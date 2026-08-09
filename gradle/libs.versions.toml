@@ -1,5 +1,7 @@
 [versions]
-agp = "8.7.3"
+# 8.7.3's bundled lint predates Kotlin 2.1 and could not analyse this source at
+# all; it also could not store a configuration cache entry under Gradle 9.
+agp = "8.13.2"
 coreKtx = "1.13.1"
 junit = "4.13.2"
 # Kept in the same era as AGP 8.7 / Compose BOM 2024.10.01. Newer androidx.test
@@ -20,7 +22,9 @@ kotlinxCoroutinesPlayServices = "1.8.1"
 kotlinxCoroutinesTest = "1.8.1"
 archCoreTesting = "2.2.0"
 generativeai = "0.9.0"
-hilt = "2.51.1"
+# 2.51.1's aggregating task cannot read Kotlin 2.1 metadata
+# ("unsupported metadata version"), which breaks any @EntryPoint.
+hilt = "2.56.2"
 hiltNavigationCompose = "1.2.0"
 glance = "1.1.0"
 datastore = "1.1.1"

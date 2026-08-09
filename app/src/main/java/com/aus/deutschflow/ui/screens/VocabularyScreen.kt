@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.AutoStories
@@ -46,6 +47,7 @@ fun VocabularyScreen(
                     onSearchChange = { viewModel.setSearchQuery(it) },
                     vocabularyList = vocabularyList,
                     onItemClick = { selectedItem = it },
+                    onEdit = { editingItem = it },
                     onDelete = { viewModel.deleteVocabulary(it) },
                     onSpeak = { viewModel.speak(it) }
                 )
@@ -77,6 +79,7 @@ fun VocabularyScreen(
                     onSearchChange = { viewModel.setSearchQuery(it) },
                     vocabularyList = vocabularyList,
                     onItemClick = { selectedItem = it },
+                    onEdit = { editingItem = it },
                     onDelete = { viewModel.deleteVocabulary(it) },
                     onSpeak = { viewModel.speak(it) }
                 )
@@ -102,6 +105,7 @@ fun VocabularyListContent(
     onSearchChange: (String) -> Unit,
     vocabularyList: List<VocabularyEntity>,
     onItemClick: (VocabularyEntity) -> Unit,
+    onEdit: (VocabularyEntity) -> Unit,
     onDelete: (VocabularyEntity) -> Unit,
     onSpeak: (String) -> Unit
 ) {
@@ -149,8 +153,9 @@ fun VocabularyListContent(
                     items(vocabularyList, key = { it.id }) { item ->
                         VocabularyItem(
                             item = item,
+                            onOpen = { onItemClick(item) },
+                            onEdit = { onEdit(item) },
                             onDelete = { onDelete(item) },
-                            onEdit = { onItemClick(item) },
                             onSpeak = { onSpeak(item.germanText) }
                         )
                     }
@@ -162,9 +167,10 @@ fun VocabularyListContent(
 
 @Composable
 fun VocabularyItem(
-    item: VocabularyEntity, 
-    onDelete: () -> Unit, 
+    item: VocabularyEntity,
+    onOpen: () -> Unit,
     onEdit: () -> Unit,
+    onDelete: () -> Unit,
     onSpeak: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -176,7 +182,7 @@ fun VocabularyItem(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         onClick = {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onEdit()
+            onOpen()
         }
     ) {
         Row(
@@ -209,6 +215,20 @@ fun VocabularyItem(
                         contentDescription = "Speak", 
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                         modifier = Modifier.size(24.dp)
+                    )
+                }
+                // The edit dialog existed but nothing ever opened it - tapping a card
+                // opened the detail view instead, so a typo could only be fixed by
+                // deleting the word and adding it again.
+                IconButton(onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onEdit()
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 IconButton(onClick = {
