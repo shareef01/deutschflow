@@ -51,11 +51,13 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     val finalText by viewModel.finalText.collectAsState()
     val translation by viewModel.translation.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
+    val isBusy by viewModel.isBusy.collectAsState()
     val suggestedWords by viewModel.suggestedWords.collectAsState()
     val errorState by viewModel.errorState.collectAsState()
+    val aiError by viewModel.aiError.collectAsState()
 
     val context = LocalContext.current
-    
+
     // Permission Mandate: Runtime Authorization
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -70,8 +72,9 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
         finalText = finalText,
         translation = translation,
         isListening = isListening,
+        isBusy = isBusy,
         suggestedWords = suggestedWords,
-        errorState = errorState,
+        errorState = errorState ?: aiError,
         onStartListening = { 
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 viewModel.startListening()
@@ -91,6 +94,7 @@ fun TranscriptContent(
     finalText: String,
     translation: String,
     isListening: Boolean,
+    isBusy: Boolean,
     suggestedWords: List<String>,
     errorState: String?,
     onStartListening: () -> Unit,
@@ -197,22 +201,41 @@ fun TranscriptContent(
                     .size(100.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) 
+                        if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer))
                         else gradientBrush
                     )
-                    .clickable { 
+                    .clickable(enabled = !isBusy) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (isListening) onStopListening() else onStartListening() 
+                        if (isListening) onStopListening() else onStartListening()
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = Color.White
-                )
+                if (isBusy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(36.dp),
+                        color = Color.White,
+                        strokeWidth = 3.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                        // The app's primary control: without this a screen reader
+                        // announces nothing at all for it.
+                        contentDescription = if (isListening) "Stop recording" else "Start recording",
+                        modifier = Modifier.size(40.dp),
+                        tint = Color.White
+                    )
+                }
             }
+        }
+
+        if (isBusy) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Transcribing…",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         Spacer(modifier = Modifier.height(48.dp))
@@ -272,15 +295,21 @@ fun TranscriptContent(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        // Rendered as labels, not chips: there is no per-word
+                        // translation to save, so nothing here is tappable.
                         suggestedWords.forEach { word ->
-                            AssistChip(
-                                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
-                                label = { Text(word) },
+                            Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                colors = AssistChipDefaults.assistChipColors(
-                                    labelColor = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
+                            ) {
+                                Text(
+                                    text = word,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -314,8 +343,9 @@ fun TranscriptScreenPreview() {
             finalText = "",
             translation = "Hello, how are you?",
             isListening = false,
+            isBusy = false,
             suggestedWords = listOf("Hallo", "Deutsch", "Lernen"),
-            errorState = "ERROR_NO_MATCH",
+            errorState = "Didn't catch that. Try speaking again, a little slower.",
             onStartListening = {},
             onStopListening = {},
             onSave = {}
