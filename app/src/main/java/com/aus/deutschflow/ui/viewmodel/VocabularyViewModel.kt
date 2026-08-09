@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.TTSHelper
+import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -13,6 +14,7 @@ import javax.inject.Inject
 @HiltViewModel
 class VocabularyViewModel @Inject constructor(
     private val vocabularyDao: VocabularyDao,
+    private val vocabularyProcessor: VocabularyProcessor,
     private val ttsHelper: TTSHelper
 ) : ViewModel() {
 
@@ -47,6 +49,12 @@ class VocabularyViewModel @Inject constructor(
             vocabularyDao.updateVocabulary(vocabulary)
         }
     }
+
+    /**
+     * The detail screen used to render the same hardcoded German sentence for
+     * every word, while this generator sat unused outside Practice.
+     */
+    fun exampleFor(word: String): String = vocabularyProcessor.generateExample(word)
 
     fun speak(text: String) {
         ttsHelper.speak(text)

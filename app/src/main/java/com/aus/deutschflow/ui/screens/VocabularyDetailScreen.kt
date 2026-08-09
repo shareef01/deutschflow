@@ -19,6 +19,7 @@ import com.aus.deutschflow.ui.components.EmptyState
 @Composable
 fun VocabularyDetailScreen(
     item: VocabularyEntity?,
+    exampleSentence: String = "",
     onClose: () -> Unit = {},
     onSpeak: (String) -> Unit = {}
 ) {
@@ -106,7 +107,7 @@ fun VocabularyDetailScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Hier ist ein Beispielsatz mit dem Wort \"${item.germanText}\".",
+                    text = exampleSentence,
                     style = MaterialTheme.typography.bodyLarge,
                     lineHeight = 26.sp
                 )
