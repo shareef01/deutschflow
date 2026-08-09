@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Deutschflow" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+        The launch theme, shown before Compose draws. DeutschflowTheme is dark-only,
+        so a light parent flashed white on every cold start.
+    -->
+    <style name="Theme.Deutschflow" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

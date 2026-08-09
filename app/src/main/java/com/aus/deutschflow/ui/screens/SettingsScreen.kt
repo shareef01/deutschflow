@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
@@ -33,6 +34,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val geminiApiKey by viewModel.geminiApiKey.collectAsState()
     val selectedDialect by viewModel.selectedDialect.collectAsState()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
+    val message by viewModel.message.collectAsState()
 
     var apiKeyInput by remember(geminiApiKey) { mutableStateOf(geminiApiKey) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -203,7 +205,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         }
 
         Text(
-            text = "DeutschFlow v1.2.0",
+            // Read from the build rather than typed here, where it drifted to
+            // 1.2.0 while the build said 1.0.
+            text = "DeutschFlow v${BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -221,7 +225,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 Button(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.clearAllHistory()
+                        viewModel.clearAllProgress()
                         showDeleteConfirm = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -232,6 +236,18 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
                     Text("Keep Progress")
+                }
+            }
+        )
+    }
+
+    message?.let { text ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissMessage() },
+            text = { Text(text) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissMessage() }) {
+                    Text("OK")
                 }
             }
         )

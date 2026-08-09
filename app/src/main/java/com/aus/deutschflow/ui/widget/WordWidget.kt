@@ -15,16 +15,22 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
+import com.aus.deutschflow.MainActivity
 import com.aus.deutschflow.R
-import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.di.WidgetEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.firstOrNull
 
 class WordWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val db = AppDatabase.getDatabase(context)
-        val vocab = db.vocabularyDao().getAllVocabulary().firstOrNull()?.randomOrNull()
+        val dao = EntryPointAccessors
+            .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
+            .vocabularyDao()
+        val vocab = dao.getAllVocabulary().firstOrNull()?.randomOrNull()
 
         provideContent {
             WordWidgetContent(vocab)
@@ -41,7 +47,8 @@ class WordWidget : GlanceAppWidget() {
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(backgroundColor)
-                .padding(12.dp),
+                .padding(12.dp)
+                .clickable(actionStartActivity<MainActivity>()),
             verticalAlignment = Alignment.CenterVertically,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

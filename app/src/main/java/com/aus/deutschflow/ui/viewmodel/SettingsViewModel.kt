@@ -2,6 +2,8 @@ package com.aus.deutschflow.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
+import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
@@ -15,6 +17,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    private val database: AppDatabase,
     private val vocabularyDao: VocabularyDao,
     private val transcriptDao: TranscriptDao,
     private val userStatsDao: UserStatsDao,
@@ -42,9 +45,17 @@ class SettingsViewModel @Inject constructor(
     val isAutoPlayEnabled: StateFlow<Boolean> = preferenceManager.isAutoPlayEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message
+
+    fun dismissMessage() {
+        _message.value = null
+    }
+
     fun saveGeminiApiKey(apiKey: String) {
         viewModelScope.launch {
-            preferenceManager.saveGeminiApiKey(apiKey)
+            preferenceManager.saveGeminiApiKey(apiKey.trim())
+            _message.value = "API key saved."
         }
     }
 
@@ -60,17 +71,28 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun clearAllHistory() {
+    /**
+     * Wipes what the confirmation dialog promises: library, history and stats.
+     *
+     * This used to delete transcripts only - row by row, from a single snapshot -
+     * leaving the vocabulary and the XP/streak untouched behind a dialog headed
+     * "Wipe All Progress?".
+     */
+    fun clearAllProgress() {
         viewModelScope.launch {
-            transcriptDao.getAllTranscripts().firstOrNull()?.forEach {
-                transcriptDao.deleteTranscript(it)
+            database.withTransaction {
+                transcriptDao.deleteAll()
+                vocabularyDao.deleteAll()
+                userStatsDao.deleteAll()
             }
+            _message.value = "Library, history and stats cleared."
         }
     }
 
     fun testNotification() {
         viewModelScope.launch {
-            dailyWordNotification.showNotification()
+            _message.value = dailyWordNotification.showNotification()
+                ?: "Notification sent."
         }
     }
 }
