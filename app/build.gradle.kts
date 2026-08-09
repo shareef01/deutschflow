@@ -22,7 +22,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -42,6 +43,17 @@ android {
 }
 
 dependencies {
+    // AGP resolves the androidTest classpath consistently with the app's runtime
+    // classpath, so anything the app pins is forced onto Espresso too. These two
+    // pins are what let instrumented tests resolve at all.
+    constraints {
+        // Glance drags concurrent-futures up to a 1.2.0 alpha; Espresso needs stable 1.2.0.
+        implementation(libs.androidx.concurrent.futures)
+        implementation(libs.androidx.concurrent.futures.ktx)
+        // The app otherwise holds tracing at 1.0.0; every androidx.test release needs 1.1.0.
+        implementation(libs.androidx.tracing)
+    }
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.m3)
@@ -53,11 +65,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     
-    // Adaptive
-    implementation("androidx.compose.material3.adaptive:adaptive:1.2.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
-    implementation("androidx.compose.material3:material3-window-size-class")
+    // Window size classes: drives the compact/expanded navigation switch
+    implementation(libs.androidx.compose.material3.window.size)
 
     // Room
     implementation(libs.androidx.room.runtime)
