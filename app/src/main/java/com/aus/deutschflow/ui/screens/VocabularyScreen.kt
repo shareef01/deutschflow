@@ -37,6 +37,12 @@ fun VocabularyScreen(
     var editingItem by remember { mutableStateOf<VocabularyEntity?>(null) }
     var selectedItem by remember { mutableStateOf<VocabularyEntity?>(null) }
 
+    // Held per word: the generator picks at random, so composing it inline would
+    // reshuffle the sentence on every recomposition.
+    val exampleSentence = remember(selectedItem?.id) {
+        selectedItem?.let { viewModel.exampleFor(it.germanText) }.orEmpty()
+    }
+
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     if (isExpanded) {
@@ -56,6 +62,7 @@ fun VocabularyScreen(
             Column(modifier = Modifier.weight(1f)) {
                 VocabularyDetailScreen(
                     item = selectedItem,
+                    exampleSentence = exampleSentence,
                     onClose = { selectedItem = null },
                     onSpeak = { viewModel.speak(it) }
                 )
@@ -70,6 +77,7 @@ fun VocabularyScreen(
             if (isDetailVisible) {
                 VocabularyDetailScreen(
                     item = selectedItem,
+                    exampleSentence = exampleSentence,
                     onClose = { selectedItem = null },
                     onSpeak = { viewModel.speak(it) }
                 )
