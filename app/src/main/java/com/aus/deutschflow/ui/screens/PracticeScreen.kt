@@ -43,6 +43,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
     val targetSentence by viewModel.targetSentence.collectAsState()
     val feedback by viewModel.feedback.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
+    val isProcessing by viewModel.isProcessing.collectAsState()
     val spokenText by viewModel.finalText.collectAsState()
     val wordResults by viewModel.wordResults.collectAsState()
     val errorState by viewModel.errorState.collectAsState()
@@ -207,23 +208,28 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                AnimatedContent(
-                    targetState = spokenText,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "spokenTextAnim"
-                ) { text ->
-                    Text(
-                        text = text.ifEmpty { "Waiting for your speech..." },
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (text.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 26.sp
-                    )
+                if (isProcessing) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+                } else {
+                    AnimatedContent(
+                        targetState = spokenText,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "spokenTextAnim"
+                    ) { text ->
+                        Text(
+                            text = text.ifEmpty { "Waiting for your speech..." },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (text.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 26.sp
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        // No weight() here: this Column scrolls, so its main-axis maximum is
+        // infinite and a weighted spacer collapses to zero height.
         Spacer(modifier = Modifier.height(32.dp))
 
         Row(
@@ -243,10 +249,14 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                         }
                     }
                 },
+                enabled = !isProcessing,
                 modifier = Modifier
                     .weight(1f)
                     .height(64.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent
+                ),
                 contentPadding = PaddingValues(0.dp),
                 shape = RoundedCornerShape(20.dp),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)

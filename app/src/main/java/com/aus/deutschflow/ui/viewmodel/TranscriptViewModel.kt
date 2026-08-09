@@ -7,8 +7,8 @@ import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.service.AIResult
 import com.aus.deutschflow.service.SpeechRecognizerHelper
-import com.aus.deutschflow.service.TranslationHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -18,7 +18,6 @@ import javax.inject.Inject
 @HiltViewModel
 class TranscriptViewModel @Inject constructor(
     private val speechRecognizerHelper: SpeechRecognizerHelper,
-    private val translationHelper: TranslationHelper,
     private val vocabularyProcessor: VocabularyProcessor,
     private val vocabularyDao: VocabularyDao,
     private val transcriptDao: TranscriptDao,
@@ -29,6 +28,15 @@ class TranscriptViewModel @Inject constructor(
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
+
+    private val _isTranslating = MutableStateFlow(false)
+
+    /** True while the recognizer is finishing up or the translation is in flight. */
+    val isBusy: StateFlow<Boolean> = combine(
+        speechRecognizerHelper.isProcessing,
+        _isTranslating
+    ) { processing, translating -> processing || translating }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _historyQuery = MutableStateFlow("")
     val historyQuery: StateFlow<String> = _historyQuery
@@ -43,43 +51,61 @@ class TranscriptViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun setHistoryQuery(query: String) {
-        _historyQuery.value = query
-    }
-
     private val _translation = MutableStateFlow("")
     val translation: StateFlow<String> = _translation
 
     private val _suggestedWords = MutableStateFlow<List<String>>(emptyList())
     val suggestedWords: StateFlow<List<String>> = _suggestedWords
 
+    private val _aiError = MutableStateFlow<String?>(null)
+    val aiError: StateFlow<String?> = _aiError
+
+    init {
+        // Completed utterances arrive here, once each. Reading finalText straight
+        // after stopListening() used to return the *previous* recording, because the
+        // engine had not answered yet.
+        speechRecognizerHelper.results
+            .onEach { handleUtterance(it) }
+            .launchIn(viewModelScope)
+    }
+
+    fun setHistoryQuery(query: String) {
+        _historyQuery.value = query
+    }
+
     fun startListening() {
-        speechRecognizerHelper.startListening()
-        _translation.value = ""
-        _suggestedWords.value = emptyList()
+        viewModelScope.launch {
+            _translation.value = ""
+            _suggestedWords.value = emptyList()
+            _aiError.value = null
+            speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
+        }
     }
 
     fun stopListening() {
         speechRecognizerHelper.stopListening()
-        val text = finalText.value
-        if (text.isNotBlank()) {
-            processWithAI(text)
-            saveTranscript(text)
-        }
     }
 
-    private fun processWithAI(text: String) {
-        viewModelScope.launch {
-            val apiKey = preferenceManager.geminiApiKey.first()
-            val result = vocabularyProcessor.processText(text, apiKey)
-            _translation.value = result.translation
-            _suggestedWords.value = result.keywords
-        }
-    }
+    private suspend fun handleUtterance(text: String) {
+        transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
 
-    private fun saveTranscript(text: String) {
-        viewModelScope.launch {
-            transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
+        _isTranslating.value = true
+        try {
+            when (val result = vocabularyProcessor.processText(text, preferenceManager.geminiApiKey.first())) {
+                is AIResult.Success -> {
+                    _translation.value = result.translation
+                    _suggestedWords.value = result.keywords
+                }
+                is AIResult.Failure -> {
+                    // Never let a failure reach the translation field: the Save button
+                    // reads it, and an error string would be filed as a translation.
+                    _translation.value = ""
+                    _suggestedWords.value = emptyList()
+                    _aiError.value = result.message
+                }
+            }
+        } finally {
+            _isTranslating.value = false
         }
     }
 
@@ -90,17 +116,16 @@ class TranscriptViewModel @Inject constructor(
     }
 
     fun saveToVocabulary(german: String, english: String) {
+        if (german.isBlank() || english.isBlank()) return
         viewModelScope.launch {
-            vocabularyDao.insertVocabulary(VocabularyEntity(germanText = german, englishTranslation = english))
+            vocabularyDao.insertVocabulary(
+                VocabularyEntity(germanText = german, englishTranslation = english)
+            )
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        // Helpers are singletons in this refactor, but we might want to reset their state
-        // or just rely on the fact that SpeechRecognizerHelper/TTSHelper might need cleaning.
-        // Actually, if they are singletons, they live as long as the App.
-        // But for SpeechRecognizer, we should stop it if VM is cleared.
-        speechRecognizerHelper.stopListening()
+        speechRecognizerHelper.destroy()
     }
 }
