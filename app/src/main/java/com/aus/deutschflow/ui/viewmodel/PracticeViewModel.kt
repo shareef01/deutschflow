@@ -2,6 +2,7 @@ package com.aus.deutschflow.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
@@ -18,12 +19,14 @@ class PracticeViewModel @Inject constructor(
     private val speechRecognizerHelper: SpeechRecognizerHelper,
     private val vocabularyDao: VocabularyDao,
     private val vocabularyProcessor: VocabularyProcessor,
+    private val preferenceManager: PreferenceManager,
     private val ttsHelper: TTSHelper
 ) : ViewModel() {
 
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
+    val isProcessing: StateFlow<Boolean> = speechRecognizerHelper.isProcessing
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
 
     private val _targetSentence = MutableStateFlow("Ich lerne Deutsch.")
@@ -37,6 +40,12 @@ class PracticeViewModel @Inject constructor(
 
     init {
         loadRandomTarget()
+
+        // Scoring runs when the utterance actually arrives. Reading finalText right
+        // after stopPractice() scored the *previous* attempt against this sentence.
+        speechRecognizerHelper.results
+            .onEach { evaluatePronunciation(it) }
+            .launchIn(viewModelScope)
     }
 
     private fun loadRandomTarget() {
@@ -53,24 +62,26 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun startPractice() {
-        speechRecognizerHelper.startListening()
-        _wordResults.value = emptyList()
-        _feedback.value = ""
+        viewModelScope.launch {
+            _wordResults.value = emptyList()
+            _feedback.value = ""
+            speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
+        }
     }
 
     fun stopPractice() {
         speechRecognizerHelper.stopListening()
-        evaluatePronunciation(finalText.value)
     }
 
     private fun evaluatePronunciation(spokenText: String) {
-        val targetWords = _targetSentence.value.split(Regex("\\s+"))
-            .map { it.replace(Regex("[^a-zA-ZäöüÄÖÜß]"), "") }
+        val targetWords = _targetSentence.value.split(WORD_SPLIT)
+            .map { it.replace(NON_LETTERS, "") }
             .filter { it.isNotBlank() }
-        
-        val spokenWords = spokenText.lowercase().split(Regex("\\s+"))
-            .map { it.replace(Regex("[^a-zA-ZäöüÄÖÜß]"), "") }
+
+        val spokenWords = spokenText.lowercase().split(WORD_SPLIT)
+            .map { it.replace(NON_LETTERS, "") }
             .filter { it.isNotBlank() }
+            .toSet()
 
         val results = targetWords.map { targetWord ->
             WordResult(
@@ -78,13 +89,14 @@ class PracticeViewModel @Inject constructor(
                 isCorrect = spokenWords.contains(targetWord.lowercase())
             )
         }
-        
+
         _wordResults.value = results
 
         val correctCount = results.count { it.isCorrect }
         _feedback.value = when {
-            correctCount == results.size && results.isNotEmpty() -> "Excellent! Perfect pronunciation."
-            correctCount > results.size / 2 -> "Good! You got most of it."
+            results.isEmpty() -> ""
+            correctCount == results.size -> "Excellent! Perfect pronunciation."
+            correctCount * 2 > results.size -> "Good! You got most of it."
             else -> "Keep practicing! Try to match the highlighted words."
         }
     }
@@ -96,7 +108,6 @@ class PracticeViewModel @Inject constructor(
 
     fun nextSentence() {
         loadRandomTarget()
-        _feedback.value = ""
     }
 
     fun speak(text: String) {
@@ -105,6 +116,11 @@ class PracticeViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        speechRecognizerHelper.stopListening()
+        speechRecognizerHelper.destroy()
+    }
+
+    private companion object {
+        val WORD_SPLIT = Regex("\\s+")
+        val NON_LETTERS = Regex("[^a-zA-ZäöüÄÖÜß]")
     }
 }

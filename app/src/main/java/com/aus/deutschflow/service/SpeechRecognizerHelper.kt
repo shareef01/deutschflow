@@ -10,146 +10,200 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "SpeechRecognizerHelper"
 
-@Singleton
+/**
+ * Wraps [SpeechRecognizer], which must be driven from the main thread and answers
+ * asynchronously through [RecognitionListener].
+ *
+ * Deliberately unscoped rather than a `@Singleton`: each ViewModel owns an instance
+ * and destroys it in `onCleared`. A shared instance would deliver every utterance to
+ * every collector, so a sentence spoken on the Practice screen would also be filed
+ * as a transcript.
+ */
 class SpeechRecognizerHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
     private var speechRecognizer: SpeechRecognizer? = null
-    
-    private val _partialText = MutableStateFlow("")
-    val partialText: StateFlow<String> = _partialText
-
-    private val _finalText = MutableStateFlow("")
-    val finalText: StateFlow<String> = _finalText
-
-    private val _isListening = MutableStateFlow(false)
-    val isListening: StateFlow<Boolean> = _isListening
-
-    private val _errorState = MutableStateFlow<String?>(null)
-    val errorState: StateFlow<String?> = _errorState
-
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    private val _partialText = MutableStateFlow("")
+    val partialText: StateFlow<String> = _partialText.asStateFlow()
+
+    private val _finalText = MutableStateFlow("")
+    val finalText: StateFlow<String> = _finalText.asStateFlow()
+
+    private val _isListening = MutableStateFlow(false)
+    val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
+
+    /** True between the end of speech and the arrival of the final result. */
+    private val _isProcessing = MutableStateFlow(false)
+    val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
+
+    private val _errorState = MutableStateFlow<String?>(null)
+    val errorState: StateFlow<String?> = _errorState.asStateFlow()
+
     /**
-     * Operation Thread-Lock: Standardized Transcription Initialization
+     * One emission per completed utterance.
+     *
+     * Callers must react to this rather than reading [finalText] after calling
+     * [stopListening]: the engine has not answered at that point, so the state flow
+     * still holds the previous session's text.
      */
-    fun startListening() {
-        // rule 1: Absolute Main-Thread Lockdown
+    private val _results = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val results: SharedFlow<String> = _results.asSharedFlow()
+
+    fun startListening(languageTag: String = DEFAULT_LANGUAGE) {
         mainHandler.post {
             try {
-                // rule 3: Aggressive Lifecycle Purge
-                Log.d(TAG, "Executing aggressive purge of existing recognizer")
                 speechRecognizer?.cancel()
                 speechRecognizer?.destroy()
                 speechRecognizer = null
 
                 if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                    _errorState.value = "CRITICAL SYSTEM FAILURE: Speech Services Not Installed"
+                    _errorState.value = "Speech recognition isn't available on this device."
                     return@post
                 }
 
-                // rule 2: Sequential Listener Attachment
-                Log.d(TAG, "Sequential Initialization: Create -> Attach -> Start")
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-                speechRecognizer?.setRecognitionListener(createRecognitionListener())
+                // Clear the previous session first, so a stale result can never be
+                // mistaken for this one's.
+                _partialText.value = ""
+                _finalText.value = ""
+                _errorState.value = null
+                _isProcessing.value = false
+                _isListening.value = true
 
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "de-DE")
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-                }
-
-                Log.d(TAG, "Invoking startListening(de-DE) on Main Thread")
-                speechRecognizer?.startListening(intent)
-                
+                val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+                recognizer.setRecognitionListener(recognitionListener)
+                recognizer.startListening(buildIntent(languageTag))
+                speechRecognizer = recognizer
             } catch (e: Exception) {
-                val errorMsg = "INTERNAL CLIENT ERROR: ${e.message}"
-                _errorState.value = errorMsg
-                Log.e(TAG, errorMsg)
+                Log.e(TAG, "Could not start recognition", e)
+                _errorState.value = "Couldn't start recording. Try again."
+                _isListening.value = false
+                _isProcessing.value = false
             }
         }
-    }
-
-    private fun createRecognitionListener() = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {
-            Log.d(TAG, "Hardware Ready: Calibration complete")
-            _isListening.value = true
-            _errorState.value = null
-        }
-
-        override fun onBeginningOfSpeech() {
-            Log.d(TAG, "Speech Detected: Input session active")
-            _partialText.value = ""
-        }
-
-        override fun onRmsChanged(rmsdB: Float) {}
-        override fun onBufferReceived(buffer: ByteArray?) {}
-
-        override fun onEndOfSpeech() {
-            Log.d(TAG, "Speech Ended: Closing session")
-            _isListening.value = false
-        }
-
-        override fun onError(error: Int) {
-            val message = when (error) {
-                SpeechRecognizer.ERROR_AUDIO -> "ERROR_AUDIO: Mic hardware failure"
-                SpeechRecognizer.ERROR_CLIENT -> "ERROR_CLIENT: Code 5 - Thread/Lifecycle Botch"
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "ERROR_PERMISSIONS: Check Manifest"
-                SpeechRecognizer.ERROR_NETWORK -> "ERROR_NETWORK: Connectivity lost"
-                SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT"
-                SpeechRecognizer.ERROR_NO_MATCH -> "ERROR_NO_MATCH: No valid German found"
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_BUSY: Parallel session active"
-                SpeechRecognizer.ERROR_SERVER -> "ERROR_SERVER: Cloud processing failure"
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_TIMEOUT: Silence detected"
-                else -> "ERROR_UNKNOWN: Code $error"
-            }
-            Log.e(TAG, "Recognizer Threw: $message")
-            _errorState.value = message
-            _isListening.value = false
-        }
-
-        override fun onResults(results: Bundle?) {
-            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            Log.d(TAG, "Final Result Captured: $matches")
-            if (!matches.isNullOrEmpty()) {
-                _finalText.value = matches[0]
-            }
-            _isListening.value = false
-        }
-
-        override fun onPartialResults(partialResults: Bundle?) {
-            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            if (!matches.isNullOrEmpty()) {
-                Log.d(TAG, "Partial: ${matches[0]}")
-                _partialText.value = matches[0]
-            }
-        }
-
-        override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
     fun stopListening() {
         mainHandler.post {
-            Log.d(TAG, "User Interrupted: Stopping engine")
-            speechRecognizer?.stopListening()
+            // The final result still arrives later, in onResults.
+            if (_isListening.value) _isProcessing.value = true
             _isListening.value = false
+            speechRecognizer?.stopListening()
         }
     }
 
     fun destroy() {
         mainHandler.post {
+            speechRecognizer?.cancel()
             speechRecognizer?.destroy()
             speechRecognizer = null
+            _isListening.value = false
+            _isProcessing.value = false
         }
+    }
+
+    private fun buildIntent(languageTag: String) =
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+        }
+
+    private val recognitionListener = object : RecognitionListener {
+
+        override fun onReadyForSpeech(params: Bundle?) {
+            _isListening.value = true
+            _errorState.value = null
+        }
+
+        override fun onBeginningOfSpeech() {
+            _partialText.value = ""
+        }
+
+        override fun onRmsChanged(rmsdB: Float) {}
+
+        override fun onBufferReceived(buffer: ByteArray?) {}
+
+        override fun onEndOfSpeech() {
+            // Capture is over but the result is still in flight. Holding a distinct
+            // processing state stops the UI offering "record" again mid-answer.
+            _isListening.value = false
+            _isProcessing.value = true
+        }
+
+        override fun onError(error: Int) {
+            _errorState.value = messageFor(error)
+            _isListening.value = false
+            _isProcessing.value = false
+        }
+
+        override fun onResults(results: Bundle?) {
+            val text = results
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                .orEmpty()
+
+            _isListening.value = false
+            _isProcessing.value = false
+
+            if (text.isNotBlank()) {
+                _finalText.value = text
+                _results.tryEmit(text)
+            }
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            partialResults
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                ?.let { _partialText.value = it }
+        }
+
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    /**
+     * Recognition content is never logged - these describe the failure to the user
+     * and say what to do about it.
+     */
+    private fun messageFor(error: Int): String = when (error) {
+        SpeechRecognizer.ERROR_AUDIO ->
+            "Microphone unavailable. Close anything else using it and try again."
+        SpeechRecognizer.ERROR_CLIENT ->
+            "Recording couldn't start. Try again."
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+            "Microphone access is needed to transcribe. Grant it in Settings."
+        SpeechRecognizer.ERROR_NETWORK ->
+            "No connection. Speech recognition needs network access."
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+            "The network timed out. Try again."
+        SpeechRecognizer.ERROR_NO_MATCH ->
+            "Didn't catch that. Try speaking again, a little slower."
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
+            "Still finishing the last recording. Try again in a moment."
+        SpeechRecognizer.ERROR_SERVER ->
+            "The speech service had a problem. Try again."
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+            "No speech detected."
+        else ->
+            "Speech recognition failed. Try again."
+    }
+
+    companion object {
+        const val DEFAULT_LANGUAGE = "de-DE"
     }
 }
