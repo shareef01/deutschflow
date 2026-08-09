@@ -2,6 +2,7 @@ package com.aus.deutschflow.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
@@ -10,12 +11,16 @@ import com.aus.deutschflow.service.TTSHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 @HiltViewModel
 class StudyViewModel @Inject constructor(
     private val vocabularyDao: VocabularyDao,
     private val userStatsDao: UserStatsDao,
+    private val preferenceManager: PreferenceManager,
     private val ttsHelper: TTSHelper
 ) : ViewModel() {
 
@@ -29,16 +34,23 @@ class StudyViewModel @Inject constructor(
     val isFlipped: StateFlow<Boolean> = _isFlipped
 
     init {
-        loadVocabulary()
+        startSession()
     }
 
-    fun loadVocabulary() {
+    /**
+     * Takes a fresh shuffled snapshot. The list is deliberately a snapshot rather
+     * than a live flow - re-shuffling mid-session would move the cards under the
+     * user - but the screen restarts the session on entry, so words saved since
+     * last time do show up.
+     */
+    fun startSession() {
         viewModelScope.launch {
-            vocabularyDao.getAllVocabulary().firstOrNull()?.let { list ->
-                _studyList.value = list.shuffled()
-                _currentIndex.value = 0
-                _isFlipped.value = false
-            }
+            val list = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
+            // Index first: a shorter list published before the index resets would
+            // leave the screen reading past the end.
+            _currentIndex.value = 0
+            _isFlipped.value = false
+            _studyList.value = list.shuffled()
         }
     }
 
@@ -47,9 +59,19 @@ class StudyViewModel @Inject constructor(
     }
 
     fun nextCard() {
-        if (_studyList.value.isNotEmpty()) {
-            _currentIndex.value = (_currentIndex.value + 1) % _studyList.value.size
+        val size = _studyList.value.size
+        if (size > 0) {
+            _currentIndex.value = (_currentIndex.value + 1) % size
             _isFlipped.value = false
+        }
+    }
+
+    /** Speaks the card, unless the user turned auto-play off in Settings. */
+    fun autoPlay(text: String) {
+        viewModelScope.launch {
+            if (preferenceManager.isAutoPlayEnabled.first()) {
+                ttsHelper.speak(text)
+            }
         }
     }
 
@@ -59,19 +81,44 @@ class StudyViewModel @Inject constructor(
 
     fun rewardXP(points: Int) {
         viewModelScope.launch {
-            val currentStats = userStatsDao.getUserStats().firstOrNull() ?: UserStatsEntity()
-            val newXP = currentStats.xp + points
-            
-            // Basic streak logic
+            val stats = userStatsDao.getUserStats().firstOrNull() ?: UserStatsEntity()
             val now = System.currentTimeMillis()
-            val isNextDay = (now - currentStats.lastActivityTimestamp) > 86400000 // 24h
-            val newStreak = if (isNextDay) currentStats.streak + 1 else currentStats.streak
-            
-            userStatsDao.insertOrUpdate(currentStats.copy(
-                xp = newXP,
-                streak = if (currentStats.streak == 0) 1 else newStreak,
-                lastActivityTimestamp = now
-            ))
+
+            userStatsDao.insertOrUpdate(
+                stats.copy(
+                    xp = stats.xp + points,
+                    streak = nextStreak(stats.streak, stats.lastActivityTimestamp, now),
+                    lastActivityTimestamp = now
+                )
+            )
+        }
+    }
+
+    companion object {
+
+        /**
+         * Compares calendar days in the device's zone.
+         *
+         * The old rule treated any gap over 24h as "the next day", so a five-day
+         * absence still added to the streak and it could never break; two sessions
+         * 23 hours apart, meanwhile, never counted as consecutive days.
+         */
+        internal fun nextStreak(currentStreak: Int, lastActivity: Long, now: Long): Int {
+            if (lastActivity <= 0L || currentStreak <= 0) return 1
+
+            return when (daysBetween(lastActivity, now)) {
+                0L -> currentStreak
+                1L -> currentStreak + 1
+                else -> 1
+            }
+        }
+
+        private fun daysBetween(from: Long, to: Long): Long {
+            val zone = ZoneId.systemDefault()
+            return ChronoUnit.DAYS.between(
+                Instant.ofEpochMilli(from).atZone(zone).toLocalDate(),
+                Instant.ofEpochMilli(to).atZone(zone).toLocalDate()
+            )
         }
     }
 }

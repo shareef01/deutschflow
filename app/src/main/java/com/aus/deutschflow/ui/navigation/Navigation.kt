@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
@@ -36,7 +37,6 @@ fun MainNavigation(
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val haptic = LocalHapticFeedback.current
 
-    // Resolve current screen title
     val currentScreen = when (currentRoute) {
         Screen.Transcript.route -> Screen.Transcript
         Screen.History.route -> Screen.History
@@ -46,36 +46,53 @@ fun MainNavigation(
         Screen.Settings.route -> Screen.Settings
         else -> Screen.Transcript
     }
+    val isOnSettings = currentRoute == Screen.Settings.route
 
-    // Global Immersive Background: Smooth Radial Gradient (No noise)
     val backgroundBrush = Brush.radialGradient(
         colors = listOf(
             MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
             MaterialTheme.colorScheme.background
         ),
-        center = androidx.compose.ui.geometry.Offset(x = 540f, y = 0f), // Center top for Pixel 1080px
-        radius = 800f
+        radius = 900f
     )
 
     Scaffold(
         modifier = Modifier.background(MaterialTheme.colorScheme.background),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
+                title = {
                     Text(
                         text = currentScreen.title,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                 },
-                actions = {
-                    if (currentRoute != Screen.Settings.route) {
-                        IconButton(onClick = { 
+                navigationIcon = {
+                    // Settings is not in the nav items, so without this it is a dead
+                    // end on any layout where the destination list is not on screen.
+                    if (isOnSettings) {
+                        IconButton(onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            navigate(navController, Screen.Settings) 
+                            if (!navController.popBackStack()) {
+                                navigate(navController, Screen.Transcript)
+                            }
                         }) {
                             Icon(
-                                imageVector = Icons.Default.Settings, 
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    if (!isOnSettings) {
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            navigate(navController, Screen.Settings)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
                                 contentDescription = "Settings",
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
@@ -97,7 +114,7 @@ fun MainNavigation(
                         val isSelected = currentRoute == screen.route
                         NavigationBarItem(
                             icon = { Icon(screen.icon, contentDescription = screen.title) },
-                            label = { 
+                            label = {
                                 if (isSelected) {
                                     Text(
                                         text = screen.title,
@@ -108,9 +125,9 @@ fun MainNavigation(
                             },
                             alwaysShowLabel = false,
                             selected = isSelected,
-                            onClick = { 
+                            onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                navigate(navController, screen) 
+                                navigate(navController, screen)
                             },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -123,24 +140,57 @@ fun MainNavigation(
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundBrush)
-            .padding(innerPadding)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundBrush)
+                .padding(innerPadding)
         ) {
+            // Above compact width there is no bottom bar, so the rail is the only
+            // way to reach the other destinations - including on a phone in
+            // landscape, which reports an expanded width.
             if (useNavigationRail) {
-                // Not implemented for this pass as focus is on mobile rectification
+                NavigationRail(
+                    containerColor = Color.Transparent,
+                    modifier = Modifier.fillMaxHeight()
+                ) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    navItems.forEach { screen ->
+                        val isSelected = currentRoute == screen.route
+                        NavigationRailItem(
+                            icon = { Icon(screen.icon, contentDescription = screen.title) },
+                            label = {
+                                Text(
+                                    text = screen.title,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            selected = isSelected,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                navigate(navController, screen)
+                            },
+                            colors = NavigationRailItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                            )
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
 
             NavHost(
                 navController = navController,
                 startDestination = Screen.Transcript.route,
                 modifier = Modifier.fillMaxSize(),
-                enterTransition = { 
-                    fadeIn(animationSpec = tween(400)) + scaleIn(initialScale = 0.98f) 
+                enterTransition = {
+                    fadeIn(animationSpec = tween(400)) + scaleIn(initialScale = 0.98f)
                 },
-                exitTransition = { 
-                    fadeOut(animationSpec = tween(300)) 
+                exitTransition = {
+                    fadeOut(animationSpec = tween(300))
                 }
             ) {
                 composable(Screen.Transcript.route) { TranscriptScreen(hiltViewModel()) }

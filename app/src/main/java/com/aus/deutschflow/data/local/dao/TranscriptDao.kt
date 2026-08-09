@@ -14,4 +14,7 @@ interface TranscriptDao {
 
     @Delete
     suspend fun deleteTranscript(transcript: TranscriptEntity)
+
+    @Query("DELETE FROM transcripts")
+    suspend fun deleteAll()
 }

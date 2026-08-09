@@ -27,6 +27,12 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
     val isFlipped by viewModel.isFlipped.collectAsState()
     val haptic = LocalHapticFeedback.current
 
+    // Re-entering the tab starts a fresh session, so words saved since last time
+    // are included rather than waiting for the ViewModel to be recreated.
+    LaunchedEffect(Unit) {
+        viewModel.startSession()
+    }
+
     if (studyList.isEmpty()) {
         EmptyState(
             icon = Icons.Default.School,
@@ -36,11 +42,11 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         return
     }
 
-    val currentItem = studyList[currentIndex]
+    val currentItem = studyList[currentIndex.coerceIn(studyList.indices)]
 
-    // Auto-play German when card is shown (unflipped)
-    LaunchedEffect(currentIndex) {
-        viewModel.speak(currentItem.germanText)
+    // Speaks the card unless auto-play is switched off in Settings.
+    LaunchedEffect(currentIndex, currentItem.id) {
+        viewModel.autoPlay(currentItem.germanText)
     }
 
     Column(
@@ -65,9 +71,11 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                     rotationY = rotation
                     cameraDistance = 12f * density
                 }
-                .clickable { 
+                .clickable(
+                    onClickLabel = if (isFlipped) "Show the German word" else "Show the translation"
+                ) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.flipCard() 
+                    viewModel.flipCard()
                 },
             colors = CardDefaults.elevatedCardColors(
                 containerColor = if (isFlipped) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f) 
@@ -165,7 +173,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         Spacer(modifier = Modifier.height(24.dp))
 
         LinearProgressIndicator(
-            progress = { (currentIndex + 1).toFloat() / studyList.size },
+            progress = { (currentIndex.coerceIn(studyList.indices) + 1).toFloat() / studyList.size },
             modifier = Modifier.fillMaxWidth().height(8.dp),
             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
             color = MaterialTheme.colorScheme.primary,
