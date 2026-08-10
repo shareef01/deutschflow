@@ -17,21 +17,10 @@
 # Entities are constructed reflectively by generated DAO code.
 -keep class com.aus.deutschflow.data.local.entities.** { *; }
 
-# --- Gemini client -----------------------------------------------------------
-# com.google.ai.client.generativeai serialises its request/response models with
-# kotlinx.serialization, which resolves serializers reflectively by class.
--keepattributes *Annotation*, InnerClasses
--dontnote kotlinx.serialization.**
--keepclassmembers class kotlinx.serialization.json.** {
-    *** Companion;
-}
--keepclasseswithmembers class kotlinx.serialization.json.** {
-    kotlinx.serialization.KSerializer serializer(...);
-}
--keep,includedescriptorclasses class com.google.ai.client.generativeai.**$$serializer { *; }
--keepclassmembers class com.google.ai.client.generativeai.** {
-    *** Companion;
-}
+# --- AI client ---------------------------------------------------------------
+# Nothing to keep. GroqHelper builds its request with org.json and reads the reply
+# by hand, so no model class is resolved reflectively. The rules that used to live
+# here existed for the Gemini SDK's kotlinx.serialization models, and went with it.
 
 # --- Diagnostics -------------------------------------------------------------
 # Keep line numbers so release stack traces stay readable, but hide the original

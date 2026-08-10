@@ -61,7 +61,7 @@ class TranscriptViewModel @Inject constructor(
     val suggestedWords: StateFlow<List<String>> = _suggestedWords
 
     /**
-     * Gemini's example for the current utterance, kept so that saving can store it.
+     * The model's example for the current utterance, kept so that saving can store it.
      *
      * It was parsed and then dropped on the floor: the library screen showed a
      * randomly picked canned template in its place, for every word.
@@ -118,7 +118,7 @@ class TranscriptViewModel @Inject constructor(
 
         _isTranslating.value = true
         try {
-            when (val result = vocabularyProcessor.processText(text, preferenceManager.geminiApiKey.first())) {
+            when (val result = vocabularyProcessor.processText(text, preferenceManager.apiKey.first())) {
                 is AIResult.Success -> {
                     _translation.value = result.translation
                     _suggestedWords.value = result.keywords

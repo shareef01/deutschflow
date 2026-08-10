@@ -12,7 +12,7 @@ data class VocabularyEntity(
     val timestamp: Long = System.currentTimeMillis(),
     val isFavorite: Boolean = false,
     /**
-     * The example Gemini produced for this word, or empty for a word typed in by
+     * The example the model produced for this word, or empty for a word typed in by
      * hand. The detail screen falls back to a generated sentence when it is empty.
      *
      * The SQL default is declared as well as the Kotlin one so that a fresh install

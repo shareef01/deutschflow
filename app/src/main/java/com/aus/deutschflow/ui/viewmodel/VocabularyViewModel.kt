@@ -47,7 +47,7 @@ class VocabularyViewModel @Inject constructor(
      * Saves a word the user typed in by hand.
      *
      * Until this existed the library could only be filled through Transcript -> Save,
-     * which needs a successful Gemini call - so a missing or rejected API key left no
+     * which needs a successful AI call - so a missing or rejected API key left no
      * way to put anything in it at all, and Study, Practice and the widget all read
      * from it. Adding a word is now the one path that never leaves the device.
      */
@@ -81,8 +81,8 @@ class VocabularyViewModel @Inject constructor(
     /**
      * The fallback example, for words with none of their own.
      *
-     * Words saved from a transcript carry the example Gemini wrote for them. Words
-     * typed in by hand never went near Gemini, so they get a generated sentence -
+     * Words saved from a transcript carry the example the model wrote for them. Words
+     * typed in by hand never went near the model, so they get a generated sentence -
      * which is what the detail screen used to show for every word, including the
      * ones whose real example had been parsed and discarded.
      */

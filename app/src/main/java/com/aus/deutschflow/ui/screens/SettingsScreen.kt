@@ -45,7 +45,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val totalVocab by viewModel.totalVocabulary.collectAsState()
     val totalTranscripts by viewModel.totalTranscripts.collectAsState()
     val userStats by viewModel.userStats.collectAsState()
-    val geminiApiKey by viewModel.geminiApiKey.collectAsState()
+    val storedKey by viewModel.apiKey.collectAsState()
     val selectedDialect by viewModel.selectedDialect.collectAsState()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
     val message by viewModel.message.collectAsState()
@@ -55,7 +55,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     // DataStore's first emission is "" and the real key lands a moment later - so
     // anything typed in that window was silently replaced.
     var typedKey by rememberSaveable { mutableStateOf<String?>(null) }
-    val apiKeyInput = typedKey ?: geminiApiKey
+    val apiKeyInput = typedKey ?: storedKey
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var isKeyVisible by rememberSaveable { mutableStateOf(false) }
 
@@ -105,8 +105,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             value = apiKeyInput,
             onValueChange = { typedKey = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Gemini API Key") },
-            placeholder = { Text("Paste your Google AI key here") },
+            label = { Text("Groq API Key") },
+            placeholder = { Text("Paste your Groq key here") },
             shape = RoundedCornerShape(16.dp),
             // Masked by default, and typed as a password so the keyboard stops
             // offering the credential back as an autocomplete suggestion.
@@ -130,7 +130,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     }
                     IconButton(onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.saveGeminiApiKey(apiKeyInput)
+                        viewModel.saveApiKey(apiKeyInput)
                     }) {
                         Icon(Icons.Default.Save, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
                     }

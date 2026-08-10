@@ -24,7 +24,7 @@ lifecycleViewmodelCompose = "2.8.0"
 # resolves that classpath consistently with the app's runtime, so the two must agree.
 kotlinxCoroutines = "1.8.1"
 archCoreTesting = "2.2.0"
-generativeai = "0.9.0"
+json = "20240303"
 # Held between two walls. 2.51.1's aggregating task cannot read Kotlin 2.1 metadata
 # ("unsupported metadata version"), which breaks any @EntryPoint - and 2.60.1 refuses
 # to apply below AGP 9 ("only compatible with AGP version 9.0.0 or higher"). Moving
@@ -64,7 +64,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "archCoreTesting" }
 androidx-compose-material3-window-size = { group = "androidx.compose.material3", name = "material3-window-size-class" }
-google-generativeai = { group = "com.google.ai.client.generativeai", name = "generativeai", version.ref = "generativeai" }
+org-json = { group = "org.json", name = "json", version.ref = "json" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }

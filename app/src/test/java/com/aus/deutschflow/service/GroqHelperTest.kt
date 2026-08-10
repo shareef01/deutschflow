@@ -4,9 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class GeminiHelperTest {
+class GroqHelperTest {
 
-    private val helper = GeminiHelper()
+    private val helper = GroqHelper()
 
     @Test
     fun `parses the format the prompt asks for`() {
@@ -56,5 +56,42 @@ class GeminiHelperTest {
         }
 
         assertTrue(result is AIResult.Failure)
+    }
+
+    // --- the OpenAI chat response shape --------------------------------------
+
+    @Test
+    fun `pulls the assistant message out of a chat completion`() {
+        val body = """
+            {"id":"x","choices":[{"index":0,"message":{"role":"assistant",
+            "content":"Translation: I am learning German."},"finish_reason":"stop"}]}
+        """.trimIndent()
+
+        assertEquals("Translation: I am learning German.", helper.contentOf(body))
+    }
+
+    @Test
+    fun `a response with no choices yields empty content rather than throwing`() {
+        // Which parseResponse then turns into a Failure, so the user is told
+        // something went wrong instead of the app falling over.
+        assertEquals("", helper.contentOf("""{"id":"x","choices":[]}"""))
+
+        assertTrue(helper.parseResponse(helper.contentOf("""{"id":"x","choices":[]}""")) is AIResult.Failure)
+    }
+
+    // --- error reporting ------------------------------------------------------
+
+    @Test
+    fun `prefers the provider's own explanation`() {
+        val body = """{"error":{"message":"Invalid API Key","type":"invalid_request_error"}}"""
+
+        assertEquals("Invalid API Key", helper.errorMessage(401, body))
+    }
+
+    @Test
+    fun `falls back to a plain explanation when the body is not the expected shape`() {
+        assertEquals("That API key was rejected. Check it in Settings.", helper.errorMessage(401, null))
+        assertEquals("Too many requests for now. Try again in a minute.", helper.errorMessage(429, "<html>"))
+        assertEquals("The service answered with 500.", helper.errorMessage(500, ""))
     }
 }

@@ -50,7 +50,7 @@ fun VocabularyScreen(
     val selectedItem = vocabularyList.firstOrNull { it.id == selectedId }
     val editingItem = vocabularyList.firstOrNull { it.id == editingId }
 
-    // Gemini's own example when the word came from a translation, and a generated
+    // The model's own example when the word came from a translation, and a generated
     // one only for words typed in by hand.
     //
     // Held per word: the generator picks at random, so composing it inline would
@@ -226,7 +226,7 @@ fun VocabularyListContent(
             }
         }
 
-        // The only way into the library that does not go through Gemini.
+        // The only way into the library that never touches the network.
         FloatingActionButton(
             onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
