@@ -1,5 +1,6 @@
 package com.aus.deutschflow.di
 
+import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.Module
 import dagger.Provides
@@ -20,7 +21,7 @@ object ServiceModule {
      */
     @Provides
     @Singleton
-    fun provideVocabularyProcessor(): VocabularyProcessor {
-        return VocabularyProcessor()
+    fun provideVocabularyProcessor(languageModel: GroqHelper): VocabularyProcessor {
+        return VocabularyProcessor(languageModel)
     }
 }

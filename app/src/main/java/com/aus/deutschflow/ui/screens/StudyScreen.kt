@@ -13,10 +13,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.theme.OnSurfaceMuted
 import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 import com.aus.deutschflow.ui.components.EmptyState
@@ -44,8 +46,8 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
     if (studyList.isEmpty()) {
         EmptyState(
             icon = Icons.Default.School,
-            message = "Ready to study?",
-            description = "Add some vocabulary to your library to start the flashcard session!"
+            message = stringResource(R.string.study_empty_title),
+            description = stringResource(R.string.study_empty_body)
         )
         return
     }
@@ -86,7 +88,9 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                     cameraDistance = 12f * density
                 }
                 .clickable(
-                    onClickLabel = if (isFlipped) "Show the German word" else "Show the translation"
+                    onClickLabel = stringResource(
+                        if (isFlipped) R.string.study_show_german else R.string.study_show_translation
+                    )
                 ) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.flipCard()
@@ -118,13 +122,13 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         Spacer(modifier = Modifier.height(24.dp))
                         Icon(
                             Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "Speak",
+                            contentDescription = stringResource(R.string.action_speak),
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                             modifier = Modifier.size(32.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Tap to flip",
+                            text = stringResource(R.string.study_tap_to_flip),
                             style = MaterialTheme.typography.labelSmall,
                             // Flat, not alpha-dimmed: 0.7f alpha on this ground read
                             // at about 3.2:1, under WCAG AA for body text.
@@ -146,7 +150,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Got it",
+                            text = stringResource(R.string.study_got_it),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.tertiary
@@ -170,7 +174,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                 modifier = Modifier.weight(1f).height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Text("Skip")
+                Text(stringResource(R.string.study_skip))
             }
             Button(
                 onClick = { 
@@ -182,7 +186,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                 shape = MaterialTheme.shapes.medium,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Text("Got it!", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.study_got_it_action), fontWeight = FontWeight.Bold)
             }
         }
 
@@ -199,7 +203,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         Spacer(modifier = Modifier.height(8.dp))
         
         Text(
-            text = "Progress: ${currentIndex + 1} / ${studyList.size}",
+            text = stringResource(R.string.study_progress, currentIndex + 1, studyList.size),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

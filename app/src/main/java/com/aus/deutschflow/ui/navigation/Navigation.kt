@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,6 +25,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.screens.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +64,7 @@ fun MainNavigation(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = currentScreen.title,
+                        text = stringResource(currentScreen.title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -79,7 +81,7 @@ fun MainNavigation(
                         }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = stringResource(R.string.action_back),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -93,7 +95,7 @@ fun MainNavigation(
                         }) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
+                                contentDescription = stringResource(R.string.nav_settings),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -113,11 +115,11 @@ fun MainNavigation(
                     navItems.forEach { screen ->
                         val isSelected = currentRoute == screen.route
                         NavigationBarItem(
-                            icon = { Icon(screen.icon, contentDescription = screen.title) },
+                            icon = { Icon(screen.icon, contentDescription = stringResource(screen.title)) },
                             label = {
                                 if (isSelected) {
                                     Text(
-                                        text = screen.title,
+                                        text = stringResource(screen.title),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -158,10 +160,10 @@ fun MainNavigation(
                     navItems.forEach { screen ->
                         val isSelected = currentRoute == screen.route
                         NavigationRailItem(
-                            icon = { Icon(screen.icon, contentDescription = screen.title) },
+                            icon = { Icon(screen.icon, contentDescription = stringResource(screen.title)) },
                             label = {
                                 Text(
-                                    text = screen.title,
+                                    text = stringResource(screen.title),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )

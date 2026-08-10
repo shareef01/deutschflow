@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
+import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
@@ -49,6 +52,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val selectedDialect by viewModel.selectedDialect.collectAsState()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
     val message by viewModel.message.collectAsState()
+    val streak = userStats?.streak ?: 0
 
     // Null until the user types, and only then does the field stop following the
     // stored key. Re-seeding on every change to that key looked equivalent, but the
@@ -82,10 +86,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         }
     }
 
-    val dialects = mapOf(
-        "Germany (de-DE)" to "de-DE",
-        "Austria (de-AT)" to "de-AT",
-        "Switzerland (de-CH)" to "de-CH"
+    // A list of resource ids, not a map keyed by an English label: the key was the
+    // thing shown on screen, so translating it would have changed the map's identity.
+    val dialects = listOf(
+        R.string.settings_dialect_de to "de-DE",
+        R.string.settings_dialect_at to "de-AT",
+        R.string.settings_dialect_ch to "de-CH"
     )
 
     Column(
@@ -99,14 +105,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Section: AI Configuration
-        SettingsHeader("Intelligence Configuration")
+        SettingsHeader(stringResource(R.string.settings_ai_header))
         
         OutlinedTextField(
             value = apiKeyInput,
             onValueChange = { typedKey = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Groq API Key") },
-            placeholder = { Text("Paste your Groq key here") },
+            label = { Text(stringResource(R.string.settings_api_key_label)) },
+            placeholder = { Text(stringResource(R.string.settings_api_key_hint)) },
             shape = RoundedCornerShape(16.dp),
             // Masked by default, and typed as a password so the keyboard stops
             // offering the credential back as an autocomplete suggestion.
@@ -124,7 +130,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
                         Icon(
                             imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (isKeyVisible) "Hide API key" else "Show API key",
+                            contentDescription = stringResource(
+                                if (isKeyVisible) R.string.settings_hide_key else R.string.settings_show_key
+                            ),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -132,21 +140,21 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.saveApiKey(apiKeyInput)
                     }) {
-                        Icon(Icons.Default.Save, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Save, contentDescription = stringResource(R.string.action_save), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             },
             singleLine = true
         )
         Text(
-            text = "Required for automatic vocabulary extraction and translations.",
+            text = stringResource(R.string.settings_api_key_help),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 4.dp)
         )
 
         // Section: Learning Progress
-        SettingsHeader("Learning Progress")
+        SettingsHeader(stringResource(R.string.settings_progress_header))
         
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -157,19 +165,25 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatGridItem(Modifier.weight(1f), "Vocabulary", totalVocab.toString())
-                    StatGridItem(Modifier.weight(1f), "Sessions", totalTranscripts.toString())
+                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_vocabulary), totalVocab.toString())
+                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_sessions), totalTranscripts.toString())
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatGridItem(Modifier.weight(1f), "XP points", (userStats?.xp ?: 0).toString())
-                    StatGridItem(Modifier.weight(1f), "Streak", "${userStats?.streak ?: 0} days")
+                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_xp), (userStats?.xp ?: 0).toString())
+                    StatGridItem(
+                        Modifier.weight(1f),
+                        stringResource(R.string.settings_stat_streak),
+                        // Plural, not "$n days": German needs Tag for one and Tage for
+                        // the rest, and English needs the same distinction.
+                        pluralStringResource(R.plurals.streak_days, streak, streak)
+                    )
                 }
             }
         }
 
         // Section: Audio Preferences
-        SettingsHeader("Audio Preferences")
+        SettingsHeader(stringResource(R.string.settings_audio_header))
         
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -184,7 +198,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Auto-play German Audio", 
+                    text = stringResource(R.string.settings_autoplay), 
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
@@ -199,9 +213,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         }
 
         // Section: Dialect
-        SettingsHeader("Recognition Dialect")
+        SettingsHeader(stringResource(R.string.settings_dialect_header))
         
-        dialects.forEach { (label, code) ->
+        dialects.forEach { (labelRes, code) ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -220,7 +234,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     }
                 )
                 Text(
-                    text = label,
+                    text = stringResource(labelRes),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(start = 12.dp)
                 )
@@ -246,7 +260,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 Icon(Icons.Default.NotificationsActive, contentDescription = null)
                 Spacer(modifier = Modifier.width(12.dp))
                 // Mandatory Title Case override
-                Text("Test Daily Notification", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_test_notification), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             }
 
             Button(
@@ -264,14 +278,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 Icon(Icons.Default.DeleteForever, contentDescription = null)
                 Spacer(modifier = Modifier.width(12.dp))
                 // Mandatory Title Case override
-                Text("Clear All Progress", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                Text(stringResource(R.string.settings_clear), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
             }
         }
 
         Text(
             // Read from the build rather than typed here, where it drifted to
             // 1.2.0 while the build said 1.0.
-            text = "DeutschFlow v${BuildConfig.VERSION_NAME}",
+            text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -283,8 +297,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("Wipe All Progress?", fontWeight = FontWeight.Black) },
-            text = { Text("This will permanently delete your library, history, and earnings. This action is final.") },
+            title = { Text(stringResource(R.string.settings_wipe_title), fontWeight = FontWeight.Black) },
+            text = { Text(stringResource(R.string.settings_wipe_body)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -294,24 +308,24 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete Everything")
+                    Text(stringResource(R.string.settings_wipe_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Keep Progress")
+                    Text(stringResource(R.string.settings_wipe_cancel))
                 }
             }
         )
     }
 
-    message?.let { text ->
+    message?.let { messageRes ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissMessage() },
-            text = { Text(text) },
+            text = { Text(stringResource(messageRes)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissMessage() }) {
-                    Text("OK")
+                    Text(stringResource(R.string.action_ok))
                 }
             }
         )

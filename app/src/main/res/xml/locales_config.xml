@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The languages the app ships. Without this, Android 13+ has no per-app language
+    entry in system settings, so a German speaker on an English phone - which is
+    exactly the audience for a German learning app - has no way to ask for the
+    German UI short of changing the whole device.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="de" />
+</locale-config>

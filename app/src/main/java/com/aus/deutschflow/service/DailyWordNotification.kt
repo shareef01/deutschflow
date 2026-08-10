@@ -32,10 +32,10 @@ class DailyWordNotification @Inject constructor(
         // minSdk is 31, so channels always exist - no version guard needed.
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Daily German Word",
+            context.getString(R.string.notification_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Notifications for your daily German word"
+            description = context.getString(R.string.notification_channel_description)
         }
         val notificationManager: NotificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -43,21 +43,25 @@ class DailyWordNotification @Inject constructor(
     }
 
     /**
-     * @return a message to show the user when nothing could be posted, or null on success.
+     * @return a message to show the user when nothing could be posted, or null on
+     * success. A resource id rather than text: the caller is a ViewModel, which has
+     * no business holding prose, and the Settings dialog resolves it.
+     *
+     * Not annotated @StringRes: a suspend function compiles to one returning Object,
+     * and lint rejects the annotation on it.
      */
-    suspend fun showNotification(): String? {
+    suspend fun showNotification(): Int? {
         if (!hasNotificationPermission()) {
-            return "Notifications are turned off. Enable them for DeutschFlow in system settings."
+            return R.string.message_notifications_off
         }
 
         // The same word the widget is showing, not an independent random pick.
-        val vocab = dailyWord.today()
-            ?: return "Save a word to your library first - there's nothing to send yet."
+        val vocab = dailyWord.today() ?: return R.string.message_library_empty
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Wort des Tages: ${vocab.germanText}")
-            .setContentText("Translation: ${vocab.englishTranslation}")
+            .setContentTitle(context.getString(R.string.notification_title, vocab.germanText))
+            .setContentText(context.getString(R.string.notification_text, vocab.englishTranslation))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             // Without a content intent the notification does nothing when tapped,
             // and setAutoCancel has nothing to cancel on.

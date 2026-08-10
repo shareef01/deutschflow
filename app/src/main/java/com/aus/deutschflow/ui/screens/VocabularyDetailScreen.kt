@@ -10,9 +10,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.components.EmptyState
 
@@ -28,8 +30,8 @@ fun VocabularyDetailScreen(
     if (item == null) {
         EmptyState(
             icon = Icons.Default.Info,
-            message = "Select a word",
-            description = "Choose an item from your library to view detailed information and examples."
+            message = stringResource(R.string.detail_empty_title),
+            description = stringResource(R.string.detail_empty_body)
         )
         return
     }
@@ -71,7 +73,7 @@ fun VocabularyDetailScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Speak",
+                    contentDescription = stringResource(R.string.action_speak),
                     modifier = Modifier.size(36.dp),
                     // The container's own On colour, not primary: brand blue on the
                     // blue container reads at 4.3:1, under AA for anything but a
@@ -85,7 +87,7 @@ fun VocabularyDetailScreen(
 
         // Context / Examples Section
         Text(
-            text = "Context and usage",
+            text = stringResource(R.string.detail_context),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
@@ -103,7 +105,7 @@ fun VocabularyDetailScreen(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "Example Sentence:",
+                    text = stringResource(R.string.detail_example),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -128,7 +130,7 @@ fun VocabularyDetailScreen(
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = MaterialTheme.shapes.medium
         ) {
-            Text("Back to library", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.detail_back), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
     }
 }

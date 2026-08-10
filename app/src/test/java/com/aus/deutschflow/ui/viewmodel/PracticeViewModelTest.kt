@@ -18,7 +18,7 @@ class PracticeViewModelTest {
 
         assertEquals(3, results.size)
         assertTrue(results.all { it.isCorrect })
-        assertEquals("Excellent! Perfect pronunciation.", feedback)
+        assertEquals(PracticeFeedback.PERFECT, feedback)
     }
 
     @Test
@@ -30,7 +30,7 @@ class PracticeViewModelTest {
 
         assertEquals(3, results.size)
         assertTrue(results.all { it.isCorrect })
-        assertEquals("Excellent! Perfect pronunciation.", feedback)
+        assertEquals(PracticeFeedback.PERFECT, feedback)
     }
 
     @Test
@@ -42,7 +42,7 @@ class PracticeViewModelTest {
 
         assertEquals(3, results.size)
         assertTrue(results.all { it.isCorrect })
-        assertEquals("Excellent! Perfect pronunciation.", feedback)
+        assertEquals(PracticeFeedback.PERFECT, feedback)
     }
 
     @Test
@@ -58,7 +58,7 @@ class PracticeViewModelTest {
         assertTrue(results.first { it.word == "Ich" }.isCorrect)
         assertTrue(results.first { it.word == "lerne" }.isCorrect)
         assertFalse(results.first { it.word == "Deutsch" }.isCorrect)
-        assertEquals("Good! You got most of it.", feedback)
+        assertEquals(PracticeFeedback.GOOD, feedback)
     }
 
     @Test
@@ -70,7 +70,7 @@ class PracticeViewModelTest {
 
         assertEquals(3, results.size)
         assertTrue(results.none { it.isCorrect })
-        assertEquals("Keep practicing! Try to match the highlighted words.", feedback)
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
     }
 
     @Test
@@ -82,7 +82,7 @@ class PracticeViewModelTest {
 
         assertEquals(3, results.size)
         assertTrue(results.none { it.isCorrect })
-        assertEquals("Keep practicing! Try to match the highlighted words.", feedback)
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
     }
 
     @Test
@@ -93,7 +93,7 @@ class PracticeViewModelTest {
         )
 
         assertTrue(results.isEmpty())
-        assertEquals("", feedback)
+        assertEquals(PracticeFeedback.NONE, feedback)
     }
 
     @Test
@@ -140,7 +140,7 @@ class PracticeViewModelTest {
         // limitation of the simple bag-of-words algorithm.
         assertEquals(3, results.size)
         assertTrue(results.all { it.isCorrect })
-        assertEquals("Excellent! Perfect pronunciation.", feedback)
+        assertEquals(PracticeFeedback.PERFECT, feedback)
     }
 
     @Test
@@ -153,7 +153,7 @@ class PracticeViewModelTest {
         assertEquals(5, results.size)
         assertEquals(3, results.count { it.isCorrect })
         // 3 of 5 > half, so "Good"
-        assertEquals("Good! You got most of it.", feedback)
+        assertEquals(PracticeFeedback.GOOD, feedback)
     }
 
     @Test
@@ -166,7 +166,7 @@ class PracticeViewModelTest {
         assertEquals(4, results.size)
         assertEquals(2, results.count { it.isCorrect })
         // 2 of 4 is exactly half (not > half), so keep-practicing
-        assertEquals("Keep practicing! Try to match the highlighted words.", feedback)
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
     }
 
     @Test
@@ -178,7 +178,7 @@ class PracticeViewModelTest {
 
         assertEquals(1, results.size)
         assertTrue(results.first().isCorrect)
-        assertEquals("Excellent! Perfect pronunciation.", feedback)
+        assertEquals(PracticeFeedback.PERFECT, feedback)
     }
 
     @Test
@@ -190,6 +190,6 @@ class PracticeViewModelTest {
 
         assertEquals(3, results.size)
         assertTrue(results.none { it.isCorrect })
-        assertEquals("Keep practicing! Try to match the highlighted words.", feedback)
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
     }
 }

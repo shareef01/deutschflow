@@ -1,11 +1,15 @@
 package com.aus.deutschflow.service
 
+import android.content.Context
+import com.aus.deutschflow.R
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.inject.Inject
 
 /**
  * Outcome of an AI translation.
@@ -38,19 +42,29 @@ sealed interface AIResult {
  * Deliberately no HTTP or JSON dependency. HttpURLConnection and org.json are both
  * in the framework, so dropping the Gemini SDK removes its Ktor and
  * kotlinx-serialization payload without adding a replacement.
+ *
+ * The Context is here for one reason: the messages a user sees are translated, and
+ * live in resources. Everything that can be tested without one - the response
+ * parsing, the error extraction - is in the companion, so the JVM tests still run
+ * without an emulator.
  */
-class GroqHelper {
+class GroqHelper @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     suspend fun translateAndExtract(text: String, apiKey: String): AIResult {
         if (apiKey.isBlank()) {
-            return AIResult.Failure("Add your Groq API key in Settings to get translations.")
+            return AIResult.Failure(context.getString(R.string.ai_no_key))
         }
 
         return withContext(Dispatchers.IO) {
             try {
-                parseResponse(contentOf(post(buildPrompt(text), apiKey)))
+                val content = contentOf(post(buildPrompt(text), apiKey))
+                parseResponse(content)
+                    ?: AIResult.Failure(context.getString(R.string.ai_unreadable))
             } catch (e: Exception) {
-                AIResult.Failure("Translation failed: ${e.message ?: "no response from Groq"}")
+                val detail = e.message ?: context.getString(R.string.ai_no_response)
+                AIResult.Failure(context.getString(R.string.ai_failed, detail))
             }
         }
     }
@@ -97,6 +111,10 @@ class GroqHelper {
         )
     }.toString()
 
+    /**
+     * English regardless of the app's language: it instructs the model, it is not
+     * shown to anyone, and the prefixes it asks for are what [parseResponse] matches.
+     */
     private fun buildPrompt(text: String) = """
         You are a German language expert. Translate the following German text to English.
         Also, extract 3-5 key German vocabulary words from the text.
@@ -110,76 +128,19 @@ class GroqHelper {
         Example: [German example sentence]
     """.trimIndent()
 
-    /** Pulls the assistant's text out of the OpenAI chat response shape. */
-    internal fun contentOf(json: String): String =
-        JSONObject(json)
-            .optJSONArray("choices")
-            ?.optJSONObject(0)
-            ?.optJSONObject("message")
-            ?.optString("content")
-            .orEmpty()
-
-    /** Prefers the provider's own explanation over a bare status code. */
-    internal fun errorMessage(status: Int, body: String?): String {
-        val detail = body
-            ?.let { runCatching { JSONObject(it).optJSONObject("error")?.optString("message") } }
-            ?.getOrNull()
-            ?.takeIf { it.isNotBlank() }
-
-        return when {
-            detail != null -> detail
-            status == 401 -> "That API key was rejected. Check it in Settings."
-            status == 429 -> "Too many requests for now. Try again in a minute."
-            else -> "The service answered with $status."
-        }
-    }
-
     /**
-     * Tolerates the markdown and list bullets the model adds unbidden - plain
-     * `startsWith("Translation:")` silently produced three empty fields whenever it
-     * answered with `**Translation:**`.
+     * Prefers the provider's own explanation over a bare status code.
      *
-     * Provider-agnostic, which is why swapping Gemini for Groq left it untouched.
+     * That explanation is passed through untranslated: it arrives in whatever
+     * language the API speaks, and inventing a German rendering of a sentence we did
+     * not write would be worse than showing the original.
      */
-    internal fun parseResponse(text: String): AIResult {
-        var translation = ""
-        var keywords = emptyList<String>()
-        var example = ""
-
-        text.lineSequence().forEach { rawLine ->
-            // Emphasis first, then bullets: stripping "*" off "**Translation:**"
-            // would otherwise leave a stray leading asterisk behind.
-            val line = rawLine.trim()
-                .replace("**", "")
-                .replace("__", "")
-                .removePrefix("-")
-                .removePrefix("*")
-                .trim()
-
-            when {
-                line.startsWith(TRANSLATION_PREFIX, ignoreCase = true) ->
-                    translation = line.drop(TRANSLATION_PREFIX.length).cleanValue()
-
-                line.startsWith(KEYWORDS_PREFIX, ignoreCase = true) ->
-                    keywords = line.drop(KEYWORDS_PREFIX.length)
-                        .cleanValue()
-                        .split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotBlank() }
-
-                line.startsWith(EXAMPLE_PREFIX, ignoreCase = true) ->
-                    example = line.drop(EXAMPLE_PREFIX.length).cleanValue()
-            }
+    private fun errorMessage(status: Int, body: String?): String =
+        detailFrom(body) ?: when (status) {
+            401 -> context.getString(R.string.ai_key_rejected)
+            429 -> context.getString(R.string.ai_rate_limited)
+            else -> context.getString(R.string.ai_status, status)
         }
-
-        return if (translation.isBlank()) {
-            AIResult.Failure("Couldn't read the response. Try again.")
-        } else {
-            AIResult.Success(translation, keywords, example)
-        }
-    }
-
-    private fun String.cleanValue() = trim().removeSurrounding("[", "]").trim()
 
     companion object {
         const val ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
@@ -196,8 +157,74 @@ class GroqHelper {
 
         private const val TIMEOUT_MS = 30_000
 
+        // Prompt tokens, not UI text: these are matched against the model's reply and
+        // stay English in every locale, because the prompt that asks for them does.
         private const val TRANSLATION_PREFIX = "Translation:"
         private const val KEYWORDS_PREFIX = "Keywords:"
         private const val EXAMPLE_PREFIX = "Example:"
+
+        /** Pulls the assistant's text out of the OpenAI chat response shape. */
+        internal fun contentOf(json: String): String =
+            JSONObject(json)
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optJSONObject("message")
+                ?.optString("content")
+                .orEmpty()
+
+        /** The provider's own error sentence, when the body carries one. */
+        internal fun detailFrom(body: String?): String? = body
+            ?.let { runCatching { JSONObject(it).optJSONObject("error")?.optString("message") } }
+            ?.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+
+        /**
+         * Tolerates the markdown and list bullets the model adds unbidden - plain
+         * `startsWith("Translation:")` silently produced three empty fields whenever
+         * it answered with `**Translation:**`.
+         *
+         * Null rather than a Failure carrying prose: the caller owns the Context, and
+         * so owns the wording. Provider-agnostic, which is why swapping Gemini for
+         * Groq left it untouched.
+         */
+        internal fun parseResponse(text: String): AIResult.Success? {
+            var translation = ""
+            var keywords = emptyList<String>()
+            var example = ""
+
+            text.lineSequence().forEach { rawLine ->
+                // Emphasis first, then bullets: stripping "*" off "**Translation:**"
+                // would otherwise leave a stray leading asterisk behind.
+                val line = rawLine.trim()
+                    .replace("**", "")
+                    .replace("__", "")
+                    .removePrefix("-")
+                    .removePrefix("*")
+                    .trim()
+
+                when {
+                    line.startsWith(TRANSLATION_PREFIX, ignoreCase = true) ->
+                        translation = line.drop(TRANSLATION_PREFIX.length).cleanValue()
+
+                    line.startsWith(KEYWORDS_PREFIX, ignoreCase = true) ->
+                        keywords = line.drop(KEYWORDS_PREFIX.length)
+                            .cleanValue()
+                            .split(",")
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() }
+
+                    line.startsWith(EXAMPLE_PREFIX, ignoreCase = true) ->
+                        example = line.drop(EXAMPLE_PREFIX.length).cleanValue()
+                }
+            }
+
+            return if (translation.isBlank()) {
+                null
+            } else {
+                AIResult.Success(translation, keywords, example)
+            }
+        }
+
+        private fun String.cleanValue() = trim().removeSurrounding("[", "]").trim()
     }
 }

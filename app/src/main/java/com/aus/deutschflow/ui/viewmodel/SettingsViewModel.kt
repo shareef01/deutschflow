@@ -1,8 +1,10 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.TranscriptDao
@@ -47,17 +49,25 @@ class SettingsViewModel @Inject constructor(
     val isAutoPlayEnabled: StateFlow<Boolean> = preferenceManager.isAutoPlayEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message
+    /**
+     * A resource id, not a sentence: a ViewModel that holds prose cannot be
+     * translated, and this one is asserted on by a test that would then be asserting
+     * on English.
+     */
+    private val _message = MutableStateFlow<Int?>(null)
+    val message: StateFlow<Int?> = _message
 
     fun dismissMessage() {
         _message.value = null
     }
 
+    @StringRes
+    fun currentMessage(): Int? = _message.value
+
     fun saveApiKey(apiKey: String) {
         viewModelScope.launch {
             preferenceManager.saveApiKey(apiKey.trim())
-            _message.value = "API key saved."
+            _message.value = R.string.message_api_key_saved
         }
     }
 
@@ -88,14 +98,14 @@ class SettingsViewModel @Inject constructor(
                 userStatsDao.deleteAll()
             }
             widgetUpdater.refresh()
-            _message.value = "Library, history and stats cleared."
+            _message.value = R.string.message_progress_cleared
         }
     }
 
     fun testNotification() {
         viewModelScope.launch {
             _message.value = dailyWordNotification.showNotification()
-                ?: "Notification sent."
+                ?: R.string.message_notification_sent
         }
     }
 }

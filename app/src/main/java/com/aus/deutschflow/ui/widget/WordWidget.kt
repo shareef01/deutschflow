@@ -65,7 +65,7 @@ class WordWidget : GlanceAppWidget() {
             Spacer(modifier = GlanceModifier.height(8.dp))
             
             Text(
-                text = vocab?.germanText ?: "Öffne die App",
+                text = vocab?.germanText ?: LocalContext.current.getString(R.string.widget_empty_title),
                 style = TextStyle(
                     color = ColorProvider(R.color.on_background_light),
                     fontSize = 22.sp, 
@@ -83,7 +83,7 @@ class WordWidget : GlanceAppWidget() {
                 )
             } else {
                 Text(
-                    text = "Lerne jetzt Deutsch!",
+                    text = LocalContext.current.getString(R.string.widget_empty_subtitle),
                     style = TextStyle(
                         color = ColorProvider(R.color.on_surface_variant),
                         fontSize = 12.sp

@@ -15,10 +15,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.ui.viewmodel.TranscriptViewModel
 import com.aus.deutschflow.ui.components.EmptyState
@@ -43,7 +45,7 @@ fun HistoryScreen(viewModel: TranscriptViewModel = viewModel()) {
             value = historyQuery,
             onValueChange = { viewModel.setHistoryQuery(it) },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search transcript history...", style = MaterialTheme.typography.bodyMedium) },
+            placeholder = { Text(stringResource(R.string.history_search_hint), style = MaterialTheme.typography.bodyMedium) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             singleLine = true,
             shape = MaterialTheme.shapes.medium,
@@ -63,8 +65,8 @@ fun HistoryScreen(viewModel: TranscriptViewModel = viewModel()) {
             if (isEmpty) {
                 EmptyState(
                     icon = Icons.Default.History,
-                    message = "No transcripts found",
-                    description = "Your speech sessions will appear here automatically."
+                    message = stringResource(R.string.history_empty_title),
+                    description = stringResource(R.string.history_empty_body)
                 )
             } else {
                 LazyColumn(
@@ -88,7 +90,8 @@ fun HistoryScreen(viewModel: TranscriptViewModel = viewModel()) {
 fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
     // Both the formatter and the formatted string were rebuilt on every
     // recomposition of every row.
-    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault()) }
+    val pattern = stringResource(R.string.history_date_format)
+    val dateFormat = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
     val dateString = remember(transcript.timestamp) { dateFormat.format(Date(transcript.timestamp)) }
     val haptic = LocalHapticFeedback.current
 
@@ -127,7 +130,7 @@ fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
             }) {
                 Icon(
                     imageVector = Icons.Default.Delete, 
-                    contentDescription = "Delete", 
+                    contentDescription = stringResource(R.string.action_delete), 
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
                     modifier = Modifier.size(20.dp)
                 )
