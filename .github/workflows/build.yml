@@ -1,0 +1,101 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Unit tests, lint and a full R8 release build. No keystore.properties exists on
+  # CI, so the release output is unsigned - this job proves the build is sound, it
+  # does not produce something publishable.
+  build:
+    name: Tests, lint and release build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Matches toolchainVersion in gradle/gradle-daemon-jvm.properties.
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --console=plain
+
+      - name: Lint
+        run: ./gradlew lintDebug --console=plain
+
+      - name: Release build
+        run: ./gradlew assembleRelease --console=plain
+
+      - name: Report APK size
+        run: |
+          apk=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          printf '### Release APK\n\n`%s` — **%s**\n' \
+            "$(basename "$apk")" "$(du -h "$apk" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+
+  # The Room migration and DAO tests need a real device. They cannot run on a
+  # developer machine without an emulator attached, so this job is where they are
+  # actually exercised.
+  instrumented:
+    name: Instrumented tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          # minSdk. The floor is where a migration is most likely to behave
+          # differently from the developer's own device.
+          api-level: 31
+          target: aosp_atd
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: ./gradlew connectedDebugAndroidTest --console=plain
+
+      - name: Upload instrumented results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-results
+          path: app/build/reports/androidTests/
+          if-no-files-found: ignore

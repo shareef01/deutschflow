@@ -14,3 +14,12 @@
 .cxx
 local.properties
 .kotlin/
+
+# Release signing material. keystore.properties holds the store and key passwords
+# in plaintext; neither it nor the keystore itself belongs in the repository.
+keystore.properties
+*.jks
+*.keystore
+
+# Session tooling metadata, not part of the project.
+.reasonix/

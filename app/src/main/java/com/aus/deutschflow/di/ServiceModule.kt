@@ -1,9 +1,7 @@
 package com.aus.deutschflow.di
 
 import android.content.Context
-import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
-import com.aus.deutschflow.service.TranslationHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.Module
 import dagger.Provides
@@ -15,12 +13,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object ServiceModule {
-
-    @Provides
-    @Singleton
-    fun provideTranslationHelper(): TranslationHelper {
-        return TranslationHelper()
-    }
 
     @Provides
     @Singleton
