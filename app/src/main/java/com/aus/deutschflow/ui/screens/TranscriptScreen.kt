@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -19,7 +18,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.BookmarkAdd
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,12 +33,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
 import com.aus.deutschflow.ui.viewmodel.TranscriptViewModel
 
@@ -64,8 +63,17 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     ) { isGranted ->
         if (isGranted) {
             viewModel.startListening()
+        } else {
+            // Android stops showing this dialog after the second refusal, so without
+            // an answer here the mic button is a control that does nothing, forever,
+            // and never says why.
+            viewModel.onPermissionDenied()
         }
     }
+
+    // Without this the recognizer keeps the microphone open after the user moves to
+    // another tab: this screen's ViewModel is kept alive by the saved back stack entry.
+    OnLeavingScreen { viewModel.cancelListening() }
 
     TranscriptContent(
         partialText = partialText,
@@ -111,7 +119,8 @@ fun TranscriptContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Refactored: Premium OutlinedCard
@@ -137,32 +146,7 @@ fun TranscriptContent(
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // Error Surfacing: Escalation Directive
-        AnimatedVisibility(
-            visible = errorState != null,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(bottom = 16.dp)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = errorState ?: "",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        ErrorBanner(errorState)
 
         // Hero Element: Gradient Pulse Microphone
         Box(contentAlignment = Alignment.Center) {

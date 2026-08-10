@@ -12,10 +12,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
 
 @Composable
@@ -61,14 +62,24 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
     ) { isGranted ->
         if (isGranted) {
             viewModel.startPractice()
+        } else {
+            // Android stops showing this dialog after the second refusal, so without
+            // an answer here the Speak button is a control that does nothing, forever,
+            // and never says why.
+            viewModel.onPermissionDenied()
         }
     }
+
+    // Without this the recognizer keeps the microphone open after the user moves to
+    // another tab: this screen's ViewModel is kept alive by the saved back stack entry.
+    OnLeavingScreen { viewModel.cancelListening() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(8.dp))
@@ -141,7 +152,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                         contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text("Listen to Native", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
                 }
@@ -150,32 +161,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Error Surfacing: Escalation Directive
-        AnimatedVisibility(
-            visible = errorState != null,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(bottom = 16.dp)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = errorState ?: "",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        ErrorBanner(errorState)
 
         AnimatedVisibility(
             visible = feedback.isNotEmpty(),
@@ -201,7 +187,9 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         }
 
         OutlinedCard(
-            modifier = Modifier.fillMaxWidth().height(160.dp),
+            // heightIn, not height: long recognised sentences were clipped, and worse
+            // at large font scales.
+            modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
             shape = RoundedCornerShape(24.dp),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
