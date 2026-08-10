@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
+import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import com.aus.deutschflow.ui.widget.WidgetUpdater
@@ -61,7 +62,7 @@ class TranscriptViewModelTest {
         viewModel = TranscriptViewModel(
             // Constructed but never started: nothing in this test touches the mic.
             speechRecognizerHelper = SpeechRecognizerHelper(context),
-            vocabularyProcessor = VocabularyProcessor(),
+            vocabularyProcessor = VocabularyProcessor(GroqHelper(context)),
             vocabularyDao = database.vocabularyDao(),
             transcriptDao = database.transcriptDao(),
             preferenceManager = preferenceManager,

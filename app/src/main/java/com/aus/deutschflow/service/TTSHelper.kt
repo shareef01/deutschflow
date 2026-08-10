@@ -3,6 +3,7 @@ package com.aus.deutschflow.service
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,7 +91,7 @@ class TTSHelper @Inject constructor(
         } else {
             state = State.UNAVAILABLE
             Log.w(TAG, "German text-to-speech is unavailable (init status $status)")
-            if (queued != null) _error.value = UNAVAILABLE
+            if (queued != null) _error.value = context.getString(R.string.tts_unavailable)
         }
     }
 
@@ -133,11 +134,5 @@ class TTSHelper @Inject constructor(
             tts?.shutdown()
             tts = null
         }
-    }
-
-    companion object {
-        const val UNAVAILABLE =
-            "German speech isn't available on this device. Install a German voice in " +
-                "Android's text-to-speech settings."
     }
 }

@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    German UI. Informal "du" throughout: this is a learning app, and the formal
+    "Sie" would sit oddly against flashcards and streaks.
+
+    app_name is deliberately absent - the app is called DeutschFlow everywhere.
+-->
+<resources>
+
+    <!-- Navigation -->
+    <string name="nav_transcript">Transkript</string>
+    <string name="nav_history">Verlauf</string>
+    <string name="nav_library">Bibliothek</string>
+    <string name="nav_study">Lernen</string>
+    <string name="nav_practice">Üben</string>
+    <string name="nav_settings">Einstellungen</string>
+    <string name="action_back">Zurück</string>
+
+    <!-- Shared actions -->
+    <string name="action_speak">Vorlesen</string>
+    <string name="action_edit">Bearbeiten</string>
+    <string name="action_delete">Löschen</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_save">Speichern</string>
+    <string name="action_copy">Kopieren</string>
+    <string name="action_ok">OK</string>
+
+    <!-- Transcript -->
+    <string name="transcript_placeholder">Tippe auf das Mikrofon, um zu transkribieren…</string>
+    <string name="transcript_transcribing">Wird transkribiert…</string>
+    <string name="transcript_start_recording">Aufnahme starten</string>
+    <string name="transcript_stop_recording">Aufnahme beenden</string>
+    <string name="transcript_translation">Übersetzung</string>
+    <string name="transcript_vocabulary">Wortschatz</string>
+    <string name="transcript_save">In Bibliothek speichern</string>
+
+    <!-- History -->
+    <string name="history_search_hint">Verlauf durchsuchen…</string>
+    <string name="history_empty_title">Keine Transkripte gefunden</string>
+    <string name="history_empty_body">Deine Sprachaufnahmen erscheinen hier automatisch.</string>
+    <!-- Day before month, as German writes dates. -->
+    <string name="history_date_format">dd. MMM yyyy • HH:mm</string>
+
+    <!-- Library -->
+    <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>
+    <string name="library_empty_title">Deine Bibliothek ist leer</string>
+    <string name="library_empty_body">Füge unten ein Wort hinzu oder transkribiere Sprache und speichere die Übersetzung.</string>
+    <string name="library_add_word">Wort hinzufügen</string>
+    <string name="library_dialog_add_title">Wort hinzufügen</string>
+    <string name="library_dialog_add_confirm">Zur Bibliothek hinzufügen</string>
+    <string name="library_dialog_edit_title">Wort bearbeiten</string>
+    <string name="library_dialog_edit_confirm">Änderungen speichern</string>
+    <string name="library_field_german">Deutsch</string>
+    <string name="library_field_translation">Übersetzung</string>
+
+    <!-- Word detail -->
+    <string name="detail_empty_title">Wähle ein Wort</string>
+    <string name="detail_empty_body">Wähle einen Eintrag aus deiner Bibliothek, um Details und Beispiele zu sehen.</string>
+    <string name="detail_context">Kontext und Verwendung</string>
+    <string name="detail_example">Beispielsatz:</string>
+    <string name="detail_back">Zurück zur Bibliothek</string>
+
+    <!-- Study -->
+    <string name="study_empty_title">Bereit zum Lernen?</string>
+    <string name="study_empty_body">Füge Wörter zu deiner Bibliothek hinzu, um mit den Karteikarten zu beginnen!</string>
+    <string name="study_tap_to_flip">Zum Umdrehen tippen</string>
+    <string name="study_show_german">Das deutsche Wort zeigen</string>
+    <string name="study_show_translation">Die Übersetzung zeigen</string>
+    <string name="study_got_it">Verstanden</string>
+    <string name="study_got_it_action">Verstanden!</string>
+    <string name="study_skip">Überspringen</string>
+    <string name="study_progress">Fortschritt: %1$d / %2$d</string>
+
+    <!-- Practice -->
+    <string name="practice_intro">Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.</string>
+    <string name="practice_listen">Anhören</string>
+    <string name="practice_speak">Sprechen</string>
+    <string name="practice_evaluate">Auswerten</string>
+    <string name="practice_next">Weiter</string>
+    <string name="practice_waiting">Warte auf deine Aufnahme…</string>
+    <string name="practice_feedback_perfect">Ausgezeichnet! Perfekte Aussprache.</string>
+    <string name="practice_feedback_good">Gut! Das meiste war richtig.</string>
+    <string name="practice_feedback_keep_going">Weiter üben! Versuche, die markierten Wörter zu treffen.</string>
+
+    <!-- Settings -->
+    <string name="settings_ai_header">KI-Konfiguration</string>
+    <string name="settings_api_key_label">Groq-API-Schlüssel</string>
+    <string name="settings_api_key_hint">Füge hier deinen Groq-Schlüssel ein</string>
+    <string name="settings_api_key_help">Erforderlich für automatische Übersetzungen und Wortschatz-Extraktion. Ein Schlüssel ist auf console.groq.com kostenlos.</string>
+    <string name="settings_show_key">API-Schlüssel anzeigen</string>
+    <string name="settings_hide_key">API-Schlüssel verbergen</string>
+    <string name="settings_progress_header">Lernfortschritt</string>
+    <string name="settings_stat_vocabulary">Wörter</string>
+    <string name="settings_stat_sessions">Sitzungen</string>
+    <string name="settings_stat_xp">XP-Punkte</string>
+    <string name="settings_stat_streak">Serie</string>
+    <string name="settings_audio_header">Audio-Einstellungen</string>
+    <string name="settings_autoplay">Deutsche Aussprache automatisch abspielen</string>
+    <string name="settings_dialect_header">Erkennungsdialekt</string>
+    <string name="settings_dialect_de">Deutschland (de-DE)</string>
+    <string name="settings_dialect_at">Österreich (de-AT)</string>
+    <string name="settings_dialect_ch">Schweiz (de-CH)</string>
+    <string name="settings_test_notification">Tagesbenachrichtigung testen</string>
+    <string name="settings_clear">Fortschritt löschen</string>
+    <string name="settings_wipe_title">Gesamten Fortschritt löschen?</string>
+    <string name="settings_wipe_body">Damit werden Bibliothek, Verlauf und Punkte endgültig gelöscht. Das lässt sich nicht rückgängig machen.</string>
+    <string name="settings_wipe_confirm">Alles löschen</string>
+    <string name="settings_wipe_cancel">Behalten</string>
+    <string name="settings_version">DeutschFlow v%1$s</string>
+
+    <!-- Settings outcomes -->
+    <string name="message_api_key_saved">API-Schlüssel gespeichert.</string>
+    <string name="message_progress_cleared">Bibliothek, Verlauf und Statistiken gelöscht.</string>
+    <string name="message_notification_sent">Benachrichtigung gesendet.</string>
+    <string name="message_notifications_off">Benachrichtigungen sind ausgeschaltet. Aktiviere sie für DeutschFlow in den Systemeinstellungen.</string>
+    <string name="message_library_empty">Speichere zuerst ein Wort in deiner Bibliothek — es gibt noch nichts zu senden.</string>
+
+    <!-- Speech recognition -->
+    <string name="speech_unavailable">Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>
+    <string name="speech_start_failed">Aufnahme konnte nicht gestartet werden. Versuche es erneut.</string>
+    <string name="speech_error_audio">Mikrofon nicht verfügbar. Schließe andere Apps, die es benutzen, und versuche es erneut.</string>
+    <string name="speech_error_client">Aufnahme konnte nicht gestartet werden. Versuche es erneut.</string>
+    <string name="speech_error_permission">Der Mikrofonzugriff ist aus. Aktiviere ihn für DeutschFlow in den App-Einstellungen von Android.</string>
+    <string name="speech_error_network">Keine Verbindung. Die Spracherkennung braucht Netzzugang.</string>
+    <string name="speech_error_network_timeout">Zeitüberschreitung im Netz. Versuche es erneut.</string>
+    <string name="speech_error_no_match">Das habe ich nicht verstanden. Sprich noch einmal, etwas langsamer.</string>
+    <string name="speech_error_busy">Die letzte Aufnahme läuft noch. Versuche es gleich erneut.</string>
+    <string name="speech_error_server">Der Sprachdienst hatte ein Problem. Versuche es erneut.</string>
+    <string name="speech_error_timeout">Keine Sprache erkannt.</string>
+    <string name="speech_error_language_unavailable">Deutsche Spracherkennung ist noch nicht auf diesem Gerät. Bestätige den Download von Android und versuche es dann erneut.</string>
+    <string name="speech_error_language_unsupported">Dieses Gerät erkennt diesen Dialekt nicht. Wähle in den Einstellungen einen anderen.</string>
+    <string name="speech_error_generic">Spracherkennung fehlgeschlagen. Versuche es erneut.</string>
+
+    <!-- Text to speech -->
+    <string name="tts_unavailable">Deutsche Sprachausgabe ist auf diesem Gerät nicht verfügbar. Installiere eine deutsche Stimme in den Text-zu-Sprache-Einstellungen von Android.</string>
+
+    <!-- AI translation -->
+    <string name="ai_no_key">Trage deinen Groq-API-Schlüssel in den Einstellungen ein, um Übersetzungen zu erhalten.</string>
+    <string name="ai_failed">Übersetzung fehlgeschlagen: %1$s</string>
+    <string name="ai_no_response">keine Antwort von Groq</string>
+    <string name="ai_unreadable">Die Antwort war nicht lesbar. Versuche es erneut.</string>
+    <string name="ai_key_rejected">Dieser API-Schlüssel wurde abgelehnt. Prüfe ihn in den Einstellungen.</string>
+    <string name="ai_rate_limited">Zu viele Anfragen im Moment. Versuche es in einer Minute erneut.</string>
+    <string name="ai_status">Der Dienst antwortete mit %1$d.</string>
+
+    <!-- Daily word notification -->
+    <string name="notification_channel_name">Deutsches Wort des Tages</string>
+    <string name="notification_channel_description">Benachrichtigungen für dein tägliches deutsches Wort</string>
+    <string name="notification_title">Wort des Tages: %1$s</string>
+    <string name="notification_text">Übersetzung: %1$s</string>
+
+    <!-- Widget -->
+    <string name="widget_description">Ein deutsches Wort aus deiner Bibliothek, auf dem Startbildschirm.</string>
+    <string name="widget_heading">WORT DES TAGES</string>
+    <string name="widget_empty_title">Öffne die App</string>
+    <string name="widget_empty_subtitle">Lerne jetzt Deutsch!</string>
+    <string name="widget_preview_word">die Übung</string>
+    <!-- The app always translates into English, so the second line stays English. -->
+    <string name="widget_preview_translation">practice</string>
+
+    <plurals name="streak_days">
+        <item quantity="one">%d Tag</item>
+        <item quantity="other">%d Tage</item>
+    </plurals>
+</resources>

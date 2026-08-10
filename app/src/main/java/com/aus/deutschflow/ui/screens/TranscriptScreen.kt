@@ -31,6 +31,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
@@ -135,7 +137,7 @@ fun TranscriptContent(
         ) {
             Box(modifier = Modifier.padding(24.dp)) {
                 Text(
-                    text = if (isListening) partialText else finalText.ifEmpty { "Tap the mic to transcribe..." },
+                    text = if (isListening) partialText else finalText.ifEmpty { stringResource(R.string.transcript_placeholder) },
                     style = MaterialTheme.typography.bodyLarge,
                     fontSize = 20.sp,
                     lineHeight = 30.sp,
@@ -205,7 +207,10 @@ fun TranscriptContent(
                         imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                         // The app's primary control: without this a screen reader
                         // announces nothing at all for it.
-                        contentDescription = if (isListening) "Stop recording" else "Start recording",
+                        contentDescription = stringResource(
+                            if (isListening) R.string.transcript_stop_recording
+                            else R.string.transcript_start_recording
+                        ),
                         modifier = Modifier.size(40.dp),
                         tint = Color.White
                     )
@@ -216,7 +221,7 @@ fun TranscriptContent(
         if (isBusy) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Transcribing…",
+                text = stringResource(R.string.transcript_transcribing),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -235,7 +240,7 @@ fun TranscriptContent(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Translation",
+                        text = stringResource(R.string.transcript_translation),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -246,7 +251,7 @@ fun TranscriptContent(
                     }) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy, 
-                            contentDescription = "Copy", 
+                            contentDescription = stringResource(R.string.action_copy), 
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
@@ -270,7 +275,7 @@ fun TranscriptContent(
                 if (suggestedWords.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Vocabulary",
+                        text = stringResource(R.string.transcript_vocabulary),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -311,7 +316,7 @@ fun TranscriptContent(
                 ) {
                     Icon(Icons.Default.BookmarkAdd, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Save to Library", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.transcript_save), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
             }
         }
