@@ -2,6 +2,7 @@ package com.aus.deutschflow.service
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -36,6 +37,9 @@ class SpeechRecognizerHelper @Inject constructor(
     private var speechRecognizer: SpeechRecognizer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /** The tag of the session in flight, so a failure can name the language it wanted. */
+    private var currentLanguage = DEFAULT_LANGUAGE
+
     private val _partialText = MutableStateFlow("")
     val partialText: StateFlow<String> = _partialText.asStateFlow()
 
@@ -64,6 +68,7 @@ class SpeechRecognizerHelper @Inject constructor(
 
     fun startListening(languageTag: String = DEFAULT_LANGUAGE) {
         mainHandler.post {
+            currentLanguage = languageTag
             try {
                 speechRecognizer?.cancel()
                 speechRecognizer?.destroy()
@@ -177,6 +182,14 @@ class SpeechRecognizerHelper @Inject constructor(
         }
 
         override fun onError(error: Int) {
+            // The code, never the audio or the transcript: which failure occurred is
+            // diagnostic, what the user said is not.
+            Log.w(TAG, "Recognition failed with error code $error")
+
+            // The one error the app can actually do something about, rather than ask
+            // the user to try again at.
+            if (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) requestLanguageDownload()
+
             _errorState.value = messageFor(error)
             _isListening.value = false
             _isProcessing.value = false
@@ -208,10 +221,41 @@ class SpeechRecognizerHelper @Inject constructor(
     }
 
     /**
+     * Asks the system to fetch the missing voice model.
+     *
+     * On a device whose system language is not German - an English phone in Germany,
+     * say - the on-device recogniser has no German pack, and answers every attempt
+     * with ERROR_LANGUAGE_UNAVAILABLE. There is nothing the user can do about that
+     * from inside this app, and "try again" is advice that can never come true.
+     * triggerModelDownload is the framework's own remedy for it.
+     */
+    private fun requestLanguageDownload() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+        try {
+            speechRecognizer?.triggerModelDownload(buildIntent(currentLanguage))
+        } catch (e: Exception) {
+            // A download that cannot be started is not worth a second error on top of
+            // the one already on screen.
+            Log.w(TAG, "Could not request the language download", e)
+        }
+    }
+
+    /**
      * Recognition content is never logged - these describe the failure to the user
      * and say what to do about it.
      */
     private fun messageFor(error: Int): String = when (error) {
+        // API 33+. Both were falling through to "Speech recognition failed. Try
+        // again.", which is wrong in opposite directions: one is fixable and one is
+        // permanent, and neither is fixed by trying again.
+        // Android 16 answers triggerModelDownload with a system consent dialog rather
+        // than a silent fetch - the pack is ~118MB - so the message points at that
+        // prompt instead of claiming a download is already under way.
+        SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+            "German speech isn't on this device yet. Accept the download Android offers, then try again."
+        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ->
+            "This device can't recognise this dialect. Try another one in Settings."
         SpeechRecognizer.ERROR_AUDIO ->
             "Microphone unavailable. Close anything else using it and try again."
         SpeechRecognizer.ERROR_CLIENT ->
