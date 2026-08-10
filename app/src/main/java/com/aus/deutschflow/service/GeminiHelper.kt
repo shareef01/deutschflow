@@ -95,7 +95,21 @@ class GeminiHelper {
     private fun String.cleanValue() = trim().removeSurrounding("[", "]").trim()
 
     companion object {
-        const val MODEL_NAME = "gemini-1.5-flash"
+        /**
+         * Model ids expire. This one is not a preference, it is a maintenance item.
+         *
+         * The app shipped `gemini-1.5-flash` until the whole 1.5 line was shut down;
+         * every request then returned 404 and the only symptom a user saw was
+         * "Translation failed", which reads like a bad API key. Check
+         * ai.google.dev/gemini-api/docs/deprecations before a release.
+         *
+         * 2.5-flash-lite rather than a 3.x model on purpose: this SDK's PartSerializer
+         * throws on any response part without a key it recognises, and the 3.x line
+         * attaches thought signatures to parts. 2.5-flash-lite has thinking off by
+         * default and answers with plain text, which is what [parseResponse] expects.
+         * Migrating to the Firebase AI Logic SDK is what makes newer models safe.
+         */
+        const val MODEL_NAME = "gemini-2.5-flash-lite"
 
         private const val TRANSLATION_PREFIX = "Translation:"
         private const val KEYWORDS_PREFIX = "Keywords:"
