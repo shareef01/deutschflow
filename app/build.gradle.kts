@@ -145,10 +145,14 @@ dependencies {
     // WorkManager: what actually makes the daily word daily
     implementation(libs.androidx.work.runtime.ktx)
 
-    // Gemini AI
-    implementation(libs.google.generativeai)
+    // No HTTP or JSON dependency for the AI client: HttpURLConnection and org.json
+    // are both in the framework, so GroqHelper needs nothing that the deprecated
+    // Gemini SDK used to drag in.
 
     testImplementation(libs.junit)
+    // org.json is stubbed on the JVM unit test classpath and throws "not mocked",
+    // so the real implementation is needed to test the response parsing.
+    testImplementation(libs.org.json)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.arch.core.testing)
 

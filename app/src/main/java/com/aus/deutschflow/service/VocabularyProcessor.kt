@@ -1,14 +1,14 @@
 package com.aus.deutschflow.service
 
 class VocabularyProcessor(
-    private val geminiHelper: GeminiHelper = GeminiHelper()
+    private val languageModel: GroqHelper = GroqHelper()
 ) {
 
     /**
-     * Translates a German utterance and extracts key words from it using Gemini.
+     * Translates a German utterance and extracts key words from it.
      */
     suspend fun processText(text: String, apiKey: String): AIResult =
-        geminiHelper.translateAndExtract(text, apiKey)
+        languageModel.translateAndExtract(text, apiKey)
 
     /**
      * Generates a natural conversation example for a given word using templates.
