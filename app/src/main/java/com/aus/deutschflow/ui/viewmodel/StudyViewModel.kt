@@ -2,6 +2,8 @@ package com.aus.deutschflow.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
+import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
@@ -18,11 +20,15 @@ import javax.inject.Inject
 
 @HiltViewModel
 class StudyViewModel @Inject constructor(
+    private val database: AppDatabase,
     private val vocabularyDao: VocabularyDao,
     private val userStatsDao: UserStatsDao,
     private val preferenceManager: PreferenceManager,
     private val ttsHelper: TTSHelper
 ) : ViewModel() {
+
+    /** Raised when a card could not be spoken, so the screen can say why. */
+    val ttsError: StateFlow<String?> = ttsHelper.error
 
     private val _studyList = MutableStateFlow<List<VocabularyEntity>>(emptyList())
     val studyList: StateFlow<List<VocabularyEntity>> = _studyList
@@ -33,15 +39,23 @@ class StudyViewModel @Inject constructor(
     private val _isFlipped = MutableStateFlow(false)
     val isFlipped: StateFlow<Boolean> = _isFlipped
 
-    init {
-        startSession()
-    }
+    /**
+     * False until the first snapshot has been read.
+     *
+     * Without it the screen cannot tell "no words saved" from "not looked yet", and
+     * flashed the empty state for a frame on every entry.
+     */
+    private val _hasLoaded = MutableStateFlow(false)
+    val hasLoaded: StateFlow<Boolean> = _hasLoaded
 
     /**
      * Takes a fresh shuffled snapshot. The list is deliberately a snapshot rather
      * than a live flow - re-shuffling mid-session would move the cards under the
      * user - but the screen restarts the session on entry, so words saved since
      * last time do show up.
+     *
+     * Not called from init: the screen already calls it on entry, and doing both
+     * meant two reads and two shuffles every time the tab was opened.
      */
     fun startSession() {
         viewModelScope.launch {
@@ -51,6 +65,7 @@ class StudyViewModel @Inject constructor(
             _currentIndex.value = 0
             _isFlipped.value = false
             _studyList.value = list.shuffled()
+            _hasLoaded.value = true
         }
     }
 
@@ -79,18 +94,28 @@ class StudyViewModel @Inject constructor(
         ttsHelper.speak(text)
     }
 
+    /**
+     * Adds [points] and advances the streak, atomically.
+     *
+     * The read and the write have to be one unit. Tapping "Got it!" twice in quick
+     * succession used to start two coroutines that both read the same row before
+     * either wrote, so one award was silently swallowed and lastActivityTimestamp
+     * could be written out of order.
+     */
     fun rewardXP(points: Int) {
         viewModelScope.launch {
-            val stats = userStatsDao.getUserStats().firstOrNull() ?: UserStatsEntity()
-            val now = System.currentTimeMillis()
+            database.withTransaction {
+                val stats = userStatsDao.getUserStatsOnce() ?: UserStatsEntity()
+                val now = System.currentTimeMillis()
 
-            userStatsDao.insertOrUpdate(
-                stats.copy(
-                    xp = stats.xp + points,
-                    streak = nextStreak(stats.streak, stats.lastActivityTimestamp, now),
-                    lastActivityTimestamp = now
+                userStatsDao.insertOrUpdate(
+                    stats.copy(
+                        xp = stats.xp + points,
+                        streak = nextStreak(stats.streak, stats.lastActivityTimestamp, now),
+                        lastActivityTimestamp = now
+                    )
                 )
-            )
+            }
         }
     }
 

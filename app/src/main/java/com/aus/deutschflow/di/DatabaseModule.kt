@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.MIGRATIONS
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
@@ -22,6 +23,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
+            .addMigrations(*MIGRATIONS)
             .apply {
                 // A user's saved vocabulary is the whole point of the app, so a
                 // release build must never drop it to satisfy a schema change.
