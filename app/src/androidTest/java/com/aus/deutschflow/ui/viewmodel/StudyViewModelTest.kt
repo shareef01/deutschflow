@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.KeystoreCipher
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.service.TTSHelper
 import kotlinx.coroutines.runBlocking
@@ -45,7 +46,7 @@ class StudyViewModelTest {
             database = database,
             vocabularyDao = database.vocabularyDao(),
             userStatsDao = database.userStatsDao(),
-            preferenceManager = PreferenceManager(context),
+            preferenceManager = PreferenceManager(context, KeystoreCipher()),
             ttsHelper = TTSHelper(context)
         )
     }
