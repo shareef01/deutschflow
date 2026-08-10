@@ -1,0 +1,15 @@
+<!--
+    Notification small icons are reduced to their alpha channel and tinted by the
+    system, so this is one flat opaque silhouette with no interior detail. The
+    platform drawable used before (android.R.drawable.ic_dialog_info) is full-colour
+    and rendered as a white blob in the status bar.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M20,2H4c-1.1,0 -2,0.9 -2,2v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2z" />
+</vector>
