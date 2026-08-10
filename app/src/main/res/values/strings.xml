@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">DeutschFlow</string>
+
+    <!-- Widget. android:description is what the picker shows under the name; without
+         it the entry is bare. -->
+    <string name="widget_description">A German word from your library, on your home screen.</string>
+    <string name="widget_heading">WORD OF THE DAY</string>
+    <string name="widget_preview_word">die Übung</string>
+    <string name="widget_preview_translation">practice</string>
 </resources>
