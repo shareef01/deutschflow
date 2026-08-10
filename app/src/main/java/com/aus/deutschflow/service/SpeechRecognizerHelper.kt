@@ -104,6 +104,37 @@ class SpeechRecognizerHelper @Inject constructor(
         }
     }
 
+    /**
+     * Abandons the current utterance without delivering it.
+     *
+     * Distinct from [stopListening], which asks for a result: when the user walks
+     * away from the screen or backgrounds the app mid-sentence, filing half a
+     * sentence as a transcript is worse than filing nothing. The recognizer itself
+     * is kept, so returning to the screen does not pay to rebuild it.
+     */
+    fun cancel() {
+        mainHandler.post {
+            speechRecognizer?.cancel()
+            _isListening.value = false
+            _isProcessing.value = false
+            _partialText.value = ""
+        }
+    }
+
+    /**
+     * Reports a denied microphone permission through the same channel as every other
+     * reason recording could not start.
+     *
+     * The screens used to ignore a denial entirely. Android stops showing the system
+     * dialog after the second refusal, so from then on the app's primary control did
+     * nothing at all and said nothing about why.
+     */
+    fun reportPermissionDenied() {
+        _errorState.value = MICROPHONE_DENIED
+        _isListening.value = false
+        _isProcessing.value = false
+    }
+
     fun destroy() {
         mainHandler.post {
             speechRecognizer?.cancel()
@@ -185,8 +216,7 @@ class SpeechRecognizerHelper @Inject constructor(
             "Microphone unavailable. Close anything else using it and try again."
         SpeechRecognizer.ERROR_CLIENT ->
             "Recording couldn't start. Try again."
-        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
-            "Microphone access is needed to transcribe. Grant it in Settings."
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> MICROPHONE_DENIED
         SpeechRecognizer.ERROR_NETWORK ->
             "No connection. Speech recognition needs network access."
         SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
@@ -205,5 +235,12 @@ class SpeechRecognizerHelper @Inject constructor(
 
     companion object {
         const val DEFAULT_LANGUAGE = "de-DE"
+
+        /**
+         * "Android's app settings", not "Settings": the app has a Settings tab of its
+         * own, and the microphone toggle is not in it.
+         */
+        const val MICROPHONE_DENIED =
+            "Microphone access is off. Turn it on for DeutschFlow in Android's app settings."
     }
 }

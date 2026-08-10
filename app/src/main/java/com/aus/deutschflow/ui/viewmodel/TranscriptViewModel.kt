@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.PreferenceManager
@@ -10,6 +11,7 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.AIResult
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.VocabularyProcessor
+import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -21,7 +23,8 @@ class TranscriptViewModel @Inject constructor(
     private val vocabularyProcessor: VocabularyProcessor,
     private val vocabularyDao: VocabularyDao,
     private val transcriptDao: TranscriptDao,
-    private val preferenceManager: PreferenceManager
+    private val preferenceManager: PreferenceManager,
+    private val widgetUpdater: WidgetUpdater
 ) : ViewModel() {
 
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
@@ -57,6 +60,14 @@ class TranscriptViewModel @Inject constructor(
     private val _suggestedWords = MutableStateFlow<List<String>>(emptyList())
     val suggestedWords: StateFlow<List<String>> = _suggestedWords
 
+    /**
+     * Gemini's example for the current utterance, kept so that saving can store it.
+     *
+     * It was parsed and then dropped on the floor: the library screen showed a
+     * randomly picked canned template in its place, for every word.
+     */
+    private val _example = MutableStateFlow("")
+
     private val _aiError = MutableStateFlow<String?>(null)
     val aiError: StateFlow<String?> = _aiError
 
@@ -77,6 +88,7 @@ class TranscriptViewModel @Inject constructor(
         viewModelScope.launch {
             _translation.value = ""
             _suggestedWords.value = emptyList()
+            _example.value = ""
             _aiError.value = null
             speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
         }
@@ -86,7 +98,22 @@ class TranscriptViewModel @Inject constructor(
         speechRecognizerHelper.stopListening()
     }
 
-    private suspend fun handleUtterance(text: String) {
+    /** Called when the screen leaves composition or the app is backgrounded. */
+    fun cancelListening() {
+        speechRecognizerHelper.cancel()
+    }
+
+    /** The user refused the microphone, so say so rather than doing nothing. */
+    fun onPermissionDenied() {
+        speechRecognizerHelper.reportPermissionDenied()
+    }
+
+    /**
+     * Internal rather than private so a test can drive a completed utterance through
+     * it. The alternative is starting real speech recognition, which no test can do.
+     */
+    @VisibleForTesting
+    internal suspend fun handleUtterance(text: String) {
         transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
 
         _isTranslating.value = true
@@ -95,12 +122,14 @@ class TranscriptViewModel @Inject constructor(
                 is AIResult.Success -> {
                     _translation.value = result.translation
                     _suggestedWords.value = result.keywords
+                    _example.value = result.example
                 }
                 is AIResult.Failure -> {
                     // Never let a failure reach the translation field: the Save button
                     // reads it, and an error string would be filed as a translation.
                     _translation.value = ""
                     _suggestedWords.value = emptyList()
+                    _example.value = ""
                     _aiError.value = result.message
                 }
             }
@@ -119,8 +148,13 @@ class TranscriptViewModel @Inject constructor(
         if (german.isBlank() || english.isBlank()) return
         viewModelScope.launch {
             vocabularyDao.insertVocabulary(
-                VocabularyEntity(germanText = german, englishTranslation = english)
+                VocabularyEntity(
+                    germanText = german,
+                    englishTranslation = english,
+                    exampleSentence = _example.value
+                )
             )
+            widgetUpdater.refresh()
         }
     }
 
