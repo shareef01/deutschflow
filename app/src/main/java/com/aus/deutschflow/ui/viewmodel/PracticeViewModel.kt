@@ -27,7 +27,16 @@ class PracticeViewModel @Inject constructor(
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
     val isProcessing: StateFlow<Boolean> = speechRecognizerHelper.isProcessing
-    val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
+    /**
+     * One error surface for the screen: whichever of the microphone or the voice
+     * engine last had something to say. Both are reasons the user is looking at a
+     * control that did not do what they expected.
+     */
+    val errorState: StateFlow<String?> = combine(
+        speechRecognizerHelper.errorState,
+        ttsHelper.error
+    ) { recognition, speech -> recognition ?: speech }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _targetSentence = MutableStateFlow("Ich lerne Deutsch.")
     val targetSentence: StateFlow<String> = _targetSentence
@@ -73,32 +82,20 @@ class PracticeViewModel @Inject constructor(
         speechRecognizerHelper.stopListening()
     }
 
+    /** Called when the screen leaves composition or the app is backgrounded. */
+    fun cancelListening() {
+        speechRecognizerHelper.cancel()
+    }
+
+    /** The user refused the microphone, so say so rather than doing nothing. */
+    fun onPermissionDenied() {
+        speechRecognizerHelper.reportPermissionDenied()
+    }
+
     private fun evaluatePronunciation(spokenText: String) {
-        val targetWords = _targetSentence.value.split(WORD_SPLIT)
-            .map { it.replace(NON_LETTERS, "") }
-            .filter { it.isNotBlank() }
-
-        val spokenWords = spokenText.lowercase().split(WORD_SPLIT)
-            .map { it.replace(NON_LETTERS, "") }
-            .filter { it.isNotBlank() }
-            .toSet()
-
-        val results = targetWords.map { targetWord ->
-            WordResult(
-                word = targetWord,
-                isCorrect = spokenWords.contains(targetWord.lowercase())
-            )
-        }
-
+        val (results, feedback) = evaluateMatch(_targetSentence.value, spokenText)
         _wordResults.value = results
-
-        val correctCount = results.count { it.isCorrect }
-        _feedback.value = when {
-            results.isEmpty() -> ""
-            correctCount == results.size -> "Excellent! Perfect pronunciation."
-            correctCount * 2 > results.size -> "Good! You got most of it."
-            else -> "Keep practicing! Try to match the highlighted words."
-        }
+        _feedback.value = feedback
     }
 
     fun setTarget(sentence: String) {
@@ -119,8 +116,49 @@ class PracticeViewModel @Inject constructor(
         speechRecognizerHelper.destroy()
     }
 
-    private companion object {
+    companion object {
         val WORD_SPLIT = Regex("\\s+")
         val NON_LETTERS = Regex("[^a-zA-ZäöüÄÖÜß]")
+
+        /**
+         * Pure function: scores [spokenText] against [targetSentence] word-by-word.
+         *
+         * Each word in the target is checked for presence (case-insensitive) in the
+         * spoken text. The feedback string follows the same progression the UI shows:
+         * perfect match, mostly correct, or keep at it.
+         *
+         * Extracted from the ViewModel so it can be tested without constructing any
+         * Android dependencies — same pattern as [StudyViewModel.nextStreak].
+         */
+        internal fun evaluateMatch(
+            targetSentence: String,
+            spokenText: String
+        ): Pair<List<WordResult>, String> {
+            val targetWords = targetSentence.split(WORD_SPLIT)
+                .map { it.replace(NON_LETTERS, "") }
+                .filter { it.isNotBlank() }
+
+            val spokenWords = spokenText.lowercase().split(WORD_SPLIT)
+                .map { it.replace(NON_LETTERS, "") }
+                .filter { it.isNotBlank() }
+                .toSet()
+
+            val results = targetWords.map { targetWord ->
+                WordResult(
+                    word = targetWord,
+                    isCorrect = spokenWords.contains(targetWord.lowercase())
+                )
+            }
+
+            val correctCount = results.count { it.isCorrect }
+            val feedback = when {
+                results.isEmpty() -> ""
+                correctCount == results.size -> "Excellent! Perfect pronunciation."
+                correctCount * 2 > results.size -> "Good! You got most of it."
+                else -> "Keep practicing! Try to match the highlighted words."
+            }
+
+            return Pair(results, feedback)
+        }
     }
 }

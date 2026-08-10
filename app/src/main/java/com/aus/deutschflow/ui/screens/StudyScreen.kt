@@ -4,7 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,21 +17,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.ui.theme.OnSurfaceMuted
 import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 import com.aus.deutschflow.ui.components.EmptyState
+import com.aus.deutschflow.ui.components.ErrorBanner
 
 @Composable
 fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
     val studyList by viewModel.studyList.collectAsState()
     val currentIndex by viewModel.currentIndex.collectAsState()
     val isFlipped by viewModel.isFlipped.collectAsState()
+    val hasLoaded by viewModel.hasLoaded.collectAsState()
+    val ttsError by viewModel.ttsError.collectAsState()
     val haptic = LocalHapticFeedback.current
 
     // Re-entering the tab starts a fresh session, so words saved since last time
-    // are included rather than waiting for the ViewModel to be recreated.
+    // are included rather than waiting for the ViewModel to be recreated. This is
+    // the only caller - the ViewModel deliberately does not also load on init.
     LaunchedEffect(Unit) {
         viewModel.startSession()
     }
+
+    // Hold the frame rather than claiming the library is empty before it is read.
+    if (!hasLoaded) return
 
     if (studyList.isEmpty()) {
         EmptyState(
@@ -56,6 +64,10 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // Autoplay is the one place the app speaks without being asked, so a device
+        // that cannot speak German has to say so here rather than sitting silent.
+        ErrorBanner(ttsError)
+
         // Card flip animation logic
         val rotation by animateFloatAsState(
             targetValue = if (isFlipped) 180f else 0f,
@@ -66,7 +78,9 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(350.dp)
+                // heightIn, not height: at the larger accessibility font scales a
+                // fixed 350dp clipped the word off the bottom of the card.
+                .heightIn(min = 350.dp)
                 .graphicsLayer {
                     rotationY = rotation
                     cameraDistance = 12f * density
@@ -103,16 +117,18 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         Icon(
-                            Icons.Default.VolumeUp,
+                            Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = "Speak",
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                             modifier = Modifier.size(32.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Tap to Flip",
+                            text = "Tap to flip",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            // Flat, not alpha-dimmed: 0.7f alpha on this ground read
+                            // at about 3.2:1, under WCAG AA for body text.
+                            color = OnSurfaceMuted
                         )
                     }
                 } else {
@@ -130,7 +146,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "CORRECT",
+                            text = "Got it",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.tertiary
