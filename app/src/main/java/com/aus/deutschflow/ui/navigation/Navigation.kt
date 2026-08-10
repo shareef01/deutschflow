@@ -74,7 +74,7 @@ fun MainNavigation(
                         IconButton(onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             if (!navController.popBackStack()) {
-                                navigate(navController, Screen.Transcript)
+                                navigateToTab(navController, Screen.Transcript)
                             }
                         }) {
                             Icon(
@@ -89,7 +89,7 @@ fun MainNavigation(
                     if (!isOnSettings) {
                         IconButton(onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            navigate(navController, Screen.Settings)
+                            navigateToDetail(navController, Screen.Settings)
                         }) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
@@ -127,7 +127,7 @@ fun MainNavigation(
                             selected = isSelected,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                navigate(navController, screen)
+                                navigateToTab(navController, screen)
                             },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -169,7 +169,7 @@ fun MainNavigation(
                             selected = isSelected,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                navigate(navController, screen)
+                                navigateToTab(navController, screen)
                             },
                             colors = NavigationRailItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -204,12 +204,27 @@ fun MainNavigation(
     }
 }
 
-private fun navigate(navController: NavHostController, screen: Screen) {
+/**
+ * Switches between the five tab destinations, keeping one of them on the stack.
+ */
+private fun navigateToTab(navController: NavHostController, screen: Screen) {
     navController.navigate(screen.route) {
         popUpTo(navController.graph.startDestinationId) {
             saveState = true
         }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+/**
+ * Pushes a non-tab destination on top of wherever the user already is.
+ *
+ * Settings used to go through [navigateToTab], which popped the current tab before
+ * pushing - so opening Settings from History and pressing back landed on Transcript.
+ */
+private fun navigateToDetail(navController: NavHostController, screen: Screen) {
+    navController.navigate(screen.route) {
+        launchSingleTop = true
     }
 }

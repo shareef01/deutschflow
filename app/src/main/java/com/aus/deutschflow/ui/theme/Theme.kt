@@ -4,21 +4,44 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
+/**
+ * Every token the app renders is named here.
+ *
+ * darkColorScheme fills anything left out from Material's baseline palette, and that
+ * palette is purple - so the tokens this scheme did not mention were quietly not
+ * this app's colours at all. The containers and the surfaceContainer ramp are here
+ * because components reach for them without being asked.
+ */
 private val DarkColorScheme = darkColorScheme(
     primary = PrimaryBlue,
     onPrimary = OnSurface,
+    primaryContainer = PrimaryContainer,
+    onPrimaryContainer = OnPrimaryContainer,
     secondary = SecondaryOrange,
     onSecondary = Background,
+    secondaryContainer = SecondaryContainer,
+    onSecondaryContainer = OnSecondaryContainer,
     tertiary = TertiaryGreen,
     onTertiary = Background,
+    tertiaryContainer = TertiaryContainer,
+    onTertiaryContainer = OnTertiaryContainer,
     background = Background,
     onBackground = OnBackground,
     surface = Surface,
     onSurface = OnSurface,
     surfaceVariant = SurfaceVariant,
     onSurfaceVariant = OnSurfaceVariant,
+    surfaceContainerLowest = SurfaceContainerLowest,
+    surfaceContainerLow = SurfaceContainerLow,
+    surfaceContainer = SurfaceContainer,
+    surfaceContainerHigh = SurfaceContainerHigh,
+    surfaceContainerHighest = SurfaceContainerHighest,
+    outline = Outline,
+    outlineVariant = OutlineVariant,
     error = ErrorRed,
-    onError = OnSurface
+    onError = OnSurface,
+    errorContainer = ErrorContainer,
+    onErrorContainer = OnErrorContainer
 )
 
 @Composable
