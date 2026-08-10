@@ -1,12 +1,9 @@
 package com.aus.deutschflow.di
 
-import android.content.Context
-import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -14,15 +11,16 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object ServiceModule {
 
+    /**
+     * VocabularyProcessor has no @Inject constructor - it takes a default-valued
+     * GeminiHelper so tests can substitute one - so it needs a binding here.
+     *
+     * TTSHelper does not: it is already an @Singleton @Inject constructor, and the
+     * @Provides that used to sit here was a second, redundant way to say so.
+     */
     @Provides
     @Singleton
     fun provideVocabularyProcessor(): VocabularyProcessor {
         return VocabularyProcessor()
-    }
-
-    @Provides
-    @Singleton
-    fun provideTTSHelper(@ApplicationContext context: Context): TTSHelper {
-        return TTSHelper(context)
     }
 }

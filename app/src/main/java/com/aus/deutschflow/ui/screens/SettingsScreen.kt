@@ -50,7 +50,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
     val message by viewModel.message.collectAsState()
 
-    var apiKeyInput by rememberSaveable(geminiApiKey) { mutableStateOf(geminiApiKey) }
+    // Null until the user types, and only then does the field stop following the
+    // stored key. Re-seeding on every change to that key looked equivalent, but the
+    // DataStore's first emission is "" and the real key lands a moment later - so
+    // anything typed in that window was silently replaced.
+    var typedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val apiKeyInput = typedKey ?: geminiApiKey
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var isKeyVisible by rememberSaveable { mutableStateOf(false) }
 
@@ -98,7 +103,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         
         OutlinedTextField(
             value = apiKeyInput,
-            onValueChange = { apiKeyInput = it },
+            onValueChange = { typedKey = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Gemini API Key") },
             placeholder = { Text("Paste your Google AI key here") },
