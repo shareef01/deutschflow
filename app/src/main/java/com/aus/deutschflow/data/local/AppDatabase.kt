@@ -18,9 +18,16 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
  * instance inside its own synchronized block, so two threads racing the first
  * access could each build a database.
  */
+/**
+ * Bump this and add a Migration in the same change. Release builds have no
+ * destructive fallback, so a version without a migration is a crash on launch;
+ * AppDatabaseMigrationTest is what turns that into a failing test instead.
+ */
+const val DATABASE_VERSION = 3
+
 @Database(
     entities = [VocabularyEntity::class, TranscriptEntity::class, UserStatsEntity::class],
-    version = 2,
+    version = DATABASE_VERSION,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
