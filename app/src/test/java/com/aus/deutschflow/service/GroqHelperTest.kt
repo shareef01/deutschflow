@@ -1,12 +1,18 @@
 package com.aus.deutschflow.service
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
+/**
+ * Covers the parts of the client that hold no Context, which is deliberately all of
+ * the parsing. The wording of a failure now comes from resources, so the sentences
+ * themselves are asserted where a Context exists - TranscriptViewModelTest.
+ */
 class GroqHelperTest {
 
-    private val helper = GroqHelper()
+    // --- the response the prompt asks for -------------------------------------
 
     @Test
     fun `parses the format the prompt asks for`() {
@@ -16,11 +22,10 @@ class GroqHelperTest {
             Example: Ich lerne jeden Tag Deutsch.
         """.trimIndent()
 
-        val result = helper.parseResponse(response)
+        val result = GroqHelper.parseResponse(response)
 
-        assertTrue(result is AIResult.Success)
-        result as AIResult.Success
-        assertEquals("I am learning German.", result.translation)
+        assertNotNull(result)
+        assertEquals("I am learning German.", result!!.translation)
         assertEquals(listOf("lernen", "Deutsch", "heute"), result.keywords)
         assertEquals("Ich lerne jeden Tag Deutsch.", result.example)
     }
@@ -33,32 +38,23 @@ class GroqHelperTest {
             * Example: Ich lerne Deutsch.
         """.trimIndent()
 
-        val result = helper.parseResponse(response)
+        val result = GroqHelper.parseResponse(response)
 
-        assertTrue(result is AIResult.Success)
-        result as AIResult.Success
-        assertEquals("I am learning German.", result.translation)
+        assertNotNull(result)
+        assertEquals("I am learning German.", result!!.translation)
         assertEquals(listOf("lernen", "Deutsch"), result.keywords)
         assertEquals("Ich lerne Deutsch.", result.example)
     }
 
     @Test
-    fun `reports failure instead of an empty success when the format is unrecognised`() {
-        val result = helper.parseResponse("Sure! Here is your translation, hope it helps.")
-
-        assertTrue(result is AIResult.Failure)
+    fun `returns null rather than an empty success when the format is unrecognised`() {
+        // Null, so the caller - which owns the Context, and so the wording - decides
+        // what to tell the user. An empty Success would have been storable as a
+        // translation by the Save button.
+        assertNull(GroqHelper.parseResponse("Sure! Here is your translation, hope it helps."))
     }
 
-    @Test
-    fun `reports failure when no api key is set`() {
-        val result = kotlinx.coroutines.runBlocking {
-            helper.translateAndExtract(text = "Hallo", apiKey = "")
-        }
-
-        assertTrue(result is AIResult.Failure)
-    }
-
-    // --- the OpenAI chat response shape --------------------------------------
+    // --- the OpenAI chat response shape ---------------------------------------
 
     @Test
     fun `pulls the assistant message out of a chat completion`() {
@@ -67,31 +63,33 @@ class GroqHelperTest {
             "content":"Translation: I am learning German."},"finish_reason":"stop"}]}
         """.trimIndent()
 
-        assertEquals("Translation: I am learning German.", helper.contentOf(body))
+        assertEquals("Translation: I am learning German.", GroqHelper.contentOf(body))
     }
 
     @Test
     fun `a response with no choices yields empty content rather than throwing`() {
-        // Which parseResponse then turns into a Failure, so the user is told
-        // something went wrong instead of the app falling over.
-        assertEquals("", helper.contentOf("""{"id":"x","choices":[]}"""))
+        val empty = GroqHelper.contentOf("""{"id":"x","choices":[]}""")
 
-        assertTrue(helper.parseResponse(helper.contentOf("""{"id":"x","choices":[]}""")) is AIResult.Failure)
+        assertEquals("", empty)
+        // Which the caller then reports as unreadable, instead of falling over.
+        assertNull(GroqHelper.parseResponse(empty))
     }
 
     // --- error reporting ------------------------------------------------------
 
     @Test
-    fun `prefers the provider's own explanation`() {
+    fun `lifts the provider's own explanation out of an error body`() {
         val body = """{"error":{"message":"Invalid API Key","type":"invalid_request_error"}}"""
 
-        assertEquals("Invalid API Key", helper.errorMessage(401, body))
+        assertEquals("Invalid API Key", GroqHelper.detailFrom(body))
     }
 
     @Test
-    fun `falls back to a plain explanation when the body is not the expected shape`() {
-        assertEquals("That API key was rejected. Check it in Settings.", helper.errorMessage(401, null))
-        assertEquals("Too many requests for now. Try again in a minute.", helper.errorMessage(429, "<html>"))
-        assertEquals("The service answered with 500.", helper.errorMessage(500, ""))
+    fun `yields null when the body carries no explanation`() {
+        // The caller falls back to a translated sentence for the status code.
+        assertNull(GroqHelper.detailFrom(null))
+        assertNull(GroqHelper.detailFrom("<html>not json</html>"))
+        assertNull(GroqHelper.detailFrom(""))
+        assertNull(GroqHelper.detailFrom("""{"error":{"message":""}}"""))
     }
 }

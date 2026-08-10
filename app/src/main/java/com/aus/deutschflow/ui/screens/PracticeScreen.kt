@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -35,8 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.OnLeavingScreen
+import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
 
 @Composable
@@ -55,6 +58,16 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
     val gradientBrush = Brush.linearGradient(
         colors = listOf(Color(0xFF00E5FF), primaryColor)
     )
+
+    // The level decides the colour; the resource decides the words. Deciding the
+    // colour from the words is what broke the moment they were translated.
+    val isPositive = feedback == PracticeFeedback.PERFECT
+    val feedbackText = when (feedback) {
+        PracticeFeedback.NONE -> null
+        PracticeFeedback.PERFECT -> stringResource(R.string.practice_feedback_perfect)
+        PracticeFeedback.GOOD -> stringResource(R.string.practice_feedback_good)
+        PracticeFeedback.KEEP_GOING -> stringResource(R.string.practice_feedback_keep_going)
+    }
 
     // Permission Mandate: Runtime Authorization
     val launcher = rememberLauncherForActivityResult(
@@ -85,7 +98,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Listen and repeat the sentence accurately to master your pronunciation.",
+            text = stringResource(R.string.practice_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -154,7 +167,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 ) {
                     Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Listen to Native", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                    Text(stringResource(R.string.practice_listen), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
                 }
             }
         }
@@ -164,23 +177,27 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         ErrorBanner(errorState)
 
         AnimatedVisibility(
-            visible = feedback.isNotEmpty(),
+            visible = feedback != PracticeFeedback.NONE,
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                color = if (feedback.startsWith("Excellent")) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
+                color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
                         else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
                 shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, if (feedback.startsWith("Excellent")) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
+                border = BorderStroke(
+                    1.dp,
+                    if (isPositive) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)
+                    else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                )
             ) {
                 Text(
-                    text = feedback,
+                    text = feedbackText.orEmpty(),
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Black,
-                    color = if (feedback.startsWith("Excellent")) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
+                    color = if (isPositive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center
                 )
             }
@@ -205,7 +222,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                         label = "spokenTextAnim"
                     ) { text ->
                         Text(
-                            text = text.ifEmpty { "Waiting for your speech..." },
+                            text = text.ifEmpty { stringResource(R.string.practice_waiting) },
                             style = MaterialTheme.typography.bodyLarge,
                             color = if (text.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
@@ -268,7 +285,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isListening) "Evaluate" else "Speak", 
+                            text = stringResource(if (isListening) R.string.practice_evaluate else R.string.practice_speak), 
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Black,
                             color = Color.White
@@ -293,7 +310,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Next", 
+                    text = stringResource(R.string.practice_next), 
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )

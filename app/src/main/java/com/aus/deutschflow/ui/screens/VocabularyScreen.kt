@@ -22,10 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.viewmodel.VocabularyViewModel
 import com.aus.deutschflow.ui.components.EmptyState
@@ -180,7 +182,7 @@ fun VocabularyListContent(
                 value = searchQuery,
                 onValueChange = onSearchChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search words or translations...", style = MaterialTheme.typography.bodyMedium) },
+                placeholder = { Text(stringResource(R.string.library_search_hint), style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium,
@@ -200,10 +202,9 @@ fun VocabularyListContent(
                 if (isEmpty) {
                     EmptyState(
                         icon = Icons.Default.AutoStories,
-                        message = "Your library is empty",
+                        message = stringResource(R.string.library_empty_title),
                         // The library no longer depends on a working API key, so say so.
-                        description = "Add a word with the button below, or transcribe " +
-                            "speech and save the translation."
+                        description = stringResource(R.string.library_empty_body)
                     )
                 } else {
                     LazyColumn(
@@ -236,7 +237,7 @@ fun VocabularyListContent(
                 .align(Alignment.BottomEnd)
                 .padding(24.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Add a word")
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.library_add_word))
         }
     }
 }
@@ -288,7 +289,7 @@ fun VocabularyItem(
                 }) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow, 
-                        contentDescription = "Speak", 
+                        contentDescription = stringResource(R.string.action_speak), 
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                         modifier = Modifier.size(24.dp)
                     )
@@ -302,7 +303,7 @@ fun VocabularyItem(
                 }) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit",
+                        contentDescription = stringResource(R.string.action_edit),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
@@ -313,7 +314,7 @@ fun VocabularyItem(
                 }) {
                     Icon(
                         imageVector = Icons.Default.Delete, 
-                        contentDescription = "Delete", 
+                        contentDescription = stringResource(R.string.action_delete), 
                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
                         modifier = Modifier.size(20.dp)
                     )
@@ -330,8 +331,8 @@ fun EditVocabularyDialog(
     onSave: (VocabularyEntity) -> Unit
 ) {
     VocabularyEditorDialog(
-        title = "Edit Vocabulary",
-        confirmLabel = "Save Changes",
+        title = stringResource(R.string.library_dialog_edit_title),
+        confirmLabel = stringResource(R.string.library_dialog_edit_confirm),
         stateKey = item.id,
         initialGerman = item.germanText,
         initialEnglish = item.englishTranslation,
@@ -348,8 +349,8 @@ fun AddVocabularyDialog(
     onSave: (german: String, english: String) -> Unit
 ) {
     VocabularyEditorDialog(
-        title = "Add Word",
-        confirmLabel = "Add to Library",
+        title = stringResource(R.string.library_dialog_add_title),
+        confirmLabel = stringResource(R.string.library_dialog_add_confirm),
         stateKey = ADD_DIALOG_STATE_KEY,
         initialGerman = "",
         initialEnglish = "",
@@ -386,14 +387,14 @@ private fun VocabularyEditorDialog(
                 OutlinedTextField(
                     value = germanText,
                     onValueChange = { germanText = it },
-                    label = { Text("German") },
+                    label = { Text(stringResource(R.string.library_field_german)) },
                     isError = germanText.isBlank(),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = translation,
                     onValueChange = { translation = it },
-                    label = { Text("Translation") },
+                    label = { Text(stringResource(R.string.library_field_translation)) },
                     isError = translation.isBlank(),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -412,7 +413,7 @@ private fun VocabularyEditorDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )

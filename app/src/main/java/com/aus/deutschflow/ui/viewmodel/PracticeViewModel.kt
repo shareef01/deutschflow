@@ -14,6 +14,16 @@ import javax.inject.Inject
 
 data class WordResult(val word: String, val isCorrect: Boolean)
 
+/**
+ * How well the attempt matched, as a value rather than a sentence.
+ *
+ * The screen used to decide which colour to use with
+ * `feedback.startsWith("Excellent")` - a comparison against English prose, which
+ * would have silently picked the failure colour the moment the string was
+ * translated. The wording now lives in resources and only the level crosses here.
+ */
+enum class PracticeFeedback { NONE, PERFECT, GOOD, KEEP_GOING }
+
 @HiltViewModel
 class PracticeViewModel @Inject constructor(
     private val speechRecognizerHelper: SpeechRecognizerHelper,
@@ -41,8 +51,8 @@ class PracticeViewModel @Inject constructor(
     private val _targetSentence = MutableStateFlow("Ich lerne Deutsch.")
     val targetSentence: StateFlow<String> = _targetSentence
 
-    private val _feedback = MutableStateFlow("")
-    val feedback: StateFlow<String> = _feedback
+    private val _feedback = MutableStateFlow(PracticeFeedback.NONE)
+    val feedback: StateFlow<PracticeFeedback> = _feedback
 
     private val _wordResults = MutableStateFlow<List<WordResult>>(emptyList())
     val wordResults: StateFlow<List<WordResult>> = _wordResults
@@ -66,14 +76,14 @@ class PracticeViewModel @Inject constructor(
                 }
             }
             _wordResults.value = emptyList()
-            _feedback.value = ""
+            _feedback.value = PracticeFeedback.NONE
         }
     }
 
     fun startPractice() {
         viewModelScope.launch {
             _wordResults.value = emptyList()
-            _feedback.value = ""
+            _feedback.value = PracticeFeedback.NONE
             speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
         }
     }
@@ -100,7 +110,7 @@ class PracticeViewModel @Inject constructor(
 
     fun setTarget(sentence: String) {
         _targetSentence.value = sentence
-        _feedback.value = ""
+        _feedback.value = PracticeFeedback.NONE
     }
 
     fun nextSentence() {
@@ -133,7 +143,7 @@ class PracticeViewModel @Inject constructor(
         internal fun evaluateMatch(
             targetSentence: String,
             spokenText: String
-        ): Pair<List<WordResult>, String> {
+        ): Pair<List<WordResult>, PracticeFeedback> {
             val targetWords = targetSentence.split(WORD_SPLIT)
                 .map { it.replace(NON_LETTERS, "") }
                 .filter { it.isNotBlank() }
@@ -152,10 +162,10 @@ class PracticeViewModel @Inject constructor(
 
             val correctCount = results.count { it.isCorrect }
             val feedback = when {
-                results.isEmpty() -> ""
-                correctCount == results.size -> "Excellent! Perfect pronunciation."
-                correctCount * 2 > results.size -> "Good! You got most of it."
-                else -> "Keep practicing! Try to match the highlighted words."
+                results.isEmpty() -> PracticeFeedback.NONE
+                correctCount == results.size -> PracticeFeedback.PERFECT
+                correctCount * 2 > results.size -> PracticeFeedback.GOOD
+                else -> PracticeFeedback.KEEP_GOING
             }
 
             return Pair(results, feedback)
