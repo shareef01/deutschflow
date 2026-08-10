@@ -57,6 +57,13 @@ class SettingsViewModel @Inject constructor(
     private val _message = MutableStateFlow<Int?>(null)
     val message: StateFlow<Int?> = _message
 
+    init {
+        // Settings is the only screen that reads the key, so it is the one place
+        // worth paying a Keystore round trip to re-encrypt one left in the clear by
+        // an older build.
+        viewModelScope.launch { preferenceManager.migrateLegacyApiKey() }
+    }
+
     fun dismissMessage() {
         _message.value = null
     }

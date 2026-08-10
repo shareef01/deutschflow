@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.KeystoreCipher
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
@@ -48,7 +49,7 @@ class TranscriptViewModelTest {
             .allowMainThreadQueries()
             .build()
 
-        preferenceManager = PreferenceManager(context)
+        preferenceManager = PreferenceManager(context, KeystoreCipher())
         // The DataStore is real and shared with the app, so set the key explicitly
         // rather than assuming the device happens to have none.
         preferenceManager.saveApiKey("")
