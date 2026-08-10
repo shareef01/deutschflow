@@ -22,15 +22,14 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.di.WidgetEntryPoint
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.firstOrNull
 
 class WordWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val dao = EntryPointAccessors
+        val vocab = EntryPointAccessors
             .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-            .vocabularyDao()
-        val vocab = dao.getAllVocabulary().firstOrNull()?.randomOrNull()
+            .dailyWord()
+            .today()
 
         provideContent {
             WordWidgetContent(vocab)
@@ -53,10 +52,12 @@ class WordWidget : GlanceAppWidget() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "WORD OF THE DAY",
+                // The picker preview already reads this from resources; the widget
+                // itself repeated it as a literal, so the two could drift apart.
+                text = LocalContext.current.getString(R.string.widget_heading),
                 style = TextStyle(
                     color = ColorProvider(R.color.primary_blue),
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
             )
