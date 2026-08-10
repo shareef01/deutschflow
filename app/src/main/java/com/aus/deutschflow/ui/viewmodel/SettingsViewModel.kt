@@ -38,7 +38,7 @@ class SettingsViewModel @Inject constructor(
     val userStats: StateFlow<UserStatsEntity?> = userStatsDao.getUserStats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val geminiApiKey: StateFlow<String> = preferenceManager.geminiApiKey
+    val apiKey: StateFlow<String> = preferenceManager.apiKey
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     val selectedDialect: StateFlow<String> = preferenceManager.selectedDialect
@@ -54,9 +54,9 @@ class SettingsViewModel @Inject constructor(
         _message.value = null
     }
 
-    fun saveGeminiApiKey(apiKey: String) {
+    fun saveApiKey(apiKey: String) {
         viewModelScope.launch {
-            preferenceManager.saveGeminiApiKey(apiKey.trim())
+            preferenceManager.saveApiKey(apiKey.trim())
             _message.value = "API key saved."
         }
     }

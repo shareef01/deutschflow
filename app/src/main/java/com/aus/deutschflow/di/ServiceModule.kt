@@ -13,7 +13,7 @@ object ServiceModule {
 
     /**
      * VocabularyProcessor has no @Inject constructor - it takes a default-valued
-     * GeminiHelper so tests can substitute one - so it needs a binding here.
+     * GroqHelper so tests can substitute one - so it needs a binding here.
      *
      * TTSHelper does not: it is already an @Singleton @Inject constructor, and the
      * @Provides that used to sit here was a second, redundant way to say so.

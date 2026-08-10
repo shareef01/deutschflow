@@ -29,9 +29,9 @@ import org.junit.runner.RunWith
  *
  * It matters because the Save button writes that field straight into the vocabulary
  * table: when a failure message lived there, "Translation failed: no response from
- * Gemini" was storable as the English meaning of a German sentence.
+ * the model" was storable as the English meaning of a German sentence.
  *
- * No mocking and no network. An empty API key makes GeminiHelper short-circuit to
+ * No mocking and no network. An empty API key makes GroqHelper short-circuit to
  * AIResult.Failure before it ever builds a request, which is the same path a user
  * with no key takes.
  */
@@ -56,7 +56,7 @@ class TranscriptViewModelTest {
         preferenceManager = PreferenceManager(context)
         // The DataStore is real and shared with the app, so set the key explicitly
         // rather than assuming the device happens to have none.
-        preferenceManager.saveGeminiApiKey("")
+        preferenceManager.saveApiKey("")
 
         viewModel = TranscriptViewModel(
             // Constructed but never started: nothing in this test touches the mic.
