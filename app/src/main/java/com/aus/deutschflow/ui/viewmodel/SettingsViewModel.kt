@@ -10,6 +10,7 @@ import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
 import com.aus.deutschflow.service.DailyWordNotification
+import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -22,7 +23,8 @@ class SettingsViewModel @Inject constructor(
     private val transcriptDao: TranscriptDao,
     private val userStatsDao: UserStatsDao,
     private val preferenceManager: PreferenceManager,
-    private val dailyWordNotification: DailyWordNotification
+    private val dailyWordNotification: DailyWordNotification,
+    private val widgetUpdater: WidgetUpdater
 ) : ViewModel() {
 
     val totalVocabulary: StateFlow<Int> = vocabularyDao.getAllVocabulary()
@@ -85,6 +87,7 @@ class SettingsViewModel @Inject constructor(
                 vocabularyDao.deleteAll()
                 userStatsDao.deleteAll()
             }
+            widgetUpdater.refresh()
             _message.value = "Library, history and stats cleared."
         }
     }

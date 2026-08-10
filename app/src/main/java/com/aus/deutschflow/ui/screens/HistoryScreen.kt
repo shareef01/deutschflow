@@ -34,6 +34,7 @@ fun HistoryScreen(viewModel: TranscriptViewModel = viewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
+            .imePadding()
     ) {
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -85,8 +86,10 @@ fun HistoryScreen(viewModel: TranscriptViewModel = viewModel()) {
 
 @Composable
 fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
-    val dateFormat = SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault())
-    val dateString = dateFormat.format(Date(transcript.timestamp))
+    // Both the formatter and the formatted string were rebuilt on every
+    // recomposition of every row.
+    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault()) }
+    val dateString = remember(transcript.timestamp) { dateFormat.format(Date(transcript.timestamp)) }
     val haptic = LocalHapticFeedback.current
 
     Card(

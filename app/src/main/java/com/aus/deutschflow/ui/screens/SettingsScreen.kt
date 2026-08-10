@@ -1,27 +1,41 @@
 package com.aus.deutschflow.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
@@ -36,11 +50,33 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
     val message by viewModel.message.collectAsState()
 
-    var apiKeyInput by remember(geminiApiKey) { mutableStateOf(geminiApiKey) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    
+    var apiKeyInput by rememberSaveable(geminiApiKey) { mutableStateOf(geminiApiKey) }
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    var isKeyVisible by rememberSaveable { mutableStateOf(false) }
+
     val haptic = LocalHapticFeedback.current
-    
+    val context = LocalContext.current
+
+    // Asked for here, at the moment the user requests a notification, rather than
+    // being demanded on the very first launch before they have seen a screen.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { viewModel.testNotification() }
+
+    fun requestTestNotification() {
+        val alreadyGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+        if (alreadyGranted) {
+            viewModel.testNotification()
+        } else {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val dialects = mapOf(
         "Germany (de-DE)" to "de-DE",
         "Austria (de-AT)" to "de-AT",
@@ -51,7 +87,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            // enableEdgeToEdge() turns off the manifest's adjustResize, so without
+            // this the keyboard lands directly on top of the API key field.
+            .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Section: AI Configuration
@@ -64,12 +103,32 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             label = { Text("Gemini API Key") },
             placeholder = { Text("Paste your Google AI key here") },
             shape = RoundedCornerShape(16.dp),
+            // Masked by default, and typed as a password so the keyboard stops
+            // offering the credential back as an autocomplete suggestion.
+            visualTransformation = if (isKeyVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                autoCorrectEnabled = false
+            ),
             trailingIcon = {
-                IconButton(onClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.saveGeminiApiKey(apiKeyInput) 
-                }) {
-                    Icon(Icons.Default.Save, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
+                Row {
+                    IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
+                        Icon(
+                            imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (isKeyVisible) "Hide API key" else "Show API key",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.saveGeminiApiKey(apiKeyInput)
+                    }) {
+                        Icon(Icons.Default.Save, contentDescription = "Save", tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             },
             singleLine = true
@@ -93,13 +152,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatGridItem(Modifier.weight(1f), "VOCABULARY", totalVocab.toString())
-                    StatGridItem(Modifier.weight(1f), "SESSIONS", totalTranscripts.toString())
+                    StatGridItem(Modifier.weight(1f), "Vocabulary", totalVocab.toString())
+                    StatGridItem(Modifier.weight(1f), "Sessions", totalTranscripts.toString())
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatGridItem(Modifier.weight(1f), "XP POINTS", (userStats?.xp ?: 0).toString())
-                    StatGridItem(Modifier.weight(1f), "STREAK", "${userStats?.streak ?: 0} days")
+                    StatGridItem(Modifier.weight(1f), "XP points", (userStats?.xp ?: 0).toString())
+                    StatGridItem(Modifier.weight(1f), "Streak", "${userStats?.streak ?: 0} days")
                 }
             }
         }
@@ -172,9 +231,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             FilledTonalButton(
-                onClick = { 
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.testNotification() 
+                    requestTestNotification()
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp)
