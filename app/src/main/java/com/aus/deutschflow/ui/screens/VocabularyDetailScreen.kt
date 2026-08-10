@@ -70,10 +70,13 @@ fun VocabularyDetailScreen(
                 modifier = Modifier.padding(start = 16.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.PlayArrow, 
+                    imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Speak",
                     modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    // The container's own On colour, not primary: brand blue on the
+                    // blue container reads at 4.3:1, under AA for anything but a
+                    // large icon.
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
@@ -82,7 +85,7 @@ fun VocabularyDetailScreen(
 
         // Context / Examples Section
         Text(
-            text = "CONTEXT & USAGE",
+            text = "Context and usage",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
@@ -125,7 +128,7 @@ fun VocabularyDetailScreen(
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = MaterialTheme.shapes.medium
         ) {
-            Text("BACK TO LIBRARY", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text("Back to library", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
     }
 }
