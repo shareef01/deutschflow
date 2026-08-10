@@ -4,19 +4,15 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import com.aus.deutschflow.ui.widget.WidgetUpdater
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -29,14 +25,14 @@ import org.junit.runner.RunWith
  * Pins the rule that a failed translation must never reach the translation field.
  *
  * It matters because the Save button writes that field straight into the vocabulary
- * table: when a failure message lived there, "Translation failed: no response from
- * the model" was storable as the English meaning of a German sentence.
+ * table: when a failure message lived there, "Translation failed" was storable as
+ * the English meaning of a German sentence.
  *
  * No mocking and no network. An empty API key makes GroqHelper short-circuit to
  * AIResult.Failure before it ever builds a request, which is the same path a user
- * with no key takes.
+ * with no key takes - and the only place the wording of that failure can be checked,
+ * now that it comes from resources and needs a Context.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class TranscriptViewModelTest {
 
@@ -46,9 +42,7 @@ class TranscriptViewModelTest {
     private lateinit var viewModel: TranscriptViewModel
 
     @Before
-    fun setup() = runTest {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-
+    fun setup() = runBlocking {
         context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
@@ -73,11 +67,10 @@ class TranscriptViewModelTest {
     @After
     fun teardown() {
         database.close()
-        Dispatchers.resetMain()
     }
 
     @Test
-    fun aFailedTranslationNeverReachesTheTranslationField() = runTest {
+    fun aFailedTranslationNeverReachesTheTranslationField() = runBlocking {
         viewModel.handleUtterance("Ich lerne Deutsch")
 
         assertEquals("", viewModel.translation.first())
@@ -85,7 +78,7 @@ class TranscriptViewModelTest {
     }
 
     @Test
-    fun aFailedTranslationIsReportedToTheUser() = runTest {
+    fun aFailedTranslationIsReportedToTheUser() = runBlocking {
         viewModel.handleUtterance("Ich lerne Deutsch")
 
         val error = viewModel.aiError.first()
@@ -97,7 +90,7 @@ class TranscriptViewModelTest {
     }
 
     @Test
-    fun theTranscriptIsStoredEvenWhenTheTranslationFails() = runTest {
+    fun theTranscriptIsStoredEvenWhenTheTranslationFails() = runBlocking {
         viewModel.handleUtterance("Ich lerne Deutsch")
 
         val history = database.transcriptDao().getAllTranscripts().first()
@@ -106,9 +99,14 @@ class TranscriptViewModelTest {
     }
 
     @Test
-    fun savingIsRejectedWhenEitherSideIsBlank() = runTest {
+    fun savingIsRejectedWhenEitherSideIsBlank() = runBlocking {
         viewModel.saveToVocabulary("Ich lerne Deutsch", "")
         viewModel.saveToVocabulary("", "I am learning German")
+
+        // Nothing should ever arrive, so give the launches a moment to prove it.
+        awaitCondition(timeoutMs = 1_000) {
+            database.vocabularyDao().getAllVocabulary().first().isNotEmpty()
+        }
 
         assertTrue(
             "a half-empty entry should never reach the library",
@@ -117,7 +115,7 @@ class TranscriptViewModelTest {
     }
 
     @Test
-    fun theHistorySearchFiltersOnText() = runTest {
+    fun theHistorySearchFiltersOnText() = runBlocking {
         viewModel.handleUtterance("Guten Morgen")
         viewModel.handleUtterance("Gute Nacht")
 
