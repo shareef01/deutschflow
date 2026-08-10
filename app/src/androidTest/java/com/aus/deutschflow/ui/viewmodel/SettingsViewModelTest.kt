@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.R
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.KeystoreCipher
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
@@ -54,7 +55,7 @@ class SettingsViewModelTest {
             vocabularyDao = database.vocabularyDao(),
             transcriptDao = database.transcriptDao(),
             userStatsDao = database.userStatsDao(),
-            preferenceManager = PreferenceManager(context),
+            preferenceManager = PreferenceManager(context, KeystoreCipher()),
             dailyWordNotification = DailyWordNotification(
                 context,
                 DailyWord(database.vocabularyDao())
