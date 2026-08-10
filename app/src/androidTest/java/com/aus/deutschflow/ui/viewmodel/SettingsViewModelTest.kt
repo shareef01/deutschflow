@@ -1,8 +1,11 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.aus.deutschflow.R
+import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
@@ -11,13 +14,8 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.DailyWord
 import com.aus.deutschflow.service.DailyWordNotification
 import com.aus.deutschflow.ui.widget.WidgetUpdater
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -34,8 +32,10 @@ import org.junit.runner.RunWith
  * The dialog says "This will permanently delete your library, history, and
  * earnings." It once deleted transcripts only - row by row, from a single snapshot -
  * leaving the vocabulary and the XP/streak untouched. Nothing would have caught that.
+ *
+ * The wipe runs on the real main looper and the test waits for it; swapping in a
+ * test dispatcher does not work in an instrumented test, see [awaitCondition].
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class SettingsViewModelTest {
 
@@ -44,11 +44,7 @@ class SettingsViewModelTest {
 
     @Before
     fun setup() {
-        // viewModelScope dispatches on Main; unconfined runs those launches eagerly
-        // so the assertions do not race the coroutine.
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val context = ApplicationProvider.getApplicationContext<Context>()
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
@@ -70,7 +66,6 @@ class SettingsViewModelTest {
     @After
     fun teardown() {
         database.close()
-        Dispatchers.resetMain()
     }
 
     private suspend fun seedEverything() {
@@ -86,16 +81,20 @@ class SettingsViewModelTest {
         )
     }
 
+    private suspend fun vocabularyIsEmpty() =
+        database.vocabularyDao().getAllVocabulary().first().isEmpty()
+
     @Test
-    fun clearAllProgressEmptiesTheLibraryTheHistoryAndTheStats() = runTest {
+    fun clearAllProgressEmptiesTheLibraryTheHistoryAndTheStats() = runBlocking {
         seedEverything()
 
         // Guard the seed, so a failure below cannot be a vacuous pass.
         assertEquals(2, database.vocabularyDao().getAllVocabulary().first().size)
         assertEquals(1, database.transcriptDao().getAllTranscripts().first().size)
-        assertNotNull(database.userStatsDao().getUserStats().first())
+        assertNotNull(database.userStatsDao().getUserStatsOnce())
 
         viewModel.clearAllProgress()
+        awaitCondition { vocabularyIsEmpty() }
 
         assertTrue(
             "the library should be empty",
@@ -107,29 +106,32 @@ class SettingsViewModelTest {
         )
         assertNull(
             "the XP and streak should be gone",
-            database.userStatsDao().getUserStats().first()
+            database.userStatsDao().getUserStatsOnce()
         )
     }
 
     @Test
-    fun clearAllProgressTellsTheUserWhatItDid() = runTest {
+    fun clearAllProgressTellsTheUserWhatItDid() = runBlocking {
         seedEverything()
 
         viewModel.clearAllProgress()
+        awaitCondition { viewModel.message.value != null }
 
-        assertEquals("Library, history and stats cleared.", viewModel.message.first())
+        // A resource id, not a sentence: the ViewModel no longer holds English.
+        assertEquals(R.string.message_progress_cleared, viewModel.message.value)
     }
 
     @Test
-    fun clearAllProgressOnAnEmptyDatabaseIsHarmless() = runTest {
+    fun clearAllProgressOnAnEmptyDatabaseIsHarmless() = runBlocking {
         viewModel.clearAllProgress()
+        awaitCondition { viewModel.message.value != null }
 
         assertTrue(database.vocabularyDao().getAllVocabulary().first().isEmpty())
-        assertNull(database.userStatsDao().getUserStats().first())
+        assertNull(database.userStatsDao().getUserStatsOnce())
     }
 
     @Test
-    fun theStatCountsFollowTheDatabase() = runTest {
+    fun theStatCountsFollowTheDatabase() = runBlocking {
         seedEverything()
 
         assertEquals(2, viewModel.totalVocabulary.first { it == 2 })
