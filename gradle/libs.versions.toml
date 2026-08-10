@@ -13,6 +13,9 @@ lifecycleRuntimeKtx = "2.8.0"
 activityCompose = "1.9.3"
 kotlin = "2.1.0"
 composeBom = "2024.10.01"
+# 2.8.4's compiler serialises schema bundles with a kotlinx-serialization newer than
+# the one on the Kotlin 2.1 KSP classpath, and KSP dies with an AbstractMethodError on
+# FieldBundle$$serializer. Room moves when Kotlin does.
 room = "2.6.1"
 navigationCompose = "2.8.0"
 ksp = "2.1.0-1.0.29"
@@ -22,14 +25,15 @@ lifecycleViewmodelCompose = "2.8.0"
 kotlinxCoroutines = "1.8.1"
 archCoreTesting = "2.2.0"
 generativeai = "0.9.0"
-# 2.51.1's aggregating task cannot read Kotlin 2.1 metadata
-# ("unsupported metadata version"), which breaks any @EntryPoint.
+# Held between two walls. 2.51.1's aggregating task cannot read Kotlin 2.1 metadata
+# ("unsupported metadata version"), which breaks any @EntryPoint - and 2.60.1 refuses
+# to apply below AGP 9 ("only compatible with AGP version 9.0.0 or higher"). Moving
+# off this version means moving to AGP 9 in the same change.
 hilt = "2.56.2"
 hiltNavigationCompose = "1.2.0"
-glance = "1.1.0"
-datastore = "1.1.1"
-# 2.9.x is the line built against Room 2.6, which is what the app already uses.
-work = "2.9.1"
+glance = "1.1.1"
+datastore = "1.2.1"
+work = "2.11.2"
 concurrentFutures = "1.2.0"
 tracing = "1.1.0"
 
