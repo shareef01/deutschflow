@@ -127,6 +127,9 @@ fun TranscriptContent(
             .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
+
+        if (hasTranscript) {
         OutlinedCard(
             modifier = Modifier
                 .fillMaxWidth()
@@ -136,17 +139,14 @@ fun TranscriptContent(
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Box(
-                modifier = Modifier.fillMaxWidth().padding(Spacing.lg),
-                contentAlignment = if (finalText.isEmpty() && !isListening) Alignment.Center else Alignment.TopStart
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().padding(Spacing.lg)) {
                 Text(
-                    text = if (isListening) partialText else finalText.ifEmpty { stringResource(R.string.transcript_placeholder) },
+                    text = if (isListening) partialText else finalText,
                     style = MaterialTheme.typography.titleMedium,
-                    textAlign = if (finalText.isEmpty() && !isListening) TextAlign.Center else TextAlign.Start,
-                    color = if (finalText.isEmpty() && !isListening) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
+        }
         }
 
         // Everything below the transcript shares what the card leaves, and scrolls
@@ -230,14 +230,20 @@ fun TranscriptContent(
             }
         }
 
-        if (isBusy) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.transcript_transcribing),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        Spacer(modifier = Modifier.height(Spacing.md))
+
+        Text(
+            text = stringResource(
+                when {
+                    isBusy -> R.string.transcript_transcribing
+                    isListening -> R.string.transcript_listening
+                    else -> R.string.transcript_hint
+                }
+            ),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (isListening) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
         Spacer(modifier = Modifier.height(Spacing.lg))
 
