@@ -58,6 +58,11 @@ class StudyViewModel @Inject constructor(
      * meant two reads and two shuffles every time the tab was opened.
      */
     fun startSession() {
+        // Cleared here rather than inside the coroutine: the session begins when the
+        // screen says so, and a tap landing before the database read came back would
+        // otherwise still be judged against the previous session's banked cards.
+        awardedCardIds.clear()
+
         viewModelScope.launch {
             val list = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
             // Index first: a shorter list published before the index resets would
@@ -95,14 +100,26 @@ class StudyViewModel @Inject constructor(
     }
 
     /**
-     * Adds [points] and advances the streak, atomically.
+     * Cards already banked this session.
+     *
+     * nextCard() wraps with a modulo, so "Got it!" on a one-word library used to
+     * mint XP for as long as somebody kept tapping. A card counts once per session;
+     * starting a new session offers them all again.
+     */
+    private val awardedCardIds = mutableSetOf<Int>()
+
+    /**
+     * Banks the card on screen, once, and advances the streak - atomically.
      *
      * The read and the write have to be one unit. Tapping "Got it!" twice in quick
      * succession used to start two coroutines that both read the same row before
      * either wrote, so one award was silently swallowed and lastActivityTimestamp
      * could be written out of order.
      */
-    fun rewardXP(points: Int) {
+    fun rewardCurrentCard(points: Int = XP_PER_CARD) {
+        val cardId = _studyList.value.getOrNull(_currentIndex.value)?.id ?: return
+        if (!awardedCardIds.add(cardId)) return
+
         viewModelScope.launch {
             database.withTransaction {
                 val stats = userStatsDao.getUserStatsOnce() ?: UserStatsEntity()
@@ -120,6 +137,9 @@ class StudyViewModel @Inject constructor(
     }
 
     companion object {
+
+        /** What one card is worth. */
+        const val XP_PER_CARD = 10
 
         /**
          * Compares calendar days in the device's zone.

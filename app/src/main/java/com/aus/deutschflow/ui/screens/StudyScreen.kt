@@ -179,7 +179,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
             Button(
                 onClick = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.rewardXP(10)
+                    viewModel.rewardCurrentCard()
                     viewModel.nextCard() 
                 },
                 modifier = Modifier.weight(1f).height(56.dp),

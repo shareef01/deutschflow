@@ -8,6 +8,7 @@ import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.KeystoreCipher
 import com.aus.deutschflow.data.local.PreferenceManager
+import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.TTSHelper
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -17,17 +18,19 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Pins the rule that no award is ever lost.
+ * Two rules about XP: no award is ever lost, and no card is ever counted twice.
  *
- * "Got it!" used to read the stats row, compute the new total in Kotlin and write it
- * back, all outside a transaction. Two taps in quick succession started two
- * coroutines that both read the same row before either wrote, so the second write
- * overwrote the first and one award vanished - silently, and only under the timing a
- * real user produces by tapping quickly.
+ * The first was a race. "Got it!" read the stats row, computed the new total in
+ * Kotlin and wrote it back, all outside a transaction, so two taps in quick
+ * succession both read before either wrote and one award vanished.
+ *
+ * The second was arithmetic. nextCard() wraps with a modulo, so on a one-word
+ * library the same card came back forever and XP could be minted by holding the
+ * button down.
  *
  * The awards are fired at the real main looper, exactly as the screen fires them,
- * and the test then waits. An earlier version swapped in a test dispatcher, which
- * cannot work in an instrumented test - see [awaitCondition].
+ * and the test then waits - see [awaitCondition] for why a test dispatcher cannot
+ * be used here.
  */
 @RunWith(AndroidJUnit4::class)
 class StudyViewModelTest {
@@ -58,25 +61,81 @@ class StudyViewModelTest {
 
     private suspend fun xp(): Int? = database.userStatsDao().getUserStatsOnce()?.xp
 
-    @Test
-    fun everyAwardSurvivesConcurrentTaps() = runBlocking {
-        repeat(AWARDS) { viewModel.rewardXP(POINTS) }
+    /** Seeds [count] words and starts a session over them. */
+    private suspend fun startSessionOf(count: Int) {
+        repeat(count) {
+            database.vocabularyDao().insertVocabulary(
+                VocabularyEntity(germanText = "wort$it", englishTranslation = "word$it")
+            )
+        }
+        viewModel.startSession()
+        awaitCondition { viewModel.studyList.value.size == count }
+    }
 
-        awaitCondition { xp() == AWARDS * POINTS }
+    @Test
+    fun everyDistinctCardIsCounted() = runBlocking {
+        startSessionOf(CARDS)
+
+        // Fired back to back, so the launches genuinely overlap: this is the
+        // lost-update guard as much as it is a count.
+        repeat(CARDS) {
+            viewModel.rewardCurrentCard()
+            viewModel.nextCard()
+        }
+
+        awaitCondition { xp() == CARDS * StudyViewModel.XP_PER_CARD }
 
         assertEquals(
-            "all $AWARDS awards should be counted; a lost update means the " +
+            "all $CARDS cards should be counted; a lost update means the " +
                 "read-modify-write is no longer atomic",
-            AWARDS * POINTS,
+            CARDS * StudyViewModel.XP_PER_CARD,
             xp()
         )
     }
 
     @Test
-    fun concurrentTapsOnOneDayLeaveTheStreakAtOne() = runBlocking {
-        repeat(AWARDS) { viewModel.rewardXP(POINTS) }
+    fun theSameCardCannotBeBankedTwice() = runBlocking {
+        startSessionOf(CARDS)
 
-        awaitCondition { xp() == AWARDS * POINTS }
+        // Never advancing, so this is one card, ten times.
+        repeat(10) { viewModel.rewardCurrentCard() }
+
+        awaitCondition { xp() == StudyViewModel.XP_PER_CARD }
+
+        assertEquals(
+            "holding Got it! on one card should bank it once, not ten times",
+            StudyViewModel.XP_PER_CARD,
+            xp()
+        )
+    }
+
+    @Test
+    fun aNewSessionOffersTheCardsAgain() = runBlocking {
+        startSessionOf(CARDS)
+        viewModel.rewardCurrentCard()
+        awaitCondition { xp() == StudyViewModel.XP_PER_CARD }
+
+        // Re-entering the Study tab is a new session, and studying again is the
+        // point of the app - only farming the same card inside one sitting is not.
+        viewModel.startSession()
+        awaitCondition { viewModel.studyList.value.size == CARDS }
+        viewModel.rewardCurrentCard()
+
+        awaitCondition { xp() == 2 * StudyViewModel.XP_PER_CARD }
+
+        assertEquals(2 * StudyViewModel.XP_PER_CARD, xp())
+    }
+
+    @Test
+    fun awardsOnOneDayLeaveTheStreakAtOne() = runBlocking {
+        startSessionOf(CARDS)
+
+        repeat(CARDS) {
+            viewModel.rewardCurrentCard()
+            viewModel.nextCard()
+        }
+
+        awaitCondition { xp() == CARDS * StudyViewModel.XP_PER_CARD }
 
         assertEquals(
             "awards within a single day are one day of the streak, however many there are",
@@ -86,18 +145,18 @@ class StudyViewModelTest {
     }
 
     @Test
-    fun aSingleAwardStartsTheStreak() = runBlocking {
-        viewModel.rewardXP(POINTS)
+    fun anEmptyLibraryBanksNothing() = runBlocking {
+        viewModel.startSession()
+        awaitCondition { viewModel.hasLoaded.value }
 
-        awaitCondition { xp() == POINTS }
+        viewModel.rewardCurrentCard()
 
-        val stats = database.userStatsDao().getUserStatsOnce()
-        assertEquals(POINTS, stats?.xp)
-        assertEquals(1, stats?.streak)
+        // No card on screen, so nothing to bank and nothing to crash on.
+        awaitCondition(timeoutMs = 1_000) { xp() != null }
+        assertEquals(null, xp())
     }
 
     private companion object {
-        const val AWARDS = 10
-        const val POINTS = 10
+        const val CARDS = 10
     }
 }
