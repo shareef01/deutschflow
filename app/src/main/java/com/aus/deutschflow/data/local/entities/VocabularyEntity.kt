@@ -10,7 +10,6 @@ data class VocabularyEntity(
     val germanText: String,
     val englishTranslation: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val isFavorite: Boolean = false,
     /**
      * The example the model produced for this word, or empty for a word typed in by
      * hand. The detail screen falls back to a generated sentence when it is empty.

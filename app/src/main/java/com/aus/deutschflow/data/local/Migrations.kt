@@ -21,10 +21,40 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
 }
 
 /**
+ * Drops isFavorite, which nothing ever read or wrote.
+ *
+ * The whole table is rebuilt rather than altered: ALTER TABLE ... DROP COLUMN needs
+ * SQLite 3.35, and minSdk 31 ships 3.32, so the column cannot simply be dropped on
+ * the oldest devices this app supports. The CREATE below is Room's own generated DDL
+ * for version 4, copied from the exported schema - if it drifts from that by so much
+ * as a default, runMigrationsAndValidate fails.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `vocabulary_new` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`germanText` TEXT NOT NULL, " +
+                "`englishTranslation` TEXT NOT NULL, " +
+                "`timestamp` INTEGER NOT NULL, " +
+                "`exampleSentence` TEXT NOT NULL DEFAULT '')"
+        )
+        db.execSQL(
+            "INSERT INTO `vocabulary_new` " +
+                "(`id`, `germanText`, `englishTranslation`, `timestamp`, `exampleSentence`) " +
+                "SELECT `id`, `germanText`, `englishTranslation`, `timestamp`, `exampleSentence` " +
+                "FROM `vocabulary`"
+        )
+        db.execSQL("DROP TABLE `vocabulary`")
+        db.execSQL("ALTER TABLE `vocabulary_new` RENAME TO `vocabulary`")
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
  * Release builds have no destructive fallback, so a gap here is a crash on launch
  * for every existing install. AppDatabaseMigrationTest walks this list.
  */
-val MIGRATIONS = arrayOf(MIGRATION_2_3)
+val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4)
