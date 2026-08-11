@@ -21,6 +21,11 @@
         </intent>
     </queries>
 
+    <!--
+        localeConfig is read only on API 33+. Below that the app simply follows the
+        system language, which is the behaviour it had anyway, so the attribute being
+        ignored there is the intent rather than an oversight.
+    -->
     <application
         android:name=".MainApp"
         android:allowBackup="true"
@@ -31,7 +36,8 @@
         android:localeConfig="@xml/locales_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Deutschflow">
+        android:theme="@style/Theme.Deutschflow"
+        tools:ignore="UnusedAttribute">
         <activity
             android:name=".MainActivity"
             android:exported="true"

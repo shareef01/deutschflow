@@ -18,7 +18,6 @@ val keystoreProperties = Properties().apply {
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
@@ -26,12 +25,17 @@ plugins {
 
 android {
     namespace = "com.aus.deutschflow"
-    compileSdk = 36
+    // 37 because androidx now requires it: core 1.19, lifecycle 2.11 and
+    // hilt-navigation-compose 1.4 all refuse to be compiled against less.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.aus.deutschflow"
         minSdk = 31
-        // Play requires new apps and updates to target API 36 from 31 August 2026.
+        // Deliberately behind compileSdk. Play requires new apps and updates to
+        // target API 36 from 31 August 2026, and raising targetSdk opts the app into
+        // behaviour changes that want testing on their own rather than arriving as a
+        // side effect of a dependency bump. Lint's OldTargetApi warning is the price.
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -92,18 +96,21 @@ ksp {
 
 dependencies {
     // AGP resolves the androidTest classpath consistently with the app's runtime
-    // classpath, so anything the app pins is forced onto Espresso too. These two
-    // pins are what let instrumented tests resolve at all.
+    // classpath, so whatever the app ends up with is forced onto the test one too.
+    // Every constraint here exists because that forcing broke something.
     constraints {
-        // Glance drags concurrent-futures up to a 1.2.0 alpha; Espresso needs stable 1.2.0.
+        // Glance and androidx.test want different concurrent-futures and tracing
+        // versions; hold both at the newer one.
         implementation(libs.androidx.concurrent.futures)
         implementation(libs.androidx.concurrent.futures.ktx)
-        // The app otherwise holds tracing at 1.0.0; every androidx.test release needs 1.1.0.
         implementation(libs.androidx.tracing)
-        // Dropping kotlinx-coroutines-play-services along with ML Kit let the app's
-        // runtime coroutines fall back to a strict 1.7.3, which then collides with the
-        // 1.8.1 that coroutines-test needs. Hold the app where it already sat.
+        // One coroutines version everywhere, so the app and coroutines-test agree.
         implementation(libs.kotlinx.coroutines.android)
+        // lifecycle-viewmodel-savedstate pulls kotlinx-serialization 1.7.3, and
+        // MigrationTestHelper in room-testing 2.8.4 throws AbstractMethodError on
+        // FieldBundle$$serializer against it. Nothing in this app serialises anything;
+        // the constraint exists purely so the schema files can be read back.
+        implementation(libs.kotlinx.serialization.core)
     }
 
     implementation(platform(libs.androidx.compose.bom))
