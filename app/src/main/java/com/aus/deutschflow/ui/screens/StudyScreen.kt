@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.theme.OnSurfaceMuted
+import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
@@ -37,6 +38,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
     // are included rather than waiting for the ViewModel to be recreated. This is
     // the only caller - the ViewModel deliberately does not also load on init.
     LaunchedEffect(Unit) {
+        viewModel.dismissTtsError()
         viewModel.startSession()
     }
 
@@ -80,9 +82,13 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                // heightIn, not height: at the larger accessibility font scales a
-                // fixed 350dp clipped the word off the bottom of the card.
-                .heightIn(min = 350.dp)
+                // weight, not a minimum height. With heightIn the card grew to
+                // whatever its content asked for - and its content asked to fill the
+                // screen - which pushed Skip and Got it off the bottom of a Column
+                // that does not scroll. They were not merely awkward to reach: they
+                // were not on the screen at all, so a card could not be advanced and
+                // XP could not be banked. A weight can only ever take what is left.
+                .weight(1f)
                 .graphicsLayer {
                     rotationY = rotation
                     cameraDistance = 12f * density
@@ -114,8 +120,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                     ) {
                         Text(
                             text = currentItem.germanText,
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
@@ -143,8 +148,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                     ) {
                         Text(
                             text = currentItem.englishTranslation,
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
@@ -160,7 +164,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
             }
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(Spacing.lg))
 
         Row(
             modifier = Modifier.fillMaxWidth(),

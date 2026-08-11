@@ -17,6 +17,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -110,17 +111,20 @@ fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = dateString.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.1.sp
+                    // Not uppercased, not primary: the timestamp is the least
+                    // important thing in the row and it was the loudest, in brand
+                    // blue over the transcript it belongs to. Screen readers also
+                    // spell some uppercase strings out letter by letter.
+                    text = dateString,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = transcript.fullText,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }

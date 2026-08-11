@@ -24,6 +24,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,6 +33,7 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.viewmodel.VocabularyViewModel
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.theme.Spacing
 
 @Composable
 fun VocabularyScreen(
@@ -66,6 +68,8 @@ fun VocabularyScreen(
         }.orEmpty()
     }
 
+    LaunchedEffect(Unit) { viewModel.dismissTtsError() }
+
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     // On a compact width the detail view is a state swap inside this destination
@@ -82,7 +86,7 @@ fun VocabularyScreen(
 
         if (isExpanded) {
             Row(modifier = Modifier.fillMaxSize()) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                     VocabularyListContent(
                         searchQuery = searchQuery,
                         onSearchChange = { viewModel.setSearchQuery(it) },
@@ -95,7 +99,7 @@ fun VocabularyScreen(
                     )
                 }
                 VerticalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.surfaceVariant)
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                     VocabularyDetailScreen(
                         item = selectedItem,
                         exampleSentence = exampleSentence,
@@ -211,7 +215,7 @@ fun VocabularyListContent(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         // Clears the add button so the last row is never trapped under it.
-                        contentPadding = PaddingValues(bottom = 96.dp)
+                        contentPadding = PaddingValues(bottom = Spacing.bottomActionClearance)
                     ) {
                         items(vocabularyList, key = { it.id }) { item ->
                             VocabularyItem(
@@ -233,6 +237,10 @@ fun VocabularyListContent(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onAdd()
             },
+            // primary, not the default primaryContainer: this app's container navy on
+            // a near-black ground made the button read as a dead rectangle.
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(24.dp)
@@ -269,17 +277,20 @@ fun VocabularyItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                 Text(
                     text = item.germanText,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = item.englishTranslation,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
