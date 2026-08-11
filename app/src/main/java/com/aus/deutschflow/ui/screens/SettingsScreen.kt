@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -41,6 +42,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
@@ -160,7 +162,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent),
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
@@ -189,7 +191,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.03f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             tonalElevation = 1.dp
         ) {
             Row(
@@ -336,10 +338,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
 fun SettingsHeader(title: String) {
     Text(
         text = title,
+        // A section label, not a headline: Black weight in full primary made every
+        // heading compete with the content underneath it.
         style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Black,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 12.dp, start = 4.dp)
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(top = Spacing.xl, bottom = Spacing.sm, start = Spacing.xs)
     )
 }
 
@@ -352,10 +355,13 @@ fun StatGridItem(modifier: Modifier, label: String, value: String) {
         horizontalAlignment = Alignment.Start
     ) {
         Text(
-            text = value, 
-            style = MaterialTheme.typography.displaySmall, 
-            fontWeight = FontWeight.Black,
-            color = MaterialTheme.colorScheme.primary
+            text = value,
+            // headlineMedium, and allowed to shrink: "0 days" at displaySmall/Black
+            // already reached the edges of its tile, and a two-digit streak clipped.
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
         Text(
             text = label, 

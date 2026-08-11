@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aus.deutschflow.ui.theme.OnSurfaceMuted
 
 @Composable
 fun EmptyState(
@@ -37,7 +38,9 @@ fun EmptyState(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                // Flat, not alpha-dimmed, for the same reason OnSurfaceMuted exists:
+                // alpha over a dark ground loses contrast faster than it looks like it should.
+                tint = OnSurfaceMuted
             )
         }
         

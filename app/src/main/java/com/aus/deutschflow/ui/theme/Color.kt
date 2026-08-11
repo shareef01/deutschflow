@@ -27,6 +27,15 @@ val TertiaryGreen = Color(0xFF30D158)
 val ErrorRed = Color(0xFFFF453A)
 
 /**
+ * The lighter end of the recording control's gradient.
+ *
+ * Two steps of the brand blue rather than two hues. The gradient was a hardcoded
+ * cyan, and swapping it for the theme's tertiary made it green-to-blue, which read
+ * as a different product's button.
+ */
+val PrimaryBlueLight = Color(0xFF4CC2FF)
+
+/**
  * Container pairs for the four brand roles.
  *
  * Material fills in any token a scheme leaves unset from its own baseline palette,
@@ -34,6 +43,12 @@ val ErrorRed = Color(0xFFFF453A)
  * blue icon on a purple pill and Study's flipped card put green text on a dusty
  * pink. Each container is a dark tint of its own hue, and each `On` colour is a pale
  * tint of the same, which is what makes them safe to pair.
+ */
+/**
+ * Dark enough to sit behind pale text, which is what a container is for - but note
+ * that Material's FloatingActionButton defaults to this colour, and a navy FAB on a
+ * near-black ground is invisible. The library's button sets primary explicitly for
+ * that reason.
  */
 val PrimaryContainer = Color(0xFF0A2540)
 val OnPrimaryContainer = Color(0xFFCCE4FF)

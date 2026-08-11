@@ -91,4 +91,9 @@ class VocabularyViewModel @Inject constructor(
     fun speak(text: String) {
         ttsHelper.speak(text)
     }
+
+    /** Called on entry, so a failure from another screen does not greet the user here. */
+    fun dismissTtsError() {
+        ttsHelper.dismissError()
+    }
 }

@@ -38,6 +38,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.theme.PrimaryBlueLight
+import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
@@ -56,7 +58,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val gradientBrush = Brush.linearGradient(
-        colors = listOf(Color(0xFF00E5FF), primaryColor)
+        colors = listOf(PrimaryBlueLight, primaryColor)
     )
 
     // The level decides the colour; the resource decides the words. Deciding the
@@ -85,17 +87,23 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
 
     // Without this the recognizer keeps the microphone open after the user moves to
     // another tab: this screen's ViewModel is kept alive by the saved back stack entry.
+    LaunchedEffect(Unit) { viewModel.dismissTtsError() }
+
     OnLeavingScreen { viewModel.cancelListening() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
+            .padding(Spacing.md)
             .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
+      Column(
+        modifier = Modifier
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
+      ) {
 
         Text(
             text = stringResource(R.string.practice_intro),
@@ -111,20 +119,17 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
             shape = RoundedCornerShape(24.dp),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 6.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val textStyle = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
-                    shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.3f),
-                        offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                        blurRadius = 4f
-                    )
+                // headlineSmall, and no drop shadow: the target is a whole
+                // sentence, and at headlineMedium/Black it filled the card and
+                // shouted over everything else on the screen.
+                val textStyle = MaterialTheme.typography.headlineSmall.copy(
+                    textAlign = TextAlign.Center
                 )
 
                 if (wordResults.isEmpty()) {
@@ -210,7 +215,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             shape = RoundedCornerShape(24.dp),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 if (isProcessing) {
@@ -233,9 +238,12 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             }
         }
 
-        // No weight() here: this Column scrolls, so its main-axis maximum is
-        // infinite and a weighted spacer collapses to zero height.
-        Spacer(modifier = Modifier.height(32.dp))
+      }
+
+        // Outside the scroll: Speak is the point of the screen, and it used to sit
+        // below the fold behind the target card, the error banner and the result
+        // card - reachable only by scrolling past everything it acts on.
+        Spacer(modifier = Modifier.height(Spacing.md))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -281,14 +289,14 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                             imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic, 
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
-                            tint = Color.White
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(if (isListening) R.string.practice_evaluate else R.string.practice_speak), 
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Black,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }

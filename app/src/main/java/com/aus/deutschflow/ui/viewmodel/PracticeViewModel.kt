@@ -121,6 +121,11 @@ class PracticeViewModel @Inject constructor(
         ttsHelper.speak(text)
     }
 
+    /** Called on entry, so a failure from another screen does not greet the user here. */
+    fun dismissTtsError() {
+        ttsHelper.dismissError()
+    }
+
     override fun onCleared() {
         speechRecognizerHelper.destroy()
     }

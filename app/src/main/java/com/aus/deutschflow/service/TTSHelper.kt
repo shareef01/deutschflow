@@ -95,6 +95,17 @@ class TTSHelper @Inject constructor(
         }
     }
 
+    /**
+     * Clears a failure once the user has left the screen that caused it.
+     *
+     * The error is a @Singleton StateFlow shared by every screen that speaks, so a
+     * failure raised by Study's autoplay was still on screen in the library, where
+     * nothing had been asked to speak at all.
+     */
+    fun dismissError() {
+        _error.value = null
+    }
+
     fun speak(text: String) {
         if (text.isBlank()) return
 
