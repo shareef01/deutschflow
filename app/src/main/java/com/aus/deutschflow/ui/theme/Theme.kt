@@ -51,6 +51,7 @@ fun DeutschflowTheme(
     MaterialTheme(
         colorScheme = DarkColorScheme,
         typography = Typography,
+        shapes = AppShapes,
         content = content
     )
 }

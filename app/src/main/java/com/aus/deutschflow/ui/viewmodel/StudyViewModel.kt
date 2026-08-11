@@ -99,6 +99,11 @@ class StudyViewModel @Inject constructor(
         ttsHelper.speak(text)
     }
 
+    /** Called on entry, so a failure from another screen does not greet the user here. */
+    fun dismissTtsError() {
+        ttsHelper.dismissError()
+    }
+
     /**
      * Cards already banked this session.
      *

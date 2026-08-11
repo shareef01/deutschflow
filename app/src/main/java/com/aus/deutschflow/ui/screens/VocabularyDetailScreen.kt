@@ -50,15 +50,15 @@ fun VocabularyDetailScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.germanText,
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Black,
+                    // headlineMedium, not displaySmall/Black: entries are whole
+                    // sentences here, not the single words the size assumed.
+                    style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = item.englishTranslation,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.secondary
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             

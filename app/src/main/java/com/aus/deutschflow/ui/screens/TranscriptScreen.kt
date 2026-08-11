@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,6 +42,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.theme.PrimaryBlueLight
+import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
 import com.aus.deutschflow.ui.viewmodel.TranscriptViewModel
@@ -114,43 +117,52 @@ fun TranscriptContent(
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val gradientBrush = Brush.linearGradient(
-        colors = listOf(Color(0xFF00E5FF), primaryColor)
+        colors = listOf(PrimaryBlueLight, primaryColor)
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
+            .padding(Spacing.md)
             .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Refactored: Premium OutlinedCard
         OutlinedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 250.dp),
+                .heightIn(min = 160.dp),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Box(modifier = Modifier.padding(24.dp)) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(Spacing.lg),
+                contentAlignment = if (finalText.isEmpty() && !isListening) Alignment.Center else Alignment.TopStart
+            ) {
                 Text(
                     text = if (isListening) partialText else finalText.ifEmpty { stringResource(R.string.transcript_placeholder) },
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontSize = 20.sp,
-                    lineHeight = 30.sp,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = if (finalText.isEmpty() && !isListening) TextAlign.Center else TextAlign.Start,
                     color = if (finalText.isEmpty() && !isListening) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        // Everything below the transcript shares what the card leaves, and scrolls
+        // once a translation arrives and there is more of it than there is room.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+
+        Spacer(modifier = Modifier.height(Spacing.lg))
 
         ErrorBanner(errorState)
 
-        // Hero Element: Gradient Pulse Microphone
         Box(contentAlignment = Alignment.Center) {
             if (isListening) {
                 val pulseTransition = rememberInfiniteTransition(label = "pulse")
@@ -199,7 +211,7 @@ fun TranscriptContent(
                 if (isBusy) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(36.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 3.dp
                     )
                 } else {
@@ -212,7 +224,7 @@ fun TranscriptContent(
                             else R.string.transcript_start_recording
                         ),
                         modifier = Modifier.size(40.dp),
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
@@ -227,7 +239,7 @@ fun TranscriptContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(Spacing.lg))
 
         // Translation Section
         if (translation.isNotEmpty()) {
@@ -262,7 +274,7 @@ fun TranscriptContent(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Text(
                         text = translation,
@@ -290,7 +302,7 @@ fun TranscriptContent(
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                             ) {
                                 Text(
                                     text = word,
@@ -319,6 +331,7 @@ fun TranscriptContent(
                     Text(stringResource(R.string.transcript_save), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
             }
+        }
         }
     }
 }

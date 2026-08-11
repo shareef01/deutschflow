@@ -117,15 +117,16 @@ fun MainNavigation(
                         NavigationBarItem(
                             icon = { Icon(screen.icon, contentDescription = stringResource(screen.title)) },
                             label = {
-                                if (isSelected) {
-                                    Text(
-                                        text = stringResource(screen.title),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                Text(
+                                    text = stringResource(screen.title),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1
+                                )
                             },
-                            alwaysShowLabel = false,
+                            // Always: with labels only on the selected item the bar
+                            // was four unexplained grey glyphs and one word, and the
+                            // row jumped sideways as the label appeared and vanished.
+                            alwaysShowLabel = true,
                             selected = isSelected,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -134,7 +135,9 @@ fun MainNavigation(
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer
                             )
                         )
                     }
