@@ -79,13 +79,12 @@
     <string name="practice_speak">Sprechen</string>
     <string name="practice_evaluate">Auswerten</string>
     <string name="practice_next">Weiter</string>
-    <string name="practice_waiting">Warte auf deine Aufnahme…</string>
     <string name="practice_feedback_perfect">Ausgezeichnet! Perfekte Aussprache.</string>
     <string name="practice_feedback_good">Gut! Das meiste war richtig.</string>
     <string name="practice_feedback_keep_going">Weiter üben! Versuche, die markierten Wörter zu treffen.</string>
 
     <!-- Settings -->
-    <string name="settings_ai_header">KI-Konfiguration</string>
+    <string name="settings_ai_header">KI-Übersetzung</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
     <string name="settings_api_key_hint">Füge hier deinen Groq-Schlüssel ein</string>
     <string name="settings_api_key_help">Erforderlich für automatische Übersetzungen und Wortschatz-Extraktion. Ein Schlüssel ist auf console.groq.com kostenlos.</string>
