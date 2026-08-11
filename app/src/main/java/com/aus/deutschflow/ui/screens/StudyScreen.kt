@@ -79,16 +79,17 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
             label = "cardFlip"
         )
 
+        // The card is centred in what is left rather than filling it. Taking the whole
+        // slot made a short word sit in the middle of a large grey field, with the
+        // emptiness inside the card instead of around it.
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                // weight, not a minimum height. With heightIn the card grew to
-                // whatever its content asked for - and its content asked to fill the
-                // screen - which pushed Skip and Got it off the bottom of a Column
-                // that does not scroll. They were not merely awkward to reach: they
-                // were not on the screen at all, so a card could not be advanced and
-                // XP could not be banked. A weight can only ever take what is left.
-                .weight(1f)
+                .heightIn(min = 240.dp, max = 420.dp)
                 .graphicsLayer {
                     rotationY = rotation
                     cameraDistance = 12f * density
@@ -108,8 +109,11 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
             shape = MaterialTheme.shapes.extraLarge
         ) {
+            // fillMaxWidth, not fillMaxSize: filling meant the card always grew to
+            // whatever height it was allowed, so a three-word card was mostly empty
+            // grey. It wraps its content now, between a floor and a ceiling.
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.lg),
                 contentAlignment = Alignment.Center
             ) {
                 if (rotation <= 90f || rotation >= 270f) {
@@ -181,6 +185,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                     }
                 }
             }
+        }
         }
 
         Spacer(modifier = Modifier.height(Spacing.lg))

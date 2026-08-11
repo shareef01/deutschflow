@@ -74,13 +74,12 @@
     <string name="practice_speak">Speak</string>
     <string name="practice_evaluate">Evaluate</string>
     <string name="practice_next">Next</string>
-    <string name="practice_waiting">Waiting for your speech…</string>
     <string name="practice_feedback_perfect">Excellent! Perfect pronunciation.</string>
     <string name="practice_feedback_good">Good! You got most of it.</string>
     <string name="practice_feedback_keep_going">Keep practicing! Try to match the highlighted words.</string>
 
     <!-- Settings -->
-    <string name="settings_ai_header">Intelligence Configuration</string>
+    <string name="settings_ai_header">AI translation</string>
     <string name="settings_api_key_label">Groq API Key</string>
     <string name="settings_api_key_hint">Paste your Groq key here</string>
     <string name="settings_api_key_help">Required for automatic vocabulary extraction and translations. A key is free at console.groq.com.</string>

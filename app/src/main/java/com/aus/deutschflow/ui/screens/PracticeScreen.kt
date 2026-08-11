@@ -102,7 +102,10 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         modifier = Modifier
             .weight(1f)
             .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        // Centred in what is left, so the sentence being practised sits where the
+        // eye goes rather than pinned to the top above an empty half-screen.
+        verticalArrangement = Arrangement.Center
       ) {
 
         Text(
@@ -208,10 +211,14 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             }
         }
 
+        // Shown only once there is a result or one is on its way. An empty bordered
+        // box reads as a screen that failed to load, which is why Transcript stopped
+        // drawing one too.
+        if (spokenText.isNotEmpty() || isProcessing) {
         OutlinedCard(
             // heightIn, not height: long recognised sentences were clipped, and worse
             // at large font scales.
-            modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
             shape = RoundedCornerShape(24.dp),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
@@ -227,15 +234,15 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                         label = "spokenTextAnim"
                     ) { text ->
                         Text(
-                            text = text.ifEmpty { stringResource(R.string.practice_waiting) },
+                            text = text,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = if (text.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 26.sp
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
             }
+        }
         }
 
       }
