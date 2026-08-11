@@ -43,8 +43,8 @@ class AppDatabaseMigrationTest {
     fun theReleaseConfigurationOpensAnExistingDatabase() {
         helper.createDatabase(TEST_DB, DATABASE_VERSION).use { db ->
             db.execSQL(
-                "INSERT INTO vocabulary (germanText, englishTranslation, timestamp, isFavorite) " +
-                    "VALUES ('das Haus', 'the house', 1000, 0)"
+                "INSERT INTO vocabulary (germanText, englishTranslation, timestamp) " +
+                    "VALUES ('das Haus', 'the house', 1000)"
             )
         }
 
@@ -98,8 +98,12 @@ class AppDatabaseMigrationTest {
     @Test
     fun theExampleSentenceColumnArrivesWithoutLosingAnything() {
         helper.createDatabase(TEST_DB, 2).use { db ->
+            // isFavorite is NOT NULL with no default at version 2, so a row written
+            // as that version has to supply it - which is the point of writing the
+            // fixture in the old schema's own terms.
             db.execSQL(
-                "INSERT INTO vocabulary (germanText, englishTranslation, timestamp, isFavorite) " +
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, isFavorite) " +
                     "VALUES ('das Haus', 'the house', 1000, 0)"
             )
         }
@@ -116,6 +120,48 @@ class AppDatabaseMigrationTest {
             // A word saved before the column existed has no example of its own; the
             // detail screen falls back to a generated one for exactly this case.
             assertEquals("", saved.first().exampleSentence)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The 3 -> 4 rebuild, which is the risky shape of migration: the table is
+     * recreated and copied rather than altered, so a mistake loses every saved word
+     * rather than one column.
+     */
+    @Test
+    fun droppingTheFavouriteColumnKeepsEveryWord() {
+        helper.createDatabase(TEST_DB, 3).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, isFavorite, exampleSentence) " +
+                    "VALUES ('das Haus', 'the house', 1000, 1, 'Das Haus ist gross.')"
+            )
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, isFavorite, exampleSentence) " +
+                    "VALUES ('lernen', 'to learn', 2000, 0, '')"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4)
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+
+            assertEquals(2, saved.size)
+            // Ordered by timestamp descending, so the newer word comes first.
+            assertEquals("lernen", saved.first().germanText)
+
+            val house = saved.first { it.germanText == "das Haus" }
+            assertEquals("the house", house.englishTranslation)
+            assertEquals(1000L, house.timestamp)
+            // The example survives the rebuild; only the unused column goes.
+            assertEquals("Das Haus ist gross.", house.exampleSentence)
+            // Ids are carried across rather than reassigned by the new table.
+            assertEquals(1, house.id)
         } finally {
             database.close()
         }
