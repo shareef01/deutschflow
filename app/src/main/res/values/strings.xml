@@ -21,7 +21,8 @@
     <string name="action_ok">OK</string>
 
     <!-- Transcript -->
-    <string name="transcript_placeholder">Tap the mic to transcribe…</string>
+    <string name="transcript_listening">Listening…</string>
+    <string name="transcript_hint">Tap to transcribe German</string>
     <string name="transcript_transcribing">Transcribing…</string>
     <string name="transcript_start_recording">Start recording</string>
     <string name="transcript_stop_recording">Stop recording</string>
@@ -41,6 +42,7 @@
     <string name="library_empty_title">Your library is empty</string>
     <string name="library_empty_body">Add a word with the button below, or transcribe speech and save the translation.</string>
     <string name="library_add_word">Add a word</string>
+    <string name="library_more_actions">More actions</string>
     <string name="library_dialog_add_title">Add Word</string>
     <string name="library_dialog_add_confirm">Add to Library</string>
     <string name="library_dialog_edit_title">Edit Vocabulary</string>
