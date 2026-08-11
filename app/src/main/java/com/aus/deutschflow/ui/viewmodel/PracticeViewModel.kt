@@ -122,7 +122,6 @@ class PracticeViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        super.onCleared()
         speechRecognizerHelper.destroy()
     }
 
