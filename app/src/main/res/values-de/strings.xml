@@ -26,7 +26,8 @@
     <string name="action_ok">OK</string>
 
     <!-- Transcript -->
-    <string name="transcript_placeholder">Tippe auf das Mikrofon, um zu transkribieren…</string>
+    <string name="transcript_listening">Hört zu…</string>
+    <string name="transcript_hint">Tippen, um Deutsch zu transkribieren</string>
     <string name="transcript_transcribing">Wird transkribiert…</string>
     <string name="transcript_start_recording">Aufnahme starten</string>
     <string name="transcript_stop_recording">Aufnahme beenden</string>
@@ -46,6 +47,7 @@
     <string name="library_empty_title">Deine Bibliothek ist leer</string>
     <string name="library_empty_body">Füge unten ein Wort hinzu oder transkribiere Sprache und speichere die Übersetzung.</string>
     <string name="library_add_word">Wort hinzufügen</string>
+    <string name="library_more_actions">Weitere Aktionen</string>
     <string name="library_dialog_add_title">Wort hinzufügen</string>
     <string name="library_dialog_add_confirm">Zur Bibliothek hinzufügen</string>
     <string name="library_dialog_edit_title">Wort bearbeiten</string>

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material3.*
@@ -272,12 +273,18 @@ fun VocabularyItem(
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(start = Spacing.md, top = Spacing.sm, end = Spacing.sm, bottom = Spacing.sm)
                 .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            // Top, not centre. Entries are whole sentences, so the text block is
+            // often three lines tall and the controls sat stranded in the middle of
+            // it, reading as though they belonged to the second line.
+            verticalAlignment = Alignment.Top
         ) {
-            Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = Spacing.sm, end = Spacing.sm)
+            ) {
                 Text(
                     text = item.germanText,
                     style = MaterialTheme.typography.titleMedium,
@@ -285,6 +292,7 @@ fun VocabularyItem(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(Spacing.xs))
                 Text(
                     text = item.englishTranslation,
                     style = MaterialTheme.typography.bodyMedium,
@@ -293,41 +301,61 @@ fun VocabularyItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onSpeak()
-                }) {
+
+            IconButton(onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onSpeak()
+            }) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = stringResource(R.string.action_speak),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Edit and delete move behind a menu. Three competing targets crowded the
+            // text, and the one that destroys a word without asking was the easiest
+            // of them to hit by accident.
+            Box {
+                var menuOpen by rememberSaveable { mutableStateOf(false) }
+
+                IconButton(onClick = { menuOpen = true }) {
                     Icon(
-                        imageVector = Icons.Default.PlayArrow, 
-                        contentDescription = stringResource(R.string.action_speak), 
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                        modifier = Modifier.size(24.dp)
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.library_more_actions),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                // The edit dialog existed but nothing ever opened it - tapping a card
-                // opened the detail view instead, so a typo could only be fixed by
-                // deleting the word and adding it again.
-                IconButton(onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onEdit()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.action_edit),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_edit)) },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onEdit()
+                        }
                     )
-                }
-                IconButton(onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onDelete()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Delete, 
-                        contentDescription = stringResource(R.string.action_delete), 
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp)
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(R.string.action_delete),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onDelete()
+                        }
                     )
                 }
             }

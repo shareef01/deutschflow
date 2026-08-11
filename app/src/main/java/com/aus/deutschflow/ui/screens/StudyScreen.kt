@@ -119,19 +119,32 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         modifier = Modifier.padding(24.dp)
                     ) {
                         Text(
+                            text = stringResource(R.string.library_field_german).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = OnSurfaceMuted
+                        )
+                        Spacer(modifier = Modifier.height(Spacing.sm))
+                        Text(
                             text = currentItem.germanText,
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Icon(
-                            Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = stringResource(R.string.action_speak),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(Spacing.md))
+                        // A real button. It carried a "Speak" description and did
+                        // nothing but flip the card, because the tap fell through to
+                        // the card behind it.
+                        IconButton(onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.speak(currentItem.germanText)
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = stringResource(R.string.action_speak),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                         Text(
                             text = stringResource(R.string.study_tap_to_flip),
                             style = MaterialTheme.typography.labelSmall,
@@ -146,6 +159,12 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.graphicsLayer { rotationY = 180f }.padding(24.dp)
                     ) {
+                        Text(
+                            text = stringResource(R.string.library_field_translation).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = OnSurfaceMuted
+                        )
+                        Spacer(modifier = Modifier.height(Spacing.sm))
                         Text(
                             text = currentItem.englishTranslation,
                             style = MaterialTheme.typography.headlineSmall,
