@@ -6,7 +6,6 @@ import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
-import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -28,7 +27,6 @@ enum class PracticeFeedback { NONE, PERFECT, GOOD, KEEP_GOING }
 class PracticeViewModel @Inject constructor(
     private val speechRecognizerHelper: SpeechRecognizerHelper,
     private val vocabularyDao: VocabularyDao,
-    private val vocabularyProcessor: VocabularyProcessor,
     private val preferenceManager: PreferenceManager,
     private val ttsHelper: TTSHelper
 ) : ViewModel() {
@@ -67,12 +65,22 @@ class PracticeViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    /**
+     * Picks something real to say.
+     *
+     * This used to wrap the entry in a template, so the sentence to pronounce came
+     * out as "Ich moechte mehr ueber '<your whole saved sentence>' lernen." - a
+     * question about the material rather than the material, and unreadable once
+     * entries were sentences rather than single words. The example the model wrote
+     * for the entry is a real German sentence; the entry itself is one too.
+     */
     private fun loadRandomTarget() {
         viewModelScope.launch {
             vocabularyDao.getAllVocabulary().firstOrNull()?.let { list ->
                 if (list.isNotEmpty()) {
                     val randomItem = list.random()
-                    _targetSentence.value = vocabularyProcessor.generateExample(randomItem.germanText)
+                    _targetSentence.value =
+                        randomItem.exampleSentence.ifBlank { randomItem.germanText }
                 }
             }
             _wordResults.value = emptyList()

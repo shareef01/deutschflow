@@ -54,12 +54,11 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
                 .padding(bottom = 16.dp)
                 .fillMaxWidth()
                 .background(
-                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                    RoundedCornerShape(12.dp)
+                    MaterialTheme.colorScheme.errorContainer,
+                    MaterialTheme.shapes.small
                 )
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.Warning,
@@ -69,11 +68,12 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
+                // On its own container colour and left-aligned, at body weight. It is
+                // a condition to read once, not an alarm: bold error red centred over
+                // three lines dominated every screen it appeared on.
                 text = lastMessage,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
             )
         }
     }
