@@ -38,6 +38,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.pressScale
+import com.aus.deutschflow.ui.theme.rememberPressSource
+import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.components.OnLeavingScreen
@@ -102,13 +105,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         // for the sentence being pinned above an empty half-screen, so the emptiness
         // had only moved: the real problem was that nothing owned the space
         // underneath. Something does now - see the result region below.
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            shape = MaterialTheme.shapes.extraLarge,
-            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 6.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
+        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
             // The sentence and its Speak control on one baseline. The control used to
             // be a full-width tonal bar stacked underneath, which added a second
             // horizontal band to a card that only holds one idea - and it carried
@@ -243,12 +240,7 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
 
                     // What the recogniser heard, on its own surface so it reads as the
                     // user's words rather than more of the app's.
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        shape = MaterialTheme.shapes.large,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
                         Text(
                             text = spokenText,
                             modifier = Modifier.padding(Spacing.md),
@@ -275,7 +267,13 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
+            // Each control owns its interaction source so pressScale can read the press
+            // without installing a second clickable over the Button's own.
+            val speakSource = rememberPressSource()
+            val nextSource = rememberPressSource()
+
             Button(
+                interactionSource = speakSource,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (isListening) {
@@ -291,7 +289,8 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 enabled = !isProcessing,
                 modifier = Modifier
                     .weight(1f)
-                    .height(ActionButtonHeight),
+                    .height(ActionButtonHeight)
+                    .pressScale(speakSource),
                 colors = ButtonDefaults.buttonColors(
                     // Recording is a stop-the-world state, so it takes the error role
                     // rather than a second gradient.
@@ -321,13 +320,15 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             }
 
             OutlinedButton(
+                interactionSource = nextSource,
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.nextSentence()
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(ActionButtonHeight),
+                    .height(ActionButtonHeight)
+                    .pressScale(nextSource),
                 shape = PillShape,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {

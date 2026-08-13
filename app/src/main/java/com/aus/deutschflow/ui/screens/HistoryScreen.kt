@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
+import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.HistoryViewModel
 import com.aus.deutschflow.ui.components.EmptyState
 import java.text.SimpleDateFormat
@@ -96,12 +97,7 @@ fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
     val dateString = remember(transcript.timestamp) { dateFormat.format(Date(transcript.timestamp)) }
     val haptic = LocalHapticFeedback.current
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = MaterialTheme.shapes.medium,
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
+    Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
         Row(
             modifier = Modifier
                 .padding(16.dp)
