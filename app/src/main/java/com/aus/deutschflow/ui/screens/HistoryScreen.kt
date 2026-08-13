@@ -51,8 +51,8 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
             singleLine = true,
             shape = MaterialTheme.shapes.medium,
             colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
         )
 
@@ -98,7 +98,7 @@ fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = MaterialTheme.shapes.medium,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {

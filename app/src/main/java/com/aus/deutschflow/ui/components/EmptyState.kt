@@ -30,14 +30,18 @@ fun EmptyState(
         // Refactored to perfectly circular background
         Box(
             modifier = Modifier
-                .size(120.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), CircleShape),
+                .size(144.dp)
+                // Solid, from the elevation ramp. At 0.4f alpha over a near-black
+                // ground the disc behind the icon was all but invisible, so the icon
+                // floated with nothing holding it.
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(56.dp),
+                // A fifth larger, with the disc scaled to match so the ratio holds.
+                modifier = Modifier.size(68.dp),
                 // Flat, not alpha-dimmed, for the same reason OnSurfaceMuted exists:
                 // alpha over a dark ground loses contrast faster than it looks like it should.
                 tint = OnSurfaceMuted
