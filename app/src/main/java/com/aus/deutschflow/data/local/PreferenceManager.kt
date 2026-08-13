@@ -1,11 +1,12 @@
 package com.aus.deutschflow.data.local
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -15,11 +16,21 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.dataStore by preferencesDataStore(name = "settings")
+private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
+/**
+ * The store is injected rather than reached for through a Context extension.
+ *
+ * The extension is a process-wide singleton over one file, so every test that built
+ * a PreferenceManager was reading and writing the user's own settings - and two of
+ * them cleared the API key as setup or teardown. That wiped a real key off a
+ * developer's device, and left GroqLiveTest with nothing to authenticate with, so the
+ * one test that proves the AI path against the real service could only ever run once.
+ * Tests now pass a store of their own; only [appDataStore] touches the real file.
+ */
 @Singleton
 class PreferenceManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val dataStore: DataStore<Preferences>,
     private val cipher: KeystoreCipher
 ) {
 
@@ -38,7 +49,7 @@ class PreferenceManager @Inject constructor(
      * Decryption is a Keystore round trip, so it happens off whichever thread is
      * collecting - which is the main one, since the ViewModels collect there.
      */
-    val apiKey: Flow<String> = context.dataStore.data
+    val apiKey: Flow<String> = dataStore.data
         .map { preferences ->
             preferences[KEY_API_KEY_ENCRYPTED]
                 ?.let { cipher.decrypt(it) }
@@ -47,11 +58,11 @@ class PreferenceManager @Inject constructor(
         }
         .flowOn(Dispatchers.IO)
 
-    val selectedDialect: Flow<String> = context.dataStore.data.map { preferences ->
+    val selectedDialect: Flow<String> = dataStore.data.map { preferences ->
         preferences[KEY_DIALECT] ?: "de-DE"
     }
 
-    val isAutoPlayEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val isAutoPlayEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[KEY_AUTO_PLAY] ?: true
     }
 
@@ -65,7 +76,7 @@ class PreferenceManager @Inject constructor(
     suspend fun saveApiKey(apiKey: String) {
         val encrypted = withContext(Dispatchers.IO) { cipher.encrypt(apiKey) } ?: return
 
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[KEY_API_KEY_ENCRYPTED] = encrypted
             preferences.remove(KEY_API_KEY_LEGACY)
         }
@@ -78,19 +89,32 @@ class PreferenceManager @Inject constructor(
      * and so the one place where paying for a Keystore round trip is warranted.
      */
     suspend fun migrateLegacyApiKey() {
-        val legacy = context.dataStore.data.first()[KEY_API_KEY_LEGACY] ?: return
+        val legacy = dataStore.data.first()[KEY_API_KEY_LEGACY] ?: return
         saveApiKey(legacy)
     }
 
     suspend fun saveDialect(dialect: String) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[KEY_DIALECT] = dialect
         }
     }
 
     suspend fun setAutoPlayEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[KEY_AUTO_PLAY] = enabled
         }
+    }
+
+    companion object {
+
+        /**
+         * The app's own settings file.
+         *
+         * The delegate behind it allows exactly one instance per file per process, so
+         * this is the only way to reach the real store: a second one built over the
+         * same path throws. Production gets it through Hilt; the one test that needs
+         * the user's real key - GroqLiveTest - calls this directly.
+         */
+        fun appDataStore(context: Context): DataStore<Preferences> = context.settingsDataStore
     }
 }

@@ -60,7 +60,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     // stored key. Re-seeding on every change to that key looked equivalent, but the
     // DataStore's first emission is "" and the real key lands a moment later - so
     // anything typed in that window was silently replaced.
-    var typedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    //
+    // remember, not rememberSaveable: saved instance state is handed to the system
+    // process and kept there for as long as the task lives, which would put the key
+    // in the clear outside the store it is encrypted in and outside what
+    // data_extraction_rules.xml covers. The cost is a half-typed key not surviving a
+    // rotation, which is the right way round for a credential.
+    var typedKey by remember { mutableStateOf<String?>(null) }
     val apiKeyInput = typedKey ?: storedKey
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var isKeyVisible by rememberSaveable { mutableStateOf(false) }
@@ -141,6 +147,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     IconButton(onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.saveApiKey(apiKeyInput)
+                        // Hand the field back to the stored value, so the plaintext
+                        // copy held here does not outlive the save.
+                        typedKey = null
                     }) {
                         Icon(Icons.Default.Save, contentDescription = stringResource(R.string.action_save), tint = MaterialTheme.colorScheme.primary)
                     }

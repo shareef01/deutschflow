@@ -6,14 +6,14 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
-import com.aus.deutschflow.data.local.KeystoreCipher
-import com.aus.deutschflow.data.local.PreferenceManager
+import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.TTSHelper
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -35,6 +35,9 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class StudyViewModelTest {
 
+    @get:Rule
+    val store = TestPreferencesRule("study-viewmodel-test")
+
     private lateinit var database: AppDatabase
     private lateinit var viewModel: StudyViewModel
 
@@ -49,7 +52,7 @@ class StudyViewModelTest {
             database = database,
             vocabularyDao = database.vocabularyDao(),
             userStatsDao = database.userStatsDao(),
-            preferenceManager = PreferenceManager(context, KeystoreCipher()),
+            preferenceManager = store.preferences,
             ttsHelper = TTSHelper(context)
         )
     }
