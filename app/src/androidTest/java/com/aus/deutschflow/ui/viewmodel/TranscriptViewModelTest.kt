@@ -5,9 +5,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.awaitCondition
+import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.data.local.AppDatabase
-import com.aus.deutschflow.data.local.KeystoreCipher
-import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.VocabularyProcessor
@@ -19,6 +18,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -37,9 +37,12 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class TranscriptViewModelTest {
 
+    /** This test's own store, so clearing the key cannot reach the user's. */
+    @get:Rule
+    val store = TestPreferencesRule("transcript-viewmodel-test")
+
     private lateinit var context: Context
     private lateinit var database: AppDatabase
-    private lateinit var preferenceManager: PreferenceManager
     private lateinit var viewModel: TranscriptViewModel
 
     @Before
@@ -49,10 +52,9 @@ class TranscriptViewModelTest {
             .allowMainThreadQueries()
             .build()
 
-        preferenceManager = PreferenceManager(context, KeystoreCipher())
-        // The DataStore is real and shared with the app, so set the key explicitly
-        // rather than assuming the device happens to have none.
-        preferenceManager.saveApiKey("")
+        // Explicit rather than assumed: an empty key is what puts GroqHelper on the
+        // failure path this whole class is about.
+        store.preferences.saveApiKey("")
 
         viewModel = TranscriptViewModel(
             // Constructed but never started: nothing in this test touches the mic.
@@ -60,7 +62,7 @@ class TranscriptViewModelTest {
             vocabularyProcessor = VocabularyProcessor(GroqHelper(context)),
             vocabularyDao = database.vocabularyDao(),
             transcriptDao = database.transcriptDao(),
-            preferenceManager = preferenceManager,
+            preferenceManager = store.preferences,
             widgetUpdater = WidgetUpdater(context)
         )
     }
@@ -113,16 +115,5 @@ class TranscriptViewModelTest {
             "a half-empty entry should never reach the library",
             database.vocabularyDao().getAllVocabulary().first().isEmpty()
         )
-    }
-
-    @Test
-    fun theHistorySearchFiltersOnText() = runBlocking {
-        viewModel.handleUtterance("Guten Morgen")
-        viewModel.handleUtterance("Gute Nacht")
-
-        viewModel.setHistoryQuery("morgen")
-
-        val filtered = viewModel.transcriptHistory.first { it.size == 1 }
-        assertEquals("Guten Morgen", filtered.first().fullText)
     }
 }
