@@ -3,7 +3,6 @@ package com.aus.deutschflow.ui.widget
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.*
@@ -39,13 +38,15 @@ class WordWidget : GlanceAppWidget() {
     @SuppressLint("RestrictedApi")
     @Composable
     private fun WordWidgetContent(vocab: VocabularyEntity?) {
-        // High-Contrast Dark Theme Colors
-        val backgroundColor = Color(0xFF121212)
-        
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(backgroundColor)
+                // From the resource, like every other colour here and like the picker
+                // preview beside it. This was a literal #121212, so when the app moved
+                // to a true-black ground the widget kept the old grey while its own
+                // preview - which reads the resource - went black. The two advertised
+                // different products on the same screen.
+                .background(ColorProvider(R.color.background_dark))
                 .padding(12.dp)
                 .clickable(actionStartActivity<MainActivity>()),
             verticalAlignment = Alignment.CenterVertically,
