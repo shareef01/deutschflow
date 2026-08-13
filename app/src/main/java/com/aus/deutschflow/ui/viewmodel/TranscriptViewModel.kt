@@ -41,19 +41,6 @@ class TranscriptViewModel @Inject constructor(
     ) { processing, translating -> processing || translating }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    private val _historyQuery = MutableStateFlow("")
-    val historyQuery: StateFlow<String> = _historyQuery
-
-    val transcriptHistory: StateFlow<List<TranscriptEntity>> = _historyQuery
-        .combine(transcriptDao.getAllTranscripts()) { query, list ->
-            if (query.isBlank()) {
-                list
-            } else {
-                list.filter { it.fullText.contains(query, ignoreCase = true) }
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
     private val _translation = MutableStateFlow("")
     val translation: StateFlow<String> = _translation
 
@@ -78,10 +65,6 @@ class TranscriptViewModel @Inject constructor(
         speechRecognizerHelper.results
             .onEach { handleUtterance(it) }
             .launchIn(viewModelScope)
-    }
-
-    fun setHistoryQuery(query: String) {
-        _historyQuery.value = query
     }
 
     fun startListening() {
@@ -135,12 +118,6 @@ class TranscriptViewModel @Inject constructor(
             }
         } finally {
             _isTranslating.value = false
-        }
-    }
-
-    fun deleteTranscript(transcript: TranscriptEntity) {
-        viewModelScope.launch {
-            transcriptDao.deleteTranscript(transcript)
         }
     }
 

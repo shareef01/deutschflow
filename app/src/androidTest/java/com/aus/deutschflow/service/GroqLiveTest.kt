@@ -36,7 +36,13 @@ class GroqLiveTest {
     @Test
     fun aRealSentenceComesBackTranslated() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val apiKey = PreferenceManager(context, KeystoreCipher()).apiKey.first()
+        // Deliberately the app's own store: the key under test is the one the user
+        // entered in Settings. Every other test now uses a store of its own, so this
+        // one is no longer read after another test has cleared it.
+        val apiKey = PreferenceManager(
+            PreferenceManager.appDataStore(context),
+            KeystoreCipher()
+        ).apiKey.first()
 
         assumeTrue("no API key stored on this device; skipping the live call", apiKey.isNotBlank())
 

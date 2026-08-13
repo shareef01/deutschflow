@@ -23,15 +23,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
-import com.aus.deutschflow.ui.viewmodel.TranscriptViewModel
+import com.aus.deutschflow.ui.viewmodel.HistoryViewModel
 import com.aus.deutschflow.ui.components.EmptyState
 import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun HistoryScreen(viewModel: TranscriptViewModel = viewModel()) {
-    val history by viewModel.transcriptHistory.collectAsState()
-    val historyQuery by viewModel.historyQuery.collectAsState()
+fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
+    val history by viewModel.transcripts.collectAsState()
+    val historyQuery by viewModel.query.collectAsState()
 
     Column(
         modifier = Modifier
@@ -44,7 +44,7 @@ fun HistoryScreen(viewModel: TranscriptViewModel = viewModel()) {
         // Standardized Search Bar
         OutlinedTextField(
             value = historyQuery,
-            onValueChange = { viewModel.setHistoryQuery(it) },
+            onValueChange = { viewModel.setQuery(it) },
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text(stringResource(R.string.history_search_hint), style = MaterialTheme.typography.bodyMedium) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },

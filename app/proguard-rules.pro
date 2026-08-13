@@ -1,6 +1,6 @@
 # R8 rules for DeutschFlow.
 #
-# Room, Hilt, Glance, DataStore and ML Kit all ship consumer rules, so this file
+# Room, Hilt, Glance and DataStore all ship consumer rules, so this file
 # only covers what is specific to this app. Additional keep rules also live in
 # src/main/keepRules/ and are merged in by AGP.
 

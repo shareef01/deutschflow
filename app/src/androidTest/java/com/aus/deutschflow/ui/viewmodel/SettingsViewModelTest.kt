@@ -7,12 +7,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.R
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
-import com.aus.deutschflow.data.local.KeystoreCipher
-import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.DailyWord
+import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.service.DailyWordNotification
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import kotlinx.coroutines.flow.first
@@ -23,6 +22,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -40,6 +40,9 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SettingsViewModelTest {
 
+    @get:Rule
+    val store = TestPreferencesRule("settings-viewmodel-test")
+
     private lateinit var database: AppDatabase
     private lateinit var viewModel: SettingsViewModel
 
@@ -55,7 +58,7 @@ class SettingsViewModelTest {
             vocabularyDao = database.vocabularyDao(),
             transcriptDao = database.transcriptDao(),
             userStatsDao = database.userStatsDao(),
-            preferenceManager = PreferenceManager(context, KeystoreCipher()),
+            preferenceManager = store.preferences,
             dailyWordNotification = DailyWordNotification(
                 context,
                 DailyWord(database.vocabularyDao())

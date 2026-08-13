@@ -1,17 +1,15 @@
 package com.aus.deutschflow.data.local
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.aus.deutschflow.TestPreferencesRule
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -23,22 +21,16 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class ApiKeyStorageTest {
 
-    private lateinit var context: Context
-    private lateinit var preferences: PreferenceManager
+    /**
+     * This test's own store. It used to be the app's, so the teardown that clears the
+     * key deleted the user's real one off whatever device the suite ran on.
+     */
+    @get:Rule
+    val store = TestPreferencesRule(STORE_NAME)
 
-    @Before
-    fun setup() {
-        context = ApplicationProvider.getApplicationContext()
-        preferences = PreferenceManager(context, KeystoreCipher())
-    }
+    private val preferences: PreferenceManager get() = store.preferences
 
-    @After
-    fun teardown() = runBlocking {
-        // The DataStore is the real one, shared with the app.
-        preferences.saveApiKey("")
-    }
-
-    private fun storeFile() = File(context.filesDir, "datastore/settings.preferences_pb")
+    private fun storeFile(): File = store.file
 
     @Test
     fun theKeyComesBackOutAsItWentIn() = runBlocking {
@@ -100,5 +92,6 @@ class ApiKeyStorageTest {
 
     private companion object {
         const val SECRET = "gsk_TESTKEY_do_not_ship_9f3a2b7c1d"
+        const val STORE_NAME = "api-key-storage-test"
     }
 }

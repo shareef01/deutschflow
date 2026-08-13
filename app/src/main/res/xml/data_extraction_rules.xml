@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The settings DataStore holds the user's Gemini API key in plaintext. It must
-    not leave the device in a backup or a device-to-device transfer; everything
-    else (the vocabulary database, the widget state) is fine to carry over.
+    The settings DataStore holds the user's Groq API key. It is encrypted under a
+    key that lives in the Android Keystore and never leaves the device, so a copy
+    restored elsewhere would be undecryptable rather than dangerous - but it would
+    also be useless, and a store full of ciphertext nothing can read is worse than
+    no store at all. Excluded from both channels for that reason; everything else
+    (the vocabulary database, the widget state) is fine to carry over.
 -->
 <data-extraction-rules>
     <cloud-backup>

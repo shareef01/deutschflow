@@ -148,7 +148,9 @@
 
     <!-- Widget -->
     <string name="widget_description">A German word from your library, on your home screen.</string>
-    <string name="widget_heading">WORD OF THE DAY</string>
+    <!-- Title case, not caps: some screen readers spell an uppercase run out
+         letter by letter. Same reason the rest of the app dropped ALL CAPS. -->
+    <string name="widget_heading">Word of the day</string>
     <string name="widget_empty_title">Öffne die App</string>
     <string name="widget_empty_subtitle">Lerne jetzt Deutsch!</string>
     <string name="widget_preview_word">die Übung</string>
