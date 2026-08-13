@@ -181,6 +181,81 @@ class PracticeViewModelTest {
         assertEquals(PracticeFeedback.PERFECT, feedback)
     }
 
+    // --- umlauts and their keyboard transliterations ------------------------
+    //
+    // The recogniser always returns the umlaut. A word typed on a keyboard without
+    // one does not have it. Both spellings are the same word, and scoring them as
+    // different is the failure this screen can least afford - it is the only thing
+    // Practice judges.
+
+    @Test
+    fun `a target typed with ue matches speech that came back with u-umlaut`() {
+        val (results, feedback) = PracticeViewModel.evaluateMatch(
+            targetSentence = "die Uebung",
+            spokenText = "die Übung"
+        )
+
+        assertEquals(2, results.size)
+        assertTrue("Uebung and Übung are the same word", results.all { it.isCorrect })
+        assertEquals(PracticeFeedback.PERFECT, feedback)
+    }
+
+    @Test
+    fun `a target with an umlaut matches speech transliterated the other way`() {
+        val (results, _) = PracticeViewModel.evaluateMatch(
+            targetSentence = "die Übung",
+            spokenText = "die Uebung"
+        )
+
+        assertTrue(results.all { it.isCorrect })
+    }
+
+    @Test
+    fun `oe and ae fold the same way`() {
+        val (results, _) = PracticeViewModel.evaluateMatch(
+            targetSentence = "schoene Baeume",
+            spokenText = "schöne Bäume"
+        )
+
+        assertEquals(2, results.size)
+        assertTrue(results.all { it.isCorrect })
+    }
+
+    @Test
+    fun `sharp-s matches its ss spelling`() {
+        val (results, _) = PracticeViewModel.evaluateMatch(
+            targetSentence = "Ich heisse Max",
+            spokenText = "Ich heiße Max"
+        )
+
+        assertEquals(3, results.size)
+        assertTrue(results.all { it.isCorrect })
+    }
+
+    @Test
+    fun `the word is reported as the user wrote it, not as it was folded`() {
+        val (results, _) = PracticeViewModel.evaluateMatch(
+            targetSentence = "die Übung",
+            spokenText = "die Uebung"
+        )
+
+        // The screen renders this back. Folding is for comparison only.
+        assertEquals("Übung", results[1].word)
+    }
+
+    @Test
+    fun `folding does not make different words match`() {
+        val (results, feedback) = PracticeViewModel.evaluateMatch(
+            targetSentence = "schoen",
+            spokenText = "schon"
+        )
+
+        // schön and schon are genuinely different words; only the first folds to schoen.
+        assertEquals(1, results.size)
+        assertFalse(results.first().isCorrect)
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
+    }
+
     @Test
     fun `whitespace-only spoken text is treated as empty`() {
         val (results, feedback) = PracticeViewModel.evaluateMatch(

@@ -143,11 +143,31 @@ class PracticeViewModel @Inject constructor(
         val NON_LETTERS = Regex("[^a-zA-ZäöüÄÖÜß]")
 
         /**
+         * Folds a word to the form both spellings of it share.
+         *
+         * German has a standard transliteration for keyboards without umlauts - ue for
+         * ü, oe for ö, ae for ä, ss for ß - and it is what anyone typing German on an
+         * English keyboard produces. The recogniser, meanwhile, always returns the
+         * umlaut. So a word saved by hand as "Uebung" never matched the "Übung" that
+         * came back from the microphone, and Practice told the user their pronunciation
+         * was wrong when it had been perfect. That is the one thing the screen exists
+         * to judge, so it judged it backwards.
+         *
+         * lowercase() is locale-invariant in Kotlin, which matters here: under a Turkish
+         * locale a default-locale lowercase would map I to a dotless ı and stop matching.
+         */
+        private fun String.foldGerman(): String = lowercase()
+            .replace("ä", "ae")
+            .replace("ö", "oe")
+            .replace("ü", "ue")
+            .replace("ß", "ss")
+
+        /**
          * Pure function: scores [spokenText] against [targetSentence] word-by-word.
          *
-         * Each word in the target is checked for presence (case-insensitive) in the
-         * spoken text. The feedback string follows the same progression the UI shows:
-         * perfect match, mostly correct, or keep at it.
+         * Each word in the target is checked for presence in the spoken text, ignoring
+         * case and umlaut spelling. The feedback follows the same progression the UI
+         * shows: perfect match, mostly correct, or keep at it.
          *
          * Extracted from the ViewModel so it can be tested without constructing any
          * Android dependencies — same pattern as [StudyViewModel.nextStreak].
@@ -160,15 +180,19 @@ class PracticeViewModel @Inject constructor(
                 .map { it.replace(NON_LETTERS, "") }
                 .filter { it.isNotBlank() }
 
-            val spokenWords = spokenText.lowercase().split(WORD_SPLIT)
+            val spokenKeys = spokenText.split(WORD_SPLIT)
                 .map { it.replace(NON_LETTERS, "") }
                 .filter { it.isNotBlank() }
+                .map { it.foldGerman() }
                 .toSet()
 
             val results = targetWords.map { targetWord ->
                 WordResult(
+                    // The target as it was written, not as it was folded: the user reads
+                    // this back, and showing them "uebung" for a word they saved as
+                    // "Übung" would be a second, more visible wrong answer.
                     word = targetWord,
-                    isCorrect = spokenWords.contains(targetWord.lowercase())
+                    isCorrect = spokenKeys.contains(targetWord.foldGerman())
                 )
             }
 
