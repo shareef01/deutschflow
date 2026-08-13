@@ -44,6 +44,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.pressScale
+import com.aus.deutschflow.ui.theme.rememberPressSource
+import com.aus.deutschflow.ui.theme.GlassFillRaised
+import com.aus.deutschflow.ui.theme.azureBrush
+import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
@@ -170,14 +175,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         // Section: Learning Progress
         SettingsHeader(stringResource(R.string.settings_progress_header))
         
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent),
-            shape = MaterialTheme.shapes.extraLarge,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
+            Column(modifier = Modifier.padding(Spacing.md)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_vocabulary), totalVocab.toString())
                     StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_sessions), totalTranscripts.toString())
@@ -199,15 +198,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         // Section: Audio Preferences
         SettingsHeader(stringResource(R.string.settings_audio_header))
         
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surface,
-            shape = MaterialTheme.shapes.large,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            tonalElevation = 1.dp
-        ) {
+        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
             Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                modifier = Modifier.padding(Spacing.md).fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -267,14 +260,19 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             // secondaryContainer when it is not told otherwise, and this palette's
             // secondary is orange - so the container resolved to a muddy brown that
             // appears nowhere else in the app and read as a warning it is not.
+            val notifySource = rememberPressSource()
+            val wipeSource = rememberPressSource()
+
             FilledTonalButton(
+                interactionSource = notifySource,
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     requestTestNotification()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(ActionButtonHeight),
+                    .height(ActionButtonHeight)
+                    .pressScale(notifySource),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = MaterialTheme.colorScheme.onSurface
@@ -289,13 +287,15 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             // The error container/on-container pair, which is the one place in the app
             // that role is correct: this is the destructive action.
             Button(
+                interactionSource = wipeSource,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     showDeleteConfirm = true
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(ActionButtonHeight),
+                    .height(ActionButtonHeight)
+                    .pressScale(wipeSource),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -370,35 +370,42 @@ fun SettingsHeader(title: String) {
     )
 }
 
+/**
+ * One cell of the telemetry matrix.
+ *
+ * The number is painted with a brush rather than a colour - Compose takes a Brush on
+ * TextStyle, so the azure ramp runs through the glyphs themselves instead of sitting
+ * behind them. It is the only text in the app treated that way, which is what makes
+ * the four figures read as instrument output rather than as more copy.
+ */
 @Composable
 fun StatGridItem(modifier: Modifier, label: String, value: String) {
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
-            // A hairline edge, so each tile reads as its own object rather than as a
-            // slightly lighter patch of the card it sits in.
-            .border(
-                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                MaterialTheme.shapes.medium
-            )
+            // Raised glass: this tile sits on the card that holds it, so it takes the
+            // brighter fill or the two would be indistinguishable.
+            .glassSurface(shape = MaterialTheme.shapes.medium, fill = GlassFillRaised)
             .padding(Spacing.md),
         horizontalAlignment = Alignment.Start
     ) {
         Text(
             text = value,
-            // headlineMedium, and allowed to shrink: "0 days" at displaySmall/Black
-            // already reached the edges of its tile, and a two-digit streak clipped.
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
+            // headlineLarge and allowed to shrink. Black weight with negative tracking
+            // comes from the scale; the brush is what is specific to the matrix.
+            style = MaterialTheme.typography.headlineLarge.copy(brush = azureBrush()),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        Spacer(modifier = Modifier.height(Spacing.xs))
         Text(
-            text = label, 
-            style = MaterialTheme.typography.labelMedium, 
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+            // Uppercased here rather than in the resource, so the string stays a
+            // sentence for a screen reader and for translation.
+            text = label.uppercase(),
+            // The wide tracking lives here rather than on labelSmall: this is the one
+            // place it is wanted, and the navigation bar renders its labels at that
+            // same style inside slots too narrow to take it.
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

@@ -41,7 +41,12 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.OracleMic
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.pressScale
+import com.aus.deutschflow.ui.theme.rememberPressSource
+import com.aus.deutschflow.ui.theme.GlassFillRaised
+import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.components.OnLeavingScreen
@@ -127,14 +132,11 @@ fun TranscriptContent(
         val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
 
         if (hasTranscript) {
-        OutlinedCard(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 160.dp),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            shape = MaterialTheme.shapes.extraLarge,
-            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                .heightIn(min = 160.dp)
+                .glassSurface()
         ) {
             Box(modifier = Modifier.fillMaxWidth().padding(Spacing.lg)) {
                 Text(
@@ -160,84 +162,16 @@ fun TranscriptContent(
 
         ErrorBanner(errorState)
 
-        Box(contentAlignment = Alignment.Center) {
-            if (isListening) {
-                val pulseTransition = rememberInfiniteTransition(label = "pulse")
-                val pulseScale by pulseTransition.animateFloat(
-                    initialValue = 1f,
-                    targetValue = 1.8f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1200, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = "pulseScale"
-                )
-                val pulseAlpha by pulseTransition.animateFloat(
-                    initialValue = 0.6f,
-                    targetValue = 0f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1200, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = "pulseAlpha"
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .scale(pulseScale)
-                        .alpha(pulseAlpha)
-                        .background(primaryColor, CircleShape)
-                )
-            }
-
-            // Solid roles, not a gradient. The same two-stop brush was on this control
-            // and on Practice's Speak button, so the app's two primary actions were
-            // the only surfaces in it painted with a gradient - and neither could
-            // derive its content colour from a container that was a Brush.
-            val recordContainer = if (isListening) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.primary
-            }
-            val recordContent = if (isListening) {
-                MaterialTheme.colorScheme.onError
-            } else {
-                MaterialTheme.colorScheme.onPrimary
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(recordContainer)
-                    .clickable(enabled = !isBusy) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (isListening) onStopListening() else onStartListening()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (isBusy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(36.dp),
-                        color = recordContent,
-                        strokeWidth = 3.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                        // The app's primary control: without this a screen reader
-                        // announces nothing at all for it.
-                        contentDescription = stringResource(
-                            if (isListening) R.string.transcript_stop_recording
-                            else R.string.transcript_start_recording
-                        ),
-                        modifier = Modifier.size(40.dp),
-                        tint = recordContent
-                    )
-                }
-            }
-        }
+        OracleMic(
+            icon = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+            contentDescription = stringResource(
+                if (isListening) R.string.transcript_stop_recording
+                else R.string.transcript_start_recording
+            ),
+            isListening = isListening,
+            isBusy = isBusy,
+            onClick = { if (isListening) onStopListening() else onStartListening() }
+        )
 
         Spacer(modifier = Modifier.height(Spacing.md))
 
@@ -285,12 +219,7 @@ fun TranscriptContent(
                     }
                 }
                 
-                OutlinedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                    shape = MaterialTheme.shapes.large,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                ) {
+                Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
                     Text(
                         text = translation,
                         // On the spacing scale, and no inline fontSize override: the
@@ -317,10 +246,11 @@ fun TranscriptContent(
                         // Rendered as labels, not chips: there is no per-word
                         // translation to save, so nothing here is tappable.
                         suggestedWords.forEach { word ->
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            Box(
+                                modifier = Modifier.glassSurface(
+                                    shape = MaterialTheme.shapes.small,
+                                    fill = GlassFillRaised
+                                )
                             ) {
                                 Text(
                                     text = word,
@@ -335,14 +265,17 @@ fun TranscriptContent(
 
                 Spacer(modifier = Modifier.height(Spacing.lg))
 
+                val saveSource = rememberPressSource()
                 Button(
+                    interactionSource = saveSource,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onSave()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(ActionButtonHeight),
+                        .height(ActionButtonHeight)
+                        .pressScale(saveSource),
                     shape = PillShape
                 ) {
                     Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(20.dp))
