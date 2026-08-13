@@ -71,27 +71,50 @@ class TTSHelper @Inject constructor(
         }
     }
 
+    /**
+     * Why the engine could not speak, when it could not.
+     *
+     * These are two different problems with two different remedies, and they were one
+     * message. A device can have no synthesiser selected at all - which is the state a
+     * Pixel was found in, with Google's engine installed but never set as the default -
+     * and telling that user to install a German voice sends them to fix something that
+     * is not broken. The other case is the opposite: engine fine, German absent.
+     */
+    private enum class Failure {
+        /** No engine bound: none installed, or none chosen as the system default. */
+        NO_ENGINE,
+
+        /** An engine answered, but it has no German. */
+        NO_GERMAN
+    }
+
     private fun onEngineInit(engine: TextToSpeech?, status: Int) {
-        val ready = when {
-            engine == null -> false
-            status != TextToSpeech.SUCCESS -> false
+        val failure = when {
+            engine == null || status != TextToSpeech.SUCCESS -> Failure.NO_ENGINE
             else -> when (engine.setLanguage(Locale.GERMAN)) {
-                TextToSpeech.LANG_MISSING_DATA, TextToSpeech.LANG_NOT_SUPPORTED -> false
-                else -> true
+                TextToSpeech.LANG_MISSING_DATA, TextToSpeech.LANG_NOT_SUPPORTED -> Failure.NO_GERMAN
+                else -> null
             }
         }
 
         val queued = pendingText
         pendingText = null
 
-        if (ready) {
+        if (failure == null) {
             state = State.READY
             _error.value = null
             queued?.let { engine?.speak(it, TextToSpeech.QUEUE_FLUSH, null, null) }
         } else {
             state = State.UNAVAILABLE
-            Log.w(TAG, "German text-to-speech is unavailable (init status $status)")
-            if (queued != null) _error.value = context.getString(R.string.tts_unavailable)
+            Log.w(TAG, "Text-to-speech unavailable: $failure (init status $status)")
+            if (queued != null) {
+                _error.value = context.getString(
+                    when (failure) {
+                        Failure.NO_ENGINE -> R.string.tts_no_engine
+                        Failure.NO_GERMAN -> R.string.tts_no_german
+                    }
+                )
+            }
         }
     }
 

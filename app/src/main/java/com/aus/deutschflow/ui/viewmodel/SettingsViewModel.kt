@@ -40,8 +40,20 @@ class SettingsViewModel @Inject constructor(
     val userStats: StateFlow<UserStatsEntity?> = userStatsDao.getUserStats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val apiKey: StateFlow<String> = preferenceManager.apiKey
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    /**
+     * Whether a key is stored - not the key.
+     *
+     * This used to expose the decrypted key itself, which the screen then put into a
+     * text field on every visit. That defeated most of the point of encrypting it: the
+     * plaintext was reconstructed into UI state whenever Settings was opened, sat in
+     * the composition for as long as the screen lived, and was offered to whatever
+     * password manager the device runs, because a filled password-typed field is
+     * exactly what those look for. Nothing needs the key here; the only screen that
+     * sends it reads it from PreferenceManager directly.
+     */
+    val hasApiKey: StateFlow<Boolean> = preferenceManager.apiKey
+        .map { it.isNotBlank() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val selectedDialect: StateFlow<String> = preferenceManager.selectedDialect
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "de-DE")

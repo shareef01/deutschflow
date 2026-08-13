@@ -58,24 +58,24 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val totalVocab by viewModel.totalVocabulary.collectAsState()
     val totalTranscripts by viewModel.totalTranscripts.collectAsState()
     val userStats by viewModel.userStats.collectAsState()
-    val storedKey by viewModel.apiKey.collectAsState()
+    val hasApiKey by viewModel.hasApiKey.collectAsState()
     val selectedDialect by viewModel.selectedDialect.collectAsState()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
     val message by viewModel.message.collectAsState()
     val streak = userStats?.streak ?: 0
 
-    // Null until the user types, and only then does the field stop following the
-    // stored key. Re-seeding on every change to that key looked equivalent, but the
-    // DataStore's first emission is "" and the real key lands a moment later - so
-    // anything typed in that window was silently replaced.
+    // The field starts empty and stays empty, even when a key is stored.
+    //
+    // It used to be seeded with the decrypted key on every visit, which put the
+    // plaintext back into UI state each time Settings opened and handed a filled
+    // password field to whatever password manager the device runs. A key is write-only
+    // from here now: the screen says whether one is saved, and typing replaces it.
     //
     // remember, not rememberSaveable: saved instance state is handed to the system
-    // process and kept there for as long as the task lives, which would put the key
-    // in the clear outside the store it is encrypted in and outside what
-    // data_extraction_rules.xml covers. The cost is a half-typed key not surviving a
-    // rotation, which is the right way round for a credential.
-    var typedKey by remember { mutableStateOf<String?>(null) }
-    val apiKeyInput = typedKey ?: storedKey
+    // process and kept for as long as the task lives, which would put a half-typed key
+    // in the clear outside the store it is encrypted in. Losing it on rotation is the
+    // right way round for a credential.
+    var typedKey by remember { mutableStateOf("") }
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var isKeyVisible by rememberSaveable { mutableStateOf(false) }
 
@@ -124,11 +124,18 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         SettingsHeader(stringResource(R.string.settings_ai_header))
         
         OutlinedTextField(
-            value = apiKeyInput,
+            value = typedKey,
             onValueChange = { typedKey = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.settings_api_key_label)) },
-            placeholder = { Text(stringResource(R.string.settings_api_key_hint)) },
+            placeholder = {
+                Text(
+                    stringResource(
+                        if (hasApiKey) R.string.settings_api_key_replace
+                        else R.string.settings_api_key_hint
+                    )
+                )
+            },
             shape = MaterialTheme.shapes.medium,
             // Masked by default, and typed as a password so the keyboard stops
             // offering the credential back as an autocomplete suggestion.
@@ -152,18 +159,48 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.saveApiKey(apiKeyInput)
-                        // Hand the field back to the stored value, so the plaintext
-                        // copy held here does not outlive the save.
-                        typedKey = null
-                    }) {
-                        Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_save), tint = MaterialTheme.colorScheme.primary)
+                    IconButton(
+                        // Nothing typed is nothing to save, and an empty save would
+                        // silently wipe a working key.
+                        enabled = typedKey.isNotBlank(),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.saveApiKey(typedKey)
+                            // The plaintext must not outlive the save.
+                            typedKey = ""
+                            isKeyVisible = false
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = stringResource(R.string.action_save),
+                            // Follows the enabled state. A hardcoded primary tint made
+                            // the control look live while it was doing nothing, which
+                            // is worse than being obviously unavailable.
+                            tint = if (typedKey.isNotBlank()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            }
+                        )
                     }
                 }
             },
             singleLine = true
+        )
+        // Says whether a key is stored without ever showing it.
+        Text(
+            text = stringResource(
+                if (hasApiKey) R.string.settings_api_key_saved_state
+                else R.string.settings_api_key_none
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (hasApiKey) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm, start = Spacing.xs)
         )
         Text(
             text = stringResource(R.string.settings_api_key_help),
