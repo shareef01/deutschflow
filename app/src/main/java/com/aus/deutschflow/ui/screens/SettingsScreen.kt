@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,7 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Visibility
@@ -42,6 +43,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
@@ -121,7 +124,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.settings_api_key_label)) },
             placeholder = { Text(stringResource(R.string.settings_api_key_hint)) },
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.medium,
             // Masked by default, and typed as a password so the keyboard stops
             // offering the credential back as an autocomplete suggestion.
             visualTransformation = if (isKeyVisible) {
@@ -151,7 +154,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                         // copy held here does not outlive the save.
                         typedKey = null
                     }) {
-                        Icon(Icons.Default.Save, contentDescription = stringResource(R.string.action_save), tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_save), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             },
@@ -170,7 +173,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 2.dp)
         ) {
@@ -199,7 +202,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.large,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             tonalElevation = 1.dp
         ) {
@@ -260,36 +263,48 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), 
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // A neutral surface, not the default tonal fill. FilledTonalButton takes
+            // secondaryContainer when it is not told otherwise, and this palette's
+            // secondary is orange - so the container resolved to a muddy brown that
+            // appears nowhere else in the app and read as a warning it is not.
             FilledTonalButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     requestTestNotification()
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ActionButtonHeight),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                shape = PillShape
             ) {
-                Icon(Icons.Default.NotificationsActive, contentDescription = null)
-                Spacer(modifier = Modifier.width(12.dp))
-                // Mandatory Title Case override
-                Text(stringResource(R.string.settings_test_notification), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
+                Text(stringResource(R.string.settings_test_notification), style = MaterialTheme.typography.labelLarge)
             }
 
+            // The error container/on-container pair, which is the one place in the app
+            // that role is correct: this is the destructive action.
             Button(
-                onClick = { 
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    showDeleteConfirm = true 
+                    showDeleteConfirm = true
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ActionButtonHeight),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 ),
-                shape = RoundedCornerShape(16.dp)
+                shape = PillShape
             ) {
-                Icon(Icons.Default.DeleteForever, contentDescription = null)
-                Spacer(modifier = Modifier.width(12.dp))
-                // Mandatory Title Case override
-                Text(stringResource(R.string.settings_clear), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
+                Text(stringResource(R.string.settings_clear), style = MaterialTheme.typography.labelLarge)
             }
         }
 
@@ -359,8 +374,14 @@ fun SettingsHeader(title: String) {
 fun StatGridItem(modifier: Modifier, label: String, value: String) {
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-            .padding(16.dp),
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.shapes.medium)
+            // A hairline edge, so each tile reads as its own object rather than as a
+            // slightly lighter patch of the card it sits in.
+            .border(
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                MaterialTheme.shapes.medium
+            )
+            .padding(Spacing.md),
         horizontalAlignment = Alignment.Start
     ) {
         Text(

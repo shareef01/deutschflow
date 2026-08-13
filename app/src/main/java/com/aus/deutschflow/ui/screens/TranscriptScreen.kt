@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -42,7 +41,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
-import com.aus.deutschflow.ui.theme.PrimaryBlueLight
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
@@ -116,9 +116,6 @@ fun TranscriptContent(
 ) {
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
-    val gradientBrush = Brush.linearGradient(
-        colors = listOf(PrimaryBlueLight, primaryColor)
-    )
 
     Column(
         modifier = Modifier
@@ -134,7 +131,7 @@ fun TranscriptContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 160.dp),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -194,14 +191,26 @@ fun TranscriptContent(
                 )
             }
 
+            // Solid roles, not a gradient. The same two-stop brush was on this control
+            // and on Practice's Speak button, so the app's two primary actions were
+            // the only surfaces in it painted with a gradient - and neither could
+            // derive its content colour from a container that was a Brush.
+            val recordContainer = if (isListening) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.primary
+            }
+            val recordContent = if (isListening) {
+                MaterialTheme.colorScheme.onError
+            } else {
+                MaterialTheme.colorScheme.onPrimary
+            }
+
             Box(
                 modifier = Modifier
                     .size(100.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer))
-                        else gradientBrush
-                    )
+                    .background(recordContainer)
                     .clickable(enabled = !isBusy) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (isListening) onStopListening() else onStartListening()
@@ -211,7 +220,7 @@ fun TranscriptContent(
                 if (isBusy) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(36.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = recordContent,
                         strokeWidth = 3.dp
                     )
                 } else {
@@ -224,7 +233,7 @@ fun TranscriptContent(
                             else R.string.transcript_start_recording
                         ),
                         modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        tint = recordContent
                     )
                 }
             }
@@ -278,20 +287,22 @@ fun TranscriptContent(
                 
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    shape = MaterialTheme.shapes.large,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Text(
                         text = translation,
-                        modifier = Modifier.padding(20.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontSize = 18.sp
+                        // On the spacing scale, and no inline fontSize override: the
+                        // style already carries a size, and setting both meant this
+                        // one block ignored the type scale everything else follows.
+                        modifier = Modifier.padding(Spacing.md),
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
 
                 if (suggestedWords.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(Spacing.lg))
                     Text(
                         text = stringResource(R.string.transcript_vocabulary),
                         style = MaterialTheme.typography.labelLarge,
@@ -299,20 +310,21 @@ fun TranscriptContent(
                         color = MaterialTheme.colorScheme.primary
                     )
                     FlowRow(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                     ) {
                         // Rendered as labels, not chips: there is no per-word
                         // translation to save, so nothing here is tappable.
                         suggestedWords.forEach { word ->
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                             ) {
                                 Text(
                                     text = word,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -321,20 +333,21 @@ fun TranscriptContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-                
+                Spacer(modifier = Modifier.height(Spacing.lg))
+
                 Button(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onSave()
                     },
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(ActionButtonHeight),
+                    shape = PillShape
                 ) {
-                    Icon(Icons.Default.BookmarkAdd, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.transcript_save), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(Spacing.sm))
+                    Text(stringResource(R.string.transcript_save), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

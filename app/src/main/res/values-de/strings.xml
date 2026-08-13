@@ -152,7 +152,7 @@
 
     <!-- Widget -->
     <string name="widget_description">Ein deutsches Wort aus deiner Bibliothek, auf dem Startbildschirm.</string>
-    <string name="widget_heading">WORT DES TAGES</string>
+    <string name="widget_heading">Wort des Tages</string>
     <string name="widget_empty_title">Öffne die App</string>
     <string name="widget_empty_subtitle">Lerne jetzt Deutsch!</string>
     <string name="widget_preview_word">die Übung</string>

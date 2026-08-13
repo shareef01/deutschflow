@@ -19,6 +19,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -50,13 +51,9 @@ fun MainNavigation(
     }
     val isOnSettings = currentRoute == Screen.Settings.route
 
-    val backgroundBrush = Brush.radialGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-            MaterialTheme.colorScheme.background
-        ),
-        radius = 900f
-    )
+    // No background gradient at all. A tinted wash behind every screen bands badly on
+    // a dark ground and competes with the surfaces in front of it. Depth is carried
+    // entirely by the surface/surfaceContainer elevation ramp from here on.
 
     Scaffold(
         modifier = Modifier.background(MaterialTheme.colorScheme.background),
@@ -108,8 +105,18 @@ fun MainNavigation(
         },
         bottomBar = {
             if (!useNavigationRail) {
+                // A solid container with a hairline above it. At 80% alpha over a
+                // near-black ground the bar had no edge at all, so the five
+                // destinations looked like they were floating on the content.
+                // Column, because Scaffold measures this slot as a single layout and
+                // two siblings would be drawn on top of each other.
+                Column {
+                HorizontalDivider(
+                    thickness = Dp.Hairline,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     tonalElevation = 0.dp
                 ) {
                     navItems.forEach { screen ->
@@ -142,13 +149,14 @@ fun MainNavigation(
                         )
                     }
                 }
+                }
             }
         }
     ) { innerPadding ->
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(backgroundBrush)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
         ) {
             // Above compact width there is no bottom bar, so the rail is the only

@@ -20,7 +20,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -38,7 +37,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
-import com.aus.deutschflow.ui.theme.PrimaryBlueLight
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
@@ -56,11 +56,6 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val gradientBrush = Brush.linearGradient(
-        colors = listOf(PrimaryBlueLight, primaryColor)
-    )
-
     // The level decides the colour; the resource decides the words. Deciding the
     // colour from the words is what broke the moment they were translated.
     val isPositive = feedback == PracticeFeedback.PERFECT
@@ -98,48 +93,45 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
             .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-      Column(
-        modifier = Modifier
-            .weight(1f)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        // Centred in what is left, so the sentence being practised sits where the
-        // eye goes rather than pinned to the top above an empty half-screen.
-        verticalArrangement = Arrangement.Center
-      ) {
+        Spacer(modifier = Modifier.height(Spacing.sm))
 
-        Text(
-            text = stringResource(R.string.practice_intro),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
+        // The hero, anchored to the top rather than floated in the middle.
+        //
+        // This column used to be centred in the space left over, which put the one
+        // thing the screen is about between two large voids. Centring was itself a fix
+        // for the sentence being pinned above an empty half-screen, so the emptiness
+        // had only moved: the real problem was that nothing owned the space
+        // underneath. Something does now - see the result region below.
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 6.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // The sentence and its Speak control on one baseline. The control used to
+            // be a full-width tonal bar stacked underneath, which added a second
+            // horizontal band to a card that only holds one idea - and it carried
+            // primary blue on a 40%-alpha primaryContainer, which composites to blue
+            // on blue and was effectively unreadable.
+            Row(
+                modifier = Modifier.padding(Spacing.lg),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // headlineSmall, and no drop shadow: the target is a whole
-                // sentence, and at headlineMedium/Black it filled the card and
-                // shouted over everything else on the screen.
-                val textStyle = MaterialTheme.typography.headlineSmall.copy(
-                    textAlign = TextAlign.Center
-                )
+                // headlineSmall: the target is a whole sentence, and at
+                // headlineMedium/Black it filled the card and shouted over everything
+                // else on the screen.
+                val textStyle = MaterialTheme.typography.headlineSmall
 
                 if (wordResults.isEmpty()) {
                     Text(
                         text = targetSentence,
                         style = textStyle,
-                        color = MaterialTheme.colorScheme.primary
+                        // onSurface, not primary. The sentence is the content of the
+                        // card, not an accent in it, and brand blue on the container
+                        // left it sitting back instead of reading first.
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
                     )
                 } else {
                     val annotatedString = buildAnnotatedString {
@@ -155,86 +147,111 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                     Text(
                         text = annotatedString,
                         style = textStyle,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                FilledTonalButton(
-                    onClick = { 
+
+                Spacer(modifier = Modifier.width(Spacing.md))
+
+                // A container/on-container pair, so the glyph is guaranteed legible
+                // against whatever sits behind it.
+                FilledTonalIconButton(
+                    onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.speak(targetSentence) 
+                        viewModel.speak(targetSentence)
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                        contentColor = MaterialTheme.colorScheme.primary
+                    modifier = Modifier.size(56.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(stringResource(R.string.practice_listen), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                    Icon(
+                        Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = stringResource(R.string.practice_listen),
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(Spacing.md))
 
         ErrorBanner(errorState)
 
-        AnimatedVisibility(
-            visible = feedback != PracticeFeedback.NONE,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+        // The result region: everything between the hero and the actions, and never
+        // empty. Before an attempt it carries the instruction - which used to sit
+        // above the card, pushing the hero down and explaining the interaction
+        // nowhere near where its answer appears. During an attempt it holds the
+        // spinner. After one it holds what was heard, and the verdict on it.
+        // Top, not centre. Whatever is in here belongs to the sentence above it, so it
+        // hugs the card and grows downward; the slack collects in one place above the
+        // actions instead of being split into a gap on either side of a single line.
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = Spacing.lg),
+            contentAlignment = Alignment.TopCenter
         ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
-                        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(
-                    1.dp,
-                    if (isPositive) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)
-                    else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+            when {
+                isProcessing -> CircularProgressIndicator(
+                    modifier = Modifier.size(36.dp),
+                    strokeWidth = 3.dp
                 )
-            ) {
-                Text(
-                    text = feedbackText.orEmpty(),
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Black,
-                    color = if (isPositive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
 
-        // Shown only once there is a result or one is on its way. An empty bordered
-        // box reads as a screen that failed to load, which is why Transcript stopped
-        // drawing one too.
-        if (spokenText.isNotEmpty() || isProcessing) {
-        OutlinedCard(
-            // heightIn, not height: long recognised sentences were clipped, and worse
-            // at large font scales.
-            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                if (isProcessing) {
-                    CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
-                } else {
-                    AnimatedContent(
-                        targetState = spokenText,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "spokenTextAnim"
-                    ) { text ->
+                spokenText.isEmpty() -> Text(
+                    text = stringResource(R.string.practice_intro),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = Spacing.lg)
+                )
+
+                else -> Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (feedback != PracticeFeedback.NONE) {
+                        Surface(
+                            color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer
+                                    else MaterialTheme.colorScheme.errorContainer,
+                            shape = PillShape
+                        ) {
+                            Text(
+                                text = feedbackText.orEmpty(),
+                                modifier = Modifier.padding(
+                                    horizontal = Spacing.md,
+                                    vertical = Spacing.sm
+                                ),
+                                style = MaterialTheme.typography.labelLarge,
+                                // The container's own On colour. The verdict used to be
+                                // tertiary or error text on a 20%-alpha tint of the
+                                // same hue - the blue-on-blue mistake the Listen
+                                // button was making, in two more colours.
+                                color = if (isPositive) MaterialTheme.colorScheme.onTertiaryContainer
+                                        else MaterialTheme.colorScheme.onErrorContainer,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(Spacing.md))
+                    }
+
+                    // What the recogniser heard, on its own surface so it reads as the
+                    // user's words rather than more of the app's.
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shape = MaterialTheme.shapes.large,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
                         Text(
-                            text = text,
+                            text = spokenText,
+                            modifier = Modifier.padding(Spacing.md),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center
@@ -243,21 +260,23 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 }
             }
         }
-        }
-
-      }
 
         // Outside the scroll: Speak is the point of the screen, and it used to sit
         // below the fold behind the target card, the error banner and the result
         // card - reachable only by scrolling past everything it acts on.
         Spacer(modifier = Modifier.height(Spacing.md))
 
+        // One filled primary for the action the screen exists for, one outlined for
+        // the secondary. The filled one used to be a transparent Button wrapping a
+        // gradient Box - which meant the real container colour was Color.Transparent,
+        // so Material could not derive a content colour, disabled state or ripple
+        // from it and every one of those had to be hand-painted.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
             Button(
-                onClick = { 
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (isListening) {
                         viewModel.stopPractice()
@@ -272,62 +291,55 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 enabled = !isProcessing,
                 modifier = Modifier
                     .weight(1f)
-                    .height(64.dp),
+                    .height(ActionButtonHeight),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent
-                ),
-                contentPadding = PaddingValues(0.dp),
-                shape = RoundedCornerShape(20.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) 
-                            else gradientBrush, 
-                            RoundedCornerShape(20.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic, 
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(if (isListening) R.string.practice_evaluate else R.string.practice_speak), 
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                    // Recording is a stop-the-world state, so it takes the error role
+                    // rather than a second gradient.
+                    containerColor = if (isListening) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                    contentColor = if (isListening) {
+                        MaterialTheme.colorScheme.onError
+                    } else {
+                        MaterialTheme.colorScheme.onPrimary
                     }
-                }
-            }
-            
-            OutlinedButton(
-                onClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.nextSentence() 
-                },
-                modifier = Modifier.weight(1f).height(64.dp),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                ),
+                shape = PillShape
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.NavigateNext, 
+                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                     contentDescription = null,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
-                    text = stringResource(R.string.practice_next), 
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    text = stringResource(if (isListening) R.string.practice_evaluate else R.string.practice_speak),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+
+            OutlinedButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.nextSentence()
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(ActionButtonHeight),
+                shape = PillShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.NavigateNext,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(Spacing.sm))
+                Text(
+                    text = stringResource(R.string.practice_next),
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }

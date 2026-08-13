@@ -70,7 +70,7 @@
 
     <!-- Practice -->
     <string name="practice_intro">Listen and repeat the sentence accurately to master your pronunciation.</string>
-    <string name="practice_listen">Listen to Native</string>
+    <string name="practice_listen">Listen</string>
     <string name="practice_speak">Speak</string>
     <string name="practice_evaluate">Evaluate</string>
     <string name="practice_next">Next</string>
@@ -85,14 +85,14 @@
     <string name="settings_api_key_help">Required for automatic vocabulary extraction and translations. A key is free at console.groq.com.</string>
     <string name="settings_show_key">Show API key</string>
     <string name="settings_hide_key">Hide API key</string>
-    <string name="settings_progress_header">Learning Progress</string>
+    <string name="settings_progress_header">Learning progress</string>
     <string name="settings_stat_vocabulary">Vocabulary</string>
     <string name="settings_stat_sessions">Sessions</string>
     <string name="settings_stat_xp">XP points</string>
     <string name="settings_stat_streak">Streak</string>
-    <string name="settings_audio_header">Audio Preferences</string>
+    <string name="settings_audio_header">Audio preferences</string>
     <string name="settings_autoplay">Auto-play German Audio</string>
-    <string name="settings_dialect_header">Recognition Dialect</string>
+    <string name="settings_dialect_header">Recognition dialect</string>
     <string name="settings_dialect_de">Germany (de-DE)</string>
     <string name="settings_dialect_at">Austria (de-AT)</string>
     <string name="settings_dialect_ch">Switzerland (de-CH)</string>
