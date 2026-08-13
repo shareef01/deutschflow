@@ -100,7 +100,7 @@ fun VocabularyDetailScreen(
         
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             shape = MaterialTheme.shapes.medium
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
