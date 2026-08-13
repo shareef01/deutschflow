@@ -1,6 +1,7 @@
 package com.aus.deutschflow.ui.screens
 
 import android.Manifest
+import android.content.ClipData
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -27,11 +29,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -192,7 +194,11 @@ fun TranscriptContent(
 
         // Translation Section
         if (translation.isNotEmpty()) {
-            val clipboardManager = LocalClipboardManager.current
+            // LocalClipboard, not the deprecated LocalClipboardManager. The
+            // replacement is suspend-based, so the copy runs in a scope rather than
+            // inline - it can touch the system clipboard service.
+            val clipboard = LocalClipboard.current
+            val scope = rememberCoroutineScope()
             
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
@@ -208,7 +214,11 @@ fun TranscriptContent(
                     )
                     IconButton(onClick = { 
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        clipboardManager.setText(AnnotatedString(translation)) 
+                        scope.launch {
+                            clipboard.setClipEntry(
+                                ClipEntry(ClipData.newPlainText("translation", translation))
+                            )
+                        }
                     }) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy, 

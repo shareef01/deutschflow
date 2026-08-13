@@ -28,7 +28,7 @@
     <string name="transcript_stop_recording">Stop recording</string>
     <string name="transcript_translation">Translation</string>
     <string name="transcript_vocabulary">Vocabulary</string>
-    <string name="transcript_save">Save to Library</string>
+    <string name="transcript_save">Save to library</string>
 
     <!-- History -->
     <string name="history_search_hint">Search transcript history…</string>
@@ -43,10 +43,10 @@
     <string name="library_empty_body">Add a word with the button below, or transcribe speech and save the translation.</string>
     <string name="library_add_word">Add a word</string>
     <string name="library_more_actions">More actions</string>
-    <string name="library_dialog_add_title">Add Word</string>
-    <string name="library_dialog_add_confirm">Add to Library</string>
-    <string name="library_dialog_edit_title">Edit Vocabulary</string>
-    <string name="library_dialog_edit_confirm">Save Changes</string>
+    <string name="library_dialog_add_title">Add a word</string>
+    <string name="library_dialog_add_confirm">Add to library</string>
+    <string name="library_dialog_edit_title">Edit word</string>
+    <string name="library_dialog_edit_confirm">Save changes</string>
     <string name="library_field_german">German</string>
     <string name="library_field_translation">Translation</string>
 
@@ -54,7 +54,7 @@
     <string name="detail_empty_title">Select a word</string>
     <string name="detail_empty_body">Choose an item from your library to view detailed information and examples.</string>
     <string name="detail_context">Context and usage</string>
-    <string name="detail_example">Example Sentence:</string>
+    <string name="detail_example">Example sentence</string>
     <string name="detail_back">Back to library</string>
 
     <!-- Study -->
@@ -80,8 +80,11 @@
 
     <!-- Settings -->
     <string name="settings_ai_header">AI translation</string>
-    <string name="settings_api_key_label">Groq API Key</string>
+    <string name="settings_api_key_label">Groq API key</string>
     <string name="settings_api_key_hint">Paste your Groq key here</string>
+    <string name="settings_api_key_replace">Enter a new key to replace the saved one</string>
+    <string name="settings_api_key_saved_state">A key is saved on this device.</string>
+    <string name="settings_api_key_none">No key saved — translation is unavailable.</string>
     <string name="settings_api_key_help">Required for automatic vocabulary extraction and translations. A key is free at console.groq.com.</string>
     <string name="settings_show_key">Show API key</string>
     <string name="settings_hide_key">Hide API key</string>
@@ -91,17 +94,17 @@
     <string name="settings_stat_xp">XP points</string>
     <string name="settings_stat_streak">Streak</string>
     <string name="settings_audio_header">Audio preferences</string>
-    <string name="settings_autoplay">Auto-play German Audio</string>
+    <string name="settings_autoplay">Auto-play German audio</string>
     <string name="settings_dialect_header">Recognition dialect</string>
     <string name="settings_dialect_de">Germany (de-DE)</string>
     <string name="settings_dialect_at">Austria (de-AT)</string>
     <string name="settings_dialect_ch">Switzerland (de-CH)</string>
-    <string name="settings_test_notification">Test Daily Notification</string>
-    <string name="settings_clear">Clear All Progress</string>
-    <string name="settings_wipe_title">Wipe All Progress?</string>
+    <string name="settings_test_notification">Test daily notification</string>
+    <string name="settings_clear">Clear all progress</string>
+    <string name="settings_wipe_title">Wipe all progress?</string>
     <string name="settings_wipe_body">This will permanently delete your library, history, and earnings. This action is final.</string>
-    <string name="settings_wipe_confirm">Delete Everything</string>
-    <string name="settings_wipe_cancel">Keep Progress</string>
+    <string name="settings_wipe_confirm">Delete everything</string>
+    <string name="settings_wipe_cancel">Keep progress</string>
     <string name="settings_version">DeutschFlow v%1$s</string>
 
     <!-- Settings outcomes -->
@@ -127,8 +130,12 @@
     <string name="speech_error_language_unsupported">This device can\'t recognise this dialect. Try another one in Settings.</string>
     <string name="speech_error_generic">Speech recognition failed. Try again.</string>
 
-    <!-- Text to speech -->
-    <string name="tts_unavailable">German speech isn\'t available on this device. Install a German voice in Android\'s text-to-speech settings.</string>
+    <!-- Text to speech.
+         Two problems, two remedies. A device with no synthesiser selected cannot be
+         fixed by installing a voice, which is what the single message these replace
+         told everyone to do. -->
+    <string name="tts_no_engine">No speech engine is set up. Choose one under Text-to-speech output in Android\'s settings.</string>
+    <string name="tts_no_german">German speech isn\'t installed. Add a German voice under Text-to-speech output in Android\'s settings.</string>
 
     <!-- AI translation -->
     <string name="ai_no_key">Add your Groq API key in Settings to get translations.</string>

@@ -59,7 +59,7 @@
     <string name="detail_empty_title">Wähle ein Wort</string>
     <string name="detail_empty_body">Wähle einen Eintrag aus deiner Bibliothek, um Details und Beispiele zu sehen.</string>
     <string name="detail_context">Kontext und Verwendung</string>
-    <string name="detail_example">Beispielsatz:</string>
+    <string name="detail_example">Beispielsatz</string>
     <string name="detail_back">Zurück zur Bibliothek</string>
 
     <!-- Study -->
@@ -87,6 +87,9 @@
     <string name="settings_ai_header">KI-Übersetzung</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
     <string name="settings_api_key_hint">Füge hier deinen Groq-Schlüssel ein</string>
+    <string name="settings_api_key_replace">Neuen Schlüssel eingeben, um den gespeicherten zu ersetzen</string>
+    <string name="settings_api_key_saved_state">Ein Schlüssel ist auf diesem Gerät gespeichert.</string>
+    <string name="settings_api_key_none">Kein Schlüssel gespeichert — Übersetzung nicht verfügbar.</string>
     <string name="settings_api_key_help">Erforderlich für automatische Übersetzungen und Wortschatz-Extraktion. Ein Schlüssel ist auf console.groq.com kostenlos.</string>
     <string name="settings_show_key">API-Schlüssel anzeigen</string>
     <string name="settings_hide_key">API-Schlüssel verbergen</string>
@@ -133,7 +136,8 @@
     <string name="speech_error_generic">Spracherkennung fehlgeschlagen. Versuche es erneut.</string>
 
     <!-- Text to speech -->
-    <string name="tts_unavailable">Deutsche Sprachausgabe ist auf diesem Gerät nicht verfügbar. Installiere eine deutsche Stimme in den Text-zu-Sprache-Einstellungen von Android.</string>
+    <string name="tts_no_engine">Es ist keine Sprachausgabe eingerichtet. Wähle unter „Text-in-Sprache-Ausgabe“ in den Android-Einstellungen eine aus.</string>
+    <string name="tts_no_german">Deutsche Sprachausgabe ist nicht installiert. Füge unter „Text-in-Sprache-Ausgabe“ in den Android-Einstellungen eine deutsche Stimme hinzu.</string>
 
     <!-- AI translation -->
     <string name="ai_no_key">Trage deinen Groq-API-Schlüssel in den Einstellungen ein, um Übersetzungen zu erhalten.</string>
