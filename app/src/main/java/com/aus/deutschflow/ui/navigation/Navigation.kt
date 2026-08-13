@@ -27,6 +27,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.screens.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,10 +114,10 @@ fun MainNavigation(
                 Column {
                 HorizontalDivider(
                     thickness = Dp.Hairline,
-                    color = MaterialTheme.colorScheme.outlineVariant
+                    color = AzureGlow.copy(alpha = 0.15f)
                 )
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    containerColor = MaterialTheme.colorScheme.background,
                     tonalElevation = 0.dp
                 ) {
                     navItems.forEach { screen ->
