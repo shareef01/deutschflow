@@ -34,6 +34,7 @@
     <string name="transcript_translation">Übersetzung</string>
     <string name="transcript_vocabulary">Wortschatz</string>
     <string name="transcript_save">In Bibliothek speichern</string>
+    <string name="transcript_saved">In deiner Bibliothek gespeichert.</string>
 
     <!-- History -->
     <string name="history_search_hint">Verlauf durchsuchen…</string>
