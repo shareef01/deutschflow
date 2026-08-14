@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -33,8 +34,10 @@ import androidx.compose.ui.unit.dp
  * outlines an empty hole.
  *
  * A gradient border rather than a solid one because a solid azure edge at this
- * weight rings the card like a selection state - the fade reads as a highlight
- * catching one side, which is what makes a flat panel look like a pane of glass.
+ * weight rings the card like a selection state. The gradient runs from the
+ * top-left corner, where the light is, fading away by the far corner - a lit
+ * corner rather than a lit edge, which is what makes a flat panel look like a
+ * pane of glass catching one lamp.
  */
 val GlassShape = RoundedCornerShape(24.dp)
 
@@ -52,7 +55,13 @@ fun Modifier.glassSurface(
     .border(
         width = 1.dp,
         brush = Brush.linearGradient(
-            colors = listOf(glow.copy(alpha = 0.3f), Color.Transparent)
+            colors = listOf(
+                glow.copy(alpha = 0.35f),
+                glow.copy(alpha = 0.12f),
+                Color.Transparent
+            ),
+            start = Offset.Zero,
+            end = Offset.Infinite
         ),
         shape = shape
     )

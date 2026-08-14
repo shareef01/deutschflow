@@ -13,10 +13,13 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.components.EmptyState
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.PillShape
+import com.aus.deutschflow.ui.theme.Spacing
+import com.aus.deutschflow.ui.theme.glassSurface
 
 @Composable
 fun VocabularyDetailScreen(
@@ -39,7 +42,7 @@ fun VocabularyDetailScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
+            .padding(Spacing.md)
     ) {
         // Header Section
         Row(
@@ -55,35 +58,40 @@ fun VocabularyDetailScreen(
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
+                Spacer(modifier = Modifier.height(Spacing.xs))
                 Text(
                     text = item.englishTranslation,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
-            LargeFloatingActionButton(
-                onClick = { 
+
+            // The same control the Practice screen uses to speak its sentence: one
+            // component, one size, one colour pair for "hear this aloud". This used
+            // to be a LargeFloatingActionButton, which made a playback control out
+            // of the component reserved for the one thing that creates content.
+            FilledTonalIconButton(
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onSpeak(item.germanText) 
+                    onSpeak(item.germanText)
                 },
-                shape = MaterialTheme.shapes.medium,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.padding(start = 16.dp)
+                modifier = Modifier
+                    .padding(start = Spacing.md)
+                    .size(56.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = stringResource(R.string.action_speak),
-                    modifier = Modifier.size(36.dp),
-                    // The container's own On colour, not primary: brand blue on the
-                    // blue container reads at 4.3:1, under AA for anything but a
-                    // large icon.
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(Spacing.xl))
 
         // Context / Examples Section
         Text(
@@ -92,29 +100,28 @@ fun VocabularyDetailScreen(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
-        
+
         HorizontalDivider(
-            modifier = Modifier.padding(vertical = 12.dp),
+            modifier = Modifier.padding(vertical = Spacing.sm),
             color = MaterialTheme.colorScheme.surfaceVariant
         )
-        
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            shape = MaterialTheme.shapes.medium
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+
+        // Glass, like every other content surface: the example is a piece of
+        // content, not an input, and this was the one content card still solid.
+        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
+            Column(modifier = Modifier.padding(Spacing.lg)) {
                 Text(
                     text = stringResource(R.string.detail_example),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 Text(
                     text = exampleSentence,
-                    style = MaterialTheme.typography.bodyLarge,
-                    lineHeight = 26.sp
+                    // The type scale's own line height: a hand-set 26sp was the one
+                    // place in the app where a body text disagreed with the scale.
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
         }
@@ -127,8 +134,10 @@ fun VocabularyDetailScreen(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClose()
             },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = MaterialTheme.shapes.medium
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(ActionButtonHeight),
+            shape = PillShape
         ) {
             Text(stringResource(R.string.detail_back), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
