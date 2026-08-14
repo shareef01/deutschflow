@@ -114,6 +114,7 @@
 
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API-Schlüssel gespeichert.</string>
+    <string name="message_api_key_not_saved">Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.</string>
     <string name="message_progress_cleared">Bibliothek, Verlauf und Statistiken gelöscht.</string>
     <string name="message_notification_sent">Benachrichtigung gesendet.</string>
     <string name="message_notifications_off">Benachrichtigungen sind ausgeschaltet. Aktiviere sie für DeutschFlow in den Systemeinstellungen.</string>

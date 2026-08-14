@@ -85,8 +85,14 @@ class SettingsViewModel @Inject constructor(
 
     fun saveApiKey(apiKey: String) {
         viewModelScope.launch {
-            preferenceManager.saveApiKey(apiKey.trim())
-            _message.value = R.string.message_api_key_saved
+            // The Keystore can refuse to encrypt (e.g. the entry was dropped when the
+            // lock screen was removed). Saying "saved" then is a lie that surfaces
+            // later as a mysterious "no API key" translation failure.
+            _message.value = if (preferenceManager.saveApiKey(apiKey.trim())) {
+                R.string.message_api_key_saved
+            } else {
+                R.string.message_api_key_not_saved
+            }
         }
     }
 

@@ -109,6 +109,7 @@
 
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API key saved.</string>
+    <string name="message_api_key_not_saved">The key couldn\'t be stored. Try again, or restart the device.</string>
     <string name="message_progress_cleared">Library, history and stats cleared.</string>
     <string name="message_notification_sent">Notification sent.</string>
     <string name="message_notifications_off">Notifications are turned off. Enable them for DeutschFlow in system settings.</string>
