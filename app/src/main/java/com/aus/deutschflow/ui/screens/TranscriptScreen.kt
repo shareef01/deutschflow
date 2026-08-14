@@ -69,6 +69,12 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
 
     val context = LocalContext.current
 
+    // Saving used to be silent: the word landed in the library and the button
+    // gave nothing back, which reads as "nothing happened". One confirmation for
+    // the one write the screen makes.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     // Permission Mandate: Runtime Authorization
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -87,24 +93,38 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     // another tab: this screen's ViewModel is kept alive by the saved back stack entry.
     OnLeavingScreen { viewModel.cancelListening() }
 
-    TranscriptContent(
-        partialText = partialText,
-        finalText = finalText,
-        translation = translation,
-        isListening = isListening,
-        isBusy = isBusy,
-        suggestedWords = suggestedWords,
-        errorState = errorState ?: aiError,
-        onStartListening = { 
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                viewModel.startListening()
-            } else {
-                launcher.launch(Manifest.permission.RECORD_AUDIO)
+    Box(modifier = Modifier.fillMaxSize()) {
+        TranscriptContent(
+            partialText = partialText,
+            finalText = finalText,
+            translation = translation,
+            isListening = isListening,
+            isBusy = isBusy,
+            suggestedWords = suggestedWords,
+            errorState = errorState ?: aiError,
+            onStartListening = {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    viewModel.startListening()
+                } else {
+                    launcher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+            onStopListening = { viewModel.stopListening() },
+            onSave = {
+                viewModel.saveToVocabulary(finalText, translation)
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.transcript_saved)
+                    )
+                }
             }
-        },
-        onStopListening = { viewModel.stopListening() },
-        onSave = { viewModel.saveToVocabulary(finalText, translation) }
-    )
+        )
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
