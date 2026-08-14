@@ -32,11 +32,11 @@ android {
     defaultConfig {
         applicationId = "com.aus.deutschflow"
         minSdk = 31
-        // Deliberately behind compileSdk. Play requires new apps and updates to
-        // target API 36 from 31 August 2026, and raising targetSdk opts the app into
-        // behaviour changes that want testing on their own rather than arriving as a
-        // side effect of a dependency bump. Lint's OldTargetApi warning is the price.
-        targetSdk = 36
+        // Matches compileSdk now. Raised from 36 under the Play deadline (new
+        // updates must target 36+ from 31 August 2026), and only after the
+        // behaviour changes were smoke-tested on a real device rather than
+        // arriving as a side effect of a dependency bump.
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
