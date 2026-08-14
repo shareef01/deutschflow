@@ -100,7 +100,10 @@ fun MainNavigation(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+                    // Solid, like the bottom bar: a transparent bar let the content
+                    // scroll straight through the title, and the two edges of the
+                    // screen disagreed about what an edge was.
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         },

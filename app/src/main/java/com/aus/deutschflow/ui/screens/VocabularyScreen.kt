@@ -3,6 +3,7 @@ package com.aus.deutschflow.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,15 +27,17 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.viewmodel.VocabularyViewModel
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.Spacing
+import com.aus.deutschflow.ui.theme.glassSurface
 
 @Composable
 fun VocabularyScreen(
@@ -99,7 +102,12 @@ fun VocabularyScreen(
                         onAdd = { isAdding = true }
                     )
                 }
-                VerticalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.surfaceVariant)
+                // The same azure hairline the navigation bar uses for its divider:
+                // the one divider language in the app.
+                VerticalDivider(
+                    thickness = Dp.Hairline,
+                    color = AzureGlow.copy(alpha = 0.15f)
+                )
                 Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                     VocabularyDetailScreen(
                         item = selectedItem,
@@ -261,15 +269,17 @@ fun VocabularyItem(
 ) {
     val haptic = LocalHapticFeedback.current
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = MaterialTheme.shapes.medium,
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onOpen()
-        }
+    // Glass, like the history rows: the two content lists are the same kind of
+    // thing, so they sit on the same surface. A solid card here was the one
+    // panel left over from the pre-glass design pass.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassSurface()
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onOpen()
+            }
     ) {
         Row(
             modifier = Modifier
