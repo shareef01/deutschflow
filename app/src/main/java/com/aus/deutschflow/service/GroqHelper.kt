@@ -3,6 +3,7 @@ package com.aus.deutschflow.service
 import android.content.Context
 import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -62,6 +63,11 @@ class GroqHelper @Inject constructor(
                 val content = contentOf(post(text, apiKey))
                 parseResponse(content)
                     ?: AIResult.Failure(context.getString(R.string.ai_unreadable))
+            } catch (e: CancellationException) {
+                // Cancellation is not a translation failure. Swallowing it here would
+                // turn "the screen went away" into a Failure handed to a dead
+                // ViewModel, and delay the scope's actual shutdown.
+                throw e
             } catch (e: Exception) {
                 val detail = e.message ?: context.getString(R.string.ai_no_response)
                 AIResult.Failure(context.getString(R.string.ai_failed, detail))
