@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Lint says mipmap-anydpi-v26 is unnecessary because minSdk is 31. It is wrong
+    about this one folder: AAPT2 only compiles <adaptive-icon> resources from a
+    directory carrying the v26 qualifier, and silently drops them from plain
+    mipmap-anydpi - which then fails the manifest link with "resource
+    mipmap/ic_launcher not found". The qualifier stays, and so does this
+    suppression.
+-->
+<lint>
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+</lint>
