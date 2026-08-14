@@ -71,7 +71,9 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
 
     // Saving used to be silent: the word landed in the library and the button
     // gave nothing back, which reads as "nothing happened". One confirmation for
-    // the one write the screen makes.
+    // the one write the screen makes. Resolved through stringResource so a
+    // configuration change cannot leave it stale.
+    val savedMessage = stringResource(R.string.transcript_saved)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -112,11 +114,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             onStopListening = { viewModel.stopListening() },
             onSave = {
                 viewModel.saveToVocabulary(finalText, translation)
-                scope.launch {
-                    snackbarHostState.showSnackbar(
-                        context.getString(R.string.transcript_saved)
-                    )
-                }
+                scope.launch { snackbarHostState.showSnackbar(savedMessage) }
             }
         )
 

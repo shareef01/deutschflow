@@ -6,7 +6,7 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4.10-7F52FF?logo=kotlin)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=android)
 ![Minimum SDK](https://img.shields.io/badge/minSdk-31%20(Android%2012)-3DDC84?logo=android)
-![Target SDK](https://img.shields.io/badge/targetSdk-36-3DDC84?logo=android)
+![Target SDK](https://img.shields.io/badge/targetSdk-37-3DDC84?logo=android)
 ![License](https://img.shields.io/badge/license-MIT-999999)
 
 DeutschFlow is an Android app for learning German through real speech. Language
@@ -46,7 +46,7 @@ Built with Kotlin and Jetpack Compose on a self-designed system called
 | ![Settings](docs/screenshots/07-settings.png) | ![Widget](docs/screenshots/09-widget-picker.png) |
 
 <p align="center">
-  <img src="docs/screenshots/08-app-drawer.png" alt="The launcher icon" width="270">
+  <img src="docs/screenshots/08-launcher-icon.png" alt="The launcher icon" width="270">
   <br>
   <em>The launcher icon — an Ü on a glass disc, with a themed-icon variant for Android 13+.</em>
 </p>
@@ -256,7 +256,7 @@ locale-invariant so a Turkish system locale can't break scoring; streaks compare
 | Networking | `HttpURLConnection` + `org.json` (no HTTP/JSON dependencies) |
 | Speech | Android `SpeechRecognizer` (on-device), `TextToSpeech` |
 | Build | Gradle 9.5, AGP 9.3, Kotlin 2.4, KSP2, version catalog, R8 + resource shrink |
-| Platform | minSdk 31 (Android 12) / targetSdk 36 / compileSdk 37 |
+| Platform | minSdk 31 (Android 12) / targetSdk 37 / compileSdk 37 |
 
 ## Testing and CI
 
