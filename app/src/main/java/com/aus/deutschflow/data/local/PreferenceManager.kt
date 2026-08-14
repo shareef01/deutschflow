@@ -72,14 +72,18 @@ class PreferenceManager @Inject constructor(
      * If encryption fails the key is not written at all. Falling back to plaintext
      * would defeat the point of the change, and silently: the app would keep
      * working, so nobody would ever find out.
+     *
+     * @return false when the key could not be stored, so the caller can say so
+     * instead of claiming a save that did not happen.
      */
-    suspend fun saveApiKey(apiKey: String) {
-        val encrypted = withContext(Dispatchers.IO) { cipher.encrypt(apiKey) } ?: return
+    suspend fun saveApiKey(apiKey: String): Boolean {
+        val encrypted = withContext(Dispatchers.IO) { cipher.encrypt(apiKey) } ?: return false
 
         dataStore.edit { preferences ->
             preferences[KEY_API_KEY_ENCRYPTED] = encrypted
             preferences.remove(KEY_API_KEY_LEGACY)
         }
+        return true
     }
 
     /**
