@@ -56,6 +56,10 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     val aiError by viewModel.aiError.collectAsState()
     val wordDetails by viewModel.wordDetails.collectAsState()
     val wordDetailError by viewModel.wordDetailError.collectAsState()
+    // Which word's interrogation is in flight, so the right chip shows its spinner.
+    // Owned by the ViewModel, which is what cancels and replaces the request: a copy
+    // remembered here could only ever be an echo of that, kept in step by an effect.
+    val interrogatingWord by viewModel.interrogatingWord.collectAsState()
 
     val context = LocalContext.current
 
@@ -67,20 +71,16 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Which word's interrogation is in flight, so the right chip shows its spinner.
-    var loadingWord by remember { mutableStateOf<String?>(null) }
-
-    // Once the interrogation resolves - sheet or error - the chip stops glowing.
-    LaunchedEffect(wordDetails, wordDetailError) {
-        if (wordDetails != null || wordDetailError != null) loadingWord = null
-    }
-
     // A failed interrogation surfaces through the same snackbar as a save, rather
     // than through the recording banner that has nothing to do with it.
+    //
+    // The message is handed back when it is cleared, so a failure that has already been
+    // superseded is left alone: showSnackbar suspends for seconds, and a chip tapped
+    // inside that window starts a request whose answer must survive this line.
     LaunchedEffect(wordDetailError) {
         wordDetailError?.let {
             snackbarHostState.showSnackbar(it)
-            viewModel.dismissWordDetails()
+            viewModel.dismissWordDetailError(it)
         }
     }
 
@@ -110,7 +110,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             isListening = isListening,
             isBusy = isBusy,
             suggestedWords = suggestedWords,
-            loadingWord = loadingWord,
+            loadingWord = interrogatingWord,
             errorState = errorState ?: aiError,
             onStartListening = {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -120,10 +120,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
                 }
             },
             onStopListening = { viewModel.stopListening() },
-            onWordClick = { word ->
-                loadingWord = word
-                viewModel.interrogateWord(word)
-            },
+            onWordClick = { word -> viewModel.interrogateWord(word) },
             onSave = {
                 viewModel.saveToVocabulary(finalText, translation)
                 scope.launch { snackbarHostState.showSnackbar(savedMessage) }
