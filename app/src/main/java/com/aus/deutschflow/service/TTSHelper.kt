@@ -128,6 +128,9 @@ class TTSHelper @Inject constructor(
     }
 
     private fun onEngineInit(engine: TextToSpeech?, status: Int) {
+        // setLanguage is a round trip to the engine, and it happens before the lock is
+        // taken: holding the lock across it would block a speak() on the main thread
+        // for the length of that call.
         val failure = when {
             engine == null || status != TextToSpeech.SUCCESS -> Failure.NO_ENGINE
             else -> when (engine.setLanguage(Locale.GERMAN)) {
@@ -136,11 +139,16 @@ class TTSHelper @Inject constructor(
             }
         }
 
-        val queued = pendingText
-        pendingText = null
+        // The state and the queued text move together, under the same lock speak()
+        // takes. Apart, a speak() that had just read CONNECTING could store its text an
+        // instant after this stopped looking for it - and the phrase was dropped with
+        // nothing left to speak it, on exactly the first tap after a cold start.
+        val queued = synchronized(lock) {
+            state = if (failure == null) State.READY else State.UNAVAILABLE
+            pendingText.also { pendingText = null }
+        }
 
         if (failure == null) {
-            state = State.READY
             _error.value = null
             engine?.setOnUtteranceProgressListener(progressListener)
             queued?.let {
@@ -148,7 +156,6 @@ class TTSHelper @Inject constructor(
                 engine?.speak(it, TextToSpeech.QUEUE_FLUSH, null, utteranceIdFor(it))
             }
         } else {
-            state = State.UNAVAILABLE
             Log.w(TAG, "Text-to-speech unavailable: $failure (init status $status)")
             if (queued != null) {
                 _error.value = context.getString(
@@ -175,23 +182,37 @@ class TTSHelper @Inject constructor(
     fun speak(text: String) {
         if (text.isBlank()) return
 
-        when (state) {
-            State.READY -> {
-                requestAudioFocus()
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceIdFor(text))
-            }
+        // Reading the state and acting on it is one step, under the lock onEngineInit
+        // takes: between them, the engine can finish connecting, and a text queued
+        // after that happened would have had nobody left to speak it.
+        val speakNow = synchronized(lock) {
+            when (state) {
+                State.READY -> true
 
-            // Spoken by onEngineInit the moment the engine answers.
-            State.CONNECTING -> pendingText = text
+                // Spoken by onEngineInit the moment the engine answers.
+                State.CONNECTING -> {
+                    pendingText = text
+                    false
+                }
 
-            // Voice data can be installed while the app is running, and the engine is
-            // also torn down when the last Activity finishes while this @Singleton
-            // lives on. So retry rather than staying mute - and if the retry fails
-            // too, onEngineInit says so, because this text is a user asking to hear it.
-            State.UNAVAILABLE -> {
-                pendingText = text
-                restart()
+                // Voice data can be installed while the app is running, and the engine
+                // is also torn down when the last Activity finishes while this
+                // @Singleton lives on. So retry rather than staying mute - and if the
+                // retry fails too, onEngineInit says so, because this text is a user
+                // asking to hear it.
+                State.UNAVAILABLE -> {
+                    pendingText = text
+                    restart()
+                    false
+                }
             }
+        }
+
+        // Outside the lock: speak() is called from the main thread, and this is a call
+        // into the engine.
+        if (speakNow) {
+            requestAudioFocus()
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceIdFor(text))
         }
     }
 

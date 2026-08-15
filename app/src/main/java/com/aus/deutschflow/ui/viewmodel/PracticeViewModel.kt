@@ -91,6 +91,11 @@ class PracticeViewModel @Inject constructor(
             }
             _wordResults.value = emptyList()
             _feedback.value = PracticeFeedback.NONE
+            // The third piece of the last attempt, and the one that does not live here:
+            // the transcript is the recogniser's. Clearing only the two above put the
+            // new sentence on screen above the words spoken for the old one, which the
+            // result card presents as what the user just said.
+            speechRecognizerHelper.clearTranscript()
         }
     }
 
