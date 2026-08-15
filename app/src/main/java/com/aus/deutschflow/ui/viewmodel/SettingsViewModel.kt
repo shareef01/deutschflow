@@ -1,6 +1,5 @@
 package com.aus.deutschflow.ui.viewmodel
 
-import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
@@ -79,9 +78,6 @@ class SettingsViewModel @Inject constructor(
     fun dismissMessage() {
         _message.value = null
     }
-
-    @StringRes
-    fun currentMessage(): Int? = _message.value
 
     fun saveApiKey(apiKey: String) {
         viewModelScope.launch {

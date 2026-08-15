@@ -1,8 +1,9 @@
 # R8 rules for DeutschFlow.
 #
 # Room, Hilt, Glance and DataStore all ship consumer rules, so this file
-# only covers what is specific to this app. Additional keep rules also live in
-# src/main/keepRules/ and are merged in by AGP.
+# only covers what is specific to this app. WorkManager's own rules already keep
+# DailyWordWorker's name and constructor (-keepnames on ListenableWorker
+# subclasses), which is what the default WorkerFactory resolves it by.
 
 # --- Privacy -----------------------------------------------------------------
 # Recognition results must never reach a release log. The call sites no longer
