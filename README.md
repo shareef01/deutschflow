@@ -211,6 +211,14 @@ erDiagram
 - Release builds strip `Log.d`/`Log.v` via R8, so no future logging mistake can
   leak a transcript or a key. Recognition content is never logged.
 
+**What does leave the device, stated plainly.** Audio never does — recognition is
+the on-device engine. The resulting *text* does, twice: each utterance is sent to
+Groq for translation, and the Room database — which holds every transcript and
+saved word — is included in Android's cloud backup and device transfer. Only the
+settings DataStore is excluded from those, because it holds the API key. If the
+transcript history is sensitive to you, turn off backup for DeutschFlow in Android's
+settings, or clear it from **Settings → Clear all progress**.
+
 **The AI client is deliberately dependency-free.** `HttpURLConnection` +
 `org.json` replace an archived Gemini SDK and its whole transitive payload. The
 request is the OpenAI chat shape most providers speak, the user's transcript and
