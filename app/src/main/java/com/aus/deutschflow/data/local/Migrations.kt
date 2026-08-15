@@ -86,6 +86,97 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
 }
 
 /**
+ * The latest non-blank [column] among the rows sharing the name of the row being
+ * written, or the empty string when no copy of the word ever carried one.
+ *
+ * Correlated on `v`, so it is only meaningful inside MIGRATION_6_7's SELECT. Every
+ * column it reads is NOT NULL, so the COALESCE guards an empty result set rather than
+ * a null value.
+ */
+private fun latestNonBlank(column: String): String =
+    "COALESCE((SELECT w.`$column` FROM `vocabulary` w " +
+        "WHERE w.`germanText` = v.`germanText` COLLATE NOCASE AND w.`$column` <> '' " +
+        "ORDER BY w.`timestamp` DESC, w.`id` DESC LIMIT 1), '')"
+
+/**
+ * Makes the word unique, and folds together the duplicates already out there.
+ *
+ * Saving a word the library already held minted a second row, which is easy to do now
+ * that one tap on a chip saves. The copies then read as repeat cards in Study, inflated
+ * the count in Settings, and gave that word extra weight in the daily rotation.
+ *
+ * A rebuild rather than an ALTER, for two reasons: the column gains a NOCASE collation,
+ * which ALTER TABLE cannot change, and the existing rows have to be deduplicated before
+ * a unique index over them can be created at all. This is the same shape as
+ * MIGRATION_3_4 and carries the same risk - a mistake here loses saved words, not one
+ * column - so the CREATE below is Room's own generated DDL for version 7, and
+ * AppDatabaseMigrationTest walks it with duplicates in the fixture.
+ *
+ * The duplicates are merged rather than picked between, field by field, under exactly
+ * the rule [VocabularyEntity.mergedWith] applies at runtime: for each field the latest
+ * non-blank value in the group wins, and the row keeps the greatest timestamp. Choosing
+ * one row wholesale would have been far less SQL, and would have thrown away a
+ * translation the user had edited by hand whenever some other copy happened to carry
+ * the grammar. The surviving row's id is the richest one's, so a word keeps the
+ * identity most of the library's history points at.
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `vocabulary_new` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`germanText` TEXT NOT NULL COLLATE NOCASE, " +
+                "`englishTranslation` TEXT NOT NULL, " +
+                "`timestamp` INTEGER NOT NULL, " +
+                "`exampleSentence` TEXT NOT NULL DEFAULT '', " +
+                "`article` TEXT NOT NULL DEFAULT '', " +
+                "`plural` TEXT NOT NULL DEFAULT '', " +
+                "`conjugation` TEXT NOT NULL DEFAULT '')"
+        )
+
+        // One row per word, carrying the best of everything the group knew. The name is
+        // compared with NOCASE explicitly: the *old* column has no collation of its own,
+        // so the grouping has to say which one it means.
+        db.execSQL(
+            "INSERT INTO `vocabulary_new` " +
+                "(`id`, `germanText`, `englishTranslation`, `timestamp`, " +
+                "`exampleSentence`, `article`, `plural`, `conjugation`) " +
+                "SELECT v.`id`, v.`germanText`, " +
+                latestNonBlank("englishTranslation") + ", " +
+                // The group's latest touch, so a word merged out of several surfaces
+                // where the most recent of them put it.
+                "(SELECT MAX(w.`timestamp`) FROM `vocabulary` w " +
+                "WHERE w.`germanText` = v.`germanText` COLLATE NOCASE), " +
+                latestNonBlank("exampleSentence") + ", " +
+                latestNonBlank("article") + ", " +
+                latestNonBlank("plural") + ", " +
+                latestNonBlank("conjugation") + " " +
+                "FROM `vocabulary` v WHERE v.`id` = (" +
+                "SELECT w.`id` FROM `vocabulary` w " +
+                "WHERE w.`germanText` = v.`germanText` COLLATE NOCASE " +
+                "ORDER BY (CASE WHEN w.`article` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`plural` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`conjugation` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`exampleSentence` <> '' THEN 1 ELSE 0 END) DESC, " +
+                "w.`timestamp` DESC, w.`id` DESC LIMIT 1)"
+        )
+
+        db.execSQL("DROP TABLE `vocabulary`")
+        db.execSQL("ALTER TABLE `vocabulary_new` RENAME TO `vocabulary`")
+
+        // After the rename, or they would be created on a table that is about to be
+        // renamed out from under them.
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_vocabulary_timestamp` ON `vocabulary` (`timestamp`)"
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_vocabulary_germanText` " +
+                "ON `vocabulary` (`germanText`)"
+        )
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -99,4 +190,5 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
  * version 1 were developer ones that have since been recreated. A 1 -> 2 migration
  * would therefore be untestable and unreachable, not a missing safety net.
  */
-val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+val MIGRATIONS =
+    arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)

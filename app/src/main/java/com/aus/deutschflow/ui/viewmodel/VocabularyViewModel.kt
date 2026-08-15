@@ -57,7 +57,7 @@ class VocabularyViewModel @Inject constructor(
         if (germanText.isBlank() || translation.isBlank()) return
 
         viewModelScope.launch {
-            vocabularyDao.insertVocabulary(
+            vocabularyDao.save(
                 VocabularyEntity(germanText = germanText, englishTranslation = translation)
             )
             widgetUpdater.refresh()
@@ -71,9 +71,17 @@ class VocabularyViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Applies an edit from the library dialog.
+     *
+     * Through [VocabularyDao.save] rather than a bare update: the word is unique now, so
+     * renaming an entry onto one the library already holds would otherwise throw a
+     * constraint violation into a coroutine and take the app down. The two are folded
+     * together instead, which is what the user asking for that name most likely meant.
+     */
     fun updateVocabulary(vocabulary: VocabularyEntity) {
         viewModelScope.launch {
-            vocabularyDao.updateVocabulary(vocabulary)
+            vocabularyDao.save(vocabulary)
             widgetUpdater.refresh()
         }
     }

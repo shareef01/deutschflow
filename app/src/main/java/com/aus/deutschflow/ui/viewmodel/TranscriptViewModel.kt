@@ -15,6 +15,7 @@ import com.aus.deutschflow.service.WordDetails
 import com.aus.deutschflow.service.WordDetailsResult
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -64,9 +65,18 @@ class TranscriptViewModel @Inject constructor(
     private val _wordDetails = MutableStateFlow<WordDetails?>(null)
     val wordDetails: StateFlow<WordDetails?> = _wordDetails
 
-    /** True while a single-word interrogation is in flight. */
-    private val _wordDetailLoading = MutableStateFlow(false)
-    val wordDetailLoading: StateFlow<Boolean> = _wordDetailLoading
+    /**
+     * The word whose interrogation is in flight, so the chip that was tapped is the one
+     * that shows a spinner.
+     *
+     * The word rather than a bare "loading" flag, and here rather than on the screen.
+     * It was both: a `wordDetailLoading` boolean nothing ever read, and a `loadingWord`
+     * remembered in the composition and cleared by an effect watching the *result* - so
+     * the spinner's truth and the sheet's truth were two states that had to be kept in
+     * step by hand, and were not.
+     */
+    private val _interrogatingWord = MutableStateFlow<String?>(null)
+    val interrogatingWord: StateFlow<String?> = _interrogatingWord
 
     /** Why a single-word interrogation failed, if it did. */
     private val _wordDetailError = MutableStateFlow<String?>(null)
@@ -138,7 +148,7 @@ class TranscriptViewModel @Inject constructor(
     fun saveToVocabulary(german: String, english: String) {
         if (german.isBlank() || english.isBlank()) return
         viewModelScope.launch {
-            vocabularyDao.insertVocabulary(
+            vocabularyDao.save(
                 VocabularyEntity(
                     germanText = german,
                     englishTranslation = english,
@@ -150,19 +160,32 @@ class TranscriptViewModel @Inject constructor(
     }
 
     /**
+     * The interrogation in flight, so a second tap supersedes the first rather than
+     * racing it.
+     */
+    private var interrogationJob: Job? = null
+
+    /**
      * Fetches the full linguistic anatomy of one extracted word.
      *
      * The previous word's detail is cleared as soon as a new interrogation starts, so
      * the sheet never shows a stale result while the next one is in flight.
+     *
+     * Clearing was not enough on its own. The chips stay tappable while a request is
+     * out, so two taps left two requests running and whichever answered *last* won the
+     * sheet - tapping a second word could open the first word's anatomy, and Save then
+     * filed the word the user had not tapped. Cancelling means only one answer can
+     * ever arrive, and it belongs to the last word tapped.
      */
     fun interrogateWord(word: String) {
         val trimmed = word.trim()
         if (trimmed.isBlank()) return
 
-        viewModelScope.launch {
+        interrogationJob?.cancel()
+        interrogationJob = viewModelScope.launch {
             _wordDetails.value = null
             _wordDetailError.value = null
-            _wordDetailLoading.value = true
+            _interrogatingWord.value = trimmed
             try {
                 when (val result =
                     vocabularyProcessor.interrogateWord(trimmed, preferenceManager.apiKey.first())) {
@@ -170,7 +193,13 @@ class TranscriptViewModel @Inject constructor(
                     is WordDetailsResult.Failure -> _wordDetailError.value = result.message
                 }
             } finally {
-                _wordDetailLoading.value = false
+                // Only the newest interrogation owns this. A cancelled predecessor runs
+                // its finally on resumption, which can land after its successor has
+                // already named its own word - clearing it there would drop the spinner
+                // off a chip whose answer is still on its way.
+                if (coroutineContext[Job] === interrogationJob) {
+                    _interrogatingWord.value = null
+                }
             }
         }
     }
@@ -182,13 +211,30 @@ class TranscriptViewModel @Inject constructor(
     }
 
     /**
+     * Clears a failed interrogation, but only if it is still the failure on screen.
+     *
+     * Distinct from [dismissWordDetails], which also closes the sheet. The screen
+     * reports a failure through a snackbar, and showing one suspends for seconds; a tap
+     * on another chip inside that window starts a new interrogation, and the blanket
+     * dismiss that used to run afterwards wiped the new word's answer as it arrived.
+     * Same rule as SpeechRecognizerHelper's timed error reset: a message that something
+     * newer has already replaced is not this caller's to clear.
+     */
+    fun dismissWordDetailError(message: String) {
+        _wordDetailError.compareAndSet(message, null)
+    }
+
+    /**
      * Saves exactly one structured word - article, plural, conjugation, meaning and
      * example - rather than the whole transcript.
+     *
+     * Through [VocabularyDao.save], so interrogating a word the library already holds
+     * fills in the grammar it was missing instead of standing a second copy beside it.
      */
     fun saveWordDetails(details: WordDetails) {
         if (details.word.isBlank() || details.meaning.isBlank()) return
         viewModelScope.launch {
-            vocabularyDao.insertVocabulary(
+            vocabularyDao.save(
                 VocabularyEntity(
                     germanText = details.word,
                     englishTranslation = details.meaning,
