@@ -13,8 +13,8 @@ import javax.inject.Singleton
 object ServiceModule {
 
     /**
-     * VocabularyProcessor has no @Inject constructor - it takes a default-valued
-     * GroqHelper so tests can substitute one - so it needs a binding here.
+     * VocabularyProcessor has no @Inject constructor - it is constructed directly by
+     * the tests that substitute a scripted subclass for it - so it needs a binding here.
      *
      * TTSHelper does not: it is already an @Singleton @Inject constructor, and the
      * @Provides that used to sit here was a second, redundant way to say so.

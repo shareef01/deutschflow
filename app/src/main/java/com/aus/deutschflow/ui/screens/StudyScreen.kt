@@ -56,7 +56,12 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         return
     }
 
-    val currentItem = studyList[currentIndex.coerceIn(studyList.indices)]
+    // Coerced once, then used for the card, the bar and the caption alike. The caption
+    // read the raw index while the other two clamped it, so the three could only agree
+    // by luck - and did, because nextCard() wraps with a modulo. A guard that only two
+    // of three readers honour is not a guard.
+    val safeIndex = currentIndex.coerceIn(studyList.indices)
+    val currentItem = studyList[safeIndex]
 
     // Speaks the card unless auto-play is switched off in Settings.
     LaunchedEffect(currentIndex, currentItem.id) {
@@ -222,7 +227,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         Spacer(modifier = Modifier.height(24.dp))
 
         LinearProgressIndicator(
-            progress = { (currentIndex.coerceIn(studyList.indices) + 1).toFloat() / studyList.size },
+            progress = { (safeIndex + 1).toFloat() / studyList.size },
             modifier = Modifier.fillMaxWidth().height(8.dp),
             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
             color = MaterialTheme.colorScheme.primary,
@@ -232,7 +237,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         Spacer(modifier = Modifier.height(8.dp))
         
         Text(
-            text = stringResource(R.string.study_progress, currentIndex + 1, studyList.size),
+            text = stringResource(R.string.study_progress, safeIndex + 1, studyList.size),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
