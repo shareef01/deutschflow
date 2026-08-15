@@ -145,8 +145,15 @@ class TranscriptViewModel @Inject constructor(
         }
     }
 
-    fun saveToVocabulary(german: String, english: String) {
-        if (german.isBlank() || english.isBlank()) return
+    /**
+     * @return false when there was nothing to save, so the caller can stay quiet
+     * instead of confirming a write that did not happen. The screen's snackbar is the
+     * only acknowledgement this action gets; announcing a save that was rejected is
+     * the same lie [com.aus.deutschflow.data.local.PreferenceManager.saveApiKey]
+     * returns a Boolean to avoid.
+     */
+    fun saveToVocabulary(german: String, english: String): Boolean {
+        if (german.isBlank() || english.isBlank()) return false
         viewModelScope.launch {
             vocabularyDao.save(
                 VocabularyEntity(
@@ -157,6 +164,7 @@ class TranscriptViewModel @Inject constructor(
             )
             widgetUpdater.refresh()
         }
+        return true
     }
 
     /**
@@ -231,8 +239,8 @@ class TranscriptViewModel @Inject constructor(
      * Through [VocabularyDao.save], so interrogating a word the library already holds
      * fills in the grammar it was missing instead of standing a second copy beside it.
      */
-    fun saveWordDetails(details: WordDetails) {
-        if (details.word.isBlank() || details.meaning.isBlank()) return
+    fun saveWordDetails(details: WordDetails): Boolean {
+        if (details.word.isBlank() || details.meaning.isBlank()) return false
         viewModelScope.launch {
             vocabularyDao.save(
                 VocabularyEntity(
@@ -246,6 +254,7 @@ class TranscriptViewModel @Inject constructor(
             )
             widgetUpdater.refresh()
         }
+        return true
     }
 
     override fun onCleared() {

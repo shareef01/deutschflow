@@ -10,6 +10,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -137,6 +138,23 @@ class SpeechRecognizerHelper @Inject constructor(
             _partialText.value = ""
             _rmsLevel.value = 0f
         }
+    }
+
+    /**
+     * Forgets the last utterance, without touching the engine.
+     *
+     * An attempt is described by three pieces of state, and they live in two places:
+     * the scores and the verdict belong to the ViewModel, the transcript belongs here.
+     * Practice moves to a new sentence without recording, so it cleared the two it
+     * owned and left this one - and the words spoken for the previous sentence stayed
+     * on screen underneath the new one, still labelled as what the user had just said.
+     *
+     * Distinct from [cancel], which also abandons a recording in progress. Nothing is
+     * in flight when this is called.
+     */
+    fun clearTranscript() {
+        _partialText.value = ""
+        _finalText.value = ""
     }
 
     /**
@@ -276,19 +294,12 @@ class SpeechRecognizerHelper @Inject constructor(
         }
 
         override fun onResults(results: Bundle?) {
-            val text = results
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-                .orEmpty()
-
-            _isListening.value = false
-            _isProcessing.value = false
-            _rmsLevel.value = 0f
-
-            if (text.isNotBlank()) {
-                _finalText.value = text
-                _results.tryEmit(text)
-            }
+            deliverUtterance(
+                results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    .orEmpty()
+            )
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
@@ -299,6 +310,27 @@ class SpeechRecognizerHelper @Inject constructor(
         }
 
         override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    /**
+     * Publishes a completed utterance and closes the session it belonged to.
+     *
+     * Internal rather than private so a test can drive one through without starting
+     * real speech recognition, which no test can do - the same reason
+     * [com.aus.deutschflow.ui.viewmodel.TranscriptViewModel.handleUtterance] is
+     * reachable. [RecognitionListener.onResults] is its only production caller, so a
+     * test that goes through here cannot drift from what the engine actually does.
+     */
+    @VisibleForTesting
+    internal fun deliverUtterance(text: String) {
+        _isListening.value = false
+        _isProcessing.value = false
+        _rmsLevel.value = 0f
+
+        if (text.isNotBlank()) {
+            _finalText.value = text
+            _results.tryEmit(text)
+        }
     }
 
     /**

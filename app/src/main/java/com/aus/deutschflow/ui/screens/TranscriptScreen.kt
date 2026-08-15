@@ -121,9 +121,13 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             },
             onStopListening = { viewModel.stopListening() },
             onWordClick = { word -> viewModel.interrogateWord(word) },
+            // Only on an accepted save: the ViewModel rejects a blank side, and
+            // confirming one anyway would be the screen's own report of a write that
+            // never happened.
             onSave = {
-                viewModel.saveToVocabulary(finalText, translation)
-                scope.launch { snackbarHostState.showSnackbar(savedMessage) }
+                if (viewModel.saveToVocabulary(finalText, translation)) {
+                    scope.launch { snackbarHostState.showSnackbar(savedMessage) }
+                }
             }
         )
 
@@ -138,9 +142,11 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             details = wordDetails,
             onDismiss = { viewModel.dismissWordDetails() },
             onSave = { details ->
-                viewModel.saveWordDetails(details)
+                val saved = viewModel.saveWordDetails(details)
                 viewModel.dismissWordDetails()
-                scope.launch { snackbarHostState.showSnackbar(savedMessage) }
+                if (saved) {
+                    scope.launch { snackbarHostState.showSnackbar(savedMessage) }
+                }
             }
         )
     }
