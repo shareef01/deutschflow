@@ -29,5 +29,17 @@ data class VocabularyEntity(
      * default alone is invisible to SQLite, which would leave the two diverging.
      */
     @ColumnInfo(defaultValue = "''")
-    val exampleSentence: String = ""
+    val exampleSentence: String = "",
+    /**
+     * The grammatical article ("der"/"die"/"das"/"none"), plural form and, for verbs,
+     * the infinitive - filled by the single-word interrogation and empty for words
+     * typed by hand. SQL defaults declared so a fresh install and the migrated
+     * database share identical DDL.
+     */
+    @ColumnInfo(defaultValue = "''")
+    val article: String = "",
+    @ColumnInfo(defaultValue = "''")
+    val plural: String = "",
+    @ColumnInfo(defaultValue = "''")
+    val conjugation: String = ""
 )

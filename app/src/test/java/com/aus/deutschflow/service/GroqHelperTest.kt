@@ -92,4 +92,45 @@ class GroqHelperTest {
         assertNull(GroqHelper.detailFrom(""))
         assertNull(GroqHelper.detailFrom("""{"error":{"message":""}}"""))
     }
+
+    // --- single-word interrogation -------------------------------------------
+
+    @Test
+    fun `parses the strict word schema`() {
+        val json = """
+            {"word":"Hund","article":"der","plural":"Hunde",
+             "conjugation_or_infinitive":"","meaning":"dog",
+             "example_sentence":"Der Hund schläft."}
+        """.trimIndent()
+
+        val details = GroqHelper.parseWordDetails(json)
+
+        assertNotNull(details)
+        assertEquals("Hund", details!!.word)
+        assertEquals("der", details.article)
+        assertEquals("Hunde", details.plural)
+        assertEquals("dog", details.meaning)
+        assertEquals("Der Hund schläft.", details.exampleSentence)
+    }
+
+    @Test
+    fun `tolerates markdown code fences around the json`() {
+        val fenced = """
+            ```json
+            {"word":"laufen","article":"none","plural":"","conjugation_or_infinitive":"laufen","meaning":"to run","example_sentence":"Ich laufe jeden Morgen."}
+            ```
+        """.trimIndent()
+
+        val details = GroqHelper.parseWordDetails(fenced)
+
+        assertEquals("laufen", details!!.word)
+        assertEquals("none", details.article)
+    }
+
+    @Test
+    fun `returns null when the word json is missing or unreadable`() {
+        assertNull(GroqHelper.parseWordDetails("Sure! Here is your word."))
+        assertNull(GroqHelper.parseWordDetails("""{"word":"","meaning":"dog"}"""))
+        assertNull(GroqHelper.parseWordDetails("""{"word":"Hund"}"""))
+    }
 }

@@ -32,17 +32,15 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.GlassButton
 import com.aus.deutschflow.ui.components.GlassmorphicCard
-import com.aus.deutschflow.ui.components.OracleMic
-import com.aus.deutschflow.ui.theme.ActionButtonHeight
-import com.aus.deutschflow.ui.theme.pressScale
-import com.aus.deutschflow.ui.theme.rememberPressSource
-import com.aus.deutschflow.ui.theme.GlassFillRaised
-import com.aus.deutschflow.ui.theme.glassSurface
-import com.aus.deutschflow.ui.theme.PillShape
-import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.components.OnLeavingScreen
+import com.aus.deutschflow.ui.components.OracleMic
+import com.aus.deutschflow.ui.components.VocabularyChip
+import com.aus.deutschflow.ui.components.WordDetailsBottomSheet
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
+import com.aus.deutschflow.ui.theme.Spacing
+import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.TranscriptViewModel
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -56,6 +54,8 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     val suggestedWords by viewModel.suggestedWords.collectAsState()
     val errorState by viewModel.errorState.collectAsState()
     val aiError by viewModel.aiError.collectAsState()
+    val wordDetails by viewModel.wordDetails.collectAsState()
+    val wordDetailError by viewModel.wordDetailError.collectAsState()
 
     val context = LocalContext.current
 
@@ -66,6 +66,23 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     val savedMessage = stringResource(R.string.transcript_saved)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Which word's interrogation is in flight, so the right chip shows its spinner.
+    var loadingWord by remember { mutableStateOf<String?>(null) }
+
+    // Once the interrogation resolves - sheet or error - the chip stops glowing.
+    LaunchedEffect(wordDetails, wordDetailError) {
+        if (wordDetails != null || wordDetailError != null) loadingWord = null
+    }
+
+    // A failed interrogation surfaces through the same snackbar as a save, rather
+    // than through the recording banner that has nothing to do with it.
+    LaunchedEffect(wordDetailError) {
+        wordDetailError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissWordDetails()
+        }
+    }
 
     // Permission Mandate: Runtime Authorization
     val launcher = rememberLauncherForActivityResult(
@@ -93,6 +110,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             isListening = isListening,
             isBusy = isBusy,
             suggestedWords = suggestedWords,
+            loadingWord = loadingWord,
             errorState = errorState ?: aiError,
             onStartListening = {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -102,6 +120,10 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
                 }
             },
             onStopListening = { viewModel.stopListening() },
+            onWordClick = { word ->
+                loadingWord = word
+                viewModel.interrogateWord(word)
+            },
             onSave = {
                 viewModel.saveToVocabulary(finalText, translation)
                 scope.launch { snackbarHostState.showSnackbar(savedMessage) }
@@ -111,6 +133,18 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        // The interrogation result. It sits above the snackbar and closes on dismiss
+        // or after a save.
+        WordDetailsBottomSheet(
+            details = wordDetails,
+            onDismiss = { viewModel.dismissWordDetails() },
+            onSave = { details ->
+                viewModel.saveWordDetails(details)
+                viewModel.dismissWordDetails()
+                scope.launch { snackbarHostState.showSnackbar(savedMessage) }
+            }
         )
     }
 }
@@ -124,9 +158,11 @@ fun TranscriptContent(
     isListening: Boolean,
     isBusy: Boolean,
     suggestedWords: List<String>,
+    loadingWord: String?,
     errorState: String?,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
+    onWordClick: (String) -> Unit,
     onSave: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -267,44 +303,34 @@ fun TranscriptContent(
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                     ) {
-                        // Rendered as labels, not chips: there is no per-word
-                        // translation to save, so nothing here is tappable.
+                        // Interactive now: each word is a glass pill that interrogates
+                        // the model on tap, and glows with a spinner while it answers.
                         suggestedWords.forEach { word ->
-                            Box(
-                                modifier = Modifier.glassSurface(
-                                    shape = MaterialTheme.shapes.small,
-                                    fill = GlassFillRaised
-                                )
-                            ) {
-                                Text(
-                                    text = word,
-                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            VocabularyChip(
+                                word = word,
+                                isLoading = loadingWord == word,
+                                onClick = { onWordClick(word) }
+                            )
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(Spacing.lg))
 
-                val saveSource = rememberPressSource()
-                Button(
-                    interactionSource = saveSource,
+                GlassButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onSave()
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(ActionButtonHeight)
-                        .pressScale(saveSource),
-                    shape = PillShape
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(Spacing.sm))
-                    Text(stringResource(R.string.transcript_save), style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        text = stringResource(R.string.transcript_save),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -323,9 +349,11 @@ fun TranscriptScreenPreview() {
             isListening = false,
             isBusy = false,
             suggestedWords = listOf("Hallo", "Deutsch", "Lernen"),
+            loadingWord = null,
             errorState = "Didn't catch that. Try speaking again, a little slower.",
             onStartListening = {},
             onStopListening = {},
+            onWordClick = {},
             onSave = {}
         )
     }

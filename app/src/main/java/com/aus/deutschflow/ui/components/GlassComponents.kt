@@ -14,13 +14,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,13 +39,17 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.AzureDeep
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.GlassFill
 import com.aus.deutschflow.ui.theme.GlassShape
+import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassBorderBrush
 import com.aus.deutschflow.ui.theme.glassSurface
+import com.aus.deutschflow.ui.theme.pressScale
+import com.aus.deutschflow.ui.theme.rememberPressSource
 
 /**
  * A glassmorphic card: the app's one surface treatment, as a named component.
@@ -202,4 +210,44 @@ fun SearchInput(
         trailingIcon = trailingIcon,
         singleLine = true
     )
+}
+
+/**
+ * The app's one primary action button: no solid fill, no solid edge.
+ *
+ * A transparent container over a 5%-white glass fill, ringed by the same cyan
+ * gradient every card uses, with a bold white label. This replaces the solid primary
+ * buttons (Save to library, Got it!, Speak, Next) that broke the Obsidian & Azure
+ * language. [glow] recolours the edge - the Practice screen's "Stop" passes the error
+ * colour so a recording still reads as stop-the-world.
+ */
+@Composable
+fun GlassButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    glow: Color = AzureGlow,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    content: @Composable RowScope.() -> Unit
+) {
+    val interactionSource = rememberPressSource()
+
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .height(ActionButtonHeight)
+            .pressScale(interactionSource),
+        shape = PillShape,
+        border = BorderStroke(1.dp, glassBorderBrush(glow)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color.White.copy(alpha = 0.05f),
+            contentColor = contentColor,
+            disabledContainerColor = Color.White.copy(alpha = 0.03f),
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    ) {
+        content()
+    }
 }
