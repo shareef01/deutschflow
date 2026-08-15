@@ -16,8 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.components.EmptyState
-import com.aus.deutschflow.ui.theme.ActionButtonHeight
-import com.aus.deutschflow.ui.theme.PillShape
+import com.aus.deutschflow.ui.components.GlassButton
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 
@@ -58,6 +57,20 @@ fun VocabularyDetailScreen(
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
+                // The grammatical facts the single-word interrogation captured, for
+                // entries that have them; hand-typed words leave this line empty.
+                val grammar = listOfNotNull(
+                    item.article.takeIf { it.isNotBlank() && it != "none" },
+                    item.plural.takeIf { it.isNotBlank() },
+                    item.conjugation.takeIf { it.isNotBlank() }
+                ).joinToString("  ·  ")
+                if (grammar.isNotBlank()) {
+                    Text(
+                        text = grammar,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(modifier = Modifier.height(Spacing.xs))
                 Text(
                     text = item.englishTranslation,
@@ -129,17 +142,18 @@ fun VocabularyDetailScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         // Navigation Action
-        Button(
+        GlassButton(
             onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClose()
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(ActionButtonHeight),
-            shape = PillShape
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(stringResource(R.string.detail_back), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(
+                text = stringResource(R.string.detail_back),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

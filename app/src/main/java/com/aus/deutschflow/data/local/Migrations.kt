@@ -71,6 +71,21 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
 }
 
 /**
+ * Adds the grammatical fields the single-word interrogation produces.
+ *
+ * Article, plural and conjugation were only ever shown in the detail sheet, then
+ * dropped on save; the library now keeps them. Empty default means hand-typed words
+ * and rows migrated from v5 behave exactly as before.
+ */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN article TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN plural TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN conjugation TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -84,4 +99,4 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
  * version 1 were developer ones that have since been recreated. A 1 -> 2 migration
  * would therefore be untestable and unreachable, not a missing safety net.
  */
-val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)

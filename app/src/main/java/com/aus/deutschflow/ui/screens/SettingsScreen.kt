@@ -38,15 +38,12 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.components.GlassButton
 import com.aus.deutschflow.ui.components.GlassTextField
-import com.aus.deutschflow.ui.theme.ActionButtonHeight
-import com.aus.deutschflow.ui.theme.pressScale
-import com.aus.deutschflow.ui.theme.rememberPressSource
 import com.aus.deutschflow.ui.theme.GlassFillRaised
+import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.azureBrush
 import com.aus.deutschflow.ui.theme.glassSurface
-import com.aus.deutschflow.ui.theme.PillShape
-import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
@@ -281,58 +278,39 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
 
         // Section: Actions
         Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), 
+            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // A neutral surface, not the default tonal fill. FilledTonalButton takes
-            // secondaryContainer when it is not told otherwise, and this palette's
-            // secondary is orange - so the container resolved to a muddy brown that
-            // appears nowhere else in the app and read as a warning it is not.
-            val notifySource = rememberPressSource()
-            val wipeSource = rememberPressSource()
-
-            FilledTonalButton(
-                interactionSource = notifySource,
+            GlassButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     requestTestNotification()
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(ActionButtonHeight)
-                    .pressScale(notifySource),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                shape = PillShape
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(stringResource(R.string.settings_test_notification), style = MaterialTheme.typography.labelLarge)
             }
 
-            // The error container/on-container pair, which is the one place in the app
-            // that role is correct: this is the destructive action.
-            Button(
-                interactionSource = wipeSource,
+            // The destructive action keeps its error identity, but as a red glass edge
+            // rather than a solid block of colour.
+            GlassButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     showDeleteConfirm = true
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(ActionButtonHeight)
-                    .pressScale(wipeSource),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                ),
-                shape = PillShape
+                modifier = Modifier.fillMaxWidth(),
+                glow = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.error
             ) {
                 Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(Spacing.sm))
-                Text(stringResource(R.string.settings_clear), style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = stringResource(R.string.settings_clear),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 

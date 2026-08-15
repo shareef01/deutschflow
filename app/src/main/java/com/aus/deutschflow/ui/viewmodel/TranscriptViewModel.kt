@@ -11,6 +11,8 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.AIResult
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.VocabularyProcessor
+import com.aus.deutschflow.service.WordDetails
+import com.aus.deutschflow.service.WordDetailsResult
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -57,6 +59,18 @@ class TranscriptViewModel @Inject constructor(
 
     private val _aiError = MutableStateFlow<String?>(null)
     val aiError: StateFlow<String?> = _aiError
+
+    /** The word the user tapped, resolved to its full linguistic anatomy. */
+    private val _wordDetails = MutableStateFlow<WordDetails?>(null)
+    val wordDetails: StateFlow<WordDetails?> = _wordDetails
+
+    /** True while a single-word interrogation is in flight. */
+    private val _wordDetailLoading = MutableStateFlow(false)
+    val wordDetailLoading: StateFlow<Boolean> = _wordDetailLoading
+
+    /** Why a single-word interrogation failed, if it did. */
+    private val _wordDetailError = MutableStateFlow<String?>(null)
+    val wordDetailError: StateFlow<String?> = _wordDetailError
 
     init {
         // Completed utterances arrive here, once each. Reading finalText straight
@@ -129,6 +143,59 @@ class TranscriptViewModel @Inject constructor(
                     germanText = german,
                     englishTranslation = english,
                     exampleSentence = _example.value
+                )
+            )
+            widgetUpdater.refresh()
+        }
+    }
+
+    /**
+     * Fetches the full linguistic anatomy of one extracted word.
+     *
+     * The previous word's detail is cleared as soon as a new interrogation starts, so
+     * the sheet never shows a stale result while the next one is in flight.
+     */
+    fun interrogateWord(word: String) {
+        val trimmed = word.trim()
+        if (trimmed.isBlank()) return
+
+        viewModelScope.launch {
+            _wordDetails.value = null
+            _wordDetailError.value = null
+            _wordDetailLoading.value = true
+            try {
+                when (val result =
+                    vocabularyProcessor.interrogateWord(trimmed, preferenceManager.apiKey.first())) {
+                    is WordDetailsResult.Success -> _wordDetails.value = result.details
+                    is WordDetailsResult.Failure -> _wordDetailError.value = result.message
+                }
+            } finally {
+                _wordDetailLoading.value = false
+            }
+        }
+    }
+
+    /** Closes the detail sheet and forgets the current word. */
+    fun dismissWordDetails() {
+        _wordDetails.value = null
+        _wordDetailError.value = null
+    }
+
+    /**
+     * Saves exactly one structured word - article, plural, conjugation, meaning and
+     * example - rather than the whole transcript.
+     */
+    fun saveWordDetails(details: WordDetails) {
+        if (details.word.isBlank() || details.meaning.isBlank()) return
+        viewModelScope.launch {
+            vocabularyDao.insertVocabulary(
+                VocabularyEntity(
+                    germanText = details.word,
+                    englishTranslation = details.meaning,
+                    exampleSentence = details.exampleSentence,
+                    article = details.article,
+                    plural = details.plural,
+                    conjugation = details.conjugationOrInfinitive
                 )
             )
             widgetUpdater.refresh()

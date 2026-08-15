@@ -10,6 +10,10 @@ class VocabularyProcessor(
     suspend fun processText(text: String, apiKey: String): AIResult =
         languageModel.translateAndExtract(text, apiKey)
 
+    /** Fetches the full linguistic anatomy of a single word. */
+    suspend fun interrogateWord(word: String, apiKey: String): WordDetailsResult =
+        languageModel.interrogateWord(word, apiKey)
+
     /** @see Companion.generateExample */
     fun generateExample(word: String): String = Companion.generateExample(word)
 
