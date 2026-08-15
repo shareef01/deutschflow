@@ -7,6 +7,10 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+# Per-developer IDE state: which device was last deployed to, and per-session
+# assistant bookkeeping. Neither describes the project.
+/.idea/deploymentTargetSelector.xml
+/.idea/planningMode.xml
 .DS_Store
 /build
 /captures
