@@ -42,6 +42,24 @@ import androidx.compose.ui.unit.dp
 val GlassShape = RoundedCornerShape(24.dp)
 
 /**
+ * The single edge treatment every glass surface and glass input shares.
+ *
+ * Cards used to paint this inline, and text fields did not paint it at all - each
+ * drew its own plain outline. Extracting it means a card and the search bar next to
+ * it are one stroke: the same azure corner fading to nothing, at the same weight.
+ * A gradient rather than a solid so the edge reads as a lit pane, not a selection.
+ */
+fun glassBorderBrush(glow: Color = AzureGlow): Brush = Brush.linearGradient(
+    colors = listOf(
+        glow.copy(alpha = 0.35f),
+        glow.copy(alpha = 0.12f),
+        Color.Transparent
+    ),
+    start = Offset.Zero,
+    end = Offset.Infinite
+)
+
+/**
  * @param shape must match whatever the caller clips its content to, or the fill and
  * the edge will disagree at the corners.
  */
@@ -54,15 +72,7 @@ fun Modifier.glassSurface(
     .background(fill, shape)
     .border(
         width = 1.dp,
-        brush = Brush.linearGradient(
-            colors = listOf(
-                glow.copy(alpha = 0.35f),
-                glow.copy(alpha = 0.12f),
-                Color.Transparent
-            ),
-            start = Offset.Zero,
-            end = Offset.Infinite
-        ),
+        brush = glassBorderBrush(glow),
         shape = shape
     )
 

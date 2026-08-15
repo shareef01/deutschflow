@@ -1,7 +1,11 @@
 package com.aus.deutschflow.service
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -39,6 +43,41 @@ class TTSHelper @Inject constructor(
     /** Text asked for while the engine was connecting, spoken as soon as it is. */
     @Volatile
     private var pendingText: String? = null
+
+    private val audioManager =
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    /**
+     * Transient focus for one spoken phrase: the app asks for the audio channel,
+     * says its piece, and hands it back. GAIN_TRANSIENT_MAY_DUCK rather than a full
+     * GAIN so a podcast keeps playing quietly underneath a two-word example, and so
+     * the recording screens can still take the microphone when they need it.
+     */
+    private val audioFocusRequest = AudioFocusRequest.Builder(
+        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+    )
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+        .build()
+
+    @Volatile
+    private var hasAudioFocus = false
+
+    /** Focus is released the moment an utterance finishes or fails. */
+    private val progressListener = object : UtteranceProgressListener() {
+        override fun onStart(utteranceId: String?) {}
+        override fun onDone(utteranceId: String?) = abandonAudioFocus()
+
+        // The single-argument onError is the only abstract hook, and the framework
+        // marks it deprecated in favour of the two-argument form it does not require
+        // a subclass to implement. Either way the focus must be handed back.
+        @Suppress("OVERRIDE_DEPRECATION")
+        override fun onError(utteranceId: String?) = abandonAudioFocus()
+    }
 
     /**
      * Set when the user asked to hear something and the engine could not oblige.
@@ -103,7 +142,11 @@ class TTSHelper @Inject constructor(
         if (failure == null) {
             state = State.READY
             _error.value = null
-            queued?.let { engine?.speak(it, TextToSpeech.QUEUE_FLUSH, null, null) }
+            engine?.setOnUtteranceProgressListener(progressListener)
+            queued?.let {
+                requestAudioFocus()
+                engine?.speak(it, TextToSpeech.QUEUE_FLUSH, null, utteranceIdFor(it))
+            }
         } else {
             state = State.UNAVAILABLE
             Log.w(TAG, "Text-to-speech unavailable: $failure (init status $status)")
@@ -133,7 +176,10 @@ class TTSHelper @Inject constructor(
         if (text.isBlank()) return
 
         when (state) {
-            State.READY -> tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+            State.READY -> {
+                requestAudioFocus()
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceIdFor(text))
+            }
 
             // Spoken by onEngineInit the moment the engine answers.
             State.CONNECTING -> pendingText = text
@@ -151,9 +197,24 @@ class TTSHelper @Inject constructor(
 
     private fun restart() {
         synchronized(lock) {
+            abandonAudioFocus()
             tts?.shutdown()
             tts = null
             initialize()
+        }
+    }
+
+    /**
+     * Stops the current phrase without tearing the engine down.
+     *
+     * The recording screens call this before they open the microphone: a German
+     * phrase still playing would be picked up by the recogniser and scored against
+     * the user's own voice.
+     */
+    fun stop() {
+        synchronized(lock) {
+            abandonAudioFocus()
+            tts?.stop()
         }
     }
 
@@ -164,9 +225,28 @@ class TTSHelper @Inject constructor(
             state = State.UNAVAILABLE
             pendingText = null
             _error.value = null
+            abandonAudioFocus()
             tts?.stop()
             tts?.shutdown()
             tts = null
         }
     }
+
+    /** Best-effort: if another app holds the channel, the phrase still plays. */
+    private fun requestAudioFocus() {
+        if (hasAudioFocus) return
+        hasAudioFocus = audioManager.requestAudioFocus(audioFocusRequest) ==
+            AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonAudioFocus() {
+        if (hasAudioFocus) {
+            audioManager.abandonAudioFocusRequest(audioFocusRequest)
+            hasAudioFocus = false
+        }
+    }
+
+    /** A fresh id per phrase so a queued utterance is never mistaken for the last. */
+    private fun utteranceIdFor(text: String): String =
+        "deutschflow-${text.hashCode()}-${System.nanoTime()}"
 }

@@ -1,10 +1,20 @@
 package com.aus.deutschflow.data.local.entities
 
+import androidx.compose.runtime.Immutable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "vocabulary")
+/**
+ * Immutable so Compose treats the vocabulary list as skippable when it is handed to a
+ * composable unchanged; the DAO only ever swaps whole entities, never mutates one.
+ */
+@Immutable
+@Entity(
+    tableName = "vocabulary",
+    indices = [Index(value = ["timestamp"])]
+)
 data class VocabularyEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val germanText: String,

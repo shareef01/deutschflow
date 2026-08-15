@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +23,7 @@ import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.HistoryViewModel
 import com.aus.deutschflow.ui.components.EmptyState
+import com.aus.deutschflow.ui.components.SearchInput
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -40,19 +40,12 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
     ) {
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Standardized Search Bar
-        OutlinedTextField(
+        // The same glass input the library uses - one component, one stroke.
+        SearchInput(
             value = historyQuery,
             onValueChange = { viewModel.setQuery(it) },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(stringResource(R.string.history_search_hint), style = MaterialTheme.typography.bodyMedium) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            singleLine = true,
-            shape = MaterialTheme.shapes.medium,
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
+            placeholder = stringResource(R.string.history_search_hint)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

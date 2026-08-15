@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.PreferenceManager
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@Immutable
 data class WordResult(val word: String, val isCorrect: Boolean)
 
 /**
@@ -21,6 +23,7 @@ data class WordResult(val word: String, val isCorrect: Boolean)
  * would have silently picked the failure colour the moment the string was
  * translated. The wording now lives in resources and only the level crosses here.
  */
+@Immutable
 enum class PracticeFeedback { NONE, PERFECT, GOOD, KEEP_GOING }
 
 @HiltViewModel
@@ -35,6 +38,9 @@ class PracticeViewModel @Inject constructor(
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
     val isProcessing: StateFlow<Boolean> = speechRecognizerHelper.isProcessing
+
+    /** Input level 0..1 for the live waveform; read in a draw phase, not composition. */
+    val rmsLevel: StateFlow<Float> = speechRecognizerHelper.rmsLevel
     /**
      * One error surface for the screen: whichever of the microphone or the voice
      * engine last had something to say. Both are reasons the user is looking at a
@@ -92,6 +98,9 @@ class PracticeViewModel @Inject constructor(
         viewModelScope.launch {
             _wordResults.value = emptyList()
             _feedback.value = PracticeFeedback.NONE
+            // Stop any German playback before the microphone opens, or the engine's
+            // own voice would be recognised as the user's.
+            ttsHelper.stop()
             speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
         }
     }

@@ -1,8 +1,10 @@
 package com.aus.deutschflow.data.local.entities
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+@Immutable
 @Entity(tableName = "user_stats")
 data class UserStatsEntity(
     @PrimaryKey val id: Int = 1,
