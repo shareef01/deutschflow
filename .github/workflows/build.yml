@@ -10,6 +10,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# This workflow only reads the repository and uploads its own artifacts. Naming that
+# explicitly stops it inheriting whatever the repository default happens to be, which
+# on older repositories is read/write on every scope.
+permissions:
+  contents: read
+
 jobs:
   # Unit tests, lint and a full R8 release build. No keystore.properties exists on
   # CI, so the release output is unsigned - this job proves the build is sound, it
