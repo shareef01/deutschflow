@@ -31,6 +31,10 @@
     <string name="transcript_save">Save to library</string>
     <string name="transcript_saved">Saved to your library.</string>
     <string name="transcript_placeholder">Your transcript will appear here.</string>
+    <string name="word_sheet_article">Article: %1$s</string>
+    <string name="word_sheet_plural">Plural: %1$s</string>
+    <string name="word_sheet_verb">Infinitive: %1$s</string>
+    <string name="word_sheet_meaning">Meaning</string>
 
     <!-- History -->
     <string name="history_search_hint">Search transcript history…</string>

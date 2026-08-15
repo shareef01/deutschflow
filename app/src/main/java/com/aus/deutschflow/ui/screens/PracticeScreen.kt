@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -34,14 +33,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.AudioWaveform
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.GlassButton
 import com.aus.deutschflow.ui.components.GlassmorphicCard
-import com.aus.deutschflow.ui.theme.ActionButtonHeight
-import com.aus.deutschflow.ui.theme.pressScale
-import com.aus.deutschflow.ui.theme.rememberPressSource
-import com.aus.deutschflow.ui.theme.glassSurface
+import com.aus.deutschflow.ui.components.OnLeavingScreen
+import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
-import com.aus.deutschflow.ui.components.OnLeavingScreen
+import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
 
@@ -297,22 +295,13 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         // card - reachable only by scrolling past everything it acts on.
         Spacer(modifier = Modifier.height(Spacing.md))
 
-        // One filled primary for the action the screen exists for, one outlined for
-        // the secondary. The filled one used to be a transparent Button wrapping a
-        // gradient Box - which meant the real container colour was Color.Transparent,
-        // so Material could not derive a content colour, disabled state or ripple
-        // from it and every one of those had to be hand-painted.
+        // Both actions are glass now. The Speak button takes the error role only while
+        // actually recording (stop-the-world), and returns to the cyan edge otherwise.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
-            // Each control owns its interaction source so pressScale can read the press
-            // without installing a second clickable over the Button's own.
-            val speakSource = rememberPressSource()
-            val nextSource = rememberPressSource()
-
-            Button(
-                interactionSource = speakSource,
+            GlassButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (isListening) {
@@ -326,25 +315,9 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                     }
                 },
                 enabled = !isProcessing,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(ActionButtonHeight)
-                    .pressScale(speakSource),
-                colors = ButtonDefaults.buttonColors(
-                    // Recording is a stop-the-world state, so it takes the error role
-                    // rather than a second gradient.
-                    containerColor = if (isListening) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    },
-                    contentColor = if (isListening) {
-                        MaterialTheme.colorScheme.onError
-                    } else {
-                        MaterialTheme.colorScheme.onPrimary
-                    }
-                ),
-                shape = PillShape
+                modifier = Modifier.weight(1f),
+                glow = if (isListening) MaterialTheme.colorScheme.error else AzureGlow,
+                contentColor = if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
             ) {
                 Icon(
                     imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
@@ -354,22 +327,17 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     text = stringResource(if (isListening) R.string.practice_evaluate else R.string.practice_speak),
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            OutlinedButton(
-                interactionSource = nextSource,
+            GlassButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.nextSentence()
                 },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(ActionButtonHeight)
-                    .pressScale(nextSource),
-                shape = PillShape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                modifier = Modifier.weight(1f)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.NavigateNext,
@@ -379,7 +347,8 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     text = stringResource(R.string.practice_next),
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

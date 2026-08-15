@@ -18,11 +18,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
-import com.aus.deutschflow.ui.theme.OnSurfaceMuted
-import com.aus.deutschflow.ui.theme.Spacing
-import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.GlassButton
+import com.aus.deutschflow.ui.theme.AzureGlow
+import com.aus.deutschflow.ui.theme.OnSurfaceMuted
+import com.aus.deutschflow.ui.theme.Spacing
+import com.aus.deutschflow.ui.theme.glassSurface
+import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 
 @Composable
 fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
@@ -85,7 +88,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-        ElevatedCard(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 240.dp, max = 420.dp)
@@ -93,6 +96,9 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                     rotationY = rotation
                     cameraDistance = 12f * density
                 }
+                // Glassmorphic now, not the flat grey/tinted panel: the same 0.03f
+                // white fill and razor-thin cyan edge every card carries.
+                .glassSurface(shape = MaterialTheme.shapes.extraLarge)
                 .clickable(
                     onClickLabel = stringResource(
                         if (isFlipped) R.string.study_show_german else R.string.study_show_translation
@@ -100,13 +106,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                 ) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.flipCard()
-                },
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = if (isFlipped) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f) 
-                                else MaterialTheme.colorScheme.surfaceVariant
-            ),
-            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
-            shape = MaterialTheme.shapes.extraLarge
+                }
         ) {
             // fillMaxWidth, not fillMaxSize: filling meant the card always grew to
             // whatever height it was allowed, so a three-word card was mostly empty
@@ -171,7 +171,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         Text(
                             text = currentItem.englishTranslation,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            color = MaterialTheme.colorScheme.onSurface,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(16.dp))
@@ -193,27 +193,29 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedButton(
-                onClick = { 
+            GlassButton(
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.nextCard() 
+                    viewModel.nextCard()
                 },
-                modifier = Modifier.weight(1f).height(56.dp),
-                shape = MaterialTheme.shapes.medium
+                modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.study_skip))
+                Text(stringResource(R.string.study_skip), style = MaterialTheme.typography.labelLarge)
             }
-            Button(
-                onClick = { 
+            GlassButton(
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.rewardCurrentCard()
-                    viewModel.nextCard() 
+                    viewModel.nextCard()
                 },
-                modifier = Modifier.weight(1f).height(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                modifier = Modifier.weight(1f),
+                contentColor = AzureGlow
             ) {
-                Text(stringResource(R.string.study_got_it_action), fontWeight = FontWeight.Bold)
+                Text(
+                    text = stringResource(R.string.study_got_it_action),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
