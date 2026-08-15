@@ -56,5 +56,12 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
  *
  * Release builds have no destructive fallback, so a gap here is a crash on launch
  * for every existing install. AppDatabaseMigrationTest walks this list.
+ *
+ * The list starts at 2 on purpose. Version 1 predates schema export - there is no
+ * app/schemas/1.json to migrate from or validate against - and it was never
+ * published: versionCode has been 1 since the first release build, and debug builds
+ * keep fallbackToDestructiveMigration, so the only databases that ever reached
+ * version 1 were developer ones that have since been recreated. A 1 -> 2 migration
+ * would therefore be untestable and unreachable, not a missing safety net.
  */
 val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4)

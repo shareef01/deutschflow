@@ -126,6 +126,11 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun speak(text: String) {
+        // The recogniser's error outlives the attempt that caused it, and this
+        // screen's banner prefers it to the voice engine's, so a stale one would hide
+        // whatever this request has to report. The banner should belong to the action
+        // the user just took.
+        speechRecognizerHelper.dismissError()
         ttsHelper.speak(text)
     }
 
