@@ -141,6 +141,19 @@ class SpeechRecognizerHelper @Inject constructor(
         _isProcessing.value = false
     }
 
+    /**
+     * Drops a failure that is no longer the most recent thing to have gone wrong.
+     *
+     * [_errorState] otherwise survives until the next [startListening], which is a
+     * problem wherever it is merged with another source: Practice shows the
+     * recogniser's error in preference to the voice engine's, so a stale one hid
+     * every later text-to-speech failure on that screen. Same role as
+     * TTSHelper.dismissError.
+     */
+    fun dismissError() {
+        _errorState.value = null
+    }
+
     fun destroy() {
         mainHandler.post {
             speechRecognizer?.cancel()

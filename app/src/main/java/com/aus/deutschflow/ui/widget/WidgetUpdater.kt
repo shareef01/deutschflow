@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.glance.appwidget.updateAll
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +27,12 @@ class WidgetUpdater @Inject constructor(
     suspend fun refresh() {
         try {
             WordWidget().updateAll(context)
+        } catch (e: CancellationException) {
+            // Not a widget failure. The callers are viewModelScope launches, so this
+            // is the screen going away mid-redraw; swallowing it would log a warning
+            // for something that did not go wrong and let the coroutine run on past
+            // its own cancellation. Same rule as GroqHelper.translateAndExtract.
+            throw e
         } catch (e: Exception) {
             // Never let a home screen redraw take down the write that triggered it.
             Log.w(TAG, "Could not refresh the widget", e)

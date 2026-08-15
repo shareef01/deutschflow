@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -48,13 +49,20 @@ class PreferenceManager @Inject constructor(
     /**
      * Decryption is a Keystore round trip, so it happens off whichever thread is
      * collecting - which is the main one, since the ViewModels collect there.
+     *
+     * The stored bytes are compared before that round trip is paid. DataStore
+     * re-emits the whole preference set on every write, so without this the key was
+     * decrypted again each time an unrelated setting changed - and Settings, which
+     * holds a subscription for as long as it is on screen, is also the screen where
+     * the dialect and the auto-play toggle are written.
      */
     val apiKey: Flow<String> = dataStore.data
         .map { preferences ->
-            preferences[KEY_API_KEY_ENCRYPTED]
-                ?.let { cipher.decrypt(it) }
-                ?: preferences[KEY_API_KEY_LEGACY]
-                ?: ""
+            preferences[KEY_API_KEY_ENCRYPTED] to preferences[KEY_API_KEY_LEGACY]
+        }
+        .distinctUntilChanged()
+        .map { (encrypted, legacy) ->
+            encrypted?.let { cipher.decrypt(it) } ?: legacy ?: ""
         }
         .flowOn(Dispatchers.IO)
 
