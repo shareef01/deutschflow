@@ -51,6 +51,26 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
 }
 
 /**
+ * Indexes the timestamp columns the list screens order by.
+ *
+ * History and Library both read whole tables ORDER BY timestamp DESC, and neither
+ * column was indexed, so every emission re-sorted the table in full. The indexes turn
+ * that sort into an index scan. Text search itself stays in memory - a `contains`
+ * over the loaded list - because that is what preserves infix matching, which FTS
+ * token queries would not.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_transcripts_timestamp` ON `transcripts` (`timestamp`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_vocabulary_timestamp` ON `vocabulary` (`timestamp`)"
+        )
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -64,4 +84,4 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
  * version 1 were developer ones that have since been recreated. A 1 -> 2 migration
  * would therefore be untestable and unreachable, not a missing safety net.
  */
-val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4)
+val MIGRATIONS = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)

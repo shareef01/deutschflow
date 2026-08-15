@@ -32,6 +32,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.GlassmorphicCard
 import com.aus.deutschflow.ui.components.OracleMic
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.pressScale
@@ -139,21 +140,28 @@ fun TranscriptContent(
     ) {
         val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
 
-        if (hasTranscript) {
-        Box(
+        // Always present, even before the first word. The transcript area keeps its
+        // minimum footprint with a placeholder in it, so the mic below does not jump
+        // upward the moment text streams in - the container is reserved before speech,
+        // not created when the first word arrives.
+        GlassmorphicCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 160.dp)
-                .glassSurface()
+                .heightIn(min = 160.dp),
+            contentPadding = PaddingValues(Spacing.lg)
         ) {
-            Box(modifier = Modifier.fillMaxWidth().padding(Spacing.lg)) {
-                Text(
-                    text = if (isListening) partialText else finalText,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
+            Text(
+                text = when {
+                    hasTranscript -> if (isListening) partialText else finalText
+                    else -> stringResource(R.string.transcript_placeholder)
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = if (hasTranscript) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
         }
 
         // Everything below the transcript shares what the card leaves, and scrolls
