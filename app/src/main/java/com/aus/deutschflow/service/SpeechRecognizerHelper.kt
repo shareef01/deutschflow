@@ -58,6 +58,17 @@ class SpeechRecognizerHelper @Inject constructor(
     val errorState: StateFlow<String?> = _errorState.asStateFlow()
 
     /**
+     * Instantaneous input level, normalised to 0..1.
+     *
+     * Updated from [RecognitionListener.onRmsChanged]. Consumers must read it inside
+     * a draw phase (a Canvas or graphicsLayer lambda) rather than collect it into
+     * composition: the engine emits it many times a second, and a recomposition per
+     * sample would be the one thing the waveform was built to avoid.
+     */
+    private val _rmsLevel = MutableStateFlow(0f)
+    val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
+
+    /**
      * One emission per completed utterance.
      *
      * Callers must react to this rather than reading [finalText] after calling
@@ -124,6 +135,7 @@ class SpeechRecognizerHelper @Inject constructor(
             _isListening.value = false
             _isProcessing.value = false
             _partialText.value = ""
+            _rmsLevel.value = 0f
         }
     }
 
@@ -156,12 +168,34 @@ class SpeechRecognizerHelper @Inject constructor(
 
     fun destroy() {
         mainHandler.post {
-            speechRecognizer?.cancel()
-            speechRecognizer?.destroy()
-            speechRecognizer = null
+            teardownRecognizer()
             _isListening.value = false
             _isProcessing.value = false
+            _rmsLevel.value = 0f
         }
+    }
+
+    /**
+     * Tears the engine down so the next [startListening] builds a fresh instance.
+     *
+     * [SpeechRecognizer.ERROR_CLIENT] is the framework's way of saying the current
+     * instance is in an unrecoverable state; keeping it would just fail again.
+     */
+    private fun teardownRecognizer() {
+        speechRecognizer?.cancel()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+    }
+
+    /**
+     * Clears a recoverable error after a beat, but only if nothing newer superseded
+     * it. A busy recogniser or a silent utterance should not leave a banner up that
+     * the user has to read past on their next, successful attempt.
+     */
+    private fun scheduleErrorReset(message: String) {
+        mainHandler.postDelayed({
+            if (_errorState.value == message) _errorState.value = null
+        }, ERROR_RESET_DELAY_MS)
     }
 
     private fun buildIntent(languageTag: String) =
@@ -184,7 +218,12 @@ class SpeechRecognizerHelper @Inject constructor(
             _partialText.value = ""
         }
 
-        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onRmsChanged(rmsdB: Float) {
+            // Most engines report roughly 0..10, louder to quietest. Normalise rather
+            // than passing raw dB through, so the waveform's amplitude means the same
+            // thing on every device.
+            _rmsLevel.value = (rmsdB / 10f).coerceIn(0f, 1f)
+        }
 
         override fun onBufferReceived(buffer: ByteArray?) {}
 
@@ -193,6 +232,7 @@ class SpeechRecognizerHelper @Inject constructor(
             // processing state stops the UI offering "record" again mid-answer.
             _isListening.value = false
             _isProcessing.value = true
+            _rmsLevel.value = 0f
         }
 
         override fun onError(error: Int) {
@@ -200,13 +240,39 @@ class SpeechRecognizerHelper @Inject constructor(
             // diagnostic, what the user said is not.
             Log.w(TAG, "Recognition failed with error code $error")
 
-            // The one error the app can actually do something about, rather than ask
-            // the user to try again at.
-            if (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) requestLanguageDownload()
-
-            _errorState.value = messageFor(error)
             _isListening.value = false
             _isProcessing.value = false
+            _rmsLevel.value = 0f
+
+            when (error) {
+                // The one error the app can actually do something about, rather than
+                // ask the user to try again at.
+                SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> {
+                    requestLanguageDownload()
+                    _errorState.value = messageFor(error)
+                }
+
+                // Recoverable by simply trying again. Surface the hint, then clear it
+                // on a timer so the control is ready without the user having to
+                // dismiss anything - a busy recogniser or a silent utterance is not a
+                // state worth leaving a red banner up for.
+                SpeechRecognizer.ERROR_NO_MATCH,
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                    val message = messageFor(error)
+                    _errorState.value = message
+                    scheduleErrorReset(message)
+                }
+
+                // A client-side failure usually means the recognizer object itself is
+                // in a bad state, so the next attempt rebuilds it instead of reusing a
+                // poisoned instance.
+                SpeechRecognizer.ERROR_CLIENT -> {
+                    _errorState.value = messageFor(error)
+                    teardownRecognizer()
+                }
+
+                else -> _errorState.value = messageFor(error)
+            }
         }
 
         override fun onResults(results: Bundle?) {
@@ -217,6 +283,7 @@ class SpeechRecognizerHelper @Inject constructor(
 
             _isListening.value = false
             _isProcessing.value = false
+            _rmsLevel.value = 0f
 
             if (text.isNotBlank()) {
                 _finalText.value = text
@@ -283,5 +350,8 @@ class SpeechRecognizerHelper @Inject constructor(
 
     companion object {
         const val DEFAULT_LANGUAGE = "de-DE"
+
+        /** How long a recoverable error stays on screen before it clears itself. */
+        private const val ERROR_RESET_DELAY_MS = 2_500L
     }
 }

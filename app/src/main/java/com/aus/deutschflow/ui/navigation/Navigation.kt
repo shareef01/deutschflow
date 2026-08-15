@@ -108,7 +108,11 @@ fun MainNavigation(
             )
         },
         bottomBar = {
-            if (!useNavigationRail) {
+            // Settings is a full-screen sub-destination pushed on top of the tabs,
+            // not a tab itself, so it keeps its back arrow and sheds the tab bar.
+            // Showing both at once was the contradiction this resolves: a screen that
+            // both walked back up the stack and advertised itself as a primary tab.
+            if (!useNavigationRail && !isOnSettings) {
                 // A solid container with a hairline above it. At 80% alpha over a
                 // near-black ground the bar had no edge at all, so the five
                 // destinations looked like they were floating on the content.
@@ -165,8 +169,9 @@ fun MainNavigation(
         ) {
             // Above compact width there is no bottom bar, so the rail is the only
             // way to reach the other destinations - including on a phone in
-            // landscape, which reports an expanded width.
-            if (useNavigationRail) {
+            // landscape, which reports an expanded width. Like the bottom bar it
+            // steps aside for Settings, which is a detail screen, not a destination.
+            if (useNavigationRail && !isOnSettings) {
                 NavigationRail(
                     containerColor = Color.Transparent,
                     modifier = Modifier.fillMaxHeight()

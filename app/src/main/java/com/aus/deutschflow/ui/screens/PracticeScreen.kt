@@ -26,12 +26,15 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.components.AudioWaveform
 import com.aus.deutschflow.ui.components.ErrorBanner
+import com.aus.deutschflow.ui.components.GlassmorphicCard
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.pressScale
 import com.aus.deutschflow.ui.theme.rememberPressSource
@@ -51,6 +54,15 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
     val spokenText by viewModel.finalText.collectAsState()
     val wordResults by viewModel.wordResults.collectAsState()
     val errorState by viewModel.errorState.collectAsState()
+    val partialText by viewModel.partialText.collectAsState()
+
+    // RMS is drawn, not composed: the recogniser emits many samples a second, so the
+    // level is folded into a MutableFloatState and read inside the waveform's Canvas,
+    // where a change invalidates only the draw pass - never a recomposition.
+    val amplitude = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(viewModel) {
+        viewModel.rmsLevel.collect { amplitude.floatValue = it }
+    }
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -172,14 +184,11 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
 
         ErrorBanner(errorState)
 
-        // The result region: everything between the hero and the actions, and never
-        // empty. Before an attempt it carries the instruction - which used to sit
-        // above the card, pushing the hero down and explaining the interaction
-        // nowhere near where its answer appears. During an attempt it holds the
-        // spinner. After one it holds what was heard, and the verdict on it.
-        // Top, not centre. Whatever is in here belongs to the sentence above it, so it
-        // hugs the card and grows downward; the slack collects in one place above the
-        // actions instead of being split into a gap on either side of a single line.
+        // The result region: one glass card that owns the space between the hero and
+        // the actions, so the middle of the screen is never a void to balance around.
+        // It carries the live waveform while recording, the instruction before the
+        // first attempt, the spinner while the answer is in flight, and the verdict +
+        // what was heard after one.
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -187,61 +196,96 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                 .padding(top = Spacing.lg),
             contentAlignment = Alignment.TopCenter
         ) {
-            when {
-                isProcessing -> CircularProgressIndicator(
-                    modifier = Modifier.size(36.dp),
-                    strokeWidth = 3.dp
-                )
-
-                spokenText.isEmpty() -> Text(
-                    text = stringResource(R.string.practice_intro),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = Spacing.lg)
-                )
-
-                else -> Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (feedback != PracticeFeedback.NONE) {
-                        Surface(
-                            color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer
-                                    else MaterialTheme.colorScheme.errorContainer,
-                            shape = PillShape
-                        ) {
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(Spacing.md)
+            ) {
+                when {
+                    isListening -> {
+                        // The live speech: what the engine has heard so far, above the
+                        // meter that traces the input level.
+                        if (partialText.isNotBlank()) {
                             Text(
-                                text = feedbackText.orEmpty(),
-                                modifier = Modifier.padding(
-                                    horizontal = Spacing.md,
-                                    vertical = Spacing.sm
-                                ),
-                                style = MaterialTheme.typography.labelLarge,
-                                // The container's own On colour. The verdict used to be
-                                // tertiary or error text on a 20%-alpha tint of the
-                                // same hue - the blue-on-blue mistake the Listen
-                                // button was making, in two more colours.
-                                color = if (isPositive) MaterialTheme.colorScheme.onTertiaryContainer
-                                        else MaterialTheme.colorScheme.onErrorContainer,
-                                textAlign = TextAlign.Center
+                                text = partialText,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
                             )
+                            Spacer(modifier = Modifier.height(Spacing.sm))
                         }
-
-                        Spacer(modifier = Modifier.height(Spacing.md))
+                        AudioWaveform(
+                            amplitude = amplitude,
+                            isActive = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                        )
                     }
 
-                    // What the recogniser heard, on its own surface so it reads as the
-                    // user's words rather than more of the app's.
-                    Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
+                    isProcessing -> Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 96.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(36.dp),
+                            strokeWidth = 3.dp
+                        )
+                    }
+
+                    spokenText.isEmpty() -> Text(
+                        text = stringResource(R.string.practice_intro),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = Spacing.lg)
+                    )
+
+                    else -> Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (feedback != PracticeFeedback.NONE) {
+                            Surface(
+                                color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer
+                                        else MaterialTheme.colorScheme.errorContainer,
+                                shape = PillShape
+                            ) {
+                                Text(
+                                    text = feedbackText.orEmpty(),
+                                    modifier = Modifier.padding(
+                                        horizontal = Spacing.md,
+                                        vertical = Spacing.sm
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    // The container's own On colour. The verdict used to be
+                                    // tertiary or error text on a 20%-alpha tint of the
+                                    // same hue - the blue-on-blue mistake the Listen
+                                    // button was making, in two more colours.
+                                    color = if (isPositive) MaterialTheme.colorScheme.onTertiaryContainer
+                                            else MaterialTheme.colorScheme.onErrorContainer,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(Spacing.md))
+                        }
+
+                        // What the recogniser heard, reading as the user's own words.
                         Text(
                             text = spokenText,
-                            modifier = Modifier.padding(Spacing.md),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }

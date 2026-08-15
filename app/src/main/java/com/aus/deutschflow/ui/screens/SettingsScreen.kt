@@ -38,6 +38,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.components.GlassTextField
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.pressScale
 import com.aus.deutschflow.ui.theme.rememberPressSource
@@ -118,20 +119,15 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         // Section: AI Configuration
         SettingsHeader(stringResource(R.string.settings_ai_header))
         
-        OutlinedTextField(
+        GlassTextField(
             value = typedKey,
             onValueChange = { typedKey = it },
             modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.settings_api_key_label)) },
-            placeholder = {
-                Text(
-                    stringResource(
-                        if (hasApiKey) R.string.settings_api_key_replace
-                        else R.string.settings_api_key_hint
-                    )
-                )
-            },
-            shape = MaterialTheme.shapes.medium,
+            label = stringResource(R.string.settings_api_key_label),
+            placeholder = stringResource(
+                if (hasApiKey) R.string.settings_api_key_replace
+                else R.string.settings_api_key_hint
+            ),
             // Masked by default, and typed as a password so the keyboard stops
             // offering the credential back as an autocomplete suggestion.
             visualTransformation = if (isKeyVisible) {
