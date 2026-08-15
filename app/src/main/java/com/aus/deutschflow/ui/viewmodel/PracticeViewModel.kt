@@ -116,11 +116,6 @@ class PracticeViewModel @Inject constructor(
         _feedback.value = feedback
     }
 
-    fun setTarget(sentence: String) {
-        _targetSentence.value = sentence
-        _feedback.value = PracticeFeedback.NONE
-    }
-
     fun nextSentence() {
         loadRandomTarget()
     }
