@@ -1,0 +1,31 @@
+{
+  "name": "deutschflow-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DeutschFlow PWA — a pixel-perfect web replica of the Android app: speak German, get it translated, keep what you learn. Obsidian & Azure.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "deploy:preview": "vercel",
+    "deploy:prod": "vercel --prod"
+  },
+  "dependencies": {
+    "dexie": "^4.0.11",
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4.1.11",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "fake-indexeddb": "^6.2.5",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
+  }
+}
