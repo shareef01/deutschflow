@@ -1,0 +1,370 @@
+/**
+ * i18n — the Android string resources (res/values + values-de) as a flat
+ * dictionary. Every user-facing string in the app goes through t().
+ *
+ * The Android app is "du" throughout in German (a learning app — formal "Sie"
+ * would sit oddly against flashcards and streaks); that tone is preserved here.
+ */
+
+export type Lang = "en" | "de";
+
+export const STRINGS = {
+  en: {
+    // Navigation
+    "nav.transcript": "Transcript",
+    "nav.history": "History",
+    "nav.library": "Library",
+    "nav.study": "Study",
+    "nav.practice": "Practice",
+    "nav.settings": "Settings",
+    "action.back": "Back",
+
+    // Shared actions
+    "action.speak": "Speak",
+    "action.edit": "Edit",
+    "action.delete": "Delete",
+    "action.cancel": "Cancel",
+    "action.save": "Save",
+    "action.copy": "Copy",
+    "action.ok": "OK",
+
+    // Transcript
+    "transcript.listening": "Listening…",
+    "transcript.hint": "Tap to transcribe German",
+    "transcript.transcribing": "Transcribing…",
+    "transcript.startRecording": "Start recording",
+    "transcript.stopRecording": "Stop recording",
+    "transcript.translation": "Translation",
+    "transcript.vocabulary": "Vocabulary",
+    "transcript.save": "Save to library",
+    "transcript.saved": "Saved to your library.",
+    "transcript.placeholder": "Your transcript will appear here.",
+    "wordSheet.article": "Article: {0}",
+    "wordSheet.plural": "Plural: {0}",
+    "wordSheet.verb": "Infinitive: {0}",
+    "wordSheet.meaning": "Meaning",
+
+    // History
+    "history.searchHint": "Search transcript history…",
+    "history.emptyTitle": "No transcripts found",
+    "history.emptyBody": "Your speech sessions will appear here automatically.",
+
+    // Library
+    "library.searchHint": "Search words or translations…",
+    "library.emptyTitle": "Your library is empty",
+    "library.emptyBody":
+      "Add a word with the button below, or transcribe speech and save the translation.",
+    "library.addWord": "Add a word",
+    "library.moreActions": "More actions",
+    "library.dialogAddTitle": "Add a word",
+    "library.dialogAddConfirm": "Add to library",
+    "library.dialogEditTitle": "Edit word",
+    "library.dialogEditConfirm": "Save changes",
+    "library.fieldGerman": "German",
+    "library.fieldTranslation": "Translation",
+
+    // Word detail
+    "detail.emptyTitle": "Select a word",
+    "detail.emptyBody":
+      "Choose an item from your library to view detailed information and examples.",
+    "detail.context": "Context and usage",
+    "detail.example": "Example sentence",
+    "detail.back": "Back to library",
+
+    // Study
+    "study.emptyTitle": "Ready to study?",
+    "study.emptyBody": "Add some vocabulary to your library to start the flashcard session!",
+    "study.tapToFlip": "Tap to flip",
+    "study.showGerman": "Show the German word",
+    "study.showTranslation": "Show the translation",
+    "study.gotIt": "Got it",
+    "study.gotItAction": "Got it!",
+    "study.skip": "Skip",
+    "study.progress": "Progress: {0} / {1}",
+
+    // Practice
+    "practice.intro": "Listen and repeat the sentence accurately to master your pronunciation.",
+    "practice.listen": "Listen",
+    "practice.speak": "Speak",
+    "practice.evaluate": "Evaluate",
+    "practice.next": "Next",
+    "practice.feedbackPerfect": "Excellent! Perfect pronunciation.",
+    "practice.feedbackGood": "Good! You got most of it.",
+    "practice.feedbackKeepGoing": "Keep practicing! Try to match the highlighted words.",
+
+    // Settings
+    "settings.aiHeader": "AI translation",
+    "settings.apiKeyLabel": "Groq API key",
+    "settings.apiKeyHint": "Paste your Groq key here",
+    "settings.apiKeyReplace": "Enter a new key to replace the saved one",
+    "settings.apiKeySavedState": "A key is saved on this device.",
+    "settings.apiKeyNone": "No key saved — translation is unavailable.",
+    "settings.apiKeyHelp":
+      "Required for automatic vocabulary extraction and translations. A key is free at console.groq.com.",
+    "settings.showKey": "Show API key",
+    "settings.hideKey": "Hide API key",
+    "settings.progressHeader": "Learning progress",
+    "settings.statVocabulary": "Vocabulary",
+    "settings.statSessions": "Sessions",
+    "settings.statXp": "XP points",
+    "settings.statStreak": "Streak",
+    "settings.audioHeader": "Audio preferences",
+    "settings.autoplay": "Auto-play German audio",
+    "settings.dialectHeader": "Recognition dialect",
+    "settings.dialectDe": "Germany (de-DE)",
+    "settings.dialectAt": "Austria (de-AT)",
+    "settings.dialectCh": "Switzerland (de-CH)",
+    "settings.clear": "Clear all progress",
+    "settings.wipeTitle": "Wipe all progress?",
+    "settings.wipeBody":
+      "This will permanently delete your library, history, and earnings. This action is final.",
+    "settings.wipeConfirm": "Delete everything",
+    "settings.wipeCancel": "Keep progress",
+    "settings.version": "DeutschFlow v{0}",
+
+    // Settings outcomes
+    "message.apiKeySaved": "API key saved.",
+    "message.apiKeyNotSaved": "The key couldn't be stored. Try again, or restart the device.",
+    "message.progressCleared": "Library, history and stats cleared.",
+
+    // Speech recognition
+    "speech.unavailable": "Speech recognition isn't available in this browser.",
+    "speech.startFailed": "Couldn't start recording. Try again.",
+    "speech.errorAudio": "Microphone unavailable. Close anything else using it and try again.",
+    "speech.errorPermission":
+      "Microphone access is off. Allow it for DeutschFlow in your browser's site settings.",
+    "speech.errorNetwork": "No connection. Speech recognition needs network access.",
+    "speech.errorNoMatch": "Didn't catch that. Try speaking again, a little slower.",
+    "speech.errorTimeout": "No speech detected.",
+    "speech.errorLanguageUnsupported":
+      "This browser can't recognise this dialect. Try another one in Settings.",
+    "speech.errorGeneric": "Speech recognition failed. Try again.",
+
+    // Text to speech
+    "tts.noEngine":
+      "No speech engine is set up. Choose one under Text-to-speech output in your browser's or system's settings.",
+    "tts.noGerman":
+      "German speech isn't installed. Add a German voice under Text-to-speech output in your system's settings.",
+
+    // AI translation
+    "ai.noKey": "Add your Groq API key in Settings to get translations.",
+    "ai.failed": "Translation failed: {0}",
+    "ai.noResponse": "no response from Groq",
+    "ai.unreadable": "Couldn't read the response. Try again.",
+    "ai.keyRejected": "That API key was rejected. Check it in Settings.",
+    "ai.rateLimited": "Too many requests for now. Try again in a minute.",
+    "ai.status": "The service answered with {0}.",
+
+    // Streak plural
+    "streak.days": "{0} days",
+    "streak.day": "{0} day",
+
+    // Language selector (web-only)
+    "settings.languageHeader": "Language",
+    "language.english": "English",
+    "language.german": "Deutsch",
+  },
+  de: {
+    // Navigation — "du" throughout, like the Android German resources.
+    "nav.transcript": "Transkript",
+    "nav.history": "Verlauf",
+    "nav.library": "Bibliothek",
+    "nav.study": "Lernen",
+    "nav.practice": "Üben",
+    "nav.settings": "Einstellungen",
+    "action.back": "Zurück",
+
+    "action.speak": "Vorlesen",
+    "action.edit": "Bearbeiten",
+    "action.delete": "Löschen",
+    "action.cancel": "Abbrechen",
+    "action.save": "Speichern",
+    "action.copy": "Kopieren",
+    "action.ok": "OK",
+
+    "transcript.listening": "Hört zu…",
+    "transcript.hint": "Tippen, um Deutsch zu transkribieren",
+    "transcript.transcribing": "Wird transkribiert…",
+    "transcript.startRecording": "Aufnahme starten",
+    "transcript.stopRecording": "Aufnahme beenden",
+    "transcript.translation": "Übersetzung",
+    "transcript.vocabulary": "Wortschatz",
+    "transcript.save": "In Bibliothek speichern",
+    "transcript.saved": "In deiner Bibliothek gespeichert.",
+    "transcript.placeholder": "Deine Mitschrift erscheint hier.",
+    "wordSheet.article": "Artikel: {0}",
+    "wordSheet.plural": "Plural: {0}",
+    "wordSheet.verb": "Infinitiv: {0}",
+    "wordSheet.meaning": "Bedeutung",
+
+    "history.searchHint": "Verlauf durchsuchen…",
+    "history.emptyTitle": "Keine Transkripte gefunden",
+    "history.emptyBody": "Deine Sprachaufnahmen erscheinen hier automatisch.",
+
+    "library.searchHint": "Wörter oder Übersetzungen suchen…",
+    "library.emptyTitle": "Deine Bibliothek ist leer",
+    "library.emptyBody":
+      "Füge unten ein Wort hinzu oder transkribiere Sprache und speichere die Übersetzung.",
+    "library.addWord": "Wort hinzufügen",
+    "library.moreActions": "Weitere Aktionen",
+    "library.dialogAddTitle": "Wort hinzufügen",
+    "library.dialogAddConfirm": "Zur Bibliothek hinzufügen",
+    "library.dialogEditTitle": "Wort bearbeiten",
+    "library.dialogEditConfirm": "Änderungen speichern",
+    "library.fieldGerman": "Deutsch",
+    "library.fieldTranslation": "Übersetzung",
+
+    "detail.emptyTitle": "Wähle ein Wort",
+    "detail.emptyBody":
+      "Wähle einen Eintrag aus deiner Bibliothek, um Details und Beispiele zu sehen.",
+    "detail.context": "Kontext und Verwendung",
+    "detail.example": "Beispielsatz",
+    "detail.back": "Zurück zur Bibliothek",
+
+    "study.emptyTitle": "Bereit zum Lernen?",
+    "study.emptyBody":
+      "Füge Wörter zu deiner Bibliothek hinzu, um mit den Karteikarten zu beginnen!",
+    "study.tapToFlip": "Zum Umdrehen tippen",
+    "study.showGerman": "Das deutsche Wort zeigen",
+    "study.showTranslation": "Die Übersetzung zeigen",
+    "study.gotIt": "Verstanden",
+    "study.gotItAction": "Verstanden!",
+    "study.skip": "Überspringen",
+    "study.progress": "Fortschritt: {0} / {1}",
+
+    "practice.intro":
+      "Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.",
+    "practice.listen": "Anhören",
+    "practice.speak": "Sprechen",
+    "practice.evaluate": "Auswerten",
+    "practice.next": "Weiter",
+    "practice.feedbackPerfect": "Ausgezeichnet! Perfekte Aussprache.",
+    "practice.feedbackGood": "Gut! Das meiste war richtig.",
+    "practice.feedbackKeepGoing":
+      "Weiter üben! Versuche, die markierten Wörter zu treffen.",
+
+    "settings.aiHeader": "KI-Übersetzung",
+    "settings.apiKeyLabel": "Groq-API-Schlüssel",
+    "settings.apiKeyHint": "Füge hier deinen Groq-Schlüssel ein",
+    "settings.apiKeyReplace": "Neuen Schlüssel eingeben, um den gespeicherten zu ersetzen",
+    "settings.apiKeySavedState": "Ein Schlüssel ist auf diesem Gerät gespeichert.",
+    "settings.apiKeyNone": "Kein Schlüssel gespeichert — Übersetzung nicht verfügbar.",
+    "settings.apiKeyHelp":
+      "Erforderlich für automatische Übersetzungen und Wortschatz-Extraktion. Ein Schlüssel ist auf console.groq.com kostenlos.",
+    "settings.showKey": "API-Schlüssel anzeigen",
+    "settings.hideKey": "API-Schlüssel verbergen",
+    "settings.progressHeader": "Lernfortschritt",
+    "settings.statVocabulary": "Wörter",
+    "settings.statSessions": "Sitzungen",
+    "settings.statXp": "XP-Punkte",
+    "settings.statStreak": "Serie",
+    "settings.audioHeader": "Audio-Einstellungen",
+    "settings.autoplay": "Deutsche Aussprache automatisch abspielen",
+    "settings.dialectHeader": "Erkennungsdialekt",
+    "settings.dialectDe": "Deutschland (de-DE)",
+    "settings.dialectAt": "Österreich (de-AT)",
+    "settings.dialectCh": "Schweiz (de-CH)",
+    "settings.clear": "Fortschritt löschen",
+    "settings.wipeTitle": "Gesamten Fortschritt löschen?",
+    "settings.wipeBody":
+      "Damit werden Bibliothek, Verlauf und Punkte endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+    "settings.wipeConfirm": "Alles löschen",
+    "settings.wipeCancel": "Behalten",
+    "settings.version": "DeutschFlow v{0}",
+
+    "message.apiKeySaved": "API-Schlüssel gespeichert.",
+    "message.apiKeyNotSaved":
+      "Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.",
+    "message.progressCleared": "Bibliothek, Verlauf und Statistiken gelöscht.",
+
+    "speech.unavailable": "Spracherkennung ist in diesem Browser nicht verfügbar.",
+    "speech.startFailed": "Aufnahme konnte nicht gestartet werden. Versuche es erneut.",
+    "speech.errorAudio":
+      "Mikrofon nicht verfügbar. Schließe andere Programme, die es benutzen, und versuche es erneut.",
+    "speech.errorPermission":
+      "Der Mikrofonzugriff ist aus. Erlaube ihn für DeutschFlow in den Einstellungen deines Browsers.",
+    "speech.errorNetwork": "Keine Verbindung. Die Spracherkennung braucht Netzzugang.",
+    "speech.errorNoMatch": "Das habe ich nicht verstanden. Sprich noch einmal, etwas langsamer.",
+    "speech.errorTimeout": "Keine Sprache erkannt.",
+    "speech.errorLanguageUnsupported":
+      "Dieser Browser erkennt diesen Dialekt nicht. Wähle in den Einstellungen einen anderen.",
+    "speech.errorGeneric": "Spracherkennung fehlgeschlagen. Versuche es erneut.",
+
+    "tts.noEngine":
+      "Es ist keine Sprachausgabe eingerichtet. Wähle eine unter „Text-in-Sprache-Ausgabe“ in den Browser- oder Systemeinstellungen.",
+    "tts.noGerman":
+      "Deutsche Sprachausgabe ist nicht installiert. Füge eine deutsche Stimme unter „Text-in-Sprache-Ausgabe“ in den Systemeinstellungen hinzu.",
+
+    "ai.noKey": "Trage deinen Groq-API-Schlüssel in den Einstellungen ein, um Übersetzungen zu erhalten.",
+    "ai.failed": "Übersetzung fehlgeschlagen: {0}",
+    "ai.noResponse": "keine Antwort von Groq",
+    "ai.unreadable": "Die Antwort war nicht lesbar. Versuche es erneut.",
+    "ai.keyRejected": "Dieser API-Schlüssel wurde abgelehnt. Prüfe ihn in den Einstellungen.",
+    "ai.rateLimited": "Zu viele Anfragen im Moment. Versuche es in einer Minute erneut.",
+    "ai.status": "Der Dienst antwortete mit {0}.",
+
+    "streak.days": "{0} Tage",
+    "streak.day": "{0} Tag",
+
+    "settings.languageHeader": "Sprache",
+    "language.english": "English",
+    "language.german": "Deutsch",
+  },
+} as const;
+
+export type TKey = keyof (typeof STRINGS)["en"];
+
+/** The shape of the reactive t from useI18n, for threading into components. */
+export type TFunction = (key: TKey, params?: (string | number)[]) => string;
+
+/** The language the app's non-React modules read at message-generation time. */
+let currentLang: Lang = "en";
+const langListeners = new Set<() => void>();
+
+export function getCurrentLang(): Lang {
+  return currentLang;
+}
+
+export function setCurrentLang(lang: Lang): void {
+  if (currentLang === lang) return;
+  currentLang = lang;
+  for (const listener of langListeners) listener();
+}
+
+/** useSyncExternalStore surface — every useI18n instance sees the same value. */
+export function subscribeLang(listener: () => void): () => void {
+  langListeners.add(listener);
+  return () => langListeners.delete(listener);
+}
+
+export function getLangSnapshot(): Lang {
+  return currentLang;
+}
+
+/** Resolve the browser's preferred language: German UI when the browser is German. */
+export function detectBrowserLang(): Lang {
+  if (typeof navigator === "undefined") return "en";
+  const preferred = navigator.language?.toLowerCase() ?? "";
+  return preferred.startsWith("de") ? "de" : "en";
+}
+
+/**
+ * Translate a key with {0}/{1} positional params, mirroring %1$s in the
+ * Android resources. Pure — takes the language explicitly, so it is testable
+ * and usable from React without reading the module's current-language state.
+ */
+export function translate(lang: Lang, key: TKey, params?: (string | number)[]): string {
+  const template = STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
+  return template.replace(/\{(\d)\}/g, (_, index: string) => {
+    const value = params?.[Number(index)];
+    return value !== undefined ? String(value) : "";
+  });
+}
+
+/**
+ * Translate using the module's current language — for non-React modules
+ * (recognizer, tts, groq) that generate messages at call time.
+ */
+export function t(key: TKey, params?: (string | number)[]): string {
+  return translate(getCurrentLang(), key, params);
+}
