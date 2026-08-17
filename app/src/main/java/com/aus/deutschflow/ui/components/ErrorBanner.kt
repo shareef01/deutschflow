@@ -64,7 +64,16 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
                 // and a user who cannot see it arriving is exactly the user most
                 // likely to be asking. Polite, not Assertive: it should follow
                 // what the screen reader is already saying, not cut across it.
-                .semantics { liveRegion = LiveRegionMode.Polite },
+                //
+                // mergeDescendants is the half that makes it work, and its absence
+                // is silent: a bare `semantics { liveRegion = ... }` publishes a
+                // node carrying the property and no text, because the message sits
+                // on a descendant Text. TalkBack announces a live region from the
+                // node's own text, so an empty one announces nothing - the banner
+                // appeared on screen and was never spoken. Verified on a Pixel 7:
+                // before this, the accessibility node was a View with text='' and
+                // the message on a TextView beneath it.
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
