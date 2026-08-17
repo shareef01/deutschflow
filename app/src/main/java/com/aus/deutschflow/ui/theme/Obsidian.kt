@@ -18,46 +18,35 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 /**
- * The Obsidian surface treatment, in one place.
+ * The surface treatment every card and input shares, in one place.
  *
- * Every card in the app is this: a translucent white fill over the void, and a
- * hairline edge that carries the azure at one corner and fades to nothing at the
- * other. Both halves matter. The fill alone is too faint to find; the border alone
- * outlines an empty hole.
- *
- * A gradient border rather than a solid one because a solid azure edge at this
- * weight rings the card like a selection state. The gradient runs from the
- * top-left corner, where the light is, fading away by the far corner - a lit
- * corner rather than a lit edge, which is what makes a flat panel look like a
- * pane of glass catching one lamp.
+ * A quiet, premium surface: an opaque fill one step above the ground, a hairline
+ * edge at low alpha, and a whisper of elevation. Separation comes from the value
+ * step, not from a glowing border — the old treatment (translucent fill plus an
+ * azure gradient edge) read as glass lit by a lamp, and it competed with the
+ * content for attention on every screen.
  */
-val GlassShape = RoundedCornerShape(24.dp)
+val GlassShape = RoundedCornerShape(16.dp)
 
 /**
- * The single edge treatment every glass surface and glass input shares.
+ * The single edge treatment every surface and input shares.
  *
- * Cards used to paint this inline, and text fields did not paint it at all - each
- * drew its own plain outline. Extracting it means a card and the search bar next to
- * it are one stroke: the same azure corner fading to nothing, at the same weight.
- * A gradient rather than a solid so the edge reads as a lit pane, not a selection.
+ * A solid hairline in the accent colour at low alpha. Solid rather than gradient:
+ * a gradient edge draws the eye to the lit corner; a hairline just separates the
+ * card from the ground. [alpha] lets focused inputs and recording controls turn
+ * the edge up without a second treatment.
  */
-fun glassBorderBrush(glow: Color = AzureGlow): Brush = Brush.linearGradient(
-    colors = listOf(
-        glow.copy(alpha = 0.35f),
-        glow.copy(alpha = 0.12f),
-        Color.Transparent
-    ),
-    start = Offset.Zero,
-    end = Offset.Infinite
-)
+fun glassBorderBrush(glow: Color = AzureGlow, alpha: Float = 0.16f): Brush =
+    SolidColor(glow.copy(alpha = alpha))
 
 /**
  * @param shape must match whatever the caller clips its content to, or the fill and
@@ -68,6 +57,13 @@ fun Modifier.glassSurface(
     fill: Color = GlassFill,
     glow: Color = AzureGlow
 ): Modifier = this
+    // Shadow outermost so it is not clipped away by the clip below it.
+    .shadow(
+        elevation = 2.dp,
+        shape = shape,
+        ambientColor = Color.Black.copy(alpha = 0.30f),
+        spotColor = Color.Black.copy(alpha = 0.30f)
+    )
     .clip(shape)
     .background(fill, shape)
     .border(
@@ -112,9 +108,8 @@ fun rememberPressSource(): MutableInteractionSource =
 /**
  * The angle driving every rotating gradient in the app, in degrees.
  *
- * One slow revolution. Deliberately not tied to a component: the microphone's mesh
- * and anything else that wants to turn should turn together, and at a speed that
- * reads as ambient rather than as a progress indicator.
+ * One slow revolution, shared by anything that wants to turn, so the motion reads
+ * as ambient rather than as a progress indicator.
  */
 @Composable
 fun rememberMeshRotation(
@@ -156,5 +151,5 @@ fun rememberBreath(
     return breath
 }
 
-/** The accent ramp, for text and icons that should carry the azure rather than sit in it. */
+/** The accent ramp, for text and icons that should carry the brand rather than sit in it. */
 fun azureBrush(): Brush = Brush.linearGradient(colors = listOf(AzureGlow, AzureDeep))

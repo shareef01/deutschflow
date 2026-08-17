@@ -33,7 +33,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
@@ -197,30 +196,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 4.dp)
         )
 
-        // Section: Learning Progress
-        SettingsHeader(stringResource(R.string.settings_progress_header))
-        
-        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
-            Column(modifier = Modifier.padding(Spacing.md)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_vocabulary), totalVocab.toString())
-                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_sessions), totalTranscripts.toString())
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_xp), (userStats?.xp ?: 0).toString())
-                    StatGridItem(
-                        Modifier.weight(1f),
-                        stringResource(R.string.settings_stat_streak),
-                        // Plural, not "$n days": German needs Tag for one and Tage for
-                        // the rest, and English needs the same distinction.
-                        pluralStringResource(R.plurals.streak_days, streak, streak)
-                    )
-                }
-            }
-        }
-
-        // Section: Audio Preferences
+        // Section: Audio
         SettingsHeader(stringResource(R.string.settings_audio_header))
         
         Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
@@ -244,72 +220,104 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             }
         }
 
-        // Section: Dialect
+        // Section: Speech recognition
         SettingsHeader(stringResource(R.string.settings_dialect_header))
         
-        dialects.forEach { (labelRes, code) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { 
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.saveDialect(code) 
+        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
+            Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)) {
+                dialects.forEach { (labelRes, code) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.saveDialect(code) 
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (selectedDialect == code),
+                            onClick = { 
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.saveDialect(code) 
+                            }
+                        )
+                        Text(
+                            text = stringResource(labelRes),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(start = Spacing.sm)
+                        )
                     }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(
-                    selected = (selectedDialect == code),
-                    onClick = { 
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.saveDialect(code) 
-                    }
-                )
-                Text(
-                    text = stringResource(labelRes),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(start = 12.dp)
-                )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp)) // Mandatory Spacer
-        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-
-        // Section: Actions
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            GlassButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    requestTestNotification()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(Spacing.sm))
-                Text(stringResource(R.string.settings_test_notification), style = MaterialTheme.typography.labelLarge)
+        // Section: Learning progress
+        SettingsHeader(stringResource(R.string.settings_progress_header))
+        
+        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
+            Column(modifier = Modifier.padding(Spacing.md)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_vocabulary), totalVocab.toString())
+                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_sessions), totalTranscripts.toString())
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_xp), (userStats?.xp ?: 0).toString())
+                    StatGridItem(
+                        Modifier.weight(1f),
+                        stringResource(R.string.settings_stat_streak),
+                        // Plural, not "$n days": German needs Tag for one and Tage for
+                        // the rest, and English needs the same distinction.
+                        pluralStringResource(R.plurals.streak_days, streak, streak)
+                    )
+                }
             }
+        }
 
-            // The destructive action keeps its error identity, but as a red glass edge
-            // rather than a solid block of colour.
-            GlassButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    showDeleteConfirm = true
-                },
-                modifier = Modifier.fillMaxWidth(),
-                glow = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.error
+        // Section: Notifications
+        SettingsHeader(stringResource(R.string.settings_notifications_header))
+
+        GlassButton(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                requestTestNotification()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(Spacing.sm))
+            Text(stringResource(R.string.settings_test_notification), style = MaterialTheme.typography.labelLarge)
+        }
+
+        // Section: Data
+        SettingsHeader(stringResource(R.string.settings_data_header))
+
+        // The destructive action stays reachable but quiet: a plain row in error
+        // text, no fill, no glow - and the confirmation dialog still guards it.
+        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showDeleteConfirm = true
+                    }
+                    .padding(Spacing.md),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(20.dp))
+                Icon(
+                    Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
                 Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     text = stringResource(R.string.settings_clear),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -404,13 +412,10 @@ fun StatGridItem(modifier: Modifier, label: String, value: String) {
         )
         Spacer(modifier = Modifier.height(Spacing.xs))
         Text(
-            // Uppercased here rather than in the resource, so the string stays a
-            // sentence for a screen reader and for translation.
-            text = label.uppercase(),
-            // The wide tracking lives here rather than on labelSmall: this is the one
-            // place it is wanted, and the navigation bar renders its labels at that
-            // same style inside slots too narrow to take it.
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp),
+            // Sentence case, like every other label: the wide-tracked uppercase
+            // treatment made these four tiles shout over the numbers above them.
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

@@ -7,24 +7,25 @@ import androidx.compose.ui.unit.dp
 /**
  * One rounding scale for the whole app.
  *
- * The screens had been hand-rolling RoundedCornerShape at 12, 16, 20 and 24dp, so
- * cards sitting next to each other were rounded differently for no reason. Naming
- * the scale here means a component picks a role - small, medium, large - rather than
- * a number, and Material's own components pick the same ones.
+ * A screen picks a role — small, medium, large — rather than a number, and
+ * Material's own components pick the same ones. Rounded, but not pill-shaped
+ * everywhere: cards are 16dp, small controls 12dp, and only the deliberate
+ * circular controls use a pill.
  */
 val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
     medium = RoundedCornerShape(16.dp),
     large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp)
+    extraLarge = RoundedCornerShape(24.dp)
 )
 
 /**
- * The pill used by every primary and secondary action button.
+ * The pill used by circular controls (the recording button's disc, the empty-state
+ * medallion).
  *
  * A percentage, not a dp: the radius has to stay half the height for the ends to be
- * true semicircles, and the buttons it is used on are not all the same height.
+ * true semicircles, and the controls it is used on are not all the same height.
  */
 val PillShape = RoundedCornerShape(percent = 50)
 

@@ -27,10 +27,13 @@
 
     <!-- Transcript -->
     <string name="transcript_listening">Hört zu…</string>
-    <string name="transcript_hint">Tippen, um Deutsch zu transkribieren</string>
+    <string name="transcript_hint">Zum Starten tippen</string>
     <string name="transcript_transcribing">Wird transkribiert…</string>
     <string name="transcript_start_recording">Aufnahme starten</string>
     <string name="transcript_stop_recording">Aufnahme beenden</string>
+    <string name="transcript_empty_title">Sprich einfach Deutsch.</string>
+    <string name="transcript_empty_body">DeutschFlow transkribiert, übersetzt und findet die Wörter, die du behalten willst.</string>
+    <string name="transcript_language">Deutsch · %1$s</string>
     <string name="transcript_translation">Übersetzung</string>
     <string name="transcript_vocabulary">Wortschatz</string>
     <string name="transcript_save">In Bibliothek speichern</string>
@@ -44,16 +47,32 @@
     <!-- History -->
     <string name="history_search_hint">Verlauf durchsuchen…</string>
     <string name="history_empty_title">Keine Transkripte gefunden</string>
-    <string name="history_empty_body">Deine Sprachaufnahmen erscheinen hier automatisch.</string>
+    <string name="history_empty_body">Deine Transkript-Sitzungen erscheinen hier.</string>
+    <string name="history_today">Heute</string>
+    <string name="history_yesterday">Gestern</string>
+    <string name="history_time_format">HH:mm</string>
+    <!-- Date-only label for history groups. -->
+    <string name="history_day_format">d. MMM yyyy</string>
+    <string name="history_deleted">Transkript gelöscht.</string>
+    <string name="action_undo">Rückgängig</string>
+    <plurals name="history_word_count">
+        <item quantity="one">%1$d Wort</item>
+        <item quantity="other">%1$d Wörter</item>
+    </plurals>
     <!-- Day before month, as German writes dates. -->
     <string name="history_date_format">dd. MMM yyyy • HH:mm</string>
 
     <!-- Library -->
     <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>
     <string name="library_empty_title">Deine Bibliothek ist leer</string>
-    <string name="library_empty_body">Füge unten ein Wort hinzu oder transkribiere Sprache und speichere die Übersetzung.</string>
+    <string name="library_empty_body">Dein Wortschatz erscheint hier, während du lernst. Füge ein Wort hinzu oder speichere eins aus einem Transkript.</string>
     <string name="library_add_word">Wort hinzufügen</string>
     <string name="library_more_actions">Weitere Aktionen</string>
+    <string name="library_stat_words">Wörter</string>
+    <string name="library_stat_phrases">Sätze</string>
+    <string name="library_stat_examples">Mit Beispielsatz</string>
+    <string name="library_sort_newest">Neueste</string>
+    <string name="library_sort_alphabetical">A–Z</string>
     <string name="library_dialog_add_title">Wort hinzufügen</string>
     <string name="library_dialog_add_confirm">Zur Bibliothek hinzufügen</string>
     <string name="library_dialog_edit_title">Wort bearbeiten</string>
@@ -70,27 +89,38 @@
 
     <!-- Study -->
     <string name="study_empty_title">Bereit zum Lernen?</string>
-    <string name="study_empty_body">Füge Wörter zu deiner Bibliothek hinzu, um mit den Karteikarten zu beginnen!</string>
+    <string name="study_empty_body">Speichere ein paar deutsche Sätze und wir bauen deine erste Lernsitzung.</string>
+    <string name="study_session">Lernsitzung</string>
+    <plurals name="study_remaining">
+        <item quantity="one">%1$d Karte übrig</item>
+        <item quantity="other">%1$d Karten übrig</item>
+    </plurals>
+    <string name="study_again">Nochmal</string>
+    <string name="study_hard">Schwer</string>
+    <string name="study_good">Gut</string>
+    <string name="study_easy">Leicht</string>
     <string name="study_tap_to_flip">Zum Umdrehen tippen</string>
     <string name="study_show_german">Das deutsche Wort zeigen</string>
     <string name="study_show_translation">Die Übersetzung zeigen</string>
     <string name="study_got_it">Verstanden</string>
-    <string name="study_got_it_action">Verstanden!</string>
-    <string name="study_skip">Überspringen</string>
     <string name="study_progress">Fortschritt: %1$d / %2$d</string>
 
     <!-- Practice -->
     <string name="practice_intro">Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.</string>
+    <string name="practice_listen_repeat">Hören und nachsprechen</string>
     <string name="practice_listen">Anhören</string>
     <string name="practice_speak">Sprechen</string>
     <string name="practice_evaluate">Auswerten</string>
     <string name="practice_next">Weiter</string>
+    <string name="practice_word_match">Worttreffer: %1$d%%</string>
+    <string name="practice_word_correct">Richtig</string>
+    <string name="practice_word_try_again">Noch einmal versuchen</string>
     <string name="practice_feedback_perfect">Ausgezeichnet! Perfekte Aussprache.</string>
     <string name="practice_feedback_good">Gut! Das meiste war richtig.</string>
     <string name="practice_feedback_keep_going">Weiter üben! Versuche, die markierten Wörter zu treffen.</string>
 
     <!-- Settings -->
-    <string name="settings_ai_header">KI-Übersetzung</string>
+    <string name="settings_ai_header">KI &amp; Übersetzung</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
     <string name="settings_api_key_hint">Füge hier deinen Groq-Schlüssel ein</string>
     <string name="settings_api_key_replace">Neuen Schlüssel eingeben, um den gespeicherten zu ersetzen</string>
@@ -104,9 +134,11 @@
     <string name="settings_stat_sessions">Sitzungen</string>
     <string name="settings_stat_xp">XP-Punkte</string>
     <string name="settings_stat_streak">Serie</string>
-    <string name="settings_audio_header">Audio-Einstellungen</string>
+    <string name="settings_audio_header">Audio</string>
     <string name="settings_autoplay">Deutsche Aussprache automatisch abspielen</string>
-    <string name="settings_dialect_header">Erkennungsdialekt</string>
+    <string name="settings_dialect_header">Spracherkennung</string>
+    <string name="settings_notifications_header">Benachrichtigungen</string>
+    <string name="settings_data_header">Daten</string>
     <string name="settings_dialect_de">Deutschland (de-DE)</string>
     <string name="settings_dialect_at">Österreich (de-AT)</string>
     <string name="settings_dialect_ch">Schweiz (de-CH)</string>
