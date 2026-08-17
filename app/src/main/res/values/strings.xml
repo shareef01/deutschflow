@@ -55,7 +55,6 @@
         <item quantity="other">%1$d words</item>
     </plurals>
     <!-- Localisable on purpose: day-month order differs by language. -->
-    <string name="history_date_format">MMM dd, yyyy • HH:mm</string>
 
     <!-- Library -->
     <string name="library_search_hint">Search words or translations…</string>

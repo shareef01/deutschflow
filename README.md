@@ -25,6 +25,7 @@ Built with Kotlin and Jetpack Compose on a self-designed system called
 - [Use cases](#use-cases)
 - [Architecture](#architecture)
 - [Security and privacy](#security-and-privacy)
+- [The web app](#the-web-app)
 - [Design system](#design-system)
 - [Tech stack](#tech-stack)
 - [Testing and CI](#testing-and-ci)
@@ -54,9 +55,10 @@ Built with Kotlin and Jetpack Compose on a self-designed system called
 ## Features
 
 **Speech and AI**
-- On-device speech recognition (audio never leaves the device), with partial
-  results, per-error guidance and a language-pack download trigger for devices
-  without German recognition.
+- On-device speech recognition through `createOnDeviceSpeechRecognizer` — audio
+  never leaves the device, and the API is what enforces it rather than a hope
+  about which service the phone happens to default to. Partial results, per-error
+  guidance, and a language-pack download trigger for devices without German.
 - Each utterance goes to Groq's chat-completions endpoint (Llama 3.3 70B), which
   returns a translation, 3–5 key vocabulary words and a natural example sentence.
   The client is hand-rolled on `HttpURLConnection` + `org.json` — zero HTTP
@@ -168,18 +170,25 @@ sequenceDiagram
 
 ### Database
 
-Room, version 4, with exported schemas and migrations validated by test. Release
-builds have **no** destructive-migration fallback — a missing migration is a
-failing test, not a wiped library.
+Room, version 7, with exported schemas and every migration (2→3→4→5→6→7)
+validated by test. Release builds have **no** destructive-migration fallback — a
+missing migration is a failing test, not a wiped library.
+
+`germanText` is unique under a `NOCASE` collation, so a word is one row however
+many times it is met; `MIGRATION_6_7` merged the duplicates that predate the
+constraint field by field rather than picking a survivor.
 
 ```mermaid
 erDiagram
     VOCABULARY {
         int id PK
-        string germanText
+        string germanText UK
         string englishTranslation
         long timestamp
         string exampleSentence
+        string article
+        string plural
+        string conjugation
     }
     TRANSCRIPTS {
         int id PK
@@ -211,8 +220,10 @@ erDiagram
 - Release builds strip `Log.d`/`Log.v` via R8, so no future logging mistake can
   leak a transcript or a key. Recognition content is never logged.
 
-**What does leave the device, stated plainly.** Audio never does — recognition is
-the on-device engine. The resulting *text* does, twice: each utterance is sent to
+**What does leave the device, stated plainly.** Audio never does —
+`createOnDeviceSpeechRecognizer` binds the on-device engine specifically, rather
+than the device's default recognition service, which on most phones is a
+cloud one. The resulting *text* does, twice: each utterance is sent to
 Groq for translation, and the Room database — which holds every transcript and
 saved word — is included in Android's cloud backup and device transfer. Only the
 settings DataStore is excluded from those, because it holds the API key. If the
@@ -237,6 +248,40 @@ ordered by id so two words saved in the same millisecond can't race.
 locale-invariant so a Turkish system locale can't break scoring; streaks compare
 **calendar days in the device's zone**, not "24 hours apart".
 
+**Where the web app's key protection stops.** The PWA mirrors the Keystore with
+AES-256-GCM under a `CryptoKey` generated `extractable: false`, so the key material
+cannot be exported and a copied browser profile is worth nothing. That is the whole
+of what it buys. The key is still *usable* by any script on the origin, and the CSP
+allows `script-src 'unsafe-inline'` because Next.js needs it for its bootstrap — so
+the vault defends against disk and backup inspection, not against script injection.
+Stated here rather than left to be inferred from the word "vault".
+
+## The web app
+
+`web/` is a Next.js PWA that ports the same six screens, the same *Obsidian &
+Azure* design system, and the same behaviours — the ones that were hard to get
+right, in particular: the recognizer publishes one utterance per recording, an AI
+failure never reaches the translation field, the newest word interrogation wins,
+XP is a single read-modify-write transaction, and the streak compares calendar
+days. Room becomes Dexie/IndexedDB, the Android Keystore becomes WebCrypto, and
+`SpeechRecognizer`/`TextToSpeech` become the Web Speech API.
+
+It is local-first in the same way the Android app is: every byte of user data
+lives in IndexedDB, there is no server-side state, and the only network call is
+the Groq request the client makes itself. A service worker precaches the shell, so
+after one visit the installed app opens offline.
+
+```bash
+cd web
+npm ci
+npm run dev                       # http://localhost:3000
+npm test                          # 42 unit tests (vitest)
+npx tsc --noEmit && npm run build
+npx playwright test               # browser smoke, including offline boot
+```
+
+Both apps are covered by the same GitHub Actions workflow.
+
 ## Design system
 
 *Obsidian & Azure*, defined in `ui/theme/`:
@@ -258,17 +303,17 @@ locale-invariant so a Turkish system locale can't break scoring; streaks compare
 | --- | --- |
 | UI | Kotlin, Jetpack Compose, Material 3, navigation-compose, window size classes |
 | DI | Hilt (including EntryPoints for the widget and the worker) |
-| Persistence | Room (exported schemas, migrations 2→3→4), DataStore Preferences |
+| Persistence | Room v7 (exported schemas, migrations 2→7), DataStore Preferences |
 | Background | WorkManager (periodic daily word, `KEEP` policy) |
 | Home screen | Glance app-widget |
 | Networking | `HttpURLConnection` + `org.json` (no HTTP/JSON dependencies) |
-| Speech | Android `SpeechRecognizer` (on-device), `TextToSpeech` |
+| Speech | Android `SpeechRecognizer` (`createOnDeviceSpeechRecognizer`), `TextToSpeech` |
 | Build | Gradle 9.5, AGP 9.3, Kotlin 2.4, KSP2, version catalog, R8 + resource shrink |
 | Platform | minSdk 31 (Android 12) / targetSdk 37 / compileSdk 37 |
 
 ## Testing and CI
 
-- **45 JVM unit tests** for the pure logic: response parsing, pronunciation
+- **53 JVM unit tests** for the pure logic: response parsing, pronunciation
   scoring, streak math, daily-word selection, worker delay, error extraction.
 - **Instrumented suite** (CI, API 31 emulator): Room migration validation against
   historical schemas, DAO behavior, ViewModel state, and the API-key storage
@@ -325,6 +370,17 @@ app/src/main/java/com/aus/deutschflow/
 │   ├── widget/          Glance widget + updater
 │   └── theme/           Obsidian & Azure design system
 └── MainApp / MainActivity
+
+web/
+├── src/app/             the six routes, grouped under the (app) shell
+├── src/components/      AppShell, the glass UI kit, OracleMic
+├── src/hooks/           one hook per screen — the ViewModel equivalents
+├── src/lib/
+│   ├── ai/              Groq client + VocabularyProcessor
+│   ├── db/              Dexie schema, repository, settings, WebCrypto vault
+│   └── speech/          Web Speech recognizer + TTS
+├── public/sw.js         service worker: app-shell precache, offline boot
+└── tests/               vitest units + the Playwright smoke suite
 ```
 
 ## License
