@@ -36,7 +36,17 @@ export type WordDetailsResult =
   | { kind: "failure"; message: string };
 
 export const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-export const GROQ_MODEL = "llama-3.3-70b-versatile";
+/**
+ * Kept in step with GroqHelper.MODEL_NAME on the Android side deliberately: the two
+ * apps read the same library and should not describe a word differently.
+ *
+ * `llama-3.3-70b-versatile` was retired underneath both of them - the same key that
+ * had translated a sentence an hour earlier came back with "The model does not exist
+ * or you do not have access to it", and the account's model list no longer carried
+ * any Llama chat model. Groq's deprecation table names the gpt-oss family as the
+ * replacement for that class.
+ */
+export const GROQ_MODEL = "openai/gpt-oss-120b";
 const TIMEOUT_MS = 30_000;
 
 /**
