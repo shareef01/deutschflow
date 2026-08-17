@@ -60,10 +60,8 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -127,6 +125,21 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     }
 
     val context = LocalContext.current
+
+    // The settled transcript, spoken once.
+    //
+    // Same reason as ErrorBanner: a live region on the transcript card cannot do
+    // it. The card is created the moment the first words arrive, and Compose skips
+    // nodes that did not exist a frame earlier when it decides what to report - so
+    // the one utterance a user most needs announced is precisely the one that is
+    // not. Keyed on finalText rather than partialText: the partial stream would
+    // interrupt itself several times a second, and what is worth hearing is the
+    // sentence the recogniser settled on.
+    val view = LocalView.current
+    LaunchedEffect(finalText) {
+        if (finalText.isNotBlank()) view.announceForAccessibility(finalText)
+    }
+
 
     // Saving used to be silent: the word landed in the library and the button
     // gave nothing back, which reads as "nothing happened". One confirmation for
@@ -465,18 +478,7 @@ private fun TranscriptCard(
     GlassmorphicCard(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 160.dp)
-            // The one thing this screen exists to produce. Without a live region a
-            // screen-reader user speaks, the words appear, and nothing is said -
-            // the result has to be hunted for by swiping. Polite so it follows the
-            // reader rather than interrupting it, and on the card rather than the
-            // Text so the settled transcript is announced once rather than on every
-            // partial-result frame.
-            //
-            // mergeDescendants for the reason spelled out in ErrorBanner: without
-            // it the node carries the property and no text, and a live region with
-            // nothing in it is announced as nothing at all.
-            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            .heightIn(min = 160.dp),
         contentPadding = PaddingValues(Spacing.lg)
     ) {
         Row(

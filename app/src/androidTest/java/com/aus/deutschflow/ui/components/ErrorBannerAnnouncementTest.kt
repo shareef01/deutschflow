@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -47,14 +48,25 @@ class ErrorBannerAnnouncementTest {
     fun listenForAccessibilityEvents() {
         events.clear()
         instrumentation.uiAutomation.setOnAccessibilityEventListener { event ->
-            // Only the change events a live region produces. The text of the event
-            // is what a screen reader would have to work with.
-            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
-                event.eventType == AccessibilityEvent.TYPE_ANNOUNCEMENT
-            ) {
-                event.text.filterNotNull().forEach { events.add(it.toString()) }
-                event.contentDescription?.let { events.add(it.toString()) }
+            // The event itself carries no words for a content change - it points at
+            // a source node, and that node is what a screen reader reads. Checking
+            // event.text was the first version of this test and it reported "no
+            // announcement" for every run, including ones that announce fine.
+            val type = AccessibilityEvent.eventTypeToString(event.eventType)
+            val source = event.source
+            val live = when (source?.liveRegion) {
+                null -> "no-source"
+                View.ACCESSIBILITY_LIVE_REGION_NONE -> "none"
+                View.ACCESSIBILITY_LIVE_REGION_POLITE -> "polite"
+                View.ACCESSIBILITY_LIVE_REGION_ASSERTIVE -> "assertive"
+                else -> "?"
             }
+            val spoken = listOfNotNull(
+                source?.contentDescription?.toString(),
+                source?.text?.toString(),
+                event.text.filterNotNull().joinToString(" ").takeIf { it.isNotBlank() }
+            ).joinToString(" ")
+            events.add("$type|live=$live|spoken='$spoken'")
         }
     }
 
@@ -89,10 +101,23 @@ class ErrorBannerAnnouncementTest {
         instrumentation.waitForIdleSync()
         Thread.sleep(SETTLE_MS)
 
-        val announced = events.any { it.contains("Microphone permission") }
+        // Instrument first, verdict second. If nothing at all arrived, the
+        // listener is deaf and the run says nothing about the banner.
+        assertTrue(
+            "the listener received no accessibility events whatsoever, so this run " +
+                "proves nothing about the banner - fix the instrument first",
+            events.isNotEmpty()
+        )
+
+        // Either route counts: a polite live region whose node carries the text, or
+        // an explicit announcement. Both end up spoken; only the mechanism differs.
+        val announced = events.any {
+            it.contains("Microphone permission") &&
+                (it.contains("live=polite") || it.contains("TYPE_ANNOUNCEMENT"))
+        }
         assertTrue(
             "no accessibility event carried the banner text, so no screen reader " +
-                "could announce it. Events seen: $events",
+                "could announce it. Events seen: " + events.joinToString(" ;; "),
             announced
         )
     }
