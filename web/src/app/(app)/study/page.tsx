@@ -59,6 +59,15 @@ export default function StudyPage() {
           device that cannot speak German has to say so here. */}
       <ErrorBanner message={ttsError} />
 
+      {/* The session header: what this is and how far through the pass the
+          learner is, without outshouting the card itself. */}
+      <div className="flex w-full max-w-2xl items-center justify-between">
+        <h2 className="text-title-medium text-on-surface">{t("study.session")}</h2>
+        <span className="text-label-medium text-on-surface-variant">
+          {t("study.remaining", [Math.max(studyList.length - safeIndex, 1)])}
+        </span>
+      </div>
+
       {/* The card is centred in what is left rather than filling it. */}
       <div className="flex w-full flex-1 items-center justify-center">
         <button
@@ -75,9 +84,9 @@ export default function StudyPage() {
             {/* Front: German */}
             <div className="absolute inset-0 flex items-center justify-center [backface-visibility:hidden]">
               <div className="flex flex-col items-center px-7 py-8 text-center">
-                <span className="text-xs font-bold uppercase tracking-widest text-on-surface-muted">
-                    {t("library.fieldGerman")}
-                  </span>
+                <span className="text-label-small font-medium text-on-surface-muted">
+                  {t("library.fieldGerman")}
+                </span>
                 <h2 className="mt-3 text-3xl font-bold text-azure-glow">{currentItem.germanText}</h2>
                 <span
                   role="button"
@@ -104,9 +113,9 @@ export default function StudyPage() {
             {/* Back: Translation */}
             <div className="absolute inset-0 flex items-center justify-center [transform:rotateY(180deg)] [backface-visibility:hidden]">
               <div className="flex flex-col items-center px-7 py-8 text-center">
-                <span className="text-xs font-bold uppercase tracking-widest text-on-surface-muted">
-                    {t("library.fieldTranslation")}
-                  </span>
+                <span className="text-label-small font-medium text-on-surface-muted">
+                  {t("library.fieldTranslation")}
+                </span>
                 <h2 className="mt-3 text-3xl font-bold text-on-surface">
                   {currentItem.englishTranslation}
                 </h2>
@@ -117,9 +126,16 @@ export default function StudyPage() {
         </button>
       </div>
 
-      <div className="mt-8 flex w-full max-w-2xl gap-4">
-        <GlassButton type="button" onClick={nextCard} className="flex-1">
-          <span className="text-sm font-bold">{t("study.skip")}</span>
+      {/* The honest feedback row. All four advance the card; Good and Easy bank
+          the XP award (once per card, per session). The spaced-repetition
+          scheduler that would steer WHEN a card returns is not implemented yet
+          — the UI is shaped for it, nothing pretends it already remembers. */}
+      <div className="mt-8 flex w-full max-w-2xl gap-3">
+        <GlassButton type="button" glow="error" onClick={nextCard} className="flex-1">
+          <span className="text-sm font-bold">{t("study.again")}</span>
+        </GlassButton>
+        <GlassButton type="button" glow="amber" onClick={nextCard} className="flex-1">
+          <span className="text-sm font-bold">{t("study.hard")}</span>
         </GlassButton>
         <GlassButton
           type="button"
@@ -129,7 +145,18 @@ export default function StudyPage() {
           }}
           className="flex-1"
         >
-          <span className="text-sm font-bold text-azure-glow">{t("study.gotItAction")}</span>
+          <span className="text-sm font-bold">{t("study.good")}</span>
+        </GlassButton>
+        <GlassButton
+          type="button"
+          glow="green"
+          onClick={() => {
+            rewardCurrentCard();
+            nextCard();
+          }}
+          className="flex-1"
+        >
+          <span className="text-sm font-bold">{t("study.easy")}</span>
         </GlassButton>
       </div>
 

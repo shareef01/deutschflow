@@ -124,8 +124,12 @@ export async function getAllVocabulary(db: DeutschFlowDB): Promise<VocabularyEnt
   return db.vocabulary.orderBy("timestamp").reverse().toArray();
 }
 
-export async function insertTranscript(db: DeutschFlowDB, fullText: string): Promise<void> {
-  await db.transcripts.add({ fullText, timestamp: Date.now() });
+export async function insertTranscript(
+  db: DeutschFlowDB,
+  fullText: string,
+  timestamp?: number
+): Promise<void> {
+  await db.transcripts.add({ fullText, timestamp: timestamp ?? Date.now() });
 }
 
 export async function deleteTranscript(

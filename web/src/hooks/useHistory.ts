@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { db } from "@/lib/db";
-import { deleteTranscript as deleteTranscriptRow, observeTranscripts } from "@/lib/db/repository";
+import {
+  deleteTranscript as deleteTranscriptRow,
+  insertTranscript,
+  observeTranscripts,
+} from "@/lib/db/repository";
 import { useLive } from "./useLive";
 
 /**
@@ -26,5 +30,13 @@ export function useHistory() {
     if (transcript.id !== undefined) void deleteTranscriptRow(db, transcript);
   };
 
-  return { query, setQuery, transcripts: filtered, deleteTranscript };
+  /**
+   * Puts a deleted transcript back, for the snackbar's Undo. Re-inserted with
+   * its original timestamp, so it lands exactly where it was in the list.
+   */
+  const restoreTranscript = (transcript: { fullText: string; timestamp: number }) => {
+    void insertTranscript(db, transcript.fullText, transcript.timestamp);
+  };
+
+  return { query, setQuery, transcripts: filtered, deleteTranscript, restoreTranscript };
 }

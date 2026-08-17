@@ -14,7 +14,7 @@ for (const route of ROUTES) {
     expect(response?.status()).toBe(200);
     await expect(page.locator("h1")).toBeVisible();
     // The app shell (the glass surface language) renders behind every screen.
-    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(10, 14, 22)");
   });
 }
 
@@ -66,7 +66,7 @@ test("offline boot after one online visit", async ({ page, context }) => {
   await context.setOffline(true);
   await page.reload();
   // The cached shell answers instead of the network error page.
-  await expect(page.getByText("Tap to transcribe German")).toBeVisible();
+  await expect(page.getByText("Tap to start")).toBeVisible();
   await expect(page.locator("h1")).toBeVisible();
 });
 
@@ -77,7 +77,23 @@ test("language switch flips the UI to German", async ({ page }) => {
 
   // The shell title and the settings section header react immediately.
   await expect(page.locator("h1")).toHaveText("Einstellungen");
-  await expect(page.getByText("KI-Übersetzung")).toBeVisible();
+  await expect(page.getByText("KI & Übersetzung")).toBeVisible();
   await expect(page.getByText("Lernfortschritt")).toBeVisible();
   await expect(page.getByText("Deutsche Aussprache automatisch abspielen")).toBeVisible();
+});
+
+test("saving an API key reports in the current language", async ({ page }) => {
+  await page.goto("/settings");
+
+  // German UI first: the save confirmation must be German too, not the
+  // hardcoded English the hook used to return.
+  await page.getByRole("button", { name: "Deutsch" }).click();
+  await expect(page.locator("h1")).toHaveText("Einstellungen");
+
+  const input = page.getByPlaceholder("Füge hier deinen Groq-Schlüssel ein");
+  await input.fill("gsk_fake_key_for_smoke");
+  await page.getByRole("button", { name: "Speichern" }).click();
+
+  await expect(page.getByText("API-Schlüssel gespeichert.")).toBeVisible();
+  await page.getByRole("button", { name: "OK" }).click();
 });

@@ -34,6 +34,7 @@ import type { VocabularyEntry } from "@/lib/db/schema";
 export default function VocabularyPage() {
   const {
     list,
+    allVocabulary,
     searchQuery,
     setSearchQuery,
     ttsError,
@@ -49,8 +50,16 @@ export default function VocabularyPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [sortMode, setSortMode] = useState<"newest" | "alpha">("newest");
 
-  const selectedItem = list.find((item) => item.id === selectedId) ?? null;
+  const sortedList = useMemo(() => {
+    if (sortMode === "alpha") {
+      return [...list].sort((a, b) => a.germanText.localeCompare(b.germanText, "de"));
+    }
+    return list;
+  }, [list, sortMode]);
+
+  const selectedItem = sortedList.find((item) => item.id === selectedId) ?? null;
   const editingItem = list.find((item) => item.id === editingId) ?? null;
 
   // The model's own example when the word came from a translation, and a
@@ -70,7 +79,10 @@ export default function VocabularyPage() {
   const listProps = {
     searchQuery,
     onSearchChange: setSearchQuery,
-    vocabularyList: list,
+    vocabularyList: sortedList,
+    statsList: allVocabulary,
+    sortMode,
+    onSortChange: setSortMode,
     onItemClick: (item: VocabularyEntry) => setSelectedId(item.id ?? null),
     onEdit: (item: VocabularyEntry) => setEditingId(item.id ?? null),
     onDelete: deleteVocabulary,
@@ -150,6 +162,9 @@ function VocabularyListContent({
   searchQuery,
   onSearchChange,
   vocabularyList,
+  statsList,
+  sortMode,
+  onSortChange,
   onItemClick,
   onEdit,
   onDelete,
@@ -160,6 +175,10 @@ function VocabularyListContent({
   searchQuery: string;
   onSearchChange: (value: string) => void;
   vocabularyList: VocabularyEntry[];
+  /** The whole library, unfiltered — the stats strip counts this. */
+  statsList: VocabularyEntry[];
+  sortMode: "newest" | "alpha";
+  onSortChange: (mode: "newest" | "alpha") => void;
   onItemClick: (item: VocabularyEntry) => void;
   onEdit: (item: VocabularyEntry) => void;
   onDelete: (item: VocabularyEntry) => void;
@@ -167,6 +186,10 @@ function VocabularyListContent({
   onAdd: () => void;
   t: TFunction;
 }) {
+  const words = statsList.length;
+  const phrases = statsList.filter((item) => item.germanText.trim().includes(" ")).length;
+  const withExample = statsList.filter((item) => item.exampleSentence.length > 0).length;
+
   return (
     <div className="relative flex h-full min-h-0 flex-col px-5 py-4">
       <div className="pt-2">
@@ -177,7 +200,38 @@ function VocabularyListContent({
         />
       </div>
 
-      <div className="mt-5 min-h-0 flex-1">
+      {/* What the library holds, in three real numbers: words, multi-word
+          phrases, and how many carry the model's example sentence. */}
+      <div className="glass-surface mt-3 grid grid-cols-3 px-4 py-2.5">
+        <StatCell value={String(words)} label={t("library.statWords")} />
+        <StatCell value={String(phrases)} label={t("library.statPhrases")} />
+        <StatCell value={String(withExample)} label={t("library.statExamples")} />
+      </div>
+
+      {/* Order the rows by recency or by the German word. */}
+      <div className="mt-3 flex gap-2">
+        {(
+          [
+            ["newest", t("library.sortNewest")],
+            ["alpha", t("library.sortAlphabetical")],
+          ] as const
+        ).map(([mode, label]) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onSortChange(mode)}
+            className={`press-scale rounded-full border px-4 py-1.5 text-label-medium ${
+              sortMode === mode
+                ? "border-azure-glow/60 bg-secondary-container/60 text-on-secondary-container"
+                : "border-outline-variant bg-glass-fill text-on-surface-variant"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 min-h-0 flex-1">
         {vocabularyList.length === 0 ? (
           <EmptyState
             icon={<AutoStoriesIcon className="size-full" />}
@@ -436,5 +490,17 @@ function VocabularyEditorDialog({
         placeholder="the word"
       />
     </ModalDialog>
+  );
+}
+
+/** One cell of the library's stats strip. */
+function StatCell({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center">
+      <p className="text-title-medium text-on-surface">{value}</p>
+      <p className="max-w-full truncate text-label-small text-on-surface-variant">
+        {label}
+      </p>
+    </div>
   );
 }
