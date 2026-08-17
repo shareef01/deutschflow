@@ -132,7 +132,7 @@ Transactional behaviors ported verbatim into `repository.ts`:
 ## 6. AI contract (frozen for Phase 3 — `src/lib/ai/groq.ts`)
 
 - Endpoint: `https://api.groq.com/openai/v1/chat/completions`
-- Model: `llama-3.3-70b-versatile`, timeout 30s, `Authorization: Bearer <key>`.
+- Model: `openai/gpt-oss-120b`, timeout 30s, `Authorization: Bearer <key>`.
 - Translation request: `temperature 0.2`, system + user roles split (the transcript is **data**, never instructions).
 - Interrogation request: `temperature 0.1`, `response_format: { "type": "json_object" }`.
 - The two system prompts are ported **byte-for-byte** from `GroqHelper.SYSTEM_PROMPT` and `WORD_SYSTEM_PROMPT` (both quoted verbatim in the file header of `groq.ts` — they are instructions to the model, stay English in every locale, and the parse functions match on their prefixes).

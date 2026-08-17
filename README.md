@@ -59,7 +59,7 @@ Built with Kotlin and Jetpack Compose on a self-designed system called
   never leaves the device, and the API is what enforces it rather than a hope
   about which service the phone happens to default to. Partial results, per-error
   guidance, and a language-pack download trigger for devices without German.
-- Each utterance goes to Groq's chat-completions endpoint (Llama 3.3 70B), which
+- Each utterance goes to Groq's chat-completions endpoint (`openai/gpt-oss-120b`), which
   returns a translation, 3–5 key vocabulary words and a natural example sentence.
   The client is hand-rolled on `HttpURLConnection` + `org.json` — zero HTTP
   dependencies.
@@ -152,7 +152,7 @@ sequenceDiagram
     participant SR as SpeechRecognizerHelper
     participant VM as TranscriptViewModel
     participant VP as VocabularyProcessor
-    participant G as Groq (llama-3.3-70b)
+    participant G as Groq (gpt-oss-120b)
     participant DB as Room
     participant WG as WidgetUpdater
 
