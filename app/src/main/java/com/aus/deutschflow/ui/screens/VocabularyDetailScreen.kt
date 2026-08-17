@@ -53,9 +53,11 @@ fun VocabularyDetailScreen(
                 Text(
                     text = item.germanText,
                     // headlineMedium, not displaySmall/Black: entries are whole
-                    // sentences here, not the single words the size assumed.
+                    // sentences here, not the single words the size assumed. On the
+                    // ground colour, not primary: the German is the content being
+                    // read, and the accent is reserved for actions.
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 // The grammatical facts the single-word interrogation captured, for
                 // entries that have them; hand-typed words leave this line empty.

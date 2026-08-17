@@ -3,6 +3,7 @@ package com.aus.deutschflow.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 /**
  * Every token the app renders is named here.
@@ -17,8 +18,10 @@ private val DarkColorScheme = darkColorScheme(
     onPrimary = OnSurface,
     primaryContainer = PrimaryContainer,
     onPrimaryContainer = OnPrimaryContainer,
-    secondary = SecondaryOrange,
-    onSecondary = Background,
+    // Secondary is the calm cyan: the transcription accent. Status colours carry
+    // the rest of the semantics (tertiary green, error red, warning amber).
+    secondary = SecondaryCyan,
+    onSecondary = Color(0xFF062B33),
     secondaryContainer = SecondaryContainer,
     onSecondaryContainer = OnSecondaryContainer,
     tertiary = TertiaryGreen,

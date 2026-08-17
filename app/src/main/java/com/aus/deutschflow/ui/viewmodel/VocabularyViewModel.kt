@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** How the library orders its rows. Purely a view concern — no persistence. */
+enum class VocabularySort { NEWEST, ALPHABETICAL }
+
 @HiltViewModel
 class VocabularyViewModel @Inject constructor(
     private val vocabularyDao: VocabularyDao,
@@ -23,12 +26,24 @@ class VocabularyViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
+    private val _sortMode = MutableStateFlow(VocabularySort.NEWEST)
+    val sortMode: StateFlow<VocabularySort> = _sortMode
+
     /** Raised when a word could not be spoken, so the screen can say why. */
     val ttsError: StateFlow<String?> = ttsHelper.error
 
-    val vocabularyList: StateFlow<List<VocabularyEntity>> = _searchQuery
-        .combine(vocabularyDao.getAllVocabulary()) { query, list ->
-            if (query.isBlank()) {
+    /** The whole library, unfiltered — the stats strip counts this, not the
+     * search result, so the headline numbers do not change while typing. */
+    val allVocabulary: StateFlow<List<VocabularyEntity>> = vocabularyDao.getAllVocabulary()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val vocabularyList: StateFlow<List<VocabularyEntity>> =
+        combine(
+            _searchQuery,
+            vocabularyDao.getAllVocabulary(),
+            _sortMode
+        ) { query, list, sort ->
+            val filtered = if (query.isBlank()) {
                 list
             } else {
                 list.filter { 
@@ -36,11 +51,22 @@ class VocabularyViewModel @Inject constructor(
                     it.englishTranslation.contains(query, ignoreCase = true) 
                 }
             }
+            // The DAO already orders by timestamp DESC, so NEWEST is the list as it
+            // arrives; alphabetical re-orders by the word the user reads first.
+            when (sort) {
+                VocabularySort.NEWEST -> filtered
+                VocabularySort.ALPHABETICAL ->
+                    filtered.sortedBy { it.germanText.lowercase() }
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    fun setSortMode(mode: VocabularySort) {
+        _sortMode.value = mode
     }
 
     /**

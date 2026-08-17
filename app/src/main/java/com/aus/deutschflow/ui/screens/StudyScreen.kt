@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -21,9 +22,11 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.GlassButton
-import com.aus.deutschflow.ui.theme.AzureGlow
+import com.aus.deutschflow.ui.theme.AzureDeep
 import com.aus.deutschflow.ui.theme.OnSurfaceMuted
 import com.aus.deutschflow.ui.theme.Spacing
+import com.aus.deutschflow.ui.theme.TertiaryGreen
+import com.aus.deutschflow.ui.theme.WarningAmber
 import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 
@@ -79,6 +82,28 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
         // that cannot speak German has to say so here rather than sitting silent.
         ErrorBanner(ttsError)
 
+        // The session header: what this is and how far through the pass the learner
+        // is, without ever outshouting the card itself.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(R.string.study_session),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            val remaining = (studyList.size - safeIndex).coerceAtLeast(1)
+            Text(
+                text = pluralStringResource(R.plurals.study_remaining, remaining, remaining),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.md))
+
         // Card flip animation logic
         val rotation by animateFloatAsState(
             targetValue = if (isFlipped) 180f else 0f,
@@ -127,7 +152,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         modifier = Modifier.padding(24.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.library_field_german).uppercase(),
+                            text = stringResource(R.string.library_field_german),
                             style = MaterialTheme.typography.labelSmall,
                             color = OnSurfaceMuted
                         )
@@ -168,7 +193,7 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
                         modifier = Modifier.graphicsLayer { rotationY = 180f }.padding(24.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.library_field_translation).uppercase(),
+                            text = stringResource(R.string.library_field_translation),
                             style = MaterialTheme.typography.labelSmall,
                             color = OnSurfaceMuted
                         )
@@ -194,34 +219,53 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.height(Spacing.lg))
 
+        // The honest feedback row. All four advance the card; Good and Easy bank the
+        // XP award (once per card, per session). The spaced-repetition scheduler that
+        // would let these answers steer WHEN a card returns is not implemented yet —
+        // the UI is shaped for it, and the four choices map straight onto it, but
+        // nothing here pretends the app already remembers each answer.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
-            GlassButton(
+            StudyFeedbackButton(
+                label = stringResource(R.string.study_again),
+                glow = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f),
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.nextCard()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(stringResource(R.string.study_skip), style = MaterialTheme.typography.labelLarge)
-            }
-            GlassButton(
+                }
+            )
+            StudyFeedbackButton(
+                label = stringResource(R.string.study_hard),
+                glow = WarningAmber,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.nextCard()
+                }
+            )
+            StudyFeedbackButton(
+                label = stringResource(R.string.study_good),
+                glow = AzureDeep,
+                modifier = Modifier.weight(1f),
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.rewardCurrentCard()
                     viewModel.nextCard()
-                },
+                }
+            )
+            StudyFeedbackButton(
+                label = stringResource(R.string.study_easy),
+                glow = TertiaryGreen,
                 modifier = Modifier.weight(1f),
-                contentColor = AzureGlow
-            ) {
-                Text(
-                    text = stringResource(R.string.study_got_it_action),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.rewardCurrentCard()
+                    viewModel.nextCard()
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -240,6 +284,27 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
             text = stringResource(R.string.study_progress, safeIndex + 1, studyList.size),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** One answer in the feedback row: a quiet tinted button in the grade's colour. */
+@Composable
+private fun StudyFeedbackButton(
+    label: String,
+    glow: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    GlassButton(
+        onClick = onClick,
+        modifier = modifier,
+        glow = glow
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold
         )
     }
 }

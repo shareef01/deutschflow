@@ -32,10 +32,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.viewmodel.VocabularyViewModel
+import com.aus.deutschflow.ui.viewmodel.VocabularySort
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.SearchInput
-import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 
@@ -46,6 +46,8 @@ fun VocabularyScreen(
 ) {
     val vocabularyList by viewModel.vocabularyList.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val sortMode by viewModel.sortMode.collectAsState()
+    val allVocabulary by viewModel.allVocabulary.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
 
     // Ids rather than entities, and saveable rather than remembered: VocabularyEntity
@@ -95,6 +97,9 @@ fun VocabularyScreen(
                         searchQuery = searchQuery,
                         onSearchChange = { viewModel.setSearchQuery(it) },
                         vocabularyList = vocabularyList,
+                        statsList = allVocabulary,
+                        sortMode = sortMode,
+                        onSortChange = { viewModel.setSortMode(it) },
                         onItemClick = { selectedId = it.id },
                         onEdit = { editingId = it.id },
                         onDelete = { viewModel.deleteVocabulary(it) },
@@ -102,11 +107,11 @@ fun VocabularyScreen(
                         onAdd = { isAdding = true }
                     )
                 }
-                // The same azure hairline the navigation bar uses for its divider:
-                // the one divider language in the app.
+                // The same hairline the navigation bar uses for its divider: the one
+                // divider language in the app.
                 VerticalDivider(
                     thickness = Dp.Hairline,
-                    color = AzureGlow.copy(alpha = 0.15f)
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
                 Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                     VocabularyDetailScreen(
@@ -135,6 +140,9 @@ fun VocabularyScreen(
                         searchQuery = searchQuery,
                         onSearchChange = { viewModel.setSearchQuery(it) },
                         vocabularyList = vocabularyList,
+                        statsList = allVocabulary,
+                        sortMode = sortMode,
+                        onSortChange = { viewModel.setSortMode(it) },
                         onItemClick = { selectedId = it.id },
                         onEdit = { editingId = it.id },
                         onDelete = { viewModel.deleteVocabulary(it) },
@@ -173,6 +181,9 @@ fun VocabularyListContent(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     vocabularyList: List<VocabularyEntity>,
+    statsList: List<VocabularyEntity>,
+    sortMode: VocabularySort,
+    onSortChange: (VocabularySort) -> Unit,
     onItemClick: (VocabularyEntity) -> Unit,
     onEdit: (VocabularyEntity) -> Unit,
     onDelete: (VocabularyEntity) -> Unit,
@@ -198,7 +209,37 @@ fun VocabularyListContent(
                 placeholder = stringResource(R.string.library_search_hint)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.sm))
+
+            // What the library holds, in three real numbers: words, multi-word
+            // phrases, and how many carry the model's example sentence. Nothing is
+            // invented here - these are counts of what is actually stored.
+            VocabularyStatsStrip(statsList)
+
+            Spacer(modifier = Modifier.height(Spacing.sm))
+
+            // Order the rows by recency or by the German word. Search stays in the
+            // field above; this only changes order, so the two never fight.
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                FilterChip(
+                    selected = sortMode == VocabularySort.NEWEST,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSortChange(VocabularySort.NEWEST)
+                    },
+                    label = { Text(stringResource(R.string.library_sort_newest)) }
+                )
+                FilterChip(
+                    selected = sortMode == VocabularySort.ALPHABETICAL,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSortChange(VocabularySort.ALPHABETICAL)
+                    },
+                    label = { Text(stringResource(R.string.library_sort_alphabetical)) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.sm))
 
             AnimatedContent(
                 targetState = vocabularyList.isEmpty(),
@@ -249,6 +290,44 @@ fun VocabularyListContent(
         ) {
             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.library_add_word))
         }
+    }
+}
+
+/**
+ * Three real counts of what the library holds, in one quiet card: words, multi-word
+ * phrases, and how many carry the model's example sentence. Real numbers only —
+ * nothing here invents a status the app does not yet track.
+ */
+@Composable
+private fun VocabularyStatsStrip(vocabularyList: List<VocabularyEntity>) {
+    val words = vocabularyList.size
+    val phrases = vocabularyList.count { it.germanText.trim().contains(' ') }
+    val withExample = vocabularyList.count { it.exampleSentence.isNotBlank() }
+
+    Box(modifier = Modifier.fillMaxWidth().glassSurface(shape = MaterialTheme.shapes.medium)) {
+        Row(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
+            StatCell(Modifier.weight(1f), words.toString(), stringResource(R.string.library_stat_words))
+            StatCell(Modifier.weight(1f), phrases.toString(), stringResource(R.string.library_stat_phrases))
+            StatCell(Modifier.weight(1f), withExample.toString(), stringResource(R.string.library_stat_examples))
+        }
+    }
+}
+
+@Composable
+private fun StatCell(modifier: Modifier, value: String, label: String) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

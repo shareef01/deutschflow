@@ -21,7 +21,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.GlassFillRaised
-import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassBorderBrush
 import com.aus.deutschflow.ui.theme.pressScale
@@ -44,16 +43,19 @@ fun VocabularyChip(
 
     Row(
         modifier = modifier
-            .clip(PillShape)
-            .background(GlassFillRaised, PillShape)
-            .border(BorderStroke(1.dp, glassBorderBrush(AzureGlow)), PillShape)
+            .clip(MaterialTheme.shapes.small)
+            .background(GlassFillRaised, MaterialTheme.shapes.small)
+            .border(
+                BorderStroke(1.dp, glassBorderBrush(AzureGlow, alpha = 0.22f)),
+                MaterialTheme.shapes.small
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
             .pressScale(interactionSource)
-            .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+            .padding(horizontal = Spacing.md, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
