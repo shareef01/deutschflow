@@ -61,6 +61,9 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -462,7 +465,14 @@ private fun TranscriptCard(
     GlassmorphicCard(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 160.dp),
+            .heightIn(min = 160.dp)
+            // The one thing this screen exists to produce. Without a live region a
+            // screen-reader user speaks, the words appear, and nothing is said -
+            // the result has to be hunted for by swiping. Polite so it follows the
+            // reader rather than interrupting it, and on the card rather than the
+            // Text so the settled transcript is announced once rather than on every
+            // partial-result frame.
+            .semantics { liveRegion = LiveRegionMode.Polite },
         contentPadding = PaddingValues(Spacing.lg)
     ) {
         Row(
@@ -497,7 +507,9 @@ private fun TranscriptCard(
                             )
                         }
                     },
-                    modifier = Modifier.size(32.dp)
+                    // No explicit size: IconButton's own 48dp minimum is the
+                    // touch target, and shrinking it to 32dp put the copy
+                    // affordance below what a finger can reliably hit.
                 ) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
@@ -613,7 +625,6 @@ private fun SectionLabel(
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onTrailing()
                 },
-                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
