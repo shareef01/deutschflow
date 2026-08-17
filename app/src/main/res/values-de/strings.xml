@@ -60,7 +60,6 @@
         <item quantity="other">%1$d Wörter</item>
     </plurals>
     <!-- Day before month, as German writes dates. -->
-    <string name="history_date_format">dd. MMM yyyy • HH:mm</string>
 
     <!-- Library -->
     <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>

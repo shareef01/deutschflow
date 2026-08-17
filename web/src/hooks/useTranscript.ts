@@ -218,7 +218,3 @@ export function useTranscript() {
   };
 }
 
-/** Extracts the recognizer snapshot for non-hook consumers. */
-export function getRecognizerState(): RecognizerState {
-  return recognizer.getSnapshot();
-}
