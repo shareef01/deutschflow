@@ -313,16 +313,28 @@ Both apps are covered by the same GitHub Actions workflow.
 
 ## Testing and CI
 
-- **53 JVM unit tests** for the pure logic: response parsing, pronunciation
+- **56 JVM unit tests** for the pure logic: response parsing, pronunciation
   scoring, streak math, daily-word selection, worker delay, error extraction.
-- **Instrumented suite** (CI, API 31 emulator): Room migration validation against
-  historical schemas, DAO behavior, ViewModel state, and the API-key storage
-  contract — including "the key never appears in the file on disk".
+- **65 web unit tests** (vitest) plus a **10-case Playwright browser suite**
+  covering the five routes, the responsive breakpoint, the language switch and
+  offline boot.
+- **Instrumented suite** (a device or an API 31 emulator): Room migration
+  validation against historical schemas, DAO behavior, ViewModel state, and the
+  API-key storage contract — including "the key never appears in the file on
+  disk".
 - **`GroqLiveTest`** proves the real request path against the real service once,
   using the device's own stored key, and skips rather than fails when no key is
   configured.
-- GitHub Actions runs unit tests, lint and a full R8 **release build** on every
-  push, and the instrumented suite on an emulator.
+- **`OnDeviceRecognitionTest`** proves recognition really is on-device: it runs a
+  German session and asserts the engine bound, found the model and opened the
+  microphone. It skips rather than fails where the capability is absent, so an
+  emulator without on-device recognition does not turn the suite red.
+- GitHub Actions is **configured** to run unit tests, lint and a full R8 release
+  build on every push, the PWA's type check, tests and browser suite, and the
+  instrumented suite on an API 31 emulator. Whether it last actually ran is what
+  the badge at the top of this file reports — a workflow can be correct and still
+  be blocked by the account it runs under, so the badge is the source of truth
+  here, not this sentence.
 
 ## Getting started
 

@@ -23,6 +23,27 @@ import type { NextConfig } from "next";
  * is the boundary of what the key vault protects: the vault defends a copied
  * profile directory, not script running on this origin. That trade is stated in
  * the README's privacy section rather than left for a reader to infer.
+ *
+ * Both documented ways out were tried, and both cost more than they buy here:
+ *
+ * - A nonce needs `proxy.ts` to mint one per request, and Next says plainly that
+ *   "to use a nonce, your page must be dynamically rendered" - static
+ *   optimisation off, no CDN caching. This app prerenders all ten routes and
+ *   boots offline from a service-worker precache; it holds no server-side state
+ *   at all, so paying for per-request rendering would dismantle the thing that
+ *   makes it work offline.
+ *
+ * - `experimental.sri` keeps the routes static and does add integrity hashes to
+ *   the six external chunks. It does not help: the prerendered HTML also carries
+ *   eight *inline* bootstrap scripts, and an inline script cannot have an
+ *   integrity attribute. Dropping 'unsafe-inline' with SRI on builds fine and
+ *   then fails in the browser - hydration never runs and the service worker
+ *   never registers, which the Playwright smoke suite catches.
+ *
+ * What makes the trade acceptable is the absence of a way in: the app renders no
+ * untrusted HTML (no dangerouslySetInnerHTML, no innerHTML, no eval, no
+ * document.write) and loads no third-party script. The only inline script on the
+ * page is Next's own. Revisit if any of those stops being true.
  */
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
