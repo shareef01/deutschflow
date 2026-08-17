@@ -70,6 +70,7 @@ export function useVocabulary() {
 
   return {
     list,
+    allVocabulary: vocabulary,
     searchQuery,
     setSearchQuery,
     ttsError,
