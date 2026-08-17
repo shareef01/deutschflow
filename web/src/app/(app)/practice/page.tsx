@@ -45,6 +45,11 @@ export default function PracticePage() {
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col overflow-y-auto px-6 py-8">
+      {/* The instruction this screen is: one quiet line, then the sentence. */}
+      <p className="mb-2 w-full pl-1 text-label-large text-on-surface-variant">
+        {t("practice.listenRepeat")}
+      </p>
+
       {/* The hero, anchored to the top: the sentence and its Listen control on
           one baseline. */}
       <div className="glass-surface shadow-lg shadow-azure-glow/5">
@@ -114,9 +119,62 @@ aria-label={t("practice.listen")}
                   {feedbackText}
                 </span>
               )}
-              <p className="mt-5 w-full text-center text-base text-on-surface">
+
+              {/* An honest score: the share of the target's words the recogniser
+                  heard. Word matching, not phoneme analysis — the label says
+                  what is measured, and the list below shows which words carried
+                  the misses. */}
+              {wordResults.length > 0 && (
+                <p className="mt-4 text-label-large text-on-surface-variant">
+                  {t("practice.wordMatch", [
+                    Math.round(
+                      (wordResults.filter((result) => result.isCorrect).length * 100) /
+                        wordResults.length
+                    ),
+                  ])}
+                </p>
+              )}
+
+              <p className="mt-4 w-full text-center text-base text-on-surface">
                 {spokenText}
               </p>
+
+              {wordResults.length > 0 && (
+                <ul className="mt-4 flex w-full flex-col items-center gap-1">
+                  {wordResults.map((result, index) => (
+                    <li key={`${result.word}-${index}`} className="flex items-center gap-2">
+                      {result.isCorrect ? (
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="size-4 shrink-0 text-tertiary"
+                          fill="currentColor"
+                          role="img"
+                          aria-label={t("practice.wordCorrect")}
+                        >
+                          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.6-4.2-4.2 1.4-1.4 2.8 2.8 6-6 1.4 1.4-7.4 7.4Z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="size-4 shrink-0 text-warning"
+                          fill="currentColor"
+                          role="img"
+                          aria-label={t("practice.wordTryAgain")}
+                        >
+                          <path d="M12 2 1 21h22L12 2Zm1 14h-2v2h2v-2Zm0-7h-2v5h2V9Z" />
+                        </svg>
+                      )}
+                      <span
+                        className={`text-body-medium ${
+                          result.isCorrect ? "text-on-surface" : "text-on-surface-variant"
+                        }`}
+                      >
+                        {result.word}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>

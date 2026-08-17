@@ -1,103 +1,104 @@
 @import "tailwindcss";
 
 /* ============================================================================
-   Obsidian & Azure — the design system, as Tailwind v4 CSS-first configuration.
-   One-to-one port of the Android app's ui/theme/ (Color.kt, Type.kt, Shape.kt,
-   Spacing.kt, Obsidian.kt). This file is the authoritative tailwind config.
+   DeutschFlow design system — the refined dark palette, as Tailwind v4
+   CSS-first configuration. One-to-one port of the Android app's ui/theme/
+   (Color.kt, Type.kt, Shape.kt, Obsidian.kt).
 
    Ground rules from the Android theme:
-   - True black ground (#000000 = an unlit OLED pixel). Surfaces are GLASS:
-     3% white fill + a hairline azure edge that falls off diagonally from the
-     top-left corner — one light source for the whole app.
-   - One accent ramp: AzureGlow #00E5FF → AzureDeep #0A84FF. Everything that
-     glows is one of these two, or a ramp between them.
-   - No solid primary buttons. Transparent containers, glowing cyan edges,
-     bold white/cyan labels.
+   - Deep blue-black ground (#0A0E16), opaque cool surfaces one step above it,
+     separated by a hairline edge and a whisper of elevation — no glow, no glass.
+   - One accent ramp: AzureGlow #4EC9E8 (calm cyan, the transcription accent)
+     → AzureDeep #0A84FF (electric blue, the action colour).
+   - Colour is for actions, progress, status and what is being learned — never
+     decoration.
    ========================================================================== */
 
 @theme {
   /* ---- Ground and surfaces --------------------------------------------- */
-  --color-background: #000000;
-  --color-surface: #07070a;
-  --color-surface-variant: #14141a;
+  --color-background: #0a0e16;
+  --color-surface: #0e131d;
+  --color-surface-variant: #18202f;
 
   /* ---- Text ------------------------------------------------------------- */
-  --color-on-background: #f2f2f7;
+  --color-on-background: #f2f5fa;
   --color-on-surface: #ffffff;
-  /* Muted steel — labels that recede without disappearing. */
-  --color-on-surface-variant: #8892b0;
-  /* Flat 4.6:1 muted body colour (alpha-over-dark loses contrast faster than
-     it looks like it should). */
-  --color-on-surface-muted: #9c9ca1;
+  /* Muted steel-blue — labels that recede without disappearing. */
+  --color-on-surface-variant: #98a2b3;
+  /* Flat muted body colour (alpha-over-dark loses contrast faster than it
+     looks like it should). */
+  --color-on-surface-muted: #6e7889;
 
-  /* ---- The azure accent ramp -------------------------------------------- */
-  --color-azure-glow: #00e5ff;
+  /* ---- The accent ramp -------------------------------------------- */
+  --color-azure-glow: #4ec9e8;
   --color-azure-deep: #0a84ff;
 
-  /* ---- The glass itself -------------------------------------------------- */
-  /* Translucent white over true black picks up whatever sits behind it — that
-     is what makes surfaces read as glass rather than panels. */
-  --color-glass-fill: rgba(255, 255, 255, 0.03);
-  /* One step brighter, for glass that sits on glass (stat tiles in a card). */
-  --color-glass-raised: rgba(255, 255, 255, 0.05);
+  /* ---- The default card and input fill — opaque, from the ramp ---------- */
+  --color-glass-fill: #131926;
+  /* One step brighter, for surfaces that sit on surfaces (stat tiles). */
+  --color-glass-raised: #1a2233;
 
-  /* ---- Brand roles (Material container pairs, cooled onto the void) ------ */
+  /* ---- Brand roles (Material container pairs, cooled onto the ground) --- */
   --color-primary: #0a84ff;
   --color-primary-light: #4cc2ff;
-  --color-secondary: #ff9f0a;
+  /* Secondary is the calm cyan — the transcription accent. */
+  --color-secondary: #43c6de;
   --color-tertiary: #30d158;
+  --color-warning: #ffb340;
   --color-error: #ff453a;
 
   --color-primary-container: #0a2540;
   --color-on-primary-container: #cce4ff;
-  --color-secondary-container: #3a2a05;
-  --color-on-secondary-container: #ffe2b8;
+  --color-secondary-container: #0b2a33;
+  --color-on-secondary-container: #bfebf5;
   --color-tertiary-container: #0e3a1b;
   --color-on-tertiary-container: #c6f6d5;
   --color-error-container: #3e1512;
   --color-on-error-container: #ffdad6;
+  --color-warning-container: #3a2a05;
+  --color-on-warning-container: #ffe2b8;
 
-  /* ---- Borders and dividers (cooled towards the azure) ------------------- */
-  --color-outline: #2e3446;
-  --color-outline-variant: #1c2130;
+  /* ---- Borders and dividers (cool grey-blues) --------------------------- */
+  --color-outline: #232c3d;
+  --color-outline-variant: #1a2231;
 
   /* ---- Opaque elevation ramp (dialogs, menus, the nav bar) --------------- */
-  --color-surface-container-lowest: #000000;
-  --color-surface-container-low: #07070b;
-  --color-surface-container: #0b0c12;
-  --color-surface-container-high: #12141c;
-  --color-surface-container-highest: #181b26;
+  --color-surface-container-lowest: #0a0e16;
+  --color-surface-container-low: #0e131d;
+  --color-surface-container: #131926;
+  --color-surface-container-high: #18202f;
+  --color-surface-container-highest: #1e2739;
 
-  /* ---- Typography (Type.kt: Black/ExtraBold geometric sans, negative
-        tracking on headlines, stepped down from Material defaults because the
-        content is long and read at arm's length) --------------------------- */
+  /* ---- Typography (Type.kt: calm premium hierarchy — weights step down with
+        size, generous line heights, no negative tracking. The learning
+        material renders at the top of the scale; UI labels at the bottom) --- */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  --text-headline-large: 28px;
-  --text-headline-large--line-height: 36px;
-  --text-headline-large--letter-spacing: -1px;
-  --text-headline-large--font-weight: 900;
+  --text-headline-large: 30px;
+  --text-headline-large--line-height: 38px;
+  --text-headline-large--letter-spacing: 0px;
+  --text-headline-large--font-weight: 700;
 
-  --text-headline-medium: 24px;
-  --text-headline-medium--line-height: 32px;
-  --text-headline-medium--letter-spacing: -0.8px;
-  --text-headline-medium--font-weight: 900;
+  --text-headline-medium: 26px;
+  --text-headline-medium--line-height: 34px;
+  --text-headline-medium--letter-spacing: 0px;
+  --text-headline-medium--font-weight: 700;
 
-  --text-headline-small: 20px;
-  --text-headline-small--line-height: 28px;
-  --text-headline-small--letter-spacing: -0.5px;
-  --text-headline-small--font-weight: 800;
+  --text-headline-small: 22px;
+  --text-headline-small--line-height: 30px;
+  --text-headline-small--letter-spacing: 0px;
+  --text-headline-small--font-weight: 700;
 
   --text-title-large: 20px;
   --text-title-large--line-height: 28px;
-  --text-title-large--letter-spacing: -0.5px;
-  --text-title-large--font-weight: 800;
+  --text-title-large--letter-spacing: 0px;
+  --text-title-large--font-weight: 700;
 
   --text-title-medium: 17px;
   --text-title-medium--line-height: 24px;
   --text-title-medium--letter-spacing: 0.1px;
-  --text-title-medium--font-weight: 700;
+  --text-title-medium--font-weight: 600;
 
   --text-body-large: 16px;
   --text-body-large--line-height: 24px;
@@ -114,56 +115,29 @@
   --text-label-large--letter-spacing: 0.1px;
   --text-label-large--font-weight: 600;
 
-  --text-label-medium: 12px;
-  --text-label-medium--line-height: 16px;
-  --text-label-medium--letter-spacing: 0.4px;
+  --text-label-medium: 13px;
+  --text-label-medium--line-height: 18px;
+  --text-label-medium--letter-spacing: 0.1px;
   --text-label-medium--font-weight: 500;
 
-  --text-label-small: 11px;
+  --text-label-small: 12px;
   --text-label-small--line-height: 16px;
-  --text-label-small--letter-spacing: 0.4px;
-  --text-label-small--font-weight: 700;
+  --text-label-small--letter-spacing: 0.1px;
+  --text-label-small--font-weight: 500;
 
   /* ---- One shape scale (Shape.kt) ---------------------------------------- */
   --radius-xs: 8px;
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 20px;
-  --radius-xl: 28px;
-  /* The GlassShape: every card and every input share this one corner. */
-  --radius-glass: 24px;
+  --radius-xl: 24px;
+  /* The card/input radius: every surface shares this one corner. */
+  --radius-glass: 16px;
 
-  /* ---- Spacing ------------------------------------------------------------ */
-  /* NOTE: Android's Spacing.kt named tokens (xs/sm/md/lg/xl) are deliberately
-     not defined here. In Tailwind v4 the `--spacing-*` namespace feeds both the
-     spacing scale and the `max-w-*` sizing utilities, so defining
-     `--spacing-sm: 8px` made `max-w-sm` resolve to 8px instead of a container
-     width (24rem). The app uses the numeric scale instead (px-6 = 24px,
-     py-8 = 32px), which matches Spacing.kt exactly. */
-
-  /* ---- Theatrical animation (Obsidian.kt) --------------------------------- */
-  /* One slow revolution, ambient rather than progress-like. */
-  --animate-mesh-rotation: mesh-rotation 12s linear infinite;
-  /* The idle breath: a slow alpha swell so an idle control still looks alive. */
-  --animate-breath: breath 2.6s ease-in-out infinite alternate;
+  /* ---- Animation ---------------------------------------------------------- */
   /* The word-details bottom sheet, and its backdrop. */
   --animate-sheet-up: sheet-up 320ms cubic-bezier(0.32, 0.72, 0, 1);
   --animate-backdrop-in: fade-in 200ms ease;
-
-  @keyframes mesh-rotation {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes breath {
-    from {
-      opacity: 0.35;
-    }
-    to {
-      opacity: 0.75;
-    }
-  }
 
   @keyframes sheet-up {
     from {
@@ -185,173 +159,125 @@
 }
 
 /* ============================================================================
-   Glass utilities — the one surface treatment, as named utilities.
+   Surface utilities — the one treatment every card and input shares.
    Compose equivalent: Modifier.glassSurface() + glassBorderBrush() in
    ui/theme/Obsidian.kt and ui/components/GlassComponents.kt.
    ========================================================================== */
 
-/* A glassmorphic card or input: 3% white fill + a hairline azure edge that
-   runs from the top-left corner (the light) and fades to nothing by the far
-   corner. The double-background technique keeps the gradient inside a real
-   1px border without border-image gaps. */
+/* A card: opaque fill one step above the ground, a hairline edge at low alpha,
+   and a whisper of elevation. Separation comes from the value step, not from a
+   glowing border. */
 @utility glass-surface {
-  border: 1px solid transparent;
+  border: 1px solid
+    color-mix(in srgb, var(--color-azure-glow) 16%, transparent);
   border-radius: var(--radius-glass);
-  background:
-    linear-gradient(var(--color-glass-fill), var(--color-glass-fill)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 229, 255, 0.35),
-        rgba(0, 229, 255, 0.12),
-        rgba(0, 229, 255, 0)
-      )
-      border-box;
+  background: var(--color-glass-fill);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
-/* Glass that sits on glass — stat tiles inside their card (GlassFillRaised). */
+/* A surface that sits on a surface — stat tiles inside their card. */
 @utility glass-raised {
-  border: 1px solid transparent;
+  border: 1px solid
+    color-mix(in srgb, var(--color-azure-glow) 14%, transparent);
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(var(--color-glass-raised), var(--color-glass-raised))
-      padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 229, 255, 0.25),
-        rgba(0, 229, 255, 0.08),
-        rgba(0, 229, 255, 0)
-      )
-      border-box;
+  background: var(--color-glass-raised);
 }
 
-/* The one input container: same glass as a card, but the edge is AzureDeep at
-   rest and AzureGlow when focused (GlassTextField's `edge = if (isFocused)
-   AzureGlow else AzureDeep`). */
+/* The one input container: same surface as a card; the edge turns up to the
+   cyan while focused (GlassTextField's focus treatment). */
 @utility glass-input {
-  border: 1px solid transparent;
+  border: 1px solid
+    color-mix(in srgb, var(--color-azure-deep) 16%, transparent);
   border-radius: var(--radius-glass);
   min-height: 56px;
-  background:
-    linear-gradient(var(--color-glass-fill), var(--color-glass-fill)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 132, 255, 0.35),
-        rgba(0, 132, 255, 0.12),
-        rgba(0, 132, 255, 0)
-      )
-      border-box;
-  transition: box-shadow 200ms ease;
+  background: var(--color-glass-fill);
+  transition: border-color 200ms ease;
 }
 
 .glass-input:focus-within {
-  background:
-    linear-gradient(var(--color-glass-fill), var(--color-glass-fill)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 229, 255, 0.55),
-        rgba(0, 229, 255, 0.2),
-        rgba(0, 229, 255, 0)
-      )
-      border-box;
-  box-shadow:
-    0 0 0 1px rgba(0, 229, 255, 0.12),
-    0 0 18px rgba(0, 229, 255, 0.18);
+  border-color: color-mix(in srgb, var(--color-azure-glow) 55%, transparent);
 }
 
-/* The accent ramp, for fills: AzureGlow → AzureDeep, top-left to bottom-right
-   (Brush.linearGradient(AzureGlow, AzureDeep)). */
+/* The accent ramp, for fills: AzureGlow → AzureDeep, top-left to bottom-right. */
 @utility azure-gradient {
-  background-image: linear-gradient(135deg, var(--color-azure-glow), var(--color-azure-deep));
+  background-image: linear-gradient(
+    135deg,
+    var(--color-azure-glow),
+    var(--color-azure-deep)
+  );
 }
 
-/* The one primary action button: 5% white glass fill + the cyan gradient edge
-   (GlassComponents.kt GlassButton). `edge-error` recolours the edge so a
-   recording still reads as stop-the-world. */
+/* The one primary action button: a quiet tinted fill and a hairline edge in the
+   accent colour (GlassComponents.kt GlassButton, default glow = AzureDeep).
+   `edge-azure` is the cyan variant (Practice's Speak while idle);
+   `edge-error` recolours the edge so a recording still reads as stop-the-world. */
 @utility glass-button {
-  border: 1px solid transparent;
-  border-radius: 9999px;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 229, 255, 0.35),
-        rgba(0, 229, 255, 0.12),
-        rgba(0, 229, 255, 0)
-      )
-      border-box;
+  border: 1px solid
+    color-mix(in srgb, var(--color-azure-deep) 50%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-azure-deep) 12%, transparent);
+}
+
+.glass-button.edge-azure {
+  border-color: color-mix(in srgb, var(--color-azure-glow) 50%, transparent);
+  background: color-mix(in srgb, var(--color-azure-glow) 12%, transparent);
 }
 
 .glass-button.edge-error {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(255, 69, 58, 0.45),
-        rgba(255, 69, 58, 0.15),
-        rgba(255, 69, 58, 0)
-      )
-      border-box;
+  border-color: color-mix(in srgb, var(--color-error) 50%, transparent);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+.glass-button.edge-green {
+  border-color: color-mix(in srgb, var(--color-tertiary) 50%, transparent);
+  background: color-mix(in srgb, var(--color-tertiary) 12%, transparent);
+}
+
+.glass-button.edge-amber {
+  border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
 }
 
 .glass-button:disabled {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.03)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 229, 255, 0.15),
-        rgba(0, 229, 255, 0.05),
-        rgba(0, 229, 255, 0)
-      )
-      border-box;
+  border-color: color-mix(in srgb, var(--color-azure-glow) 16%, transparent);
+  background: var(--color-glass-fill);
 }
 
-/* A glass pill: raised fill + cyan edge at 50% radius (VocabularyChip). */
+/* An interactive chip: raised fill + a quiet cyan hairline, at a small radius
+   (VocabularyChip — 12dp, not a pill). */
 @utility glass-pill {
-  border: 1px solid transparent;
-  border-radius: 9999px;
-  background:
-    linear-gradient(var(--color-glass-raised), var(--color-glass-raised)) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 229, 255, 0.35),
-        rgba(0, 229, 255, 0.12),
-        rgba(0, 229, 255, 0)
-      )
-      border-box;
+  border: 1px solid
+    color-mix(in srgb, var(--color-azure-glow) 22%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--color-glass-raised);
 }
 
-/* The selected rail destination: a tinted primary-container fill + the app's
-   signature 135° gradient edge, so the active tab reads as glass like every
-   other surface instead of a flat-bordered rectangle. The fill is diagonal
-   (brighter top-left, dimmer bottom-right) to honour the single light source. */
+/* The selected rail destination: a tinted primary-container fill + a quiet
+   hairline, so the active tab reads like every other surface. */
 @utility glass-nav-active {
-  border: 1px solid transparent;
+  border: 1px solid
+    color-mix(in srgb, var(--color-azure-glow) 35%, transparent);
   border-radius: var(--radius-glass);
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--color-primary-container) 65%, transparent),
-      color-mix(in srgb, var(--color-primary-container) 35%, transparent)
-    ) padding-box,
-    linear-gradient(
-        135deg,
-        rgba(0, 229, 255, 0.6),
-        rgba(0, 229, 255, 0.15),
-        rgba(0, 229, 255, 0)
-      )
-      border-box;
+  background: color-mix(
+    in srgb,
+    var(--color-primary-container) 60%,
+    transparent
+  );
 }
 
-/* The accent ramp as text — cut from one piece, not typed. */
+/* The accent ramp as text — used by the settings telemetry figures alone. */
 @utility text-azure-gradient {
-  background-image: linear-gradient(135deg, var(--color-azure-glow), var(--color-azure-deep));
+  background-image: linear-gradient(
+    135deg,
+    var(--color-azure-glow),
+    var(--color-azure-deep)
+  );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-/* Presses the surface into the screen and lets it spring back (pressScale:
-   spring(DampingRatioMediumBouncy, StiffnessMediumLow), scale 0.97). */
+/* Presses the surface into the screen and lets it spring back (pressScale). */
 @utility press-scale {
   transition: transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -360,10 +286,11 @@
   transform: scale(0.97);
 }
 
-/* The hairline above the bottom navigation bar (AzureGlow at 15%). */
+/* The hairline above the bottom navigation bar — neutral, so the bar reads as
+   a panel edge rather than a lit seam. */
 @utility hairline-azure {
   height: 1px;
-  background: rgba(0, 229, 255, 0.15);
+  background: var(--color-outline-variant);
 }
 
 /* ============================================================================

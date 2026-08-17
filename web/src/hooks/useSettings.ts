@@ -17,6 +17,7 @@ import {
   type Dialect,
 } from "@/lib/db/settings";
 import { useLive } from "./useLive";
+import type { TKey } from "@/lib/i18n";
 
 /**
  * useSettings — SettingsViewModel port.
@@ -45,13 +46,16 @@ export function useSettings() {
   const isAutoPlayEnabled = autoPlayRow ? autoPlayRow.value === "true" : true;
 
   /**
-   * @returns the message to show — the analogue of the Android message resource
-   * ids. Saying "saved" when the vault refused to encrypt is a lie that
-   * surfaces later as a mysterious "no API key" translation failure.
+   * @returns the i18n key of the message to show — the analogue of the Android
+   * message resource ids. A key rather than prose, so the Settings screen
+   * resolves it in the current language; returning English here is what used
+   * to put an English dialog in front of a German UI. Saying "saved" when the
+   * vault refused to encrypt is a lie that surfaces later as a mysterious
+   * "no API key" translation failure.
    */
-  const saveApiKey = useCallback(async (apiKey: string): Promise<string> => {
+  const saveApiKey = useCallback(async (apiKey: string): Promise<TKey> => {
     const saved = await persistApiKey(db, apiKey.trim());
-    return saved ? "API key saved." : "The key couldn't be stored. Try again, or restart the device.";
+    return saved ? "message.apiKeySaved" : "message.apiKeyNotSaved";
   }, []);
 
   const saveDialect = useCallback((dialect: Dialect) => {
@@ -63,9 +67,9 @@ export function useSettings() {
   }, []);
 
   /** Wipes what the confirmation dialog promises: library, history and stats. */
-  const clearAllProgress = useCallback(async (): Promise<string> => {
+  const clearAllProgress = useCallback(async (): Promise<TKey> => {
     await clearAllProgressRows(db);
-    return "Library, history and stats cleared.";
+    return "message.progressCleared";
   }, []);
 
   return {

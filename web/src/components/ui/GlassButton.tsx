@@ -11,13 +11,18 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
  */
 interface GlassButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
-  /** Edge colour when not glowing azure (e.g. the error colour for Stop). */
-  glow?: "azure" | "error";
+  /**
+   * Edge + fill tint. "deep" is the electric blue default (the app's action
+   * colour); "azure" is the calm cyan (transcription accents); "error", "green"
+   * and "amber" carry the status set — Practice's Stop and the Study feedback
+   * grades.
+   */
+  glow?: "deep" | "azure" | "error" | "green" | "amber";
 }
 
 export function GlassButton({
   children,
-  glow = "azure",
+  glow = "deep",
   className = "",
   ...rest
 }: GlassButtonProps) {
@@ -25,7 +30,10 @@ export function GlassButton({
     <button
       className={[
         "glass-button",
+        glow === "azure" ? "edge-azure" : "",
         glow === "error" ? "edge-error" : "",
+        glow === "green" ? "edge-green" : "",
+        glow === "amber" ? "edge-amber" : "",
         "press-scale",
         "h-12",
         "rounded-full",

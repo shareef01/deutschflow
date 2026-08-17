@@ -54,7 +54,7 @@ export function AudioWaveform({
       if (bars > 1) {
         const slot = width / (bars * 2 - 1);
         const barWidth = slot;
-        context.fillStyle = `rgba(0, 229, 255, ${0.3 + 0.7 * level})`;
+        context.fillStyle = `rgba(78, 201, 232, ${0.3 + 0.7 * level})`;
         for (let i = 0; i < bars; i++) {
           // Idle, the meter collapses to a faint static comb so the card reads
           // as reserved rather than empty.

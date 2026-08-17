@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
 import { getAllVocabulary } from "@/lib/db/repository";
 import { getDialect } from "@/lib/db/settings";
@@ -41,6 +41,17 @@ export function usePractice() {
   const [feedback, setFeedback] = useState<PracticeFeedback>("NONE");
   const [wordResults, setWordResults] = useState<WordResult[]>([]);
 
+  /**
+   * The sentence the scorer reads when an utterance arrives.
+   *
+   * The utterance listener is registered once on entry, so a closure over
+   * `targetSentence` would keep scoring the sentence that was on screen at
+   * mount time — every "Next sentence" after the first would be judged against
+   * the first one. The ref is updated wherever the target changes, which is
+   * only [loadRandomTarget], so the scorer always sees the current sentence.
+   */
+  const targetRef = useRef(targetSentence);
+
   /** One error surface: whichever of the microphone or the voice engine last
    * had something to say — recognition preferred, like the Android combine. */
   const errorState = recognizerState.errorState ?? ttsError;
@@ -49,7 +60,11 @@ export function usePractice() {
     const list = await getAllVocabulary(db);
     if (list.length > 0) {
       const randomItem = list[Math.floor(Math.random() * list.length)];
-      setTargetSentence(randomItem.exampleSentence || randomItem.germanText);
+      const next = randomItem.exampleSentence || randomItem.germanText;
+      // Keep the scorer's ref in step the moment the target changes, before
+      // any utterance can arrive against it.
+      targetRef.current = next;
+      setTargetSentence(next);
     }
     setWordResults([]);
     setFeedback("NONE");
@@ -62,9 +77,10 @@ export function usePractice() {
     tts.dismissError();
     void loadRandomTarget();
 
-    // Scoring runs when the utterance actually arrives.
+    // Scoring runs when the utterance actually arrives, against the sentence
+    // currently on screen — read through the ref, not a mount-time closure.
     return recognizer.onUtterance((text) => {
-      const { results, feedback: verdict } = evaluateMatch(targetSentence, text);
+      const { results, feedback: verdict } = evaluateMatch(targetRef.current, text);
       setWordResults(results);
       setFeedback(verdict);
     });

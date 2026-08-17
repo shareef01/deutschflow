@@ -52,8 +52,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <ArrowBackIcon className="size-5" />
               </button>
             )}
-            <h1 className="min-w-0 flex-1 truncate text-left text-headline-medium">
-              <span className="text-azure-gradient">{title}</span>
+            <h1 className="min-w-0 flex-1 truncate text-left text-headline-small md:text-headline-medium">
+              <span>{title}</span>
             </h1>
             {!isOnSettings && (
               <button

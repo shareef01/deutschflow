@@ -52,7 +52,9 @@ export default function SettingsPage() {
 
   const onSaveKey = () => {
     void saveApiKey(typedKey).then((result) => {
-      setMessage(result);
+      // The hook hands back an i18n key; the message is resolved here, in the
+      // language the UI is currently showing.
+      setMessage(t(result));
       // The plaintext must not outlive the save.
       setTypedKey("");
       setIsKeyVisible(false);
@@ -62,7 +64,7 @@ export default function SettingsPage() {
   const onClearAll = () => {
     void clearAllProgress().then((result) => {
       setShowDeleteConfirm(false);
-      setMessage(result);
+      setMessage(t(result));
     });
   };
 
@@ -140,18 +142,6 @@ export default function SettingsPage() {
         {t("settings.apiKeyHelp")}
       </p>
 
-      {/* ---- Learning progress ---------------------------------------------- */}
-      <SectionHeader title={t("settings.progressHeader")} />
-
-      <div className="glass-surface p-4">
-        <div className="grid grid-cols-2 gap-4">
-          <StatGridItem label={t("settings.statVocabulary")} value={String(totalVocabulary)} />
-          <StatGridItem label={t("settings.statSessions")} value={String(totalTranscripts)} />
-          <StatGridItem label={t("settings.statXp")} value={String(xp)} />
-          <StatGridItem label={t("settings.statStreak")} value={streakLabel} />
-        </div>
-      </div>
-
       {/* ---- Audio preferences ---------------------------------------------- */}
       <SectionHeader title={t("settings.audioHeader")} />
 
@@ -176,28 +166,34 @@ export default function SettingsPage() {
 
       <RadioGroup options={languages} selected={lang} onSelect={changeLang} />
 
-      <div className="mt-6 h-px bg-surface-variant" />
+      {/* ---- Learning progress ---------------------------------------------- */}
+      <SectionHeader title={t("settings.progressHeader")} />
 
-      {/* ---- Actions --------------------------------------------------------- */}
-      <div className="flex flex-col gap-4 py-8">
-        <GlassButton
-          type="button"
-          glow="error"
-          onClick={() => setShowDeleteConfirm(true)}
-          className="w-full"
-        >
-          <span className="flex items-center justify-center gap-2 text-label-large font-bold text-error">
-            <DeleteForeverIcon className="size-5" />
-            {t("settings.clear")}
-          </span>
-        </GlassButton>
+      <div className="glass-surface p-4">
+        <div className="grid grid-cols-2 gap-4">
+          <StatGridItem label={t("settings.statVocabulary")} value={String(totalVocabulary)} />
+          <StatGridItem label={t("settings.statSessions")} value={String(totalTranscripts)} />
+          <StatGridItem label={t("settings.statXp")} value={String(xp)} />
+          <StatGridItem label={t("settings.statStreak")} value={streakLabel} />
+        </div>
       </div>
 
-      <p className="pb-8 text-center text-label-small text-on-surface-variant">
-        {t("settings.version", ["0.1.0"])}
-      </p>
+      <div className="mt-6 h-px bg-surface-variant" />
 
-      {/* ---- Wipe confirmation ------------------------------------------------ */}
+            {/* ---- Data ------------------------------------------------------------- */}
+      <SectionHeader title={t("settings.dataHeader")} />
+
+      <button
+        type="button"
+        onClick={() => setShowDeleteConfirm(true)}
+        className="glass-surface flex w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        <DeleteForeverIcon className="size-5 shrink-0 text-error" />
+        <span className="text-body-large text-error">{t("settings.clear")}</span>
+      </button>
+      <div className="h-6" />
+
+{/* ---- Wipe confirmation ------------------------------------------------ */}
       {showDeleteConfirm && (
         <ModalDialog
           title={t("settings.wipeTitle")}
@@ -294,10 +290,10 @@ function RadioGroup<T extends string>({
 function StatGridItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="glass-raised p-4">
-      <p className="truncate text-headline-large font-black tracking-tight text-azure-gradient">
+      <p className="truncate text-headline-large font-bold text-on-surface">
         {value}
       </p>
-      <p className="mt-1 text-label-small tracking-[2px] text-on-surface-variant uppercase">
+      <p className="mt-1 text-label-small text-on-surface-variant">
         {label}
       </p>
     </div>
