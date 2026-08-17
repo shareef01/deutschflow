@@ -10,7 +10,16 @@ import { WarningIcon } from "@/components/icons";
 export function ErrorBanner({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <div className="mb-5 flex w-full items-start gap-3 rounded-xl bg-error-container/30 px-4 py-3 border border-error/20">
+    <div
+      // Announced when it appears rather than waiting to be found. A banner
+      // saying the microphone was refused, or that German speech is missing, is
+      // the answer to "why did nothing happen" — and a user who cannot see it
+      // arrive is the one most likely to be asking. `polite` so it follows what
+      // the screen reader is already saying instead of cutting across it.
+      role="status"
+      aria-live="polite"
+      className="mb-5 flex w-full items-start gap-3 rounded-xl bg-error-container/30 px-4 py-3 border border-error/20"
+    >
       <WarningIcon className="size-5 shrink-0 text-error mt-0.5" />
       <p className="text-sm text-on-error-container leading-relaxed">{message}</p>
     </div>

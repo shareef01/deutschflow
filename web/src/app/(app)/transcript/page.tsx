@@ -151,7 +151,17 @@ export default function TranscriptPage() {
           hasTranscript ? "" : "flex items-center justify-center"
         }`}
       >
-        <div className="flex w-full items-start gap-3">
+        <div
+          // The one thing this screen exists to produce. Without a live region a
+          // screen-reader user speaks, the words appear, and nothing is said —
+          // the result has to be hunted for by tabbing. `polite` so it follows
+          // the reader rather than interrupting, and on the container rather
+          // than the <p> so the settled transcript is announced once instead of
+          // on every partial-result frame.
+          role="status"
+          aria-live="polite"
+          className="flex w-full items-start gap-3"
+        >
           <p
             className={`min-w-0 flex-1 leading-relaxed ${
               hasTranscript
