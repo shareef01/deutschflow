@@ -139,17 +139,14 @@ export async function deleteTranscript(
   if (transcript.id !== undefined) await db.transcripts.delete(transcript.id);
 }
 
-export async function deleteAllTranscripts(db: DeutschFlowDB): Promise<void> {
-  await db.transcripts.clear();
-}
-
 export async function deleteVocabulary(db: DeutschFlowDB, entry: VocabularyEntry): Promise<void> {
   if (entry.id !== undefined) await db.vocabulary.delete(entry.id);
 }
 
-export async function deleteAllVocabulary(db: DeutschFlowDB): Promise<void> {
-  await db.vocabulary.clear();
-}
+// No deleteAllTranscripts / deleteAllVocabulary: wiping a whole table only ever
+// happens as part of "Clear all progress", which has to clear all three together
+// in one transaction. Per-table versions existed, were never called, and offered a
+// way to do half of that job.
 
 /* ---------------------------------------------------------------------------
    User stats — XP and streak

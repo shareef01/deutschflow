@@ -66,30 +66,9 @@ export function foldGermanKey(text: string): string {
   return text.replace(/[A-Z]/g, (c) => c.toLowerCase());
 }
 
-/**
- * Builds the persisted vocabulary row. `germanTextKey` is derived here so no
- * caller can save a row whose key disagrees with its text.
- */
-export function toVocabularyEntry(input: {
-  germanText: string;
-  englishTranslation: string;
-  exampleSentence?: string;
-  article?: string;
-  plural?: string;
-  conjugation?: string;
-  timestamp?: number;
-}): VocabularyEntry {
-  return {
-    germanText: input.germanText,
-    germanTextKey: foldGermanKey(input.germanText),
-    englishTranslation: input.englishTranslation,
-    timestamp: input.timestamp ?? Date.now(),
-    exampleSentence: input.exampleSentence ?? "",
-    article: input.article ?? "",
-    plural: input.plural ?? "",
-    conjugation: input.conjugation ?? "",
-  };
-}
+// The row is built in `saveVocabulary`, which is the only way a word enters the
+// library. A second builder lived here, was never called, and was one edit away
+// from letting a caller persist a row whose key disagreed with its text.
 
 export class DeutschFlowDB extends Dexie {
   vocabulary!: Table<VocabularyEntry, number>;

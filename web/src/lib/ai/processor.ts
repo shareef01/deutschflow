@@ -31,6 +31,11 @@ export class VocabularyProcessor {
  * words typed in by hand, which never went near the model and so carry no
  * example of their own. German in every locale, deliberately: it is the
  * material being learned, not interface text.
+ *
+ * Chosen by the word rather than at random, matching the Kotlin companion: a
+ * random pick returned a different sentence on every call, and the library
+ * renders this during a render pass — so a word's example changed underneath the
+ * reader. The sentence is a property of the word, so it is derived from it.
  */
 export function generateExample(word: string): string {
   const templates = [
@@ -56,8 +61,25 @@ export function generateExample(word: string): string {
     case "sprechen":
       return "Kannst du bitte langsamer sprechen?";
     default:
-      return templates[Math.floor(Math.random() * templates.length)];
+      return templates[hashIndex(word, templates.length)];
   }
+}
+
+/**
+ * Java's `String.hashCode`, folded into range the way `Math.floorMod` folds it.
+ *
+ * The same algorithm as the Kotlin side deliberately: the two apps read the same
+ * library, and a word carried between them should not describe itself differently
+ * on each. `Math.imul` and `| 0` reproduce Java's signed 32-bit overflow, and
+ * `((h % n) + n) % n` reproduces floorMod — a plain `%` keeps JavaScript's sign
+ * and would disagree with Kotlin on every word that hashes negative.
+ */
+function hashIndex(word: string, size: number): number {
+  let hash = 0;
+  for (let i = 0; i < word.length; i++) {
+    hash = (Math.imul(31, hash) + word.charCodeAt(i)) | 0;
+  }
+  return ((hash % size) + size) % size;
 }
 
 export const vocabularyProcessor = new VocabularyProcessor();

@@ -240,18 +240,22 @@ fun TranscriptContent(
     val isEmpty = !hasTranscript && !isListening && !isBusy
 
     // The recording clock, in the screen's own time. Restarted per session.
-    var recordingSeconds by remember { mutableIntStateOf(0) }
+    //
+    // Held as State and passed down rather than read here: reading it in this scope
+    // recomposed the whole content column - mic, transcript card, translation,
+    // chips - once a second for the length of every recording. Only the one text
+    // node that draws the clock needs to invalidate, which is the same rule the
+    // waveform follows for the RMS level.
+    val recordingSeconds = remember { mutableIntStateOf(0) }
     LaunchedEffect(isListening) {
         if (isListening) {
-            recordingSeconds = 0
-            while (isListening) {
+            recordingSeconds.intValue = 0
+            while (true) {
                 delay(1_000)
-                recordingSeconds++
+                recordingSeconds.intValue++
             }
         }
     }
-    val duration =
-        String.format(Locale.ROOT, "%d:%02d", recordingSeconds / 60, recordingSeconds % 60)
 
     Column(
         modifier = Modifier
@@ -321,7 +325,7 @@ fun TranscriptContent(
                 isListening = isListening,
                 isBusy = isBusy,
                 rmsAmplitude = rmsAmplitude,
-                duration = duration
+                recordingSeconds = recordingSeconds
             )
 
             Spacer(modifier = Modifier.height(Spacing.md))
@@ -447,7 +451,7 @@ private fun TranscriptCard(
     isListening: Boolean,
     isBusy: Boolean,
     rmsAmplitude: State<Float>,
-    duration: String
+    recordingSeconds: State<Int>
 ) {
     val haptic = LocalHapticFeedback.current
     val clipboard = LocalClipboard.current
@@ -515,14 +519,14 @@ private fun TranscriptCard(
                     .height(40.dp)
             )
             Spacer(modifier = Modifier.height(Spacing.sm))
-            RecordingRow(duration)
+            RecordingRow(recordingSeconds)
         }
     }
 }
 
 /** The pulsing dot, "Listening…" and the running clock — the recording indicator. */
 @Composable
-private fun RecordingRow(duration: String) {
+private fun RecordingRow(recordingSeconds: State<Int>) {
     val transition = rememberInfiniteTransition(label = "recording-row")
     val alpha by transition.animateFloat(
         initialValue = 0.3f,
@@ -548,8 +552,11 @@ private fun RecordingRow(duration: String) {
             color = AzureGlow
         )
         Spacer(modifier = Modifier.width(Spacing.sm))
+        // The only place the clock is read, so the tick invalidates this row and
+        // nothing above it.
+        val seconds = recordingSeconds.value
         Text(
-            text = duration,
+            text = String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

@@ -44,7 +44,10 @@ const MESSAGES = {
   audio: "speech.errorAudio" as TKey,
   permission: "speech.errorPermission" as TKey,
   network: "speech.errorNetwork" as TKey,
-  noMatch: "speech.errorNoMatch" as TKey,
+  // No entry for Android's ERROR_NO_MATCH — "speech heard but not understood".
+  // The Web Speech API has no equivalent: its `no-speech` means nothing was heard
+  // at all, which is `timeout`. `speech.errorNoMatch` stays in the dictionary so
+  // the two string sets remain a pair, but nothing here can raise it.
   timeout: "speech.errorTimeout" as TKey,
   languageUnsupported: "speech.errorLanguageUnsupported" as TKey,
   generic: "speech.errorGeneric" as TKey,
@@ -73,6 +76,23 @@ class Recognizer {
   private rmsTimer: number | null = null;
   private currentLanguage = DEFAULT_LANGUAGE;
 
+  /**
+   * The final segments of the session in flight, joined and delivered once when it
+   * ends.
+   *
+   * `continuous` recognition emits a final result at every natural pause, not once
+   * per recording. Delivering each one as a completed utterance filed a transcript
+   * row and made a Groq request per pause - so one spoken paragraph became three of
+   * each - and, because deliverUtterance closes the session's state, the microphone
+   * control dropped back to idle mid-sentence while capture was still running.
+   * Android's SpeechRecognizer answers once per session, which is the contract
+   * `results` claims.
+   */
+  private finalSegments: string[] = [];
+
+  /** True once this session's utterance has been published, so `onend` cannot repeat it. */
+  private delivered = false;
+
   getSnapshot = (): RecognizerState => this.state;
 
   subscribe = (listener: StateListener): (() => void) => {
@@ -91,10 +111,27 @@ class Recognizer {
     for (const listener of this.stateListeners) listener();
   }
 
+  /**
+   * Detaches an engine so its remaining callbacks cannot reach this object.
+   *
+   * `abort()` fires `onend` asynchronously, so a superseded session's handler would
+   * otherwise land *after* the next one had already set itself listening - closing a
+   * recording that had just started. Silencing the old engine before abandoning it
+   * is what makes "the newest session owns the state" true rather than a race.
+   */
+  private detach(recognition: SpeechRecognition | null): void {
+    if (!recognition) return;
+    recognition.onaudiostart = null;
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
+    recognition.abort();
+  }
+
   /** Aborts the in-flight request that a newer one supersedes. */
   startListening(languageTag: string = DEFAULT_LANGUAGE): void {
     this.currentLanguage = languageTag;
-    this.recognition?.abort();
+    this.detach(this.recognition);
     this.recognition = null;
 
     const recognition = createRecognition();
@@ -106,6 +143,8 @@ class Recognizer {
     // Clear the previous session first, so a stale result can never be mistaken
     // for this one's. (The permission gate happens before the engine is told to
     // listen — see requestMicrophonePermission.)
+    this.finalSegments = [];
+    this.delivered = false;
     this.setState({
       partialText: "",
       finalText: "",
@@ -124,9 +163,11 @@ class Recognizer {
     recognition.onresult = (event) => this.onResults(event);
     recognition.onerror = (event) => this.onError(event);
     recognition.onend = () => {
-      // The engine closed on its own (or after stop()). If no final result was
-      // delivered, close the session without inventing one.
+      // The session is over, so this is the moment the utterance is complete —
+      // everything the engine finalised, joined, delivered once. If it finalised
+      // nothing, close the session without inventing an utterance.
       this.stopRmsAnimation();
+      this.deliverUtterance(this.finalSegments.join(" "));
       this.setState({ isListening: false, isProcessing: false, rmsLevel: 0 });
     };
 
@@ -157,9 +198,10 @@ class Recognizer {
   }
 
   stopListening(): void {
-    // The final result still arrives later, in onresult.
-    if (this.state.isListening) this.setState({ isProcessing: true });
-    this.setState({ isListening: false });
+    // One patch, not two: the pair used to publish an intermediate state in which
+    // the screen was neither listening nor processing. The utterance itself still
+    // arrives later, from `onend`.
+    this.setState({ isProcessing: this.state.isListening, isListening: false });
     this.recognition?.stop();
   }
 
@@ -168,13 +210,18 @@ class Recognizer {
    * sentence as a transcript is worse than filing nothing.
    */
   cancel(): void {
-    this.recognition?.abort();
+    // Detached rather than merely aborted: `onend` would otherwise publish the
+    // half-sentence this call exists to throw away.
+    this.detach(this.recognition);
+    this.recognition = null;
+    this.finalSegments = [];
     this.stopRmsAnimation();
     this.setState({ isListening: false, isProcessing: false, partialText: "", rmsLevel: 0 });
   }
 
   /** Forgets the last utterance without touching the engine (Practice uses this). */
   clearTranscript(): void {
+    this.finalSegments = [];
     this.setState({ partialText: "", finalText: "" });
   }
 
@@ -189,8 +236,9 @@ class Recognizer {
   }
 
   destroy(): void {
-    this.recognition?.abort();
+    this.detach(this.recognition);
     this.recognition = null;
+    this.finalSegments = [];
     this.stopRmsAnimation();
     if (this.errorResetTimer !== null) {
       window.clearTimeout(this.errorResetTimer);
@@ -199,19 +247,29 @@ class Recognizer {
     this.setState({ isListening: false, isProcessing: false, rmsLevel: 0 });
   }
 
+  /**
+   * Banks each finalised segment and shows the transcript so far.
+   *
+   * Nothing is published here: a pause is not the end of an utterance, only the end
+   * of a phrase. `onend` is what closes the session and delivers it.
+   */
   private onResults(event: SpeechRecognitionEvent): void {
     let interim = "";
-    let final = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const result = event.results[i];
-      if (result.isFinal) final += result[0].transcript;
+      if (result.isFinal) this.finalSegments.push(result[0].transcript.trim());
       else interim += result[0].transcript;
     }
+
+    const settled = this.finalSegments.join(" ").trim();
     this.setState({
-      partialText: interim,
-      finalText: final || this.state.finalText,
+      // The whole utterance as it stands, not just the segment in progress, so a
+      // speaker who pauses does not watch their first sentence disappear. Each part
+      // is trimmed before joining: engines emit interim text with its own leading
+      // space, which a single join would double.
+      partialText: [settled, interim.trim()].filter(Boolean).join(" "),
+      finalText: settled || this.state.finalText,
     });
-    if (final) this.deliverUtterance(final.trim());
   }
 
   private onError(event: SpeechRecognitionErrorEvent): void {
@@ -257,10 +315,16 @@ class Recognizer {
   deliverUtterance(text: string): void {
     this.stopRmsAnimation();
     this.setState({ isListening: false, isProcessing: false, rmsLevel: 0 });
-    if (!text.trim()) return;
 
-    this.setState({ finalText: text });
-    for (const listener of this.utteranceListeners) listener(text);
+    const utterance = text.trim();
+    // Once per session. `onend` fires after an explicit stop() as well as after the
+    // engine closes on its own, and cancel() abandons a session that must publish
+    // nothing at all.
+    if (!utterance || this.delivered) return;
+    this.delivered = true;
+
+    this.setState({ partialText: "", finalText: utterance });
+    for (const listener of this.utteranceListeners) listener(utterance);
   }
 
   private scheduleErrorReset(message: string) {

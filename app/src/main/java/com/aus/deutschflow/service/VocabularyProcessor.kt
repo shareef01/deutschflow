@@ -38,6 +38,13 @@ open class VocabularyProcessor(
          * German in every locale, and deliberately so: it is the material being
          * learned, not interface text. Translating it would defeat the point.
          *
+         * Chosen by the word rather than at random. `templates.random()` returned a
+         * different sentence on every call, and the library screen calls this during
+         * composition - so a word's "example" changed as the user scrolled past it,
+         * which reads as the app making the sentence up each time. Deriving the index
+         * from the word keeps the variety across the library and makes the sentence a
+         * stable property of the word, which is what it claims to be.
+         *
          * On the companion so it can be tested without constructing a GroqHelper,
          * which needs a Context.
          */
@@ -60,7 +67,9 @@ open class VocabularyProcessor(
                 "deutsch" -> "Ich lerne jeden Tag Deutsch."
                 "lernen" -> "Wir lernen zusammen in der Schule."
                 "sprechen" -> "Kannst du bitte langsamer sprechen?"
-                else -> templates.random()
+                // floorMod, not %: hashCode is signed, and a negative index would
+                // throw on exactly the words that happen to hash below zero.
+                else -> templates[Math.floorMod(word.hashCode(), templates.size)]
             }
         }
     }

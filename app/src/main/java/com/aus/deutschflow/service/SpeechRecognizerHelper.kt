@@ -100,7 +100,7 @@ class SpeechRecognizerHelper @Inject constructor(
                 _isProcessing.value = false
                 _isListening.value = true
 
-                val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+                val recognizer = createRecognizer()
                 recognizer.setRecognitionListener(recognitionListener)
                 recognizer.startListening(buildIntent(languageTag))
                 speechRecognizer = recognizer
@@ -216,6 +216,27 @@ class SpeechRecognizerHelper @Inject constructor(
         }, ERROR_RESET_DELAY_MS)
     }
 
+    /**
+     * Builds a recogniser that keeps the audio on the device.
+     *
+     * [SpeechRecognizer.createSpeechRecognizer] binds whatever service the device has
+     * set as its default, which on most phones is Google's and streams the audio to a
+     * server. The app's privacy promise is that the microphone never leaves the
+     * device - only the resulting *text* is sent, to Groq, and the README says so in
+     * as many words - so the guarantee has to be made here rather than hoped for.
+     * The evidence that it was only hoped for is in [messageFor]: it maps
+     * ERROR_NETWORK, ERROR_NETWORK_TIMEOUT and ERROR_SERVER, none of which an
+     * on-device engine can produce.
+     *
+     * createOnDeviceSpeechRecognizer is API 31, which is this app's minSdk, so there
+     * is no version to fall back for. A device without the German pack answers with
+     * ERROR_LANGUAGE_UNAVAILABLE, which [requestLanguageDownload] already turns into
+     * the system's own fetch - the same path that handled an English phone in Germany
+     * before this change.
+     */
+    private fun createRecognizer(): SpeechRecognizer =
+        SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+
     private fun buildIntent(languageTag: String) =
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -223,6 +244,10 @@ class SpeechRecognizerHelper @Inject constructor(
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+            // Belt and braces with createOnDeviceSpeechRecognizer: the extra is a
+            // request the engine may honour, the factory is the guarantee. Both say
+            // the same thing, so a future edit that loses one still keeps the promise.
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
 
     private val recognitionListener = object : RecognitionListener {
