@@ -25,6 +25,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
@@ -54,7 +57,14 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
                     MaterialTheme.colorScheme.errorContainer,
                     MaterialTheme.shapes.small
                 )
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                // Announced when it appears, rather than waiting to be found.
+                // A banner that says the microphone was denied, or that German
+                // speech is missing, is the answer to "why did nothing happen" -
+                // and a user who cannot see it arriving is exactly the user most
+                // likely to be asking. Polite, not Assertive: it should follow
+                // what the screen reader is already saying, not cut across it.
+                .semantics { liveRegion = LiveRegionMode.Polite },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
