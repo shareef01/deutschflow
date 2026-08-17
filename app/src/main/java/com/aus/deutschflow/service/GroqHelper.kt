@@ -277,10 +277,22 @@ class GroqHelper @Inject constructor(
          * shipped a Gemini model that was retired underneath it, and the only symptom
          * a user saw was "Translation failed", which reads like a bad API key.
          *
+         * It happened a second time. `llama-3.3-70b-versatile` stopped being reachable
+         * mid-session - the same key that had translated a sentence an hour earlier
+         * came back with "The model does not exist or you do not have access to it",
+         * and the account's own model list no longer carried any Llama chat model at
+         * all. Groq's deprecation table names the gpt-oss family as the replacement
+         * for that class, and 120b is the largest the free tier reaches.
+         *
+         * GroqModelAvailabilityTest is the guard added afterwards: it asks the account
+         * which models the stored key can actually reach and fails if this constant is
+         * not among them, so the next retirement is a failing test rather than a user
+         * staring at "Translation failed".
+         *
          * Groq's free tier covers this comfortably - roughly 1,000 requests a day,
          * against an app that makes one per spoken sentence.
          */
-        const val MODEL_NAME = "llama-3.3-70b-versatile"
+        const val MODEL_NAME = "openai/gpt-oss-120b"
 
         private const val TIMEOUT_MS = 30_000
 
