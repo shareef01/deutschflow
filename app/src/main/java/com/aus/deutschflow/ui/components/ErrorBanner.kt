@@ -22,12 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 
 /**
@@ -44,6 +43,28 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
     var lastMessage by remember { mutableStateOf("") }
     if (message != null) lastMessage = message
 
+    // Announced explicitly, because a live region cannot do this job here.
+    //
+    // Two attempts failed on a real device before this one. Compose decides what to
+    // report by diffing the semantics tree, and
+    // AndroidComposeViewAccessibilityDelegateCompat opens that diff with
+    // `previousSemanticsNodes[id] ?: return@forEachKey` - a node that did not exist
+    // a frame ago is skipped. The banner and its message are born together, so the
+    // node is always new and the change is never reported. Hoisting liveRegion onto
+    // a wrapper that outlives the message does not rescue it either: with no banner
+    // the wrapper has no size, Compose leaves it out of the accessibility tree, and
+    // it is just as new when the message arrives. Measured both times - every
+    // content-changed event came back live=none with no text.
+    //
+    // announceForAccessibility posts TYPE_ANNOUNCEMENT directly, which a screen
+    // reader speaks without consulting any tree. Deprecated on API 34+, and kept
+    // anyway: the supported alternative is the live region that demonstrably does
+    // not fire for content that appears.
+    val view = LocalView.current
+    LaunchedEffect(message) {
+        if (message != null) view.announceForAccessibility(message)
+    }
+
     AnimatedVisibility(
         visible = message != null,
         enter = fadeIn() + expandVertically(),
@@ -57,23 +78,7 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
                     MaterialTheme.colorScheme.errorContainer,
                     MaterialTheme.shapes.small
                 )
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                // Announced when it appears, rather than waiting to be found.
-                // A banner that says the microphone was denied, or that German
-                // speech is missing, is the answer to "why did nothing happen" -
-                // and a user who cannot see it arriving is exactly the user most
-                // likely to be asking. Polite, not Assertive: it should follow
-                // what the screen reader is already saying, not cut across it.
-                //
-                // mergeDescendants is the half that makes it work, and its absence
-                // is silent: a bare `semantics { liveRegion = ... }` publishes a
-                // node carrying the property and no text, because the message sits
-                // on a descendant Text. TalkBack announces a live region from the
-                // node's own text, so an empty one announces nothing - the banner
-                // appeared on screen and was never spoken. Verified on a Pixel 7:
-                // before this, the accessibility node was a View with text='' and
-                // the message on a TextView beneath it.
-                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
