@@ -46,4 +46,15 @@ class HistoryViewModel @Inject constructor(
             transcriptDao.deleteTranscript(transcript)
         }
     }
+
+    /**
+     * Puts a deleted transcript back, for the snackbar's Undo. The row is re-inserted
+     * with its original timestamp (the entity carries it), so it lands exactly where
+     * it was in the list.
+     */
+    fun restoreTranscript(transcript: TranscriptEntity) {
+        viewModelScope.launch {
+            transcriptDao.insertTranscript(transcript.copy(id = 0))
+        }
+    }
 }

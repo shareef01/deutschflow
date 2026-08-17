@@ -44,7 +44,6 @@ import com.aus.deutschflow.ui.theme.AzureDeep
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.GlassFill
 import com.aus.deutschflow.ui.theme.GlassShape
-import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassBorderBrush
 import com.aus.deutschflow.ui.theme.glassSurface
@@ -82,16 +81,15 @@ fun GlassmorphicCard(
 /**
  * The one input container in the app.
  *
- * History, Library and Settings each carried a slightly different `OutlinedTextField`
- * - a solid `surfaceContainer` fill with a plain outline that looked nothing like the
- * cards around it. This is the glass equivalent: the same translucent fill, the same
- * [glassBorderBrush] edge, the same 24dp [GlassShape] corner, and a cyan-tinted edge
- * while focused.
+ * History, Library and Settings each carried a slightly different `OutlinedTextField`.
+ * This is the one input: the same opaque fill as a card, the same hairline edge, the
+ * same corner — and the edge turns up to the calm cyan while focused, which is the
+ * only accent an input carries.
  *
  * Built on [BasicTextField] rather than Material's outlined field because the latter
- * draws its own solid border, and the gradient edge is the whole point. Everything a
- * caller needs - masking, keyboard options, leading/trailing slots - is passed through
- * unchanged, so the Settings password field and the search bars are the same control.
+ * draws its own solid border. Everything a caller needs - masking, keyboard options,
+ * leading/trailing slots - is passed through unchanged, so the Settings password
+ * field and the search bars are the same control.
  *
  * The placeholder is shown only while [value] is empty, and reads the *raw* value, so
  * a masked password still hides its hint the moment a character is typed.
@@ -110,12 +108,14 @@ fun GlassTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
-    shape: Shape = GlassShape,
+    shape: Shape = MaterialTheme.shapes.medium,
     minHeight: Dp = 56.dp
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val edge = if (isFocused) AzureGlow else AzureDeep
+    // Focus turns the edge up; the fill stays put.
+    val edge = if (isFocused) glassBorderBrush(AzureGlow, alpha = 0.55f)
+        else glassBorderBrush(AzureDeep, alpha = 0.16f)
 
     Column(modifier = modifier) {
         if (label != null) {
@@ -132,7 +132,7 @@ fun GlassTextField(
                 .fillMaxWidth()
                 .clip(shape)
                 .background(GlassFill, shape)
-                .border(BorderStroke(1.dp, glassBorderBrush(edge)), shape)
+                .border(BorderStroke(1.dp, edge), shape)
                 .padding(horizontal = Spacing.md),
             contentAlignment = Alignment.CenterStart
         ) {
@@ -213,20 +213,20 @@ fun SearchInput(
 }
 
 /**
- * The app's one primary action button: no solid fill, no solid edge.
+ * The app's one primary action button: a quiet tinted fill, a hairline edge in the
+ * accent colour, a bold label.
  *
- * A transparent container over a 5%-white glass fill, ringed by the same cyan
- * gradient every card uses, with a bold white label. This replaces the solid primary
- * buttons (Save to library, Got it!, Speak, Next) that broke the Obsidian & Azure
- * language. [glow] recolours the edge - the Practice screen's "Stop" passes the error
- * colour so a recording still reads as stop-the-world.
+ * Colour is what marks this as the action to take — a faint fill of the same hue as
+ * the edge, never a solid neon block. [glow] recolours the edge and the fill, so the
+ * Practice screen's "Stop" passes the error colour and a recording still reads as
+ * stop-the-world.
  */
 @Composable
 fun GlassButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    glow: Color = AzureGlow,
+    glow: Color = AzureDeep,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     content: @Composable RowScope.() -> Unit
 ) {
@@ -239,12 +239,12 @@ fun GlassButton(
         modifier = modifier
             .height(ActionButtonHeight)
             .pressScale(interactionSource),
-        shape = PillShape,
-        border = BorderStroke(1.dp, glassBorderBrush(glow)),
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, glassBorderBrush(glow, alpha = 0.5f)),
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = Color.White.copy(alpha = 0.05f),
+            containerColor = glow.copy(alpha = 0.12f),
             contentColor = contentColor,
-            disabledContainerColor = Color.White.copy(alpha = 0.03f),
+            disabledContainerColor = GlassFill,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     ) {

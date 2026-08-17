@@ -35,6 +35,19 @@ class TranscriptViewModel @Inject constructor(
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
 
+    /**
+     * Instantaneous input level 0..1, for the live waveform. The screen reads it in
+     * a draw phase, never into composition — see SpeechRecognizerHelper.rmsLevel.
+     */
+    val rmsLevel: StateFlow<Float> = speechRecognizerHelper.rmsLevel
+
+    /**
+     * The recognition dialect, so the screen can say which German it is listening
+     * for ("German · de-AT") rather than a bare "German".
+     */
+    val selectedDialect: StateFlow<String> = preferenceManager.selectedDialect
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "de-DE")
+
     private val _isTranslating = MutableStateFlow(false)
 
     /** True while the recognizer is finishing up or the translation is in flight. */

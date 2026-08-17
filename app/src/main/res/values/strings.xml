@@ -22,10 +22,13 @@
 
     <!-- Transcript -->
     <string name="transcript_listening">Listening…</string>
-    <string name="transcript_hint">Tap to transcribe German</string>
+    <string name="transcript_hint">Tap to start</string>
     <string name="transcript_transcribing">Transcribing…</string>
     <string name="transcript_start_recording">Start recording</string>
     <string name="transcript_stop_recording">Stop recording</string>
+    <string name="transcript_empty_title">Speak German naturally.</string>
+    <string name="transcript_empty_body">DeutschFlow transcribes what you say, translates it, and finds the words worth keeping.</string>
+    <string name="transcript_language">German · %1$s</string>
     <string name="transcript_translation">Translation</string>
     <string name="transcript_vocabulary">Vocabulary</string>
     <string name="transcript_save">Save to library</string>
@@ -39,16 +42,32 @@
     <!-- History -->
     <string name="history_search_hint">Search transcript history…</string>
     <string name="history_empty_title">No transcripts found</string>
-    <string name="history_empty_body">Your speech sessions will appear here automatically.</string>
+    <string name="history_empty_body">Your transcript sessions will appear here.</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_time_format">HH:mm</string>
+    <!-- Date-only label for history groups (day-month order differs by language). -->
+    <string name="history_day_format">MMM d, yyyy</string>
+    <string name="history_deleted">Transcript deleted.</string>
+    <string name="action_undo">Undo</string>
+    <plurals name="history_word_count">
+        <item quantity="one">%1$d word</item>
+        <item quantity="other">%1$d words</item>
+    </plurals>
     <!-- Localisable on purpose: day-month order differs by language. -->
     <string name="history_date_format">MMM dd, yyyy • HH:mm</string>
 
     <!-- Library -->
     <string name="library_search_hint">Search words or translations…</string>
     <string name="library_empty_title">Your library is empty</string>
-    <string name="library_empty_body">Add a word with the button below, or transcribe speech and save the translation.</string>
+    <string name="library_empty_body">Your vocabulary will appear here as you learn. Add a word, or save one from a transcript.</string>
     <string name="library_add_word">Add a word</string>
     <string name="library_more_actions">More actions</string>
+    <string name="library_stat_words">Words</string>
+    <string name="library_stat_phrases">Phrases</string>
+    <string name="library_stat_examples">With example</string>
+    <string name="library_sort_newest">Newest</string>
+    <string name="library_sort_alphabetical">A–Z</string>
     <string name="library_dialog_add_title">Add a word</string>
     <string name="library_dialog_add_confirm">Add to library</string>
     <string name="library_dialog_edit_title">Edit word</string>
@@ -65,27 +84,38 @@
 
     <!-- Study -->
     <string name="study_empty_title">Ready to study?</string>
-    <string name="study_empty_body">Add some vocabulary to your library to start the flashcard session!</string>
+    <string name="study_empty_body">Save some German phrases and we\'ll build your first study session.</string>
+    <string name="study_session">Study session</string>
+    <plurals name="study_remaining">
+        <item quantity="one">%1$d card remaining</item>
+        <item quantity="other">%1$d cards remaining</item>
+    </plurals>
+    <string name="study_again">Again</string>
+    <string name="study_hard">Hard</string>
+    <string name="study_good">Good</string>
+    <string name="study_easy">Easy</string>
     <string name="study_tap_to_flip">Tap to flip</string>
     <string name="study_show_german">Show the German word</string>
     <string name="study_show_translation">Show the translation</string>
     <string name="study_got_it">Got it</string>
-    <string name="study_got_it_action">Got it!</string>
-    <string name="study_skip">Skip</string>
     <string name="study_progress">Progress: %1$d / %2$d</string>
 
     <!-- Practice -->
     <string name="practice_intro">Listen and repeat the sentence accurately to master your pronunciation.</string>
+    <string name="practice_listen_repeat">Listen and repeat</string>
     <string name="practice_listen">Listen</string>
     <string name="practice_speak">Speak</string>
     <string name="practice_evaluate">Evaluate</string>
     <string name="practice_next">Next</string>
+    <string name="practice_word_match">Word match: %1$d%%</string>
+    <string name="practice_word_correct">Correct</string>
+    <string name="practice_word_try_again">Try again</string>
     <string name="practice_feedback_perfect">Excellent! Perfect pronunciation.</string>
     <string name="practice_feedback_good">Good! You got most of it.</string>
     <string name="practice_feedback_keep_going">Keep practicing! Try to match the highlighted words.</string>
 
     <!-- Settings -->
-    <string name="settings_ai_header">AI translation</string>
+    <string name="settings_ai_header">AI &amp; Translation</string>
     <string name="settings_api_key_label">Groq API key</string>
     <string name="settings_api_key_hint">Paste your Groq key here</string>
     <string name="settings_api_key_replace">Enter a new key to replace the saved one</string>
@@ -99,9 +129,11 @@
     <string name="settings_stat_sessions">Sessions</string>
     <string name="settings_stat_xp">XP points</string>
     <string name="settings_stat_streak">Streak</string>
-    <string name="settings_audio_header">Audio preferences</string>
+    <string name="settings_audio_header">Audio</string>
     <string name="settings_autoplay">Auto-play German audio</string>
-    <string name="settings_dialect_header">Recognition dialect</string>
+    <string name="settings_dialect_header">Speech recognition</string>
+    <string name="settings_notifications_header">Notifications</string>
+    <string name="settings_data_header">Data</string>
     <string name="settings_dialect_de">Germany (de-DE)</string>
     <string name="settings_dialect_at">Austria (de-AT)</string>
     <string name="settings_dialect_ch">Switzerland (de-CH)</string>

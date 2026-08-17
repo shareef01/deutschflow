@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
@@ -39,6 +41,7 @@ import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.PillShape
 import com.aus.deutschflow.ui.theme.Spacing
+import com.aus.deutschflow.ui.theme.WarningAmber
 import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
@@ -110,6 +113,14 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         // for the sentence being pinned above an empty half-screen, so the emptiness
         // had only moved: the real problem was that nothing owned the space
         // underneath. Something does now - see the result region below.
+        // The instruction this screen is: one quiet line, then the sentence itself.
+        Text(
+            text = stringResource(R.string.practice_listen_repeat),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(start = Spacing.xs, bottom = Spacing.sm)
+        )
+
         Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
             // The sentence and its Speak control on one baseline. The control used to
             // be a full-width tonal bar stacked underneath, which added a second
@@ -277,6 +288,20 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                             Spacer(modifier = Modifier.height(Spacing.md))
                         }
 
+                        // An honest score: the share of the target's words the
+                        // recogniser heard. Word matching, not phoneme analysis — the
+                        // label says what is measured, and the per-word list below
+                        // shows which words carried the misses.
+                        if (wordResults.isNotEmpty()) {
+                            val percent = wordResults.count { it.isCorrect } * 100 / wordResults.size
+                            Text(
+                                text = stringResource(R.string.practice_word_match, percent),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(Spacing.sm))
+                        }
+
                         // What the recogniser heard, reading as the user's own words.
                         Text(
                             text = spokenText,
@@ -285,6 +310,49 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        if (wordResults.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(Spacing.md))
+
+                            // Word by word: what was hit and what is worth another go.
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+                            ) {
+                                wordResults.forEach { result ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = if (result.isCorrect) {
+                                                Icons.Default.CheckCircle
+                                            } else {
+                                                Icons.Default.ErrorOutline
+                                            },
+                                            contentDescription = stringResource(
+                                                if (result.isCorrect) R.string.practice_word_correct
+                                                else R.string.practice_word_try_again
+                                            ),
+                                            tint = if (result.isCorrect) {
+                                                MaterialTheme.colorScheme.tertiary
+                                            } else {
+                                                WarningAmber
+                                            },
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(Spacing.sm))
+                                        Text(
+                                            text = result.word,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (result.isCorrect) {
+                                                MaterialTheme.colorScheme.onSurface
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
