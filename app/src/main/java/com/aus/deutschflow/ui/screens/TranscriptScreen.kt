@@ -472,7 +472,11 @@ private fun TranscriptCard(
             // reader rather than interrupting it, and on the card rather than the
             // Text so the settled transcript is announced once rather than on every
             // partial-result frame.
-            .semantics { liveRegion = LiveRegionMode.Polite },
+            //
+            // mergeDescendants for the reason spelled out in ErrorBanner: without
+            // it the node carries the property and no text, and a live region with
+            // nothing in it is announced as nothing at all.
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         contentPadding = PaddingValues(Spacing.lg)
     ) {
         Row(
