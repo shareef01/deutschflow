@@ -21,7 +21,7 @@ export function ErrorBanner({ message }: { message: string | null }) {
       className="mb-5 flex w-full items-start gap-3 rounded-xl bg-error-container/30 px-4 py-3 border border-error/20"
     >
       <WarningIcon className="size-5 shrink-0 text-error mt-0.5" />
-      <p className="text-sm text-on-error-container leading-relaxed">{message}</p>
+      <p className="max-w-[60ch] text-sm leading-relaxed text-on-error-container">{message}</p>
     </div>
   );
 }

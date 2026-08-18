@@ -103,7 +103,7 @@ aria-label={t("practice.listen")}
               <span className="size-9 animate-spin rounded-full border-[3px] border-azure-glow border-t-transparent" />
             </div>
           ) : spokenText.length === 0 ? (
-            <p className="w-full px-4 py-8 text-center text-sm text-on-surface-variant">
+            <p className="mx-auto max-w-[60ch] w-full px-4 py-8 text-center text-sm text-on-surface-variant">
               {t("practice.intro")}
             </p>
           ) : (

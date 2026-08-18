@@ -138,7 +138,7 @@ export default function SettingsPage() {
       >
         {hasApiKey ? t("settings.apiKeySavedState") : t("settings.apiKeyNone")}
       </p>
-      <p className="mt-2 pl-1 text-body-medium text-on-surface-variant">
+      <p className="max-w-[60ch] mt-2 pl-1 text-body-medium text-on-surface-variant">
         {t("settings.apiKeyHelp")}
       </p>
 
