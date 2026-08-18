@@ -79,6 +79,8 @@ export default function TranscriptPage() {
 
   const hasTranscript = state.partialText.length > 0 || state.finalText.length > 0;
   const isEmpty = !hasTranscript && !state.isListening && !isBusy;
+  /** A second column is only worth having once there is something to put in it. */
+  const hasResult = state.translation.length > 0;
 
   const statusLabel = isBusy
     ? t("transcript.transcribing")
@@ -142,9 +144,24 @@ export default function TranscriptPage() {
   }
 
   return (
-    // Wider than the empty state on purpose: once there is a transcript, this
-    // is the workspace, and the German is the thing being read.
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-workspace)] flex-col gap-[var(--space-5)] overflow-y-auto px-[var(--gutter)] py-[var(--space-6)]">
+    // The workspace grows with what it holds. While recording it is one focused
+    // column; once a translation exists there is genuinely a second thing to
+    // read, so on a wide screen it becomes document-and-inspector rather than a
+    // single column with everything stacked below the fold. The second column
+    // is never rendered empty - an inspector with nothing in it is just a hole.
+    <div
+      className={`mx-auto flex h-full min-h-0 w-full flex-col gap-[var(--space-5)] overflow-y-auto px-[var(--gutter)] py-[var(--space-6)] ${
+        hasResult
+          ? "max-w-[var(--container-wide)]"
+          : "max-w-[var(--container-workspace)]"
+      }`}
+    >
+      <div
+        className={`grid min-h-0 items-start gap-[var(--space-6)] ${
+          hasResult ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" : "grid-cols-1"
+        }`}
+      >
+      <div className="flex min-w-0 flex-col gap-[var(--space-5)]">
       {/* The transcript card keeps its minimum footprint, so the mic below does
           not jump upward the moment text streams in. */}
       <GlassCard
@@ -235,8 +252,11 @@ export default function TranscriptPage() {
           </p>
         )}
 
-        {state.translation.length > 0 && (
-          <div className="mt-8 w-full">
+      </div>
+      </div>
+
+        {hasResult && (
+          <aside className="mt-0 w-full min-w-0">
             <div className="flex w-full items-center justify-between">
               <h2 className="text-label-large font-semibold text-secondary">
                 {t("transcript.translation")}
@@ -279,7 +299,7 @@ export default function TranscriptPage() {
                 <span className="text-label-large font-bold">{t("transcript.save")}</span>
               </span>
             </GlassButton>
-          </div>
+          </aside>
         )}
       </div>
 
