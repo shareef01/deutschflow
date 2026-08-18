@@ -49,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={goBack}
                 aria-label={t("action.back")}
-                className="glass-button flex size-10 shrink-0 items-center justify-center text-on-surface-variant transition-all duration-200 hover:text-azure-glow hover:shadow-lg hover:shadow-azure-glow/20 active:scale-95"
+                className="glass-button flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-all duration-200 hover:text-azure-glow hover:shadow-lg hover:shadow-azure-glow/20 active:scale-95"
               >
                 <ArrowBackIcon className="size-5" />
               </button>
@@ -62,7 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => navigate(SETTINGS_ROUTE)}
                 aria-label={t("nav.settings")}
-                className="glass-button flex size-10 shrink-0 items-center justify-center text-on-surface-variant transition-all duration-200 hover:text-azure-glow hover:shadow-lg hover:shadow-azure-glow/20 active:scale-95"
+                className="glass-button flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-all duration-200 hover:text-azure-glow hover:shadow-lg hover:shadow-azure-glow/20 active:scale-95"
               >
                 <SettingsIcon className="size-5" />
               </button>

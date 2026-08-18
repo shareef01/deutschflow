@@ -164,7 +164,7 @@ function HistoryRow({
           type="button"
           onClick={onDelete}
           aria-label={t("action.delete")}
-          className="press-scale shrink-0 rounded-lg p-2.5 text-error/60 transition-all hover:bg-error/10 hover:text-error active:bg-error/20"
+          className="press-scale shrink-0 rounded-lg p-3 text-error/60 transition-all hover:bg-error/10 hover:text-error active:bg-error/20"
         >
           <DeleteIcon className="size-5" />
         </button>
