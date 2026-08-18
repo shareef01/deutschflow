@@ -44,7 +44,7 @@ export default function PracticePage() {
     feedback === "NONE" ? null : t(PRACTICE_FEEDBACK_KEYS[feedback]);
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col overflow-y-auto px-6 py-8">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-workspace)] flex-col overflow-y-auto px-[var(--gutter)] py-[var(--space-6)]">
       {/* The instruction this screen is: one quiet line, then the sentence. */}
       <p className="mb-2 w-full pl-1 text-label-large text-on-surface-variant">
         {t("practice.listenRepeat")}
