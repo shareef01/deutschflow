@@ -82,7 +82,7 @@ export default function SettingsPage() {
   const streakLabel = streak === 1 ? t("streak.day", [streak]) : t("streak.days", [streak]);
 
   return (
-    <div className="flex h-full min-h-0 w-full max-w-3xl flex-col overflow-y-auto px-4">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-reading)] flex-col overflow-y-auto px-[var(--gutter)]">
       {/* ---- AI translation ------------------------------------------------- */}
       <SectionHeader title={t("settings.aiHeader")} />
 
