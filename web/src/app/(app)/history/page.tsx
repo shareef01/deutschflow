@@ -37,7 +37,7 @@ export default function HistoryPage() {
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-wide)] flex-col px-[var(--gutter)] py-[var(--space-5)]">
-      <div className="pt-2">
+      <div className="max-w-[var(--container-reading)] pt-2">
         <SearchInput
           value={query}
           onChange={setQuery}
@@ -57,6 +57,10 @@ export default function HistoryPage() {
             {groups.map(([day, entries]) => (
               <div key={day.toISOString()} className="flex flex-col gap-3">
                 <DayLabel day={day} lang={lang} />
+                {/* One column until there is genuinely room for two. Widening
+                    the page without splitting the list just stretched every
+                    card to an unreadable measure. */}
+                <div className="grid gap-[var(--space-3)] xl:grid-cols-2">
                 {entries.map((transcript) => (
                   <HistoryRow
                     key={transcript.id}
@@ -74,6 +78,7 @@ export default function HistoryPage() {
                     t={t}
                   />
                 ))}
+                </div>
               </div>
             ))}
           </div>
