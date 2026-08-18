@@ -182,13 +182,16 @@ aria-label={t("practice.listen")}
 
       {/* Both actions are glass. Speak takes the error role only while actually
           recording (stop-the-world), and returns to the cyan edge otherwise. */}
-      <div className="mt-8 flex w-full gap-4 pb-6">
+      {/* Stacked below 480px: side by side, two labelled buttons in a 320px
+          viewport leave roughly 130px each, which is narrower than the words
+          they contain. */}
+      <div className="mt-[var(--space-6)] flex w-full flex-col gap-[var(--space-3)] pb-[var(--space-5)] xs:flex-row xs:gap-[var(--space-4)]">
         <GlassButton
           type="button"
           disabled={isProcessing}
           glow={isListening ? "error" : "azure"}
           onClick={isListening ? stopPractice : () => void startPractice()}
-          className="flex-1"
+          className="w-full xs:flex-1"
         >
           <span className="flex items-center justify-center gap-2">
             {isListening ? <StopIcon className="size-5" /> : <MicIcon className="size-5" />}
@@ -201,7 +204,7 @@ aria-label={t("practice.listen")}
             </span>
           </span>
         </GlassButton>
-        <GlassButton type="button" onClick={nextSentence} className="flex-1">
+        <GlassButton type="button" onClick={nextSentence} className="w-full xs:flex-1">
           <span className="flex items-center justify-center gap-2">
             <NavigateNextIcon className="size-5" />
             <span className="text-sm font-bold">{t("practice.next")}</span>
