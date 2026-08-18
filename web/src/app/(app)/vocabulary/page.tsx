@@ -230,7 +230,7 @@ function VocabularyListContent({
             key={mode}
             type="button"
             onClick={() => onSortChange(mode)}
-            className={`press-scale rounded-full border px-4 py-1.5 text-label-medium ${
+            className={`press-scale flex min-h-11 items-center rounded-full border px-4 text-label-medium ${
               sortMode === mode
                 ? "border-azure-glow/60 bg-secondary-container/60 text-on-secondary-container"
                 : "border-outline-variant bg-glass-fill text-on-surface-variant"
@@ -313,7 +313,7 @@ function VocabularyItem({
           type="button"
           onClick={onSpeak}
           aria-label={t("action.speak")}
-          className="press-scale shrink-0 rounded-full p-2.5 text-primary"
+          className="press-scale shrink-0 rounded-full p-3 text-primary"
         >
           <PlayArrowIcon className="size-5" />
         </button>
@@ -323,7 +323,7 @@ function VocabularyItem({
             type="button"
             onClick={() => setMenuOpen(true)}
             aria-label={t("library.moreActions")}
-            className="press-scale rounded-full p-2.5 text-on-surface-variant"
+            className="press-scale rounded-full p-3 text-on-surface-variant"
           >
             <MoreVertIcon className="size-5" />
           </button>

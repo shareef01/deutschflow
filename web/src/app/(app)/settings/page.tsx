@@ -104,7 +104,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => setIsKeyVisible((visible) => !visible)}
                 aria-label={isKeyVisible ? t("settings.hideKey") : t("settings.showKey")}
-                className="press-scale rounded-full p-2 text-on-surface-variant"
+                className="press-scale rounded-full p-3 text-on-surface-variant"
               >
                 {isKeyVisible ? (
                   <VisibilityOffIcon className="size-5" />
@@ -119,7 +119,7 @@ export default function SettingsPage() {
                 onClick={onSaveKey}
                 disabled={typedKey.trim().length === 0}
                 aria-label={t("action.save")}
-                className={`press-scale rounded-full p-2 ${
+                className={`press-scale rounded-full p-3 ${
                   typedKey.trim().length > 0 ? "text-primary" : "text-on-surface-variant/40"
                 }`}
               >
