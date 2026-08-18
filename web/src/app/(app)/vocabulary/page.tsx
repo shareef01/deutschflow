@@ -46,6 +46,8 @@ export default function VocabularyPage() {
   } = useVocabulary();
 
   const isDesktop = useHasSplitView();
+  /** With nothing saved there is no detail to show, so there is no split. */
+  const isLibraryEmpty = allVocabulary.length === 0;
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -95,15 +97,18 @@ export default function VocabularyPage() {
     <div className="flex h-full min-h-0 flex-col">
       <ErrorBanner message={ttsError} />
 
-      {isDesktop ? (
-        <div className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1">
+      {isDesktop && !isLibraryEmpty ? (
+        // A proportional split with a floor, not a blind 50/50: the list needs a
+        // minimum before it is worth showing beside anything, and past that the
+        // detail pane takes the larger share because it holds the reading.
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(22rem,0.9fr)_1px_minmax(0,1.1fr)]">
+          <div className="min-w-0">
             <VocabularyListContent {...listProps} />
           </div>
           {/* The same azure hairline the navigation bar uses for its divider:
               the one divider language in the app. */}
-          <div className="w-px shrink-0 self-stretch bg-[rgba(0,229,255,0.15)]" />
-          <div className="min-w-0 flex-1">
+          <div className="self-stretch bg-[rgba(0,229,255,0.15)]" />
+          <div className="min-w-0">
             <VocabularyDetail
               item={selectedItem}
               exampleSentence={exampleSentence}
@@ -113,6 +118,11 @@ export default function VocabularyPage() {
             />
           </div>
         </div>
+      ) : isLibraryEmpty ? (
+        // Nothing saved yet: the whole content area answers what to do next.
+        // Splitting the screen to put "select a word" beside "you have no
+        // words" spends half a monitor saying the same thing twice.
+        <VocabularyListContent {...listProps} />
       ) : selectedItem ? (
         <VocabularyDetail
           item={selectedItem}
