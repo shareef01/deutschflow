@@ -54,7 +54,7 @@ export default function PracticePage() {
           one baseline. */}
       <div className="glass-surface shadow-lg shadow-azure-glow/5">
         <div className="flex items-center gap-6 p-8">
-          <p className="min-w-0 flex-1 text-3xl font-bold leading-tight text-on-surface">
+          <p lang="de" className="min-w-0 flex-1 hyphens-auto break-words text-3xl font-bold leading-tight text-on-surface">
             {wordResults.length === 0
               ? targetSentence
               : wordResults.map((result) => (

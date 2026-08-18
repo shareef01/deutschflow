@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useIsDesktop } from "@/hooks/useViewport";
+import { useHasRail } from "@/hooks/useViewport";
 import { useI18n } from "@/hooks/useI18n";
 import { SETTINGS_ROUTE, TABS, tabForRoute } from "@/lib/navigation/tabs";
 import { ArrowBackIcon, SettingsIcon } from "@/components/icons";
@@ -18,7 +18,7 @@ import { ArrowBackIcon, SettingsIcon } from "@/components/icons";
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isDesktop = useIsDesktop();
+  const isDesktop = useHasRail();
   const { t } = useI18n();
 
   const currentTab = tabForRoute(pathname);
@@ -75,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {isDesktop && !isOnSettings && (
           <nav
             aria-label="Primary"
-            className="sticky top-16 flex h-[calc(100dvh-4rem)] w-32 shrink-0 flex-col items-center justify-evenly border-r border-white/[0.06] bg-white/[0.02] backdrop-blur-xl"
+            className="sticky top-16 flex h-[calc(100dvh-4rem)] w-32 shrink-0 flex-col items-center justify-center gap-2 overflow-y-auto border-r border-white/[0.06] bg-white/[0.02] backdrop-blur-xl"
           >
             {TABS.map((tab) => {
               const selected = pathname === tab.route;
