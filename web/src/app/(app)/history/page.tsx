@@ -147,7 +147,7 @@ function HistoryRow({
     <div className="glass-surface p-5 shadow-md shadow-azure-glow/10 transition-shadow hover:shadow-lg hover:shadow-azure-glow/15">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="mt-2 line-clamp-3 text-base leading-relaxed text-on-surface">
+          <p lang="de" className="mt-2 line-clamp-3 hyphens-auto break-words text-base leading-relaxed text-on-surface">
             {transcript.fullText}
           </p>
           {/* When it happened and how much was said — metadata, quiet. */}
