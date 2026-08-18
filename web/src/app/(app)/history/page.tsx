@@ -36,7 +36,7 @@ export default function HistoryPage() {
   const groups = useMemo(() => groupByDay(transcripts), [transcripts]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col px-6 py-4">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-wide)] flex-col px-[var(--gutter)] py-[var(--space-5)]">
       <div className="pt-2">
         <SearchInput
           value={query}

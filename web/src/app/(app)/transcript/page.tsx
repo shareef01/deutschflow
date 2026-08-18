@@ -98,7 +98,7 @@ export default function TranscriptPage() {
 
   if (isEmpty) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-8">
+      <div className="mx-auto flex min-h-0 w-full max-w-[var(--container-workspace)] flex-1 flex-col items-center justify-center px-[var(--gutter)] py-[var(--space-6)]">
         {/* Which German the recogniser is listening for. */}
         <span className="flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container">
           <span className="size-2 rounded-full bg-secondary" />
@@ -142,7 +142,9 @@ export default function TranscriptPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col gap-6 overflow-y-auto px-6 py-8">
+    // Wider than the empty state on purpose: once there is a transcript, this
+    // is the workspace, and the German is the thing being read.
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-workspace)] flex-col gap-[var(--space-5)] overflow-y-auto px-[var(--gutter)] py-[var(--space-6)]">
       {/* The transcript card keeps its minimum footprint, so the mic below does
           not jump upward the moment text streams in. */}
       <GlassCard

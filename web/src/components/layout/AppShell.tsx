@@ -23,6 +23,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const currentTab = tabForRoute(pathname);
   const isOnSettings = pathname === SETTINGS_ROUTE;
+  /** The rail occupies a grid column only when it is actually rendered. */
+  const showRail = isDesktop && !isOnSettings;
   const title = isOnSettings ? t("nav.settings") : (currentTab ? t(currentTab.title) : "DeutschFlow");
 
   const goBack = () => {
@@ -40,8 +42,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Top bar — full-width, like the Android bar: a transparent bar lets
           content scroll straight through the title. */}
       <header className="sticky top-0 z-30 border-b border-azure-glow/15 bg-background/95 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
-        <div className="flex h-16 items-center">
-          <div className="flex w-full items-center gap-3 px-6">
+        <div className="flex h-[var(--header-height)] items-center">
+          <div className="flex w-full items-center gap-[var(--space-3)] px-[var(--gutter)]">
             {isOnSettings && (
               <button
                 type="button"
@@ -69,45 +71,52 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div
+        className={`grid min-h-0 flex-1 ${
+          showRail ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
+        }`}
+      >
         {/* Desktop rail — hugs the screen's left edge, like the Android
             NavigationRail; the content column is centred in what remains. */}
-        {isDesktop && !isOnSettings && (
+        {showRail && (
           <nav
             aria-label="Primary"
-            className="sticky top-16 flex h-[calc(100dvh-4rem)] w-32 shrink-0 flex-col items-center justify-center gap-2 overflow-y-auto border-r border-white/[0.06] bg-white/[0.02] backdrop-blur-xl"
+            className="sticky top-[var(--header-height)] flex h-[calc(100dvh-var(--header-height))] w-[var(--nav-rail-width)] shrink-0 flex-col gap-[var(--space-1)] overflow-y-auto border-r border-white/[0.06] bg-white/[0.02] px-[var(--space-3)] py-[var(--space-5)] backdrop-blur-xl"
           >
             {TABS.map((tab) => {
               const selected = pathname === tab.route;
               const label = t(tab.title);
               return (
+                // Label beside the icon, one consistent 44px row. The vertical
+                // icon-over-label tile was shaped for a 128px column and made
+                // each destination as tall as a card, which is what spread the
+                // five of them down the whole screen. The active state is a
+                // filled row plus an edge marker rather than a heavy pill, so
+                // it reads at a glance without shouting.
                 <button
                   key={tab.route}
                   type="button"
                   onClick={() => navigate(tab.route)}
                   aria-current={selected ? "page" : undefined}
-                  className={`relative flex w-28 flex-col items-center gap-2 rounded-3xl px-3 py-3 transition-[background-color,transform] duration-200 active:scale-[0.97] ${
-                    selected ? "" : "hover:bg-white/[0.05] active:bg-white/[0.1]"
+                  className={`group relative flex h-11 w-full items-center gap-[var(--space-3)] rounded-xl px-[var(--space-3)] text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow ${
+                    selected
+                      ? "bg-azure-glow/10 text-on-surface"
+                      : "text-on-surface-variant hover:bg-white/[0.05] hover:text-on-surface"
                   }`}
                 >
+                  {/* Not colour alone: the selected row carries a marker. */}
                   <span
-                    className={`flex size-12 items-center justify-center ${
-                      selected ? "glass-nav-active shadow-lg shadow-azure-glow/10" : ""
+                    aria-hidden="true"
+                    className={`absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-azure-glow transition-opacity duration-150 ${
+                      selected ? "opacity-100" : "opacity-0"
                     }`}
-                  >
-                    <tab.icon
-                      className={`size-6 transition-colors duration-200 ${
-                        selected ? "text-azure-glow" : "text-on-surface-variant"
-                      }`}
-                    />
-                  </span>
-                  <span
-                    className={`max-w-full truncate text-xs font-bold leading-none transition-colors duration-200 ${
-                      selected ? "text-on-surface" : "text-on-surface-variant"
+                  />
+                  <tab.icon
+                    className={`size-5 shrink-0 transition-colors duration-150 ${
+                      selected ? "text-azure-glow" : "text-current"
                     }`}
-                  >
-                    {label}
-                  </span>
+                  />
+                  <span className="min-w-0 truncate text-label-large">{label}</span>
                 </button>
               );
             })}
@@ -116,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {/* The content column — left-aligned to match the title; the max width
             the cards may use. */}
-        <div className="flex w-full max-w-6xl min-w-0 min-h-0 flex-1 flex-col">
+        <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col">
           <main
             className={`flex min-w-0 min-h-0 flex-1 flex-col ${
               !isDesktop && !isOnSettings ? "pb-[calc(6rem+env(safe-area-inset-bottom))]" : ""

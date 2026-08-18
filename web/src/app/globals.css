@@ -69,24 +69,81 @@
   --color-surface-container-high: #18202f;
   --color-surface-container-highest: #1e2739;
 
+  /* ---- Spacing -----------------------------------------------------------
+     One 4px-based ramp. Before this the pages used whatever number looked
+     right — px-4, px-6, py-8, py-4 and nothing at all, one per screen — which
+     is why no two pages started their content at the same place. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ---- Container widths --------------------------------------------------
+     The measure a kind of content wants, named by what it holds rather than
+     by a number, so a page asks for "reading width" instead of inventing
+     max-w-3xl. `wide` is for list and split layouts that genuinely use the
+     room; `reading` keeps prose near 70 characters however big the monitor.
+
+     These replace a ceiling that did not move: every screen was pinned to
+     1152px (or 768px on top of that), so a 2560px monitor showed the same
+     column a 1366px laptop did — 70% of the screen unused on Settings. */
+  --container-reading: 46rem;   /* 736px — settings, prose, forms      */
+  --container-workspace: 64rem; /* 1024px — transcript, study, practice */
+  --container-wide: 90rem;      /* 1440px — history, library, split views */
+
+  /* ---- Shell dimensions --------------------------------------------------
+     The rail was w-32 (128px) with labels under icons; 240px lets the label
+     sit beside the icon, which is the shape a navigation column wants. */
+  --nav-rail-width: 15rem;      /* 240px */
+  --nav-bar-height: 4rem;       /* 64px — mobile bottom bar */
+  --header-height: 4rem;
+
+  /* Gutters grow with the viewport instead of being set per page. */
+  --gutter: clamp(1rem, 2.5vw, 3rem);
+
+  /* ---- Elevation ---------------------------------------------------------
+     Two steps only. Surfaces separate by value and a hairline edge; shadow is
+     for things that genuinely float. */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.28);
+  --shadow-raised: 0 6px 20px -8px rgb(0 0 0 / 0.55);
+
+  /* ---- Breakpoints -------------------------------------------------------
+     Named so the JS layout hooks and the CSS agree on where the seams are.
+     640 phone→large phone, 768 bottom bar→rail, 1024 single→split,
+     1440 comfortable→wide. */
+  --breakpoint-xs: 30rem;   /* 480 */
+  --breakpoint-sm: 40rem;   /* 640 */
+  --breakpoint-md: 48rem;   /* 768 */
+  --breakpoint-lg: 64rem;   /* 1024 */
+  --breakpoint-xl: 90rem;   /* 1440 */
+
   /* ---- Typography (Type.kt: calm premium hierarchy — weights step down with
         size, generous line heights, no negative tracking. The learning
         material renders at the top of the scale; UI labels at the bottom) --- */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  --text-headline-large: 30px;
-  --text-headline-large--line-height: 38px;
-  --text-headline-large--letter-spacing: 0px;
+  /* The three headline sizes are fluid; everything below them is not.
+     Learning material and page titles should grow with the workspace, while
+     labels, body copy and controls stay at the size they were designed at —
+     scaling a 13px label by viewport makes it either illegible or absurd. The
+     lower bound is the old fixed value, so nothing shrinks on a phone. */
+  --text-headline-large: clamp(30px, 1.4vw + 1.4rem, 40px);
+  --text-headline-large--line-height: 1.24;
+  --text-headline-large--letter-spacing: -0.2px;
   --text-headline-large--font-weight: 700;
 
-  --text-headline-medium: 26px;
-  --text-headline-medium--line-height: 34px;
-  --text-headline-medium--letter-spacing: 0px;
+  --text-headline-medium: clamp(26px, 1vw + 1.3rem, 34px);
+  --text-headline-medium--line-height: 1.28;
+  --text-headline-medium--letter-spacing: -0.1px;
   --text-headline-medium--font-weight: 700;
 
-  --text-headline-small: 22px;
-  --text-headline-small--line-height: 30px;
+  --text-headline-small: clamp(22px, 0.6vw + 1.2rem, 27px);
+  --text-headline-small--line-height: 1.34;
   --text-headline-small--letter-spacing: 0px;
   --text-headline-small--font-weight: 700;
 
