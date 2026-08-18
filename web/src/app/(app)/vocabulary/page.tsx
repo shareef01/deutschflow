@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useVocabulary } from "@/hooks/useVocabulary";
-import { useIsDesktop } from "@/hooks/useViewport";
+import { useHasSplitView } from "@/hooks/useViewport";
 import { useBackHandler } from "@/hooks/useBackHandler";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -45,7 +45,7 @@ export default function VocabularyPage() {
     speak,
   } = useVocabulary();
 
-  const isDesktop = useIsDesktop();
+  const isDesktop = useHasSplitView();
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -293,7 +293,7 @@ function VocabularyItem({
           middle of it. */}
       <div className="flex items-start gap-1 p-2 pl-4">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 pr-2 text-left">
-          <p className="line-clamp-3 text-title-medium text-primary">{item.germanText}</p>
+          <p lang="de" className="line-clamp-3 hyphens-auto break-words text-title-medium text-primary">{item.germanText}</p>
           <p className="mt-1 line-clamp-2 text-body-medium text-on-surface-variant">
             {item.englishTranslation}
           </p>
@@ -390,7 +390,7 @@ function VocabularyDetail({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           {/* headlineMedium, not display: entries are whole sentences here. */}
-          <h2 className="text-headline-medium text-primary">{item.germanText}</h2>
+          <h2 lang="de" className="hyphens-auto break-words text-headline-medium text-primary">{item.germanText}</h2>
           {grammar && (
             <p className="mt-1 text-label-large text-on-surface-variant">{grammar}</p>
           )}
