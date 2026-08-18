@@ -130,11 +130,13 @@ export default function StudyPage() {
           the XP award (once per card, per session). The spaced-repetition
           scheduler that would steer WHEN a card returns is not implemented yet
           — the UI is shaped for it, nothing pretends it already remembers. */}
-      <div className="mt-8 flex w-full max-w-2xl gap-3">
-        <GlassButton type="button" glow="error" onClick={nextCard} className="flex-1">
+      {/* Four grades across a 320px screen give each about 70px, which cannot
+          hold its label. Two-by-two first, one row once there is room. */}
+      <div className="mt-[var(--space-6)] grid w-full max-w-2xl grid-cols-2 gap-[var(--space-3)] sm:grid-cols-4">
+        <GlassButton type="button" glow="error" onClick={nextCard} className="w-full">
           <span className="text-sm font-bold">{t("study.again")}</span>
         </GlassButton>
-        <GlassButton type="button" glow="amber" onClick={nextCard} className="flex-1">
+        <GlassButton type="button" glow="amber" onClick={nextCard} className="w-full">
           <span className="text-sm font-bold">{t("study.hard")}</span>
         </GlassButton>
         <GlassButton
@@ -143,7 +145,7 @@ export default function StudyPage() {
             rewardCurrentCard();
             nextCard();
           }}
-          className="flex-1"
+          className="w-full"
         >
           <span className="text-sm font-bold">{t("study.good")}</span>
         </GlassButton>
@@ -154,7 +156,7 @@ export default function StudyPage() {
             rewardCurrentCard();
             nextCard();
           }}
-          className="flex-1"
+          className="w-full"
         >
           <span className="text-sm font-bold">{t("study.easy")}</span>
         </GlassButton>
