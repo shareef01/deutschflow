@@ -216,6 +216,43 @@
 }
 
 /* ============================================================================
+   Focus and motion — applied once, globally, rather than per component.
+
+   Fewer than half the buttons in the app carried a focus style, so keyboard
+   users lost their place on most screens. `:where()` keeps the specificity at
+   zero, so any component that wants its own ring still wins without needing
+   !important.
+   ========================================================================== */
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-azure-glow);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 6px);
+}
+
+/* The mouse should not get the keyboard's ring. */
+:where(a, button, [role="button"]):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/*
+   The app animates: a pulsing record dot, a breathing microphone, a card flip,
+   a waveform. For a reader with vestibular sensitivity that is not decoration,
+   it is a symptom trigger — and the app honoured no such preference at all.
+   Motion is reduced to effectively nothing rather than removed, so anything
+   that depends on a transition still fires its end event.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
    Surface utilities — the one treatment every card and input shares.
    Compose equivalent: Modifier.glassSurface() + glassBorderBrush() in
    ui/theme/Obsidian.kt and ui/components/GlassComponents.kt.
