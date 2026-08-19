@@ -12,11 +12,41 @@ for (const route of ROUTES) {
   test(`route ${route} loads`, async ({ page }) => {
     const response = await page.goto(route);
     expect(response?.status()).toBe(200);
+    // The URL, first. These assertions used to be satisfied by the login page -
+    // it has an h1 and the same background - so all five passed while the app
+    // was never reached. Anything that can be true on /login proves nothing.
+    expect(new URL(page.url()).pathname).toBe(route);
+    await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
     await expect(page.locator("h1")).toBeVisible();
     // The app shell (the glass surface language) renders behind every screen.
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(10, 14, 22)");
   });
 }
+
+test.describe("the access gate", () => {
+  // No session: the point of these two.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("sends an unauthenticated visitor to the login page", async ({ page }) => {
+    await page.goto("/transcript");
+
+    expect(new URL(page.url()).pathname).toBe("/login");
+    // The destination is preserved for the redirect back.
+    expect(new URL(page.url()).searchParams.get("from")).toBe("/transcript");
+    await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
+  });
+
+  test("refuses a forged cookie", async ({ page, context }) => {
+    // The old gate admitted this exact value; the signature is what stops it now.
+    await context.addCookies([
+      { name: "df_access", value: "granted", domain: "localhost", path: "/" },
+    ]);
+
+    await page.goto("/transcript");
+
+    expect(new URL(page.url()).pathname).toBe("/login");
+  });
+});
 
 test("bottom bar below 768px, rail at and above 768px", async ({ page }) => {
   await page.setViewportSize({ width: 400, height: 800 });
