@@ -25,6 +25,8 @@ import com.aus.deutschflow.ui.components.SegmentTab
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.GlassButton
+import com.aus.deutschflow.ui.theme.motionDuration
+import com.aus.deutschflow.ui.theme.Motion
 import com.aus.deutschflow.ui.theme.AzureDeep
 import com.aus.deutschflow.ui.theme.OnSurfaceMuted
 import com.aus.deutschflow.ui.theme.Spacing
@@ -146,7 +148,7 @@ fun StudySessionContent(viewModel: StudyViewModel) {
 
         val rotation by animateFloatAsState(
             targetValue = if (isFlipped) 180f else 0f,
-            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+            animationSpec = tween(durationMillis = motionDuration(Motion.DELIBERATE), easing = FastOutSlowInEasing),
             label = "cardFlip"
         )
 

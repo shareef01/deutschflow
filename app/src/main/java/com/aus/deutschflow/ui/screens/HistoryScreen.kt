@@ -50,6 +50,8 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.SearchInput
+import com.aus.deutschflow.ui.theme.motionDuration
+import com.aus.deutschflow.ui.theme.Motion
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
@@ -106,9 +108,11 @@ fun HistoryScreen(
             Spacer(modifier = Modifier.height(Spacing.md))
         }
 
+        // Hoisted: a transitionSpec lambda is not a composable scope.
+        val fade = motionDuration(Motion.STANDARD)
         AnimatedContent(
             targetState = history.isEmpty(),
-            transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+            transitionSpec = { fadeIn(tween(fade)) togetherWith fadeOut(tween(fade)) },
             label = "historyContent"
         ) { isEmpty ->
             if (isEmpty) {

@@ -27,6 +27,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.aus.deutschflow.ui.theme.motionDuration
+import com.aus.deutschflow.ui.theme.Motion
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.screens.*
 
@@ -62,6 +64,10 @@ fun MainNavigation(
     // visible. Without it the bar and the ground were the same value, and content
     // scrolling under the title simply appeared to be sliced in half.
     val topBarScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
+    // Hoisted: enter/exit transition lambdas are not composable scopes.
+    val navEnter = motionDuration(Motion.STANDARD)
+    val navExit = motionDuration(Motion.STANDARD)
 
     Scaffold(
         modifier = Modifier
@@ -223,10 +229,10 @@ fun MainNavigation(
                 startDestination = Screen.Transcript.route,
                 modifier = Modifier.fillMaxSize(),
                 enterTransition = {
-                    fadeIn(animationSpec = tween(400)) + scaleIn(initialScale = 0.98f)
+                    fadeIn(animationSpec = tween(navEnter)) + scaleIn(initialScale = 0.98f)
                 },
                 exitTransition = {
-                    fadeOut(animationSpec = tween(300))
+                    fadeOut(animationSpec = tween(navExit))
                 }
             ) {
                 composable(Screen.Transcript.route) { TranscriptScreen(hiltViewModel()) }
