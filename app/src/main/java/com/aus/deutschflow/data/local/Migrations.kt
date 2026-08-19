@@ -177,6 +177,83 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
 }
 
 /**
+ * Adds Spaced Repetition (SRS) fields to the vocabulary table.
+ *
+ * This enables the "Ebbinghaus" engine, tracking nextReview (timestamp), interval
+ * (days), easeFactor (float) and reviewCount (int).
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN nextReview INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN interval INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN easeFactor REAL NOT NULL DEFAULT 2.5")
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN reviewCount INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_vocabulary_nextReview` ON `vocabulary` (`nextReview`)")
+    }
+}
+
+/**
+ * Adds linguistic fields: synonyms and antonyms.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN synonyms TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN antonyms TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+/**
+ * Adds the activity_log table for the Mastery Dashboard.
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `activity_log` (" +
+                "`date` TEXT NOT NULL, " +
+                "`xpGained` INTEGER NOT NULL, " +
+                "`timestamp` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`date`))"
+        )
+    }
+}
+
+/**
+ * Adds cloud sync fields: remoteId and lastModifiedAt.
+ */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN remoteId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN lastModifiedAt INTEGER NOT NULL DEFAULT 0")
+        
+        db.execSQL("ALTER TABLE transcripts ADD COLUMN remoteId TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE transcripts ADD COLUMN lastModifiedAt INTEGER NOT NULL DEFAULT 0")
+        
+        // Existing rows need both, not just the timestamp. Leaving remoteId at
+        // its SQL default of '' would have given every record that predates this
+        // migration - which is all of them, and the ones most worth syncing - no
+        // cross-device identity at all, while the entity's Kotlin default mints a
+        // fresh UUID for everything saved afterwards.
+        val now = System.currentTimeMillis()
+        db.execSQL("UPDATE vocabulary SET lastModifiedAt = $now, remoteId = $UUID_V4")
+        db.execSQL("UPDATE transcripts SET lastModifiedAt = $now, remoteId = $UUID_V4")
+    }
+}
+
+/**
+ * A version-4 UUID built out of SQLite's own randomness, as a SQL expression.
+ *
+ * `randomblob` is re-evaluated per row, so an UPDATE over the whole table gives
+ * each row its own id rather than one shared value. The literal `4` and the
+ * `[89ab]` pick are the version and variant nibbles the format requires; the rest
+ * is random. Matches `UUID.randomUUID().toString()` in shape and case.
+ */
+private const val UUID_V4 =
+    "lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || " +
+        "substr(hex(randomblob(2)), 2) || '-' || " +
+        "substr('89ab', abs(random()) % 4 + 1, 1) || " +
+        "substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6)))"
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -191,4 +268,4 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
  * would therefore be untestable and unreachable, not a missing safety net.
  */
 val MIGRATIONS =
-    arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)

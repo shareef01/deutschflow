@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.components.EmptyState
@@ -52,15 +53,9 @@ fun VocabularyDetailScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.germanText,
-                    // headlineMedium, not displaySmall/Black: entries are whole
-                    // sentences here, not the single words the size assumed. On the
-                    // ground colour, not primary: the German is the content being
-                    // read, and the accent is reserved for actions.
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                // The grammatical facts the single-word interrogation captured, for
-                // entries that have them; hand-typed words leave this line empty.
                 val grammar = listOfNotNull(
                     item.article.takeIf { it.isNotBlank() && it != "none" },
                     item.plural.takeIf { it.isNotBlank() },
@@ -81,10 +76,6 @@ fun VocabularyDetailScreen(
                 )
             }
 
-            // The same control the Practice screen uses to speak its sentence: one
-            // component, one size, one colour pair for "hear this aloud". This used
-            // to be a LargeFloatingActionButton, which made a playback control out
-            // of the component reserved for the one thing that creates content.
             FilledTonalIconButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -108,6 +99,27 @@ fun VocabularyDetailScreen(
 
         Spacer(modifier = Modifier.height(Spacing.xl))
 
+        // Deep Interrogation: Linguistic Web
+        Text(
+            text = stringResource(R.string.detail_linguistic_connections),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 1.2.sp
+        )
+        
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = Spacing.sm),
+            color = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            LinguisticBox(Modifier.weight(1f), stringResource(R.string.detail_synonyms), item.synonyms)
+            LinguisticBox(Modifier.weight(1f), stringResource(R.string.detail_antonyms), item.antonyms)
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.lg))
+
         // Context / Examples Section
         Text(
             text = stringResource(R.string.detail_context),
@@ -121,8 +133,6 @@ fun VocabularyDetailScreen(
             color = MaterialTheme.colorScheme.surfaceVariant
         )
 
-        // Glass, like every other content surface: the example is a piece of
-        // content, not an input, and this was the one content card still solid.
         Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
             Column(modifier = Modifier.padding(Spacing.lg)) {
                 Text(
@@ -134,8 +144,6 @@ fun VocabularyDetailScreen(
                 Spacer(modifier = Modifier.height(Spacing.sm))
                 Text(
                     text = exampleSentence,
-                    // The type scale's own line height: a hand-set 26sp was the one
-                    // place in the app where a body text disagreed with the scale.
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -143,7 +151,6 @@ fun VocabularyDetailScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Navigation Action
         GlassButton(
             onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -155,6 +162,25 @@ fun VocabularyDetailScreen(
                 text = stringResource(R.string.detail_back),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun LinguisticBox(modifier: Modifier, title: String, content: String) {
+    Box(
+        modifier = modifier
+            .glassSurface(shape = MaterialTheme.shapes.medium)
+            .padding(Spacing.md)
+    ) {
+        Column {
+            Text(text = title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = content.ifBlank { "-" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (content.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
             )
         }
     }

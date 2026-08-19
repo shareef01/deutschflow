@@ -14,14 +14,6 @@ import { Snackbar } from "@/components/ui/Snackbar";
 import { AudioWaveform } from "@/components/ui/AudioWaveform";
 import { BookmarkAddIcon, ContentCopyIcon, MicIcon, StopIcon } from "@/components/icons";
 
-/**
- * TranscriptScreen — the core screen, three states:
- * - EMPTY: what will happen, which German the app listens for, and the mic.
- * - RECORDING: the transcript card streams the partial text, a live waveform
- *   and a recording clock make "it is listening" obvious.
- * - RESULT: the German dominates; the translation, the tappable vocabulary and
- *   the one Save action follow below it.
- */
 export default function TranscriptPage() {
   const { t } = useI18n();
   const {
@@ -42,7 +34,6 @@ export default function TranscriptPage() {
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const snackbarTimer = useRef<number | null>(null);
 
-  // The recording clock, in the screen's own time. Restarted per session.
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   useEffect(() => {
     if (!state.isListening) return;
@@ -63,23 +54,17 @@ export default function TranscriptPage() {
     snackbarTimer.current = window.setTimeout(() => setSnackbar(null), 3_000);
   };
 
-  // A failed interrogation surfaces through the same snackbar as a save — the
-  // recording banner has nothing to do with it.
   useEffect(() => {
     if (state.wordDetailError) {
       showSnackbar(state.wordDetailError);
       dismissWordDetailError(state.wordDetailError);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.wordDetailError]);
+  }, [state.wordDetailError, dismissWordDetailError]);
 
-  // OnLeavingScreen: navigating to another tab unmounts this page, which is
-  // what cancels a recording in flight — half a sentence must not be filed.
   useEffect(() => () => cancelListening(), [cancelListening]);
 
   const hasTranscript = state.partialText.length > 0 || state.finalText.length > 0;
   const isEmpty = !hasTranscript && !state.isListening && !isBusy;
-  /** A second column is only worth having once there is something to put in it. */
   const hasResult = state.translation.length > 0;
 
   const statusLabel = isBusy
@@ -101,7 +86,6 @@ export default function TranscriptPage() {
   if (isEmpty) {
     return (
       <div className="mx-auto flex min-h-0 w-full max-w-[var(--container-workspace)] flex-1 flex-col items-center justify-center px-[var(--gutter)] py-[var(--space-6)]">
-        {/* Which German the recogniser is listening for. */}
         <span className="flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container">
           <span className="size-2 rounded-full bg-secondary" />
           {t("transcript.language", [selectedDialect])}
@@ -144,11 +128,6 @@ export default function TranscriptPage() {
   }
 
   return (
-    // The workspace grows with what it holds. While recording it is one focused
-    // column; once a translation exists there is genuinely a second thing to
-    // read, so on a wide screen it becomes document-and-inspector rather than a
-    // single column with everything stacked below the fold. The second column
-    // is never rendered empty - an inspector with nothing in it is just a hole.
     <div
       className={`mx-auto flex h-full min-h-0 w-full flex-col gap-[var(--space-5)] overflow-y-auto px-[var(--gutter)] py-[var(--space-6)] ${
         hasResult
@@ -162,8 +141,6 @@ export default function TranscriptPage() {
         }`}
       >
       <div className="flex min-w-0 flex-col gap-[var(--space-5)]">
-      {/* The transcript card keeps its minimum footprint, so the mic below does
-          not jump upward the moment text streams in. */}
       <GlassCard
         contentPadding="p-8"
         className={`min-h-[180px] shadow-lg shadow-azure-glow/10 ${
@@ -171,12 +148,6 @@ export default function TranscriptPage() {
         }`}
       >
         <div
-          // The one thing this screen exists to produce. Without a live region a
-          // screen-reader user speaks, the words appear, and nothing is said —
-          // the result has to be hunted for by tabbing. `polite` so it follows
-          // the reader rather than interrupting, and on the container rather
-          // than the <p> so the settled transcript is announced once instead of
-          // on every partial-result frame.
           role="status"
           aria-live="polite"
           className="flex w-full items-start gap-3"
@@ -219,8 +190,6 @@ export default function TranscriptPage() {
         )}
       </GlassCard>
 
-      {/* Everything below the transcript shares what the card leaves, and
-          scrolls once a translation arrives. */}
       <div className="flex flex-1 flex-col items-center justify-center pb-6">
         <ErrorBanner message={state.errorState} />
 
@@ -251,8 +220,33 @@ export default function TranscriptPage() {
             {statusLabel}
           </p>
         )}
-
       </div>
+
+      {/* Grammar Spotlight Section */}
+      {hasResult && state.grammarNotes.length > 0 && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
+              <h2 className="text-[10px] font-black tracking-[0.25em] text-primary uppercase pl-1">
+                  Grammar Spotlight
+              </h2>
+              <div className="flex flex-col gap-3">
+                  {state.grammarNotes.map((note, i) => (
+                      <div key={i} className="glass-surface p-4 border-l-4 border-primary/40">
+                          <div className="flex items-center gap-3">
+                              <span className="bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                  {note.case}
+                              </span>
+                              <span className="text-sm font-bold text-on-surface">{note.phrase}</span>
+                          </div>
+                          {note.explanation && (
+                              <p className="mt-2 text-xs text-on-surface-variant leading-relaxed">
+                                  {note.explanation}
+                              </p>
+                          )}
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
       </div>
 
         {hasResult && (
@@ -293,10 +287,10 @@ export default function TranscriptPage() {
               </>
             )}
 
-            <GlassButton type="button" onClick={onSave} className="mt-8 w-full">
+            <GlassButton type="button" onClick={onSave} className="mt-8 w-full h-14">
               <span className="flex items-center justify-center gap-2">
                 <BookmarkAddIcon className="size-5" />
-                <span className="text-label-large font-bold">{t("transcript.save")}</span>
+                <span className="text-label-large font-bold">Save to Library</span>
               </span>
             </GlassButton>
           </aside>

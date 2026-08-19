@@ -9,6 +9,7 @@ import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.AIResult
+import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import com.aus.deutschflow.service.WordDetails
@@ -62,6 +63,9 @@ class TranscriptViewModel @Inject constructor(
 
     private val _suggestedWords = MutableStateFlow<List<String>>(emptyList())
     val suggestedWords: StateFlow<List<String>> = _suggestedWords
+
+    private val _grammarNotes = MutableStateFlow<List<GrammarNote>>(emptyList())
+    val grammarNotes: StateFlow<List<GrammarNote>> = _grammarNotes
 
     /**
      * The model's example for the current utterance, kept so that saving can store it.
@@ -143,6 +147,7 @@ class TranscriptViewModel @Inject constructor(
                     _translation.value = result.translation
                     _suggestedWords.value = result.keywords
                     _example.value = result.example
+                    _grammarNotes.value = result.grammarNotes
                 }
                 is AIResult.Failure -> {
                     // Never let a failure reach the translation field: the Save button
@@ -262,7 +267,12 @@ class TranscriptViewModel @Inject constructor(
                     exampleSentence = details.exampleSentence,
                     article = details.article,
                     plural = details.plural,
-                    conjugation = details.conjugationOrInfinitive
+                    conjugation = details.conjugationOrInfinitive,
+                    // Comma-joined, the shape LinguisticBox on the detail screen
+                    // renders. Without these two the whole chain — prompt, parser,
+                    // MIGRATION_8_9, the two boxes — ended in a value nothing wrote.
+                    synonyms = details.synonyms.joinToString(", "),
+                    antonyms = details.antonyms.joinToString(", ")
                 )
             )
             widgetUpdater.refresh()

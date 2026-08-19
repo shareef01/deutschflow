@@ -5,20 +5,25 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -27,48 +32,76 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
-import com.aus.deutschflow.ui.components.AudioWaveform
-import com.aus.deutschflow.ui.components.ErrorBanner
-import com.aus.deutschflow.ui.components.GlassButton
-import com.aus.deutschflow.ui.components.GlassmorphicCard
-import com.aus.deutschflow.ui.components.OnLeavingScreen
-import com.aus.deutschflow.ui.theme.AzureGlow
-import com.aus.deutschflow.ui.theme.PillShape
-import com.aus.deutschflow.ui.theme.Spacing
-import com.aus.deutschflow.ui.theme.WarningAmber
-import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
+import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PracticeScreen(
+    viewModel: PracticeViewModel = viewModel(),
+    roleplayViewModel: RoleplayViewModel = viewModel()
+) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val haptic = LocalHapticFeedback.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        PrimaryTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            divider = {}
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    selectedTab = 0 
+                },
+                text = { Text(stringResource(R.string.practice_tab), style = MaterialTheme.typography.labelLarge) }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    selectedTab = 1 
+                },
+                text = { Text(stringResource(R.string.roleplay_tab), style = MaterialTheme.typography.labelLarge) }
+            )
+        }
+
+        Box(modifier = Modifier.weight(1f)) {
+            if (selectedTab == 0) {
+                ShadowingMode(viewModel)
+            } else {
+                RoleplayScreen(viewModel = roleplayViewModel)
+            }
+        }
+    }
+}
 
 @Composable
-fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
+fun ShadowingMode(viewModel: PracticeViewModel) {
     val targetSentence by viewModel.targetSentence.collectAsState()
     val feedback by viewModel.feedback.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
-    val isProcessing by viewModel.isProcessing.collectAsState()
     val spokenText by viewModel.finalText.collectAsState()
     val wordResults by viewModel.wordResults.collectAsState()
     val errorState by viewModel.errorState.collectAsState()
-    val partialText by viewModel.partialText.collectAsState()
-
-    // RMS is drawn, not composed: the recogniser emits many samples a second, so the
-    // level is folded into a MutableFloatState and read inside the waveform's Canvas,
-    // where a change invalidates only the draw pass - never a recomposition.
-    val amplitude = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(viewModel) {
-        viewModel.rmsLevel.collect { amplitude.floatValue = it }
-    }
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    // The level decides the colour; the resource decides the words. Deciding the
-    // colour from the words is what broke the moment they were translated.
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val gradientBrush = Brush.linearGradient(
+        colors = listOf(Color(0xFF00E5FF), primaryColor)
+    )
+
     val isPositive = feedback == PracticeFeedback.PERFECT
     val feedbackText = when (feedback) {
         PracticeFeedback.NONE -> null
@@ -77,74 +110,58 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
         PracticeFeedback.KEEP_GOING -> stringResource(R.string.practice_feedback_keep_going)
     }
 
-    // Permission Mandate: Runtime Authorization
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
             viewModel.startPractice()
-        } else {
-            // Android stops showing this dialog after the second refusal, so without
-            // an answer here the Speak button is a control that does nothing, forever,
-            // and never says why.
-            viewModel.onPermissionDenied()
         }
     }
-
-    // Without this the recognizer keeps the microphone open after the user moves to
-    // another tab: this screen's ViewModel is kept alive by the saved back stack entry.
-    LaunchedEffect(Unit) { viewModel.dismissTtsError() }
-
-    OnLeavingScreen { viewModel.cancelListening() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(Spacing.md)
-            .imePadding(),
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(Spacing.sm))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // The hero, anchored to the top rather than floated in the middle.
-        //
-        // This column used to be centred in the space left over, which put the one
-        // thing the screen is about between two large voids. Centring was itself a fix
-        // for the sentence being pinned above an empty half-screen, so the emptiness
-        // had only moved: the real problem was that nothing owned the space
-        // underneath. Something does now - see the result region below.
-        // The instruction this screen is: one quiet line, then the sentence itself.
         Text(
-            text = stringResource(R.string.practice_listen_repeat),
-            style = MaterialTheme.typography.labelLarge,
+            text = stringResource(R.string.practice_intro),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(start = Spacing.xs, bottom = Spacing.sm)
+            textAlign = TextAlign.Center
         )
 
-        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
-            // The sentence and its Speak control on one baseline. The control used to
-            // be a full-width tonal bar stacked underneath, which added a second
-            // horizontal band to a card that only holds one idea - and it carried
-            // primary blue on a 40%-alpha primaryContainer, which composites to blue
-            // on blue and was effectively unreadable.
-            Row(
-                modifier = Modifier.padding(Spacing.lg),
-                verticalAlignment = Alignment.CenterVertically
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 6.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // headlineSmall: the target is a whole sentence, and at
-                // headlineMedium/Black it filled the card and shouted over everything
-                // else on the screen.
-                val textStyle = MaterialTheme.typography.headlineSmall
+                val textStyle = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    shadow = Shadow(
+                        color = Color.Black.copy(alpha = 0.3f),
+                        offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                        blurRadius = 4f
+                    )
+                )
 
                 if (wordResults.isEmpty()) {
                     Text(
                         text = targetSentence,
                         style = textStyle,
-                        // onSurface, not primary. The sentence is the content of the
-                        // card, not an accent in it, and brand blue on the container
-                        // left it sitting back instead of reading first.
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 } else {
                     val annotatedString = buildAnnotatedString {
@@ -160,217 +177,119 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                     Text(
                         text = annotatedString,
                         style = textStyle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-
-                Spacer(modifier = Modifier.width(Spacing.md))
-
-                // A container/on-container pair, so the glyph is guaranteed legible
-                // against whatever sits behind it.
-                FilledTonalIconButton(
-                    onClick = {
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                FilledTonalButton(
+                    onClick = { 
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.speak(targetSentence)
+                        viewModel.speak(targetSentence) 
                     },
-                    modifier = Modifier.size(56.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                        contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = stringResource(R.string.practice_listen),
-                        modifier = Modifier.size(28.dp)
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        stringResource(R.string.practice_listen_repeat),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.md))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        ErrorBanner(errorState)
-
-        // The result region: one glass card that owns the space between the hero and
-        // the actions, so the middle of the screen is never a void to balance around.
-        // It carries the live waveform while recording, the instruction before the
-        // first attempt, the spinner while the answer is in flight, and the verdict +
-        // what was heard after one.
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(top = Spacing.lg),
-            contentAlignment = Alignment.TopCenter
+        AnimatedVisibility(
+            visible = errorState != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
         ) {
-            GlassmorphicCard(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(Spacing.md)
+            Row(
+                modifier = Modifier
+                    .padding(bottom = 16.dp)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                when {
-                    isListening -> {
-                        // The live speech: what the engine has heard so far, above the
-                        // meter that traces the input level.
-                        if (partialText.isNotBlank()) {
-                            Text(
-                                text = partialText,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Center,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(modifier = Modifier.height(Spacing.sm))
-                        }
-                        AudioWaveform(
-                            amplitude = amplitude,
-                            isActive = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                        )
-                    }
+                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = errorState ?: "",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
-                    isProcessing -> Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 96.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(36.dp),
-                            strokeWidth = 3.dp
-                        )
-                    }
+        AnimatedVisibility(
+            visible = feedbackText != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
+                        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, if (isPositive) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = feedbackText ?: "",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = if (isPositive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
 
-                    spokenText.isEmpty() -> Text(
-                        text = stringResource(R.string.practice_intro),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth().height(160.dp),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        ) {
+            Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                AnimatedContent(
+                    targetState = spokenText,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "spokenTextAnim"
+                ) { text ->
+                    Text(
+                        text = text.ifEmpty { "Waiting for your speech..." },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (text.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = Spacing.lg)
+                        lineHeight = 26.sp
                     )
-
-                    else -> Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (feedback != PracticeFeedback.NONE) {
-                            Surface(
-                                color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer
-                                        else MaterialTheme.colorScheme.errorContainer,
-                                shape = PillShape
-                            ) {
-                                Text(
-                                    text = feedbackText.orEmpty(),
-                                    modifier = Modifier.padding(
-                                        horizontal = Spacing.md,
-                                        vertical = Spacing.sm
-                                    ),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    // The container's own On colour. The verdict used to be
-                                    // tertiary or error text on a 20%-alpha tint of the
-                                    // same hue - the blue-on-blue mistake the Listen
-                                    // button was making, in two more colours.
-                                    color = if (isPositive) MaterialTheme.colorScheme.onTertiaryContainer
-                                            else MaterialTheme.colorScheme.onErrorContainer,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(Spacing.md))
-                        }
-
-                        // An honest score: the share of the target's words the
-                        // recogniser heard. Word matching, not phoneme analysis — the
-                        // label says what is measured, and the per-word list below
-                        // shows which words carried the misses.
-                        if (wordResults.isNotEmpty()) {
-                            val percent = wordResults.count { it.isCorrect } * 100 / wordResults.size
-                            Text(
-                                text = stringResource(R.string.practice_word_match, percent),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(Spacing.sm))
-                        }
-
-                        // What the recogniser heard, reading as the user's own words.
-                        Text(
-                            text = spokenText,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        if (wordResults.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(Spacing.md))
-
-                            // Word by word: what was hit and what is worth another go.
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(Spacing.xs)
-                            ) {
-                                wordResults.forEach { result ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = if (result.isCorrect) {
-                                                Icons.Default.CheckCircle
-                                            } else {
-                                                Icons.Default.ErrorOutline
-                                            },
-                                            contentDescription = stringResource(
-                                                if (result.isCorrect) R.string.practice_word_correct
-                                                else R.string.practice_word_try_again
-                                            ),
-                                            tint = if (result.isCorrect) {
-                                                MaterialTheme.colorScheme.tertiary
-                                            } else {
-                                                WarningAmber
-                                            },
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(Spacing.sm))
-                                        Text(
-                                            text = result.word,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (result.isCorrect) {
-                                                MaterialTheme.colorScheme.onSurface
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
 
-        // Outside the scroll: Speak is the point of the screen, and it used to sit
-        // below the fold behind the target card, the error banner and the result
-        // card - reachable only by scrolling past everything it acts on.
-        Spacer(modifier = Modifier.height(Spacing.md))
+        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // Both actions are glass now. The Speak button takes the error role only while
-        // actually recording (stop-the-world), and returns to the cyan edge otherwise.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            GlassButton(
-                onClick = {
+            Button(
+                onClick = { 
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (isListening) {
                         viewModel.stopPractice()
@@ -382,37 +301,52 @@ fun PracticeScreen(viewModel: PracticeViewModel = viewModel()) {
                         }
                     }
                 },
-                enabled = !isProcessing,
-                modifier = Modifier.weight(1f),
-                glow = if (isListening) MaterialTheme.colorScheme.error else AzureGlow,
-                contentColor = if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                modifier = Modifier
+                    .weight(1f)
+                    .height(64.dp)
+                    .background(if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) else gradientBrush, RoundedCornerShape(20.dp)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(20.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
             ) {
-                Icon(
-                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(Spacing.sm))
-                Text(
-                    text = stringResource(if (isListening) R.string.practice_evaluate else R.string.practice_speak),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic, 
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isListening) "Evaluate" else "Speak", 
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                    }
+                }
             }
-
-            GlassButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.nextSentence()
+            
+            OutlinedButton(
+                onClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.nextSentence() 
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).height(64.dp),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.NavigateNext,
+                    imageVector = Icons.AutoMirrored.Filled.NavigateNext, 
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(28.dp)
                 )
-                Spacer(modifier = Modifier.width(Spacing.sm))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.practice_next),
                     style = MaterialTheme.typography.labelLarge,

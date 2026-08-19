@@ -5,56 +5,32 @@ import android.content.ClipData
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
@@ -66,17 +42,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
-import com.aus.deutschflow.ui.components.AudioWaveform
-import com.aus.deutschflow.ui.components.ErrorBanner
-import com.aus.deutschflow.ui.components.GlassButton
-import com.aus.deutschflow.ui.components.GlassmorphicCard
-import com.aus.deutschflow.ui.components.OnLeavingScreen
-import com.aus.deutschflow.ui.components.OracleMic
-import com.aus.deutschflow.ui.components.VocabularyChip
-import com.aus.deutschflow.ui.components.WordDetailsBottomSheet
+import com.aus.deutschflow.service.GrammarNote
+import com.aus.deutschflow.ui.components.*
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
 import com.aus.deutschflow.ui.theme.Spacing
@@ -86,17 +57,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-/**
- * TranscriptScreen — the app's core screen.
- *
- * Three states, each with one job:
- * - EMPTY: explain what will happen (title, one body line, the German the app
- *   listens for, and the mic with "Tap to start").
- * - RECORDING: the transcript card streams the partial text, a live waveform and
- *   a recording clock make "it is listening" obvious without a theatre.
- * - RESULT: the German dominates (headline weight); the translation, the tappable
- *   vocabulary and the one Save action follow below it.
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
@@ -106,55 +66,29 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     val isListening by viewModel.isListening.collectAsState()
     val isBusy by viewModel.isBusy.collectAsState()
     val suggestedWords by viewModel.suggestedWords.collectAsState()
+    val grammarNotes by viewModel.grammarNotes.collectAsState()
     val errorState by viewModel.errorState.collectAsState()
     val aiError by viewModel.aiError.collectAsState()
     val wordDetails by viewModel.wordDetails.collectAsState()
     val wordDetailError by viewModel.wordDetailError.collectAsState()
-    // Which word's interrogation is in flight, so the right chip shows its spinner.
-    // Owned by the ViewModel, which is what cancels and replaces the request: a copy
-    // remembered here could only ever be an echo of that, kept in step by an effect.
     val interrogatingWord by viewModel.interrogatingWord.collectAsState()
     val selectedDialect by viewModel.selectedDialect.collectAsState()
 
-    // The input level is read in a draw phase, never into composition: a
-    // MutableFloatState mutation costs zero recompositions, and the waveform's
-    // Canvas reads it per frame. (Same pattern as PracticeScreen.)
     val amplitude = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(viewModel) {
         viewModel.rmsLevel.collect { amplitude.floatValue = it }
     }
 
     val context = LocalContext.current
-
-    // The settled transcript, spoken once.
-    //
-    // Same reason as ErrorBanner: a live region on the transcript card cannot do
-    // it. The card is created the moment the first words arrive, and Compose skips
-    // nodes that did not exist a frame earlier when it decides what to report - so
-    // the one utterance a user most needs announced is precisely the one that is
-    // not. Keyed on finalText rather than partialText: the partial stream would
-    // interrupt itself several times a second, and what is worth hearing is the
-    // sentence the recogniser settled on.
     val view = LocalView.current
     LaunchedEffect(finalText) {
         if (finalText.isNotBlank()) view.announceForAccessibility(finalText)
     }
 
-
-    // Saving used to be silent: the word landed in the library and the button
-    // gave nothing back, which reads as "nothing happened". One confirmation for
-    // the one write the screen makes. Resolved through stringResource so a
-    // configuration change cannot leave it stale.
     val savedMessage = stringResource(R.string.transcript_saved)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // A failed interrogation surfaces through the same snackbar as a save, rather
-    // than through the recording banner that has nothing to do with it.
-    //
-    // The message is handed back when it is cleared, so a failure that has already been
-    // superseded is left alone: showSnackbar suspends for seconds, and a chip tapped
-    // inside that window starts a request whose answer must survive this line.
     LaunchedEffect(wordDetailError) {
         wordDetailError?.let {
             snackbarHostState.showSnackbar(it)
@@ -162,22 +96,16 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
         }
     }
 
-    // Permission Mandate: Runtime Authorization
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
             viewModel.startListening()
         } else {
-            // Android stops showing this dialog after the second refusal, so without
-            // an answer here the mic button is a control that does nothing, forever,
-            // and never says why.
             viewModel.onPermissionDenied()
         }
     }
 
-    // Without this the recognizer keeps the microphone open after the user moves to
-    // another tab: this screen's ViewModel is kept alive by the saved back stack entry.
     OnLeavingScreen { viewModel.cancelListening() }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -188,6 +116,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             isListening = isListening,
             isBusy = isBusy,
             suggestedWords = suggestedWords,
+            grammarNotes = grammarNotes,
             loadingWord = interrogatingWord,
             errorState = errorState ?: aiError,
             rmsAmplitude = amplitude,
@@ -201,9 +130,6 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             },
             onStopListening = { viewModel.stopListening() },
             onWordClick = { word -> viewModel.interrogateWord(word) },
-            // Only on an accepted save: the ViewModel rejects a blank side, and
-            // confirming one anyway would be the screen's own report of a write that
-            // never happened.
             onSave = {
                 if (viewModel.saveToVocabulary(finalText, translation)) {
                     scope.launch { snackbarHostState.showSnackbar(savedMessage) }
@@ -216,8 +142,6 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        // The interrogation result. It sits above the snackbar and closes on dismiss
-        // or after a save.
         WordDetailsBottomSheet(
             details = wordDetails,
             onDismiss = { viewModel.dismissWordDetails() },
@@ -241,6 +165,7 @@ fun TranscriptContent(
     isListening: Boolean,
     isBusy: Boolean,
     suggestedWords: List<String>,
+    grammarNotes: List<GrammarNote>,
     loadingWord: String?,
     errorState: String?,
     rmsAmplitude: State<Float>,
@@ -251,279 +176,67 @@ fun TranscriptContent(
     onSave: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val gradientBrush = Brush.linearGradient(
+        colors = listOf(Color(0xFF00E5FF), primaryColor)
+    )
 
     val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
     val isEmpty = !hasTranscript && !isListening && !isBusy
-
-    // The recording clock, in the screen's own time. Restarted per session.
-    //
-    // Held as State and passed down rather than read here: reading it in this scope
-    // recomposed the whole content column - mic, transcript card, translation,
-    // chips - once a second for the length of every recording. Only the one text
-    // node that draws the clock needs to invalidate, which is the same rule the
-    // waveform follows for the RMS level.
-    val recordingSeconds = remember { mutableIntStateOf(0) }
-    LaunchedEffect(isListening) {
-        if (isListening) {
-            recordingSeconds.intValue = 0
-            while (true) {
-                delay(1_000)
-                recordingSeconds.intValue++
-            }
-        }
-    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = Spacing.md)
-            .imePadding(),
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (isEmpty) {
-            // -------- EMPTY: explain, then invite. --------
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .heightIn(min = 500.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 LanguageIndicator(dialect)
-
                 Spacer(modifier = Modifier.height(Spacing.lg))
-
                 Text(
                     text = stringResource(R.string.transcript_empty_title),
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
-
                 Spacer(modifier = Modifier.height(Spacing.sm))
-
                 Text(
                     text = stringResource(R.string.transcript_empty_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(0.85f)
+                    textAlign = TextAlign.Center
                 )
-
-                Spacer(modifier = Modifier.height(Spacing.xl))
-
-                ErrorBanner(errorState)
-
-                OracleMic(
-                    icon = Icons.Default.Mic,
-                    contentDescription = stringResource(R.string.transcript_start_recording),
-                    isListening = false,
-                    isBusy = false,
-                    onClick = onStartListening,
-                    controlSize = 152.dp,
-                    discSize = 128.dp,
-                    iconSize = 48.dp
-                )
-
-                Spacer(modifier = Modifier.height(Spacing.md))
-
-                Text(
-                    text = stringResource(R.string.transcript_hint),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            // -------- RECORDING / RESULT: the transcript leads. --------
-            TranscriptCard(
-                partialText = partialText,
-                finalText = finalText,
-                isListening = isListening,
-                isBusy = isBusy,
-                rmsAmplitude = rmsAmplitude,
-                recordingSeconds = recordingSeconds
-            )
-
-            Spacer(modifier = Modifier.height(Spacing.md))
-
-            ErrorBanner(errorState)
-
-            // Everything below the transcript shares what the card leaves, and
-            // scrolls once a translation arrives and there is more of it than there
-            // is room.
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(Spacing.sm))
-
-                OracleMic(
-                    icon = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = stringResource(
-                        if (isListening) R.string.transcript_stop_recording
-                        else R.string.transcript_start_recording
-                    ),
-                    isListening = isListening,
-                    isBusy = isBusy,
-                    onClick = { if (isListening) onStopListening() else onStartListening() }
-                )
-
-                if (isBusy) {
-                    Spacer(modifier = Modifier.height(Spacing.md))
-                    Text(
-                        text = stringResource(R.string.transcript_transcribing),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(Spacing.lg))
-
-                // -------- Translation, vocabulary, and the one save action. --------
-                if (translation.isNotEmpty()) {
-                    // LocalClipboard, not the deprecated LocalClipboardManager. The
-                    // replacement is suspend-based, so the copy runs in a scope rather
-                    // than inline - it can touch the system clipboard service.
-                    val clipboard = LocalClipboard.current
-                    val scope = rememberCoroutineScope()
-
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        SectionLabel(stringResource(R.string.transcript_translation)) {
-                            scope.launch {
-                                clipboard.setClipEntry(
-                                    ClipEntry(ClipData.newPlainText("translation", translation))
-                                )
-                            }
-                        }
-
-                        Box(modifier = Modifier.fillMaxWidth().glassSurface()) {
-                            Text(
-                                text = translation,
-                                modifier = Modifier.padding(Spacing.md),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        if (suggestedWords.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(Spacing.lg))
-                            Text(
-                                text = stringResource(R.string.transcript_vocabulary),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-                            ) {
-                                // Interactive now: each word interrogates the model on
-                                // tap, and shows a spinner while it answers.
-                                suggestedWords.forEach { word ->
-                                    VocabularyChip(
-                                        word = word,
-                                        isLoading = loadingWord == word,
-                                        onClick = { onWordClick(word) }
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(Spacing.lg))
-
-                        GlassButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSave()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(Spacing.sm))
-                            Text(
-                                text = stringResource(R.string.transcript_save),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
             }
         }
-    }
-}
 
-/**
- * The transcript itself: the German at headline weight (what is being learned
- * dominates), a copy affordance for the finished result, and — while recording —
- * the live waveform and the clock that say "listening" without a word of copy.
- */
-@Composable
-private fun TranscriptCard(
-    partialText: String,
-    finalText: String,
-    isListening: Boolean,
-    isBusy: Boolean,
-    rmsAmplitude: State<Float>,
-    recordingSeconds: State<Int>
-) {
-    val haptic = LocalHapticFeedback.current
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
+        Spacer(modifier = Modifier.height(Spacing.md))
 
-    val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
-
-    GlassmorphicCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 160.dp),
-        contentPadding = PaddingValues(Spacing.lg)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
+        // Transcript Area
+        OutlinedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 200.dp),
+            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
         ) {
-            Text(
-                text = when {
-                    hasTranscript -> if (isListening) partialText else finalText
-                    else -> stringResource(R.string.transcript_placeholder)
-                },
-                modifier = Modifier.weight(1f),
-                style = if (hasTranscript) {
-                    MaterialTheme.typography.headlineSmall
-                } else {
-                    MaterialTheme.typography.bodyLarge
-                },
-                color = if (hasTranscript) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-
-            if (finalText.isNotEmpty() && !isListening) {
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        scope.launch {
-                            clipboard.setClipEntry(
-                                ClipEntry(ClipData.newPlainText("transcript", finalText))
-                            )
-                        }
-                    },
-                    // No explicit size: IconButton's own 48dp minimum is the
-                    // touch target, and shrinking it to 32dp put the copy
-                    // affordance below what a finger can reliably hit.
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = stringResource(R.string.action_copy),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+            Box(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = if (isListening) partialText else finalText.ifEmpty { "Tap the mic to transcribe..." },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontSize = 20.sp,
+                    lineHeight = 30.sp,
+                    color = if (finalText.isEmpty() && !isListening) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                )
             }
         }
 
@@ -532,136 +245,157 @@ private fun TranscriptCard(
             AudioWaveform(
                 amplitude = rmsAmplitude,
                 isActive = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
+                modifier = Modifier.fillMaxWidth().height(40.dp)
             )
-            Spacer(modifier = Modifier.height(Spacing.sm))
-            RecordingRow(recordingSeconds)
         }
-    }
-}
 
-/** The pulsing dot, "Listening…" and the running clock — the recording indicator. */
-@Composable
-private fun RecordingRow(recordingSeconds: State<Int>) {
-    val transition = rememberInfiniteTransition(label = "recording-row")
-    val alpha by transition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 700),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "recording-dot"
-    )
+        Spacer(modifier = Modifier.height(32.dp))
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .graphicsLayer { this.alpha = alpha }
-                .background(AzureGlow, CircleShape)
-        )
-        Spacer(modifier = Modifier.width(Spacing.sm))
-        Text(
-            text = stringResource(R.string.transcript_listening),
-            style = MaterialTheme.typography.labelLarge,
-            color = AzureGlow
-        )
-        Spacer(modifier = Modifier.width(Spacing.sm))
-        // The only place the clock is read, so the tick invalidates this row and
-        // nothing above it.
-        val seconds = recordingSeconds.value
-        Text(
-            text = String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
+        // Hero Interaction
+        Box(contentAlignment = Alignment.Center) {
+            if (isListening) {
+                val pulseScale by rememberInfiniteTransition().animateFloat(
+                    initialValue = 1f, targetValue = 1.8f,
+                    animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart), label = ""
+                )
+                Box(Modifier.size(100.dp).scale(pulseScale).alpha(0.3f).background(primaryColor, CircleShape))
+            }
 
-/** "German · de-AT": which language the recogniser is listening for. */
-@Composable
-private fun LanguageIndicator(dialect: String) {
-    Row(
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(
-                MaterialTheme.colorScheme.secondaryContainer,
-                MaterialTheme.shapes.small
-            )
-            .padding(horizontal = Spacing.md, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(MaterialTheme.colorScheme.secondary, CircleShape)
-        )
-        Spacer(modifier = Modifier.width(Spacing.sm))
-        Text(
-            text = stringResource(R.string.transcript_language, dialect),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer
-        )
-    }
-}
-
-/** A section heading with an optional trailing action (the copy affordance). */
-@Composable
-private fun SectionLabel(
-    label: String,
-    onTrailing: (() -> Unit)? = null
-) {
-    val haptic = LocalHapticFeedback.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.secondary
-        )
-        if (onTrailing != null) {
-            IconButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onTrailing()
-                },
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) else gradientBrush)
+                    .clickable { 
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (isListening) onStopListening() else onStartListening() 
+                    },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.ContentCopy,
-                    contentDescription = stringResource(R.string.action_copy),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
+                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = Color.White
                 )
+            }
+        }
+
+        ErrorBanner(errorState)
+
+        if (translation.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            // Grammar Spotlight Section
+            if (grammarNotes.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.transcript_grammar_spotlight),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                grammarNotes.forEach { note ->
+                    GrammarSpotlightCard(note)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Results Section
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SectionLabel("Translation")
+                Box(modifier = Modifier.fillMaxWidth().glassSurface().padding(Spacing.md)) {
+                    Text(text = translation, style = MaterialTheme.typography.bodyLarge)
+                }
+
+                if (suggestedWords.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(Spacing.lg))
+                    SectionLabel("Vocabulary")
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        suggestedWords.forEach { word ->
+                            VocabularyChip(
+                                word = word,
+                                isLoading = loadingWord == word,
+                                onClick = { onWordClick(word) }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = onSave,
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Icon(Icons.Default.BookmarkAdd, null)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        stringResource(R.string.transcript_save),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(48.dp))
+    }
+}
+
+@Composable
+fun GrammarSpotlightCard(note: GrammarNote) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                    Text(note.case.uppercase(), modifier = Modifier.padding(horizontal = 6.dp), style = MaterialTheme.typography.labelSmall)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(text = note.phrase, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
+            if (note.explanation.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = note.explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun TranscriptScreenPreview() {
-    DeutschflowTheme {
-        TranscriptContent(
-            partialText = "Hallo, wie geht es dir?",
-            finalText = "",
-            translation = "Hello, how are you?",
-            isListening = false,
-            isBusy = false,
-            suggestedWords = listOf("Hallo", "Deutsch", "Lernen"),
-            loadingWord = null,
-            errorState = "Didn't catch that. Try speaking again, a little slower.",
-            rmsAmplitude = remember { mutableFloatStateOf(0.6f) },
-            dialect = "de-DE",
-            onStartListening = {},
-            onStopListening = {},
-            onWordClick = {},
-            onSave = {}
+private fun SectionLabel(label: String) {
+    Text(
+        text = label.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        letterSpacing = 1.sp,
+        modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+    )
+}
+
+@Composable
+private fun LanguageIndicator(dialect: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+        shape = CircleShape
+    ) {
+        Text(
+            text = stringResource(R.string.transcript_listening_for, dialect),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
         )
     }
 }

@@ -24,6 +24,14 @@ open class VocabularyProcessor(
     open suspend fun interrogateWord(word: String, apiKey: String): WordDetailsResult =
         languageModel.interrogateWord(word, apiKey)
 
+    /** Handles a conversational turn in a roleplay. */
+    open suspend fun processRoleplay(
+        userInput: String,
+        history: List<Pair<String, String>>,
+        scenario: String,
+        apiKey: String
+    ): GroqHelper.RoleplayResult = languageModel.roleplayTurn(userInput, history, scenario, apiKey)
+
     /** @see Companion.generateExample */
     fun generateExample(word: String): String = Companion.generateExample(word)
 

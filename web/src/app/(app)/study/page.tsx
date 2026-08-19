@@ -1,20 +1,46 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useStudy } from "@/hooks/useStudy";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { SchoolIcon, VolumeUpIcon } from "@/components/icons";
+import { ReviewQuality } from "@/lib/ai/srs";
+import { DashboardContent } from "@/components/ui/DashboardContent";
 
-/**
- * StudyScreen — ui/screens/StudyScreen.kt port.
- *
- * A shuffled snapshot of the library, a 3D flip card, autoplay gated by
- * Settings, and a once-per-session XP award behind the "Got it!" button.
- */
 export default function StudyPage() {
+  const [selectedTab, setSelectedTab] = useState<"dashboard" | "flashcards">("dashboard");
+  const { t } = useI18n();
+
+  return (
+    <div className="flex h-full flex-col">
+        {/* Tab Selector */}
+        <div className="flex w-full justify-center gap-8 border-b border-white/5 bg-background/50 backdrop-blur-md">
+            {(["dashboard", "flashcards"] as const).map((tab) => (
+                <button
+                    key={tab}
+                    onClick={() => setSelectedTab(tab)}
+                    className={`px-6 py-4 text-sm font-bold uppercase tracking-widest transition-all ${
+                        selectedTab === tab
+                        ? "text-primary border-b-2 border-primary"
+                        : "text-on-surface-variant hover:text-on-surface"
+                    }`}
+                >
+                    {tab === "dashboard" ? "Dashboard" : "Flashcards"}
+                </button>
+            ))}
+        </div>
+
+        <div className="flex-1 min-h-0">
+            {selectedTab === "dashboard" ? <DashboardContent /> : <FlashcardMode />}
+        </div>
+    </div>
+  );
+}
+
+function FlashcardMode() {
   const { t } = useI18n();
   const {
     studyList,
@@ -23,22 +49,19 @@ export default function StudyPage() {
     hasLoaded,
     ttsError,
     flipCard,
-    nextCard,
+    submitReview,
+    skipCard,
     autoPlay,
     speak,
-    rewardCurrentCard,
   } = useStudy();
 
-  // Coerced once, then used for the card, the bar and the caption alike.
   const safeIndex = Math.min(Math.max(currentIndex, 0), Math.max(studyList.length - 1, 0));
   const currentItem = studyList[safeIndex];
 
-  // Speaks the card unless auto-play is switched off in Settings.
   useEffect(() => {
     if (currentItem) autoPlay(currentItem.germanText);
   }, [currentIndex, currentItem?.id, autoPlay, currentItem]);
 
-  // Hold the frame rather than claiming the library is empty before it is read.
   if (!hasLoaded) return null;
 
   if (studyList.length === 0) {
@@ -51,24 +74,17 @@ export default function StudyPage() {
     );
   }
 
-  const progress = ((safeIndex + 1) / studyList.length) * 100;
-
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-8">
-      {/* Autoplay is the one place the app speaks without being asked, so a
-          device that cannot speak German has to say so here. */}
       <ErrorBanner message={ttsError} />
 
-      {/* The session header: what this is and how far through the pass the
-          learner is, without outshouting the card itself. */}
       <div className="flex w-full max-w-2xl items-center justify-between">
         <h2 className="text-title-medium text-on-surface">{t("study.session")}</h2>
         <span className="text-label-medium text-on-surface-variant">
-          {t("study.remaining", [Math.max(studyList.length - safeIndex, 1)])}
+          {t("study.remaining", [studyList.length])}
         </span>
       </div>
 
-      {/* The card is centred in what is left rather than filling it. */}
       <div className="flex w-full flex-1 items-center justify-center">
         <button
           type="button"
@@ -119,58 +135,42 @@ export default function StudyPage() {
                 <h2 className="mt-3 text-3xl font-bold text-on-surface">
                   {currentItem.englishTranslation}
                 </h2>
-                <span className="mt-5 text-lg font-black text-tertiary">{t("study.gotIt")}</span>
+                <div className="mt-4 flex flex-col gap-1">
+                    {currentItem.article !== "none" && (
+                         <span className="text-sm font-semibold text-secondary">{currentItem.article} {currentItem.germanText}</span>
+                    )}
+                    {currentItem.plural && (
+                         <span className="text-xs text-on-surface-muted">pl. {currentItem.plural}</span>
+                    )}
+                </div>
               </div>
             </div>
           </div>
         </button>
       </div>
 
-      {/* The honest feedback row. All four advance the card; Good and Easy bank
-          the XP award (once per card, per session). The spaced-repetition
-          scheduler that would steer WHEN a card returns is not implemented yet
-          — the UI is shaped for it, nothing pretends it already remembers. */}
-      {/* Four grades across a 320px screen give each about 70px, which cannot
-          hold its label. Two-by-two first, one row once there is room. */}
-      <div className="mt-[var(--space-6)] grid w-full max-w-2xl grid-cols-2 gap-[var(--space-3)] sm:grid-cols-4">
-        <GlassButton type="button" glow="error" onClick={nextCard} className="w-full">
-          <span className="text-sm font-bold">{t("study.again")}</span>
+      <div className="mt-6 grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+        <GlassButton type="button" glow="error" onClick={() => submitReview(ReviewQuality.AGAIN)} className="w-full">
+          <span className="text-sm font-bold uppercase tracking-wider">{t("study.again")}</span>
         </GlassButton>
-        <GlassButton type="button" glow="amber" onClick={nextCard} className="w-full">
-          <span className="text-sm font-bold">{t("study.hard")}</span>
+        <GlassButton type="button" glow="amber" onClick={() => submitReview(ReviewQuality.HARD)} className="w-full">
+          <span className="text-sm font-bold uppercase tracking-wider">{t("study.hard")}</span>
         </GlassButton>
-        <GlassButton
-          type="button"
-          onClick={() => {
-            rewardCurrentCard();
-            nextCard();
-          }}
-          className="w-full"
-        >
-          <span className="text-sm font-bold">{t("study.good")}</span>
+        <GlassButton type="button" onClick={() => submitReview(ReviewQuality.GOOD)} className="w-full">
+          <span className="text-sm font-bold uppercase tracking-wider">{t("study.good")}</span>
         </GlassButton>
-        <GlassButton
-          type="button"
-          glow="green"
-          onClick={() => {
-            rewardCurrentCard();
-            nextCard();
-          }}
-          className="w-full"
-        >
-          <span className="text-sm font-bold">{t("study.easy")}</span>
+        <GlassButton type="button" glow="green" onClick={() => submitReview(ReviewQuality.EASY)} className="w-full">
+          <span className="text-sm font-bold uppercase tracking-wider">{t("study.easy")}</span>
         </GlassButton>
       </div>
 
-      <div className="mt-8 h-2 w-full max-w-2xl overflow-hidden rounded-full bg-surface-variant">
-        <div
-          className="h-full rounded-full bg-azure-glow transition-[width] duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-      <p className="mt-3 text-xs font-medium text-on-surface-variant uppercase tracking-wider">
-        {t("study.progress", [safeIndex + 1, studyList.length])}
-      </p>
+      <button
+        type="button"
+        onClick={skipCard}
+        className="mt-6 text-sm font-medium text-on-surface-muted hover:text-on-surface transition-colors"
+      >
+        Skip for now
+      </button>
     </div>
   );
 }

@@ -9,6 +9,21 @@ interface VocabularyDao {
     @Query("SELECT * FROM vocabulary ORDER BY timestamp DESC")
     fun getAllVocabulary(): Flow<List<VocabularyEntity>>
 
+    /**
+     * The words ready for review: those whose nextReview has passed.
+     *
+     * Scheduled reviews come first, in the order they fell due; words never answered
+     * (nextReview = 0) follow, newest first. Sorting on nextReview alone put every
+     * unseen word ahead of every review, so a library with a backlog of new material
+     * buried the reviews it was the scheduler's whole job to surface. A review has a
+     * date it is owed on; new material does not.
+     */
+    @Query(
+        "SELECT * FROM vocabulary WHERE nextReview <= :currentTime " +
+            "ORDER BY CASE WHEN nextReview = 0 THEN 1 ELSE 0 END, nextReview ASC, timestamp DESC"
+    )
+    fun getDueVocabulary(currentTime: Long): Flow<List<VocabularyEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertVocabulary(vocabulary: VocabularyEntity)
 

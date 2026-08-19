@@ -81,7 +81,7 @@
     <string name="detail_example">Example sentence</string>
     <string name="detail_back">Back to library</string>
 
-    <!-- Study -->
+    <!-- Study / Dashboard -->
     <string name="study_empty_title">Ready to study?</string>
     <string name="study_empty_body">Save some German phrases and we\'ll build your first study session.</string>
     <string name="study_session">Study session</string>
@@ -98,6 +98,51 @@
     <string name="study_show_translation">Show the translation</string>
     <string name="study_got_it">Got it</string>
     <string name="study_progress">Progress: %1$d / %2$d</string>
+
+    <string name="dashboard_daily_goal">Daily Goal</string>
+    <string name="dashboard_goal_achieved">Goal achieved!</string>
+    <string name="dashboard_xp_remaining">%1$d XP remaining</string>
+    <string name="dashboard_retention">Vocabulary Retention</string>
+    <string name="dashboard_mastered">Mastered</string>
+    <string name="dashboard_learning">Learning</string>
+    <string name="dashboard_new">New</string>
+    <string name="dashboard_heatmap">Activity Heatmap</string>
+    <string name="dashboard_heatmap_sub">Past 3 months of consistent effort</string>
+    <string name="dashboard_streak">🔥 %1$d Day Streak</string>
+    <string name="dashboard_xp">XP</string>
+    <string name="dashboard_tab">Dashboard</string>
+    <string name="dashboard_flashcards_tab">Flashcards</string>
+
+    <!-- Roleplay -->
+    <string name="roleplay_tab">Roleplay</string>
+    <string name="roleplay_tap_to_speak">Tap to speak</string>
+    <string name="roleplay_tap_to_send">Tap to send</string>
+    <string name="roleplay_start_speaking">Start speaking</string>
+    <string name="roleplay_send_turn">Send what you said</string>
+    <string name="roleplay_speak_message">Play this reply aloud</string>
+    <string name="roleplay_retry">Try again</string>
+    <string name="practice_tab">Repetition</string>
+    <string name="study_skip">Skip for now</string>
+    <string name="study_word_grammar">%1$s %2$s (pl. %3$s)</string>
+    <string name="transcript_grammar_spotlight">Grammar spotlight</string>
+    <string name="transcript_listening_for">Listening for: %1$s</string>
+    <string name="detail_linguistic_connections">Linguistic connections</string>
+
+    <!-- Cloud sync. Not built yet; the copy says so rather than implying a backup. -->
+    <string name="settings_cloud_header">Cloud sync</string>
+    <string name="settings_cloud_signed_in">Signed in</string>
+    <string name="settings_cloud_title">Cloud sync</string>
+    <string name="settings_cloud_unavailable">Not available yet — your library is saved on this device.</string>
+    <string name="settings_cloud_sign_in">Sign in</string>
+    <string name="settings_cloud_sign_out">Sign out</string>
+    <string name="settings_cloud_sign_in_title">Sign in</string>
+    <string name="settings_cloud_sign_in_body">Accounts are ready for a backend that does not exist yet. Signing in changes nothing on this device.</string>
+    <string name="settings_cloud_email">Email</string>
+    <string name="settings_cloud_password">Password</string>
+
+    <!-- Word detail -->
+    <string name="detail_synonyms">Synonyms</string>
+    <string name="detail_antonyms">Antonyms</string>
 
     <!-- Practice -->
     <string name="practice_intro">Listen and repeat the sentence accurately to master your pronunciation.</string>
@@ -151,6 +196,10 @@
     <string name="message_notification_sent">Notification sent.</string>
     <string name="message_notifications_off">Notifications are turned off. Enable them for DeutschFlow in system settings.</string>
     <string name="message_library_empty">Save a word to your library first — there\'s nothing to send yet.</string>
+    <string name="message_cloud_connected">Signed in. Cloud sync isn\'t available yet — your library stays on this device.</string>
+    <string name="message_cloud_failed">Couldn\'t sign in. Check your details and try again.</string>
+    <string name="message_cloud_disconnected">Signed out. Your library is saved on this device, as it always was.</string>
+    <string name="message_sync_unavailable">Cloud sync isn\'t available yet. Your library is saved on this device.</string>
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Speech recognition isn\'t available on this device.</string>

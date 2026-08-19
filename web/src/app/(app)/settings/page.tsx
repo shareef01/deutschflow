@@ -13,20 +13,12 @@ import {
   VisibilityIcon,
   VisibilityOffIcon,
   WarningIcon,
+  CloudSyncIcon,
+  LogoutIcon,
+  LoginIcon
 } from "@/components/icons";
 import type { Lang } from "@/lib/i18n";
 
-/**
- * SettingsScreen — ui/screens/SettingsScreen.kt port.
- *
- * The API key is write-only from here: the field starts empty and stays empty
- * even when a key is stored (seeding it with the decrypted key would hand a
- * filled password field to every password manager on the device). The screen
- * says whether one is saved, and typing replaces it.
- *
- * The web adds one Android parity surface: the app language (Android 13+
- * per-app language), as Deutsch/English here.
- */
 export default function SettingsPage() {
   const {
     totalVocabulary,
@@ -36,26 +28,28 @@ export default function SettingsPage() {
     hasApiKey,
     selectedDialect,
     isAutoPlayEnabled,
+    isCloudConnected,
+    isSyncing,
     saveApiKey,
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,
+    signIn,
+    signOut,
+    performSync
   } = useSettings();
 
   const { t, lang, changeLang } = useI18n();
 
-  // remember, not persisted: a half-typed key must not survive in session state.
   const [typedKey, setTypedKey] = useState("");
   const [isKeyVisible, setIsKeyVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const onSaveKey = () => {
     void saveApiKey(typedKey).then((result) => {
-      // The hook hands back an i18n key; the message is resolved here, in the
-      // language the UI is currently showing.
       setMessage(t(result));
-      // The plaintext must not outlive the save.
       setTypedKey("");
       setIsKeyVisible(false);
     });
@@ -82,7 +76,49 @@ export default function SettingsPage() {
   const streakLabel = streak === 1 ? t("streak.day", [streak]) : t("streak.days", [streak]);
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-reading)] flex-col overflow-y-auto px-[var(--gutter)]">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-reading)] flex-col overflow-y-auto px-[var(--gutter)] pb-12">
+
+      {/* ---- Cloud Sync (The Bridge) ---------------------------------------- */}
+      <SectionHeader title={t("cloud.header")} />
+      <div className="glass-surface p-6 flex flex-col gap-6 shadow-xl shadow-azure-glow/5">
+          <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-xl ${isCloudConnected ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-on-surface-variant'}`}>
+                    <CloudSyncIcon className="size-6" />
+                  </div>
+                  <div className="flex flex-col">
+                      <span className="text-body-large font-black uppercase tracking-tight">
+                          {isCloudConnected ? t("cloud.signedIn") : t("cloud.title")}
+                      </span>
+                      <span className="text-xs text-on-surface-variant font-medium">
+                          {/* One line whatever the state: nothing here may imply a backup. */}
+                          {t("cloud.unavailable")}
+                      </span>
+                  </div>
+              </div>
+              {isCloudConnected && (
+                  <button
+                    onClick={() => void performSync().then((result) => setMessage(t(result)))}
+                    disabled={isSyncing}
+                    className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors disabled:opacity-30"
+                  >
+                      {isSyncing ? <div className="size-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : <CloudSyncIcon className="size-5" />}
+                  </button>
+              )}
+          </div>
+
+          <GlassButton
+            onClick={isCloudConnected ? signOut : () => setShowLoginDialog(true)}
+            className="w-full h-14"
+            glow={isCloudConnected ? "deep" : "azure"}
+          >
+              <div className="flex items-center gap-2">
+                {isCloudConnected ? <LogoutIcon className="size-5" /> : <LoginIcon className="size-5" />}
+                <span className="font-bold">{isCloudConnected ? t("cloud.signOut") : t("cloud.signIn")}</span>
+              </div>
+          </GlassButton>
+      </div>
+
       {/* ---- AI translation ------------------------------------------------- */}
       <SectionHeader title={t("settings.aiHeader")} />
 
@@ -106,14 +142,8 @@ export default function SettingsPage() {
                 aria-label={isKeyVisible ? t("settings.hideKey") : t("settings.showKey")}
                 className="press-scale rounded-full p-3 text-on-surface-variant"
               >
-                {isKeyVisible ? (
-                  <VisibilityOffIcon className="size-5" />
-                ) : (
-                  <VisibilityIcon className="size-5" />
-                )}
+                {isKeyVisible ? <VisibilityOffIcon className="size-5" /> : <VisibilityIcon className="size-5" />}
               </button>
-              {/* Nothing typed is nothing to save — an empty save would silently
-                  wipe a working key. */}
               <button
                 type="button"
                 onClick={onSaveKey}
@@ -130,47 +160,15 @@ export default function SettingsPage() {
         />
       </div>
 
-      {/* Says whether a key is stored without ever showing it. */}
-      <p
-        className={`mt-2 pl-1 text-label-medium ${
-          hasApiKey ? "text-on-surface-variant" : "text-error"
-        }`}
-      >
+      <p className={`mt-2 pl-1 text-label-medium ${hasApiKey ? "text-on-surface-variant" : "text-error"}`}>
         {hasApiKey ? t("settings.apiKeySavedState") : t("settings.apiKeyNone")}
       </p>
-      <p className="max-w-[60ch] mt-2 pl-1 text-body-medium text-on-surface-variant">
-        {t("settings.apiKeyHelp")}
-      </p>
 
-      {/* ---- Audio preferences ---------------------------------------------- */}
-      <SectionHeader title={t("settings.audioHeader")} />
-
-      <div className="glass-surface">
-        <div className="flex items-center justify-between p-4">
-          <span className="text-body-large font-medium">{t("settings.autoplay")}</span>
-          <GlassSwitch
-            checked={isAutoPlayEnabled}
-            onChange={setAutoPlayEnabled}
-            label={t("settings.autoplay")}
-          />
-        </div>
-      </div>
-
-      {/* ---- Recognition dialect --------------------------------------------- */}
-      <SectionHeader title={t("settings.dialectHeader")} />
-
-      <RadioGroup options={dialects} selected={selectedDialect} onSelect={saveDialect} />
-
-      {/* ---- Language (web parity for Android 13+ per-app language) ---------- */}
-      <SectionHeader title={t("settings.languageHeader")} />
-
-      <RadioGroup options={languages} selected={lang} onSelect={changeLang} />
-
-      {/* ---- Learning progress ---------------------------------------------- */}
+      {/* ---- Learning progress (2x2 Grid) ----------------------------------- */}
       <SectionHeader title={t("settings.progressHeader")} />
 
-      <div className="glass-surface p-4">
-        <div className="grid grid-cols-2 gap-4">
+      <div className="glass-surface p-6 border border-white/5">
+        <div className="grid grid-cols-2 gap-6">
           <StatGridItem label={t("settings.statVocabulary")} value={String(totalVocabulary)} />
           <StatGridItem label={t("settings.statSessions")} value={String(totalTranscripts)} />
           <StatGridItem label={t("settings.statXp")} value={String(xp)} />
@@ -178,61 +176,72 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="mt-6 h-px bg-surface-variant" />
+      {/* ---- Audio preferences ---------------------------------------------- */}
+      <SectionHeader title={t("settings.audioHeader")} />
+      <div className="glass-surface">
+        <div className="flex items-center justify-between p-4">
+          <span className="text-body-large font-medium">{t("settings.autoplay")}</span>
+          <GlassSwitch checked={isAutoPlayEnabled} onChange={setAutoPlayEnabled} label={t("settings.autoplay")} />
+        </div>
+      </div>
 
-            {/* ---- Data ------------------------------------------------------------- */}
+      {/* ---- Recognition dialect --------------------------------------------- */}
+      <SectionHeader title={t("settings.dialectHeader")} />
+      <RadioGroup options={dialects} selected={selectedDialect} onSelect={saveDialect} />
+
+      {/* ---- Data ------------------------------------------------------------- */}
       <SectionHeader title={t("settings.dataHeader")} />
-
       <button
         type="button"
         onClick={() => setShowDeleteConfirm(true)}
-        className="glass-surface flex w-full items-center gap-3 px-4 py-3 text-left"
+        className="glass-surface flex w-full items-center gap-3 px-6 py-4 text-left border-l-4 border-error/40"
       >
         <DeleteForeverIcon className="size-5 shrink-0 text-error" />
-        <span className="text-body-large text-error">{t("settings.clear")}</span>
+        <span className="text-body-large font-bold text-error">{t("settings.clear")}</span>
       </button>
-      <div className="h-6" />
 
-{/* ---- Wipe confirmation ------------------------------------------------ */}
+      <div className="mt-12 text-center">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/30">
+          DeutschFlow v1.3.0 Obsidian
+        </p>
+      </div>
+
+      {/* ---- Modals ----------------------------------------------------------- */}
+      {showLoginDialog && (
+          <ModalDialog
+            title={t("cloud.signIn")}
+            onDismiss={() => setShowLoginDialog(false)}
+            actions={
+                <GlassButton onClick={() => setShowLoginDialog(false)}>{t("action.cancel")}</GlassButton>
+            }
+          >
+              <div className="space-y-4 pt-4">
+                  <GlassTextField label={t("cloud.email")} placeholder="you@example.com" onChange={() => {}} value="" />
+                  <GlassTextField label={t("cloud.password")} type="password" placeholder="••••••••" onChange={() => {}} value="" />
+                  <GlassButton className="w-full h-14" onClick={() => void signIn("", "")}>{t("cloud.signIn")}</GlassButton>
+                  <p className="text-[10px] text-center text-on-surface-variant">{t("cloud.signInBody")}</p>
+              </div>
+          </ModalDialog>
+      )}
+
       {showDeleteConfirm && (
         <ModalDialog
           title={t("settings.wipeTitle")}
           onDismiss={() => setShowDeleteConfirm(false)}
           actions={
             <>
-              <GlassButton
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 text-label-large font-bold"
-              >
-                {t("settings.wipeCancel")}
-              </GlassButton>
-              <GlassButton type="button" glow="error" onClick={onClearAll} className="px-4">
-                <span className="text-label-large font-bold text-error">
-                  {t("settings.wipeConfirm")}
-                </span>
-              </GlassButton>
+              <GlassButton onClick={() => setShowDeleteConfirm(false)}>{t("action.cancel")}</GlassButton>
+              <GlassButton type="button" glow="error" onClick={onClearAll}>{t("settings.wipeConfirm")}</GlassButton>
             </>
           }
         >
-          <div className="flex items-start gap-3">
-            <WarningIcon className="mt-0.5 size-5 shrink-0 text-error" />
-            <p className="text-body-medium text-on-surface-variant">{t("settings.wipeBody")}</p>
-          </div>
+          <p className="text-body-medium text-on-surface-variant pt-2">{t("settings.wipeBody")}</p>
         </ModalDialog>
       )}
 
-      {/* ---- Result message ---------------------------------------------------- */}
       {message != null && (
-        <ModalDialog
-          onDismiss={() => setMessage(null)}
-          actions={
-            <GlassButton type="button" onClick={() => setMessage(null)} className="px-4">
-              <span className="text-label-large font-bold">{t("action.ok")}</span>
-            </GlassButton>
-          }
-        >
-          <p className="text-body-medium text-on-surface">{message}</p>
+        <ModalDialog onDismiss={() => setMessage(null)} actions={<GlassButton onClick={() => setMessage(null)}>OK</GlassButton>}>
+          <p className="text-body-medium text-on-surface pt-2">{message}</p>
         </ModalDialog>
       )}
     </div>
@@ -241,40 +250,21 @@ export default function SettingsPage() {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h2 className="mt-8 mb-2 w-full pl-1 text-label-large text-on-surface-variant">{title}</h2>
+    <h2 className="mt-12 mb-3 w-full pl-1 text-[10px] font-black uppercase tracking-[0.2em] text-primary">{title}</h2>
   );
 }
 
-function RadioGroup<T extends string>({
-  options,
-  selected,
-  onSelect,
-}: {
-  options: { label: string; code: T }[];
-  selected: T;
-  onSelect: (code: T) => void;
-}) {
+function RadioGroup<T extends string>({ options, selected, onSelect }: { options: { label: string; code: T }[]; selected: T; onSelect: (code: T) => void }) {
   return (
-    <div className="glass-surface px-2 py-1">
+    <div className="glass-surface p-2">
       {options.map((option) => {
         const isSelected = selected === option.code;
         return (
-          <button
-            key={option.code}
-            type="button"
-            onClick={() => onSelect(option.code)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left"
-          >
-            <span
-              className={`flex size-5 items-center justify-center rounded-full border-2 ${
-                isSelected ? "border-azure-glow" : "border-on-surface-variant"
-              }`}
-            >
-              {isSelected && <span className="size-2.5 rounded-full bg-azure-glow" />}
+          <button key={option.code} onClick={() => onSelect(option.code)} className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left hover:bg-white/5 transition-colors">
+            <span className={`flex size-6 items-center justify-center rounded-full border-2 transition-all ${isSelected ? "border-azure-glow scale-110" : "border-on-surface-variant/40"}`}>
+              {isSelected && <span className="size-3 rounded-full bg-azure-glow" />}
             </span>
-            <span className={`text-body-large ${isSelected ? "text-on-surface" : "text-on-surface-variant"}`}>
-              {option.label}
-            </span>
+            <span className={`text-body-large font-bold ${isSelected ? "text-on-surface" : "text-on-surface-variant"}`}>{option.label}</span>
           </button>
         );
       })}
@@ -282,18 +272,13 @@ function RadioGroup<T extends string>({
   );
 }
 
-/**
- * One cell of the telemetry matrix. The number is painted with the azure ramp
- * running through the glyphs themselves — the only text in the app treated
- * that way, so the four figures read as instrument output rather than copy.
- */
 function StatGridItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="glass-raised p-4">
-      <p className="truncate text-headline-large font-bold text-on-surface">
+    <div className="flex flex-col gap-1">
+      <p className="text-3xl font-black text-on-surface tracking-tight">
         {value}
       </p>
-      <p className="mt-1 text-label-small text-on-surface-variant">
+      <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest opacity-60">
         {label}
       </p>
     </div>

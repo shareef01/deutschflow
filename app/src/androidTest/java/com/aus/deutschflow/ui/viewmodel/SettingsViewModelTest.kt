@@ -13,6 +13,8 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.DailyWord
 import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.service.DailyWordNotification
+import com.aus.deutschflow.service.MockCloudService
+import com.aus.deutschflow.service.SyncManager
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -46,6 +48,8 @@ class SettingsViewModelTest {
     private lateinit var database: AppDatabase
     private lateinit var viewModel: SettingsViewModel
 
+    private val cloudService = MockCloudService()
+
     @Before
     fun setup() {
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -63,7 +67,15 @@ class SettingsViewModelTest {
                 context,
                 DailyWord(database.vocabularyDao())
             ),
-            widgetUpdater = WidgetUpdater(context)
+            activityDao = database.activityDao(),
+            widgetUpdater = WidgetUpdater(context),
+            cloudService = cloudService,
+            syncManager = SyncManager(
+                vocabularyDao = database.vocabularyDao(),
+                transcriptDao = database.transcriptDao(),
+                preferenceManager = store.preferences,
+                cloudService = cloudService
+            )
         )
     }
 

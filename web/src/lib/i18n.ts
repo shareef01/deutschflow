@@ -100,6 +100,32 @@ export const STRINGS = {
     "study.skip": "Skip",
     "study.progress": "Progress: {0} / {1}",
 
+    // Dashboard - the Study tab's first pane. The Android values live in
+    // res/values/strings.xml under dashboard_*; keep the two in step.
+    "dashboard.dailyGoal": "Daily goal",
+    "dashboard.goalAchieved": "Goal achieved!",
+    "dashboard.xpRemaining": "{0} XP remaining",
+    "dashboard.streak": "🔥 {0} day streak",
+    "dashboard.retention": "Vocabulary retention",
+    "dashboard.mastered": "Mastered",
+    "dashboard.learning": "Learning",
+    "dashboard.new": "New",
+    "dashboard.heatmap": "Activity heatmap",
+    "dashboard.heatmapSub": "The past three months",
+    "dashboard.xp": "XP",
+
+    // Cloud sync. Not built yet; the copy says so rather than implying a backup.
+    "cloud.header": "Cloud sync",
+    "cloud.signedIn": "Signed in",
+    "cloud.title": "Cloud sync",
+    "cloud.unavailable": "Not available yet — your library is saved in this browser.",
+    "cloud.signIn": "Sign in",
+    "cloud.signOut": "Sign out",
+    "cloud.signInBody": "Accounts are ready for a backend that does not exist yet. Signing in changes nothing here.",
+    "cloud.email": "Email",
+    "cloud.password": "Password",
+    "cloud.syncUnavailable": "Cloud sync isn’t available yet. Your library is saved in this browser.",
+
     // Practice
     "practice.intro": "Listen and repeat the sentence accurately to master your pronunciation.",
     "practice.listenRepeat": "Listen and repeat",
@@ -272,6 +298,29 @@ export const STRINGS = {
     "study.gotItAction": "Verstanden!",
     "study.skip": "Überspringen",
     "study.progress": "Fortschritt: {0} / {1}",
+
+    "dashboard.dailyGoal": "Tagesziel",
+    "dashboard.goalAchieved": "Ziel erreicht!",
+    "dashboard.xpRemaining": "{0} XP verbleibend",
+    "dashboard.streak": "🔥 {0} Tage Serie",
+    "dashboard.retention": "Wortschatz-Gedächtnis",
+    "dashboard.mastered": "Meisterhaft",
+    "dashboard.learning": "Lernend",
+    "dashboard.new": "Neu",
+    "dashboard.heatmap": "Aktivitäts-Heatmap",
+    "dashboard.heatmapSub": "Die letzten drei Monate",
+    "dashboard.xp": "XP",
+
+    "cloud.header": "Cloud-Synchronisierung",
+    "cloud.signedIn": "Angemeldet",
+    "cloud.title": "Cloud-Synchronisierung",
+    "cloud.unavailable": "Noch nicht verfügbar — deine Bibliothek ist in diesem Browser gespeichert.",
+    "cloud.signIn": "Anmelden",
+    "cloud.signOut": "Abmelden",
+    "cloud.signInBody": "Konten sind für ein Backend vorbereitet, das es noch nicht gibt. Das Anmelden ändert hier nichts.",
+    "cloud.email": "E-Mail",
+    "cloud.password": "Passwort",
+    "cloud.syncUnavailable": "Cloud-Synchronisierung ist noch nicht verfügbar. Deine Bibliothek ist in diesem Browser gespeichert.",
 
     "practice.intro":
       "Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.",

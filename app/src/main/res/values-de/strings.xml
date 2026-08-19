@@ -86,7 +86,7 @@
     <string name="detail_example">Beispielsatz</string>
     <string name="detail_back">Zurück zur Bibliothek</string>
 
-    <!-- Study -->
+    <!-- Study / Dashboard -->
     <string name="study_empty_title">Bereit zum Lernen?</string>
     <string name="study_empty_body">Speichere ein paar deutsche Sätze und wir bauen deine erste Lernsitzung.</string>
     <string name="study_session">Lernsitzung</string>
@@ -103,6 +103,51 @@
     <string name="study_show_translation">Die Übersetzung zeigen</string>
     <string name="study_got_it">Verstanden</string>
     <string name="study_progress">Fortschritt: %1$d / %2$d</string>
+
+    <string name="dashboard_daily_goal">Tagesziel</string>
+    <string name="dashboard_goal_achieved">Ziel erreicht!</string>
+    <string name="dashboard_xp_remaining">%1$d XP verbleibend</string>
+    <string name="dashboard_retention">Wortschatz-Gedächtnis</string>
+    <string name="dashboard_mastered">Meisterhaft</string>
+    <string name="dashboard_learning">Lernend</string>
+    <string name="dashboard_new">Neu</string>
+    <string name="dashboard_heatmap">Aktivitäts-Heatmap</string>
+    <string name="dashboard_heatmap_sub">Letzte 3 Monate konsequenter Bemühungen</string>
+    <string name="dashboard_streak">🔥 %1$d Tage Serie</string>
+    <string name="dashboard_xp">XP</string>
+    <string name="dashboard_tab">Übersicht</string>
+    <string name="dashboard_flashcards_tab">Karteikarten</string>
+
+    <!-- Roleplay -->
+    <string name="roleplay_tab">Rollenspiel</string>
+    <string name="roleplay_tap_to_speak">Zum Sprechen tippen</string>
+    <string name="roleplay_tap_to_send">Zum Senden tippen</string>
+    <string name="roleplay_start_speaking">Sprechen beginnen</string>
+    <string name="roleplay_send_turn">Das Gesagte senden</string>
+    <string name="roleplay_speak_message">Diese Antwort vorlesen</string>
+    <string name="roleplay_retry">Erneut versuchen</string>
+    <string name="practice_tab">Wiederholung</string>
+    <string name="study_skip">Vorerst überspringen</string>
+    <string name="study_word_grammar">%1$s %2$s (Pl. %3$s)</string>
+    <string name="transcript_grammar_spotlight">Grammatik im Fokus</string>
+    <string name="transcript_listening_for">Erkennt: %1$s</string>
+    <string name="detail_linguistic_connections">Sprachliche Verbindungen</string>
+
+    <!-- Cloud-Synchronisierung. Noch nicht gebaut; der Text sagt das auch. -->
+    <string name="settings_cloud_header">Cloud-Synchronisierung</string>
+    <string name="settings_cloud_signed_in">Angemeldet</string>
+    <string name="settings_cloud_title">Cloud-Synchronisierung</string>
+    <string name="settings_cloud_unavailable">Noch nicht verfügbar — deine Bibliothek ist auf diesem Gerät gespeichert.</string>
+    <string name="settings_cloud_sign_in">Anmelden</string>
+    <string name="settings_cloud_sign_out">Abmelden</string>
+    <string name="settings_cloud_sign_in_title">Anmelden</string>
+    <string name="settings_cloud_sign_in_body">Konten sind für ein Backend vorbereitet, das es noch nicht gibt. Das Anmelden ändert auf diesem Gerät nichts.</string>
+    <string name="settings_cloud_email">E-Mail</string>
+    <string name="settings_cloud_password">Passwort</string>
+
+    <!-- Word detail -->
+    <string name="detail_synonyms">Synonyme</string>
+    <string name="detail_antonyms">Antonyme</string>
 
     <!-- Practice -->
     <string name="practice_intro">Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.</string>
@@ -156,6 +201,10 @@
     <string name="message_notification_sent">Benachrichtigung gesendet.</string>
     <string name="message_notifications_off">Benachrichtigungen sind ausgeschaltet. Aktiviere sie für DeutschFlow in den Systemeinstellungen.</string>
     <string name="message_library_empty">Speichere zuerst ein Wort in deiner Bibliothek — es gibt noch nichts zu senden.</string>
+    <string name="message_cloud_connected">Angemeldet. Cloud-Synchronisierung ist noch nicht verfügbar — deine Bibliothek bleibt auf diesem Gerät.</string>
+    <string name="message_cloud_failed">Anmeldung fehlgeschlagen. Prüfe deine Angaben und versuche es erneut.</string>
+    <string name="message_cloud_disconnected">Abgemeldet. Deine Bibliothek ist wie immer auf diesem Gerät gespeichert.</string>
+    <string name="message_sync_unavailable">Cloud-Synchronisierung ist noch nicht verfügbar. Deine Bibliothek ist auf diesem Gerät gespeichert.</string>
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>

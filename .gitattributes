@@ -1,0 +1,28 @@
+# Normalise line endings on the way into the repository.
+#
+# Three web files were staged with LF against a CRLF working tree, which made every
+# `git diff` on them open with a warning. Git decides the checkout ending; the blob
+# is always LF.
+* text=auto
+
+*.kt      text diff=java
+*.kts     text diff=java
+*.java    text diff=java
+*.ts      text
+*.tsx     text
+*.xml     text
+*.json    text
+*.md      text
+*.css     text
+
+# Scripts whose ending is not ours to choose.
+gradlew   text eol=lf
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+
+# Anything Git should never try to rewrite.
+*.png     binary
+*.jpg     binary
+*.webp    binary
+*.jar     binary
+*.keystore binary

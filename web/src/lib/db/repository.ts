@@ -1,27 +1,10 @@
-import type { DeutschFlowDB, TranscriptEntry, UserStatsEntry, VocabularyEntry } from "./schema";
+import type { DeutschFlowDB, TranscriptEntry, UserStatsEntry, VocabularyEntry, ActivityEntry } from "./schema";
 import { foldGermanKey } from "./schema";
 
 /**
  * Repository — Room DAO transactions ported 1:1.
- *
- * Mirrors app/src/main/java/com/aus/deutschflow/data/local/dao/:
- *   VocabularyDao.save()      → saveVocabulary()  (one rw transaction)
- *   VocabularyDao.findByGermanText() → findByGermanText()
- *   UserStatsDao.getUserStatsOnce() / insertOrUpdate → rewardXp()
- *   TranscriptDao / VocabularyDao deletes → delete*()
- *
- * The two subtle behaviours are preserved exactly:
- * 1. saveVocabulary is ONE transaction — the read decides what the write does,
- *    and two concurrent saves of the same word must not both insert.
- * 2. rewardXp is a read-modify-write in one transaction, and the streak compares
- *    CALENDAR DAYS in the device's zone, not "24 hours apart".
  */
 
-/**
- * A word can be met again and learned a bit more each time. All fields except
- * the two essentials are optional: a word typed in by hand arrives with only
- * text + translation; an interrogated word carries the full anatomy.
- */
 export type VocabularyInput = {
   id?: number;
   germanText: string;
@@ -31,15 +14,10 @@ export type VocabularyInput = {
   article?: string;
   plural?: string;
   conjugation?: string;
+  synonyms?: string;
+  antonyms?: string;
 };
 
-/**
- * The fold of the Android `VocabularyEntity.mergedWith`: a field the newcomer
- * fills in wins, a field it leaves blank keeps what was already known; `id` and
- * `germanText` stay as they are (identity is not up for negotiation, and
- * re-saving must not recapitalise the library); `timestamp` takes the later of
- * the two so a word touched again surfaces at the top of the list.
- */
 function mergedWith(existing: VocabularyEntry, incoming: VocabularyInput): VocabularyEntry {
   return {
     ...existing,
@@ -48,38 +26,63 @@ function mergedWith(existing: VocabularyEntry, incoming: VocabularyInput): Vocab
     article: incoming.article || existing.article,
     plural: incoming.plural || existing.plural,
     conjugation: incoming.conjugation || existing.conjugation,
+    synonyms: incoming.synonyms || existing.synonyms,
+    antonyms: incoming.antonyms || existing.antonyms,
     timestamp: Math.max(existing.timestamp, incoming.timestamp ?? 0),
+    lastModifiedAt: Date.now()
   };
 }
 
-/**
- * The one way a word enters or changes in the library — `VocabularyDao.save()`.
- *
- * NOCASE-unique on germanText, so a plain insert would throw the moment a word
- * was saved twice, or edited into a name another row already holds. The
- * collision is resolved by folding the rows together, never by crashing and
- * never by silently dropping one of them.
- */
+/** A word nobody has answered yet: due now, on SM-2's starting ease. */
+export const NEW_CARD_SCHEDULE = {
+  nextReview: 0,
+  interval: 0,
+  easeFactor: 2.5,
+  reviewCount: 0,
+} as const;
+
 export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput): Promise<void> {
-  const entry: VocabularyEntry = {
-    id: input.id,
-    germanText: input.germanText,
-    // The key is derived here so no caller can persist a row whose key
-    // disagrees with its text.
-    germanTextKey: foldGermanKey(input.germanText),
-    englishTranslation: input.englishTranslation,
-    timestamp: input.timestamp ?? Date.now(),
-    exampleSentence: input.exampleSentence ?? "",
-    article: input.article ?? "",
-    plural: input.plural ?? "",
-    conjugation: input.conjugation ?? "",
-  };
+  const now = Date.now();
 
   await db.transaction("rw", db.vocabulary, async () => {
+    /**
+     * The row this save is editing, if it is an edit at all.
+     *
+     * Its schedule and its cloud identity belong to the word, not to the text
+     * the user just typed: building them fresh here reset a card reviewed
+     * twenty times back to new, and minted a second remoteId for a record the
+     * cloud already knew. Read inside the transaction, so the row cannot move
+     * between this read and the write below.
+     */
+    const editing = input.id === undefined ? undefined : await db.vocabulary.get(input.id);
+
+    const entry: VocabularyEntry = {
+      id: input.id,
+      germanText: input.germanText,
+      germanTextKey: foldGermanKey(input.germanText),
+      englishTranslation: input.englishTranslation,
+      timestamp: input.timestamp ?? now,
+      exampleSentence: input.exampleSentence ?? "",
+      article: input.article ?? "",
+      plural: input.plural ?? "",
+      conjugation: input.conjugation ?? "",
+      synonyms: input.synonyms ?? "",
+      antonyms: input.antonyms ?? "",
+
+      nextReview: editing?.nextReview ?? NEW_CARD_SCHEDULE.nextReview,
+      interval: editing?.interval ?? NEW_CARD_SCHEDULE.interval,
+      easeFactor: editing?.easeFactor ?? NEW_CARD_SCHEDULE.easeFactor,
+      reviewCount: editing?.reviewCount ?? NEW_CARD_SCHEDULE.reviewCount,
+
+      // `||`, not `??`: rows migrated from before the sync columns carry an
+      // empty string, which needs a real id just as much as a missing one.
+      remoteId: editing?.remoteId || crypto.randomUUID(),
+      lastModifiedAt: now,
+    };
+
     const existing = await db.vocabulary.where("germanTextKey").equals(entry.germanTextKey).first();
 
     if (!existing) {
-      // Nothing holds that word yet: a new entry, or a rename onto a free name.
       if (entry.id === undefined) {
         await db.vocabulary.add(entry);
       } else {
@@ -88,15 +91,13 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
       return;
     }
 
+    // An edit the user typed wins outright — a correction, not a second
+    // sighting. `entry` already carries this row's schedule and remoteId.
     if (existing.id === entry.id) {
-      // An edit the user typed wins outright — a correction, not a second sighting.
       await db.vocabulary.put(entry);
       return;
     }
 
-    // Another row owns the word. Fold into it and let the newcomer go — which
-    // for a save is a row that never existed, and for a rename is the row being
-    // renamed onto its new twin.
     if (entry.id !== undefined) {
       await db.vocabulary.delete(entry.id);
     }
@@ -104,24 +105,41 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
   });
 }
 
-/** NOCASE lookup: "hund" finds the row saved as "Hund". */
+export async function updateVocabulary(db: DeutschFlowDB, entry: VocabularyEntry): Promise<void> {
+  await db.vocabulary.put({ ...entry, lastModifiedAt: Date.now() });
+}
+
 export async function findByGermanText(db: DeutschFlowDB, germanText: string) {
   return db.vocabulary.where("germanTextKey").equals(foldGermanKey(germanText)).first();
 }
 
-/** Live (Flow-like) list of the library, newest first. */
 export function observeVocabulary(db: DeutschFlowDB) {
   return db.vocabulary.orderBy("timestamp").reverse().toArray();
 }
 
-/** Live list of transcripts, newest first — TranscriptDao.getAllTranscripts(). */
 export function observeTranscripts(db: DeutschFlowDB) {
   return db.transcripts.orderBy("timestamp").reverse().toArray();
 }
 
-/** One-shot read of the whole library, newest first — the Study/Practice snapshots. */
 export async function getAllVocabulary(db: DeutschFlowDB): Promise<VocabularyEntry[]> {
   return db.vocabulary.orderBy("timestamp").reverse().toArray();
+}
+
+/**
+ * The cards ready for review — VocabularyDao.getDueVocabulary().
+ *
+ * Same order as the Room query: scheduled reviews first, in the order they fell
+ * due, then words never answered, newest first. Sorting on `timestamp` alone
+ * ignored the schedule entirely, so the two apps walked one library differently.
+ */
+export async function getDueVocabulary(db: DeutschFlowDB, currentTime: number): Promise<VocabularyEntry[]> {
+  const due = await db.vocabulary.where("nextReview").belowOrEqual(currentTime).toArray();
+  return due.sort(
+    (a, b) =>
+      Number(a.nextReview === 0) - Number(b.nextReview === 0) ||
+      a.nextReview - b.nextReview ||
+      b.timestamp - a.timestamp
+  );
 }
 
 export async function insertTranscript(
@@ -129,7 +147,13 @@ export async function insertTranscript(
   fullText: string,
   timestamp?: number
 ): Promise<void> {
-  await db.transcripts.add({ fullText, timestamp: timestamp ?? Date.now() });
+  const now = Date.now();
+  await db.transcripts.add({
+    fullText,
+    timestamp: timestamp ?? now,
+    remoteId: crypto.randomUUID(),
+    lastModifiedAt: now
+  });
 }
 
 export async function deleteTranscript(
@@ -142,11 +166,6 @@ export async function deleteTranscript(
 export async function deleteVocabulary(db: DeutschFlowDB, entry: VocabularyEntry): Promise<void> {
   if (entry.id !== undefined) await db.vocabulary.delete(entry.id);
 }
-
-// No deleteAllTranscripts / deleteAllVocabulary: wiping a whole table only ever
-// happens as part of "Clear all progress", which has to clear all three together
-// in one transaction. Per-table versions existed, were never called, and offered a
-// way to do half of that job.
 
 /* ---------------------------------------------------------------------------
    User stats — XP and streak
@@ -165,18 +184,49 @@ export async function getUserStatsOnce(db: DeutschFlowDB): Promise<UserStatsEntr
   );
 }
 
-/** Live singleton for the Settings telemetry grid. */
 export function observeUserStats(db: DeutschFlowDB) {
   return db.userStats.where("id").equals(1).first();
 }
 
+/** The heatmap's window, newest first — bounded, like the Room query. */
+export const HEATMAP_DAYS = 92;
+
+export async function observeActivityLog(db: DeutschFlowDB) {
+    const since = todayKey(new Date(Date.now() - HEATMAP_DAYS * 86_400_000));
+    // Sorted after the read, not by reversing the collection: sortBy re-sorts in
+    // JS, so a reverse() before it is simply discarded.
+    const days = await db.activityLog.where("date").aboveOrEqual(since).toArray();
+    return days.sort((a, b) => b.date.localeCompare(a.date));
+}
+
 /**
- * Compares calendar days in the device's zone — StudyViewModel.nextStreak().
+ * Today as "YYYY-MM-DD" in the device's zone — the activity_log primary key.
  *
- * The old rule treated any gap over 24h as "the next day" (a streak that could
- * never break), while two sessions 23 hours apart never counted as consecutive
- * days. Calendar-day comparison fixes both.
+ * Local, not `toISOString()`, for the same reason `daysBetween` below compares
+ * calendar days: a UTC key rolls the heatmap and the daily goal over at the
+ * wrong hour for every user outside UTC, and disagrees with the streak sitting
+ * next to it. Android writes the same key via `LocalDate.now()`.
+ *
+ * Exported so the dashboard reads under exactly the key this writes.
  */
+export function todayKey(now: Date = new Date()): string {
+  const month = `${now.getMonth() + 1}`.padStart(2, "0");
+  const day = `${now.getDate()}`.padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+export async function addActivityXp(db: DeutschFlowDB, amount: number): Promise<void> {
+    const date = todayKey();
+    await db.transaction("rw", db.activityLog, async () => {
+        const current = await db.activityLog.get(date);
+        if (current) {
+            await db.activityLog.put({ ...current, xpGained: current.xpGained + amount });
+        } else {
+            await db.activityLog.add({ date, xpGained: amount, timestamp: Date.now() });
+        }
+    });
+}
+
 export function nextStreak(currentStreak: number, lastActivity: number, now: number): number {
   if (lastActivity <= 0 || currentStreak <= 0) return 1;
   const days = daysBetween(lastActivity, now);
@@ -193,16 +243,8 @@ function daysBetween(from: number, to: number): number {
   return Math.round((startOfDayB - startOfDayA) / 86_400_000);
 }
 
-/**
- * Banks XP and advances the streak — atomically, like the Room transaction.
- *
- * The read and the write are one unit: two rapid "Got it!" taps must not both
- * read the same row before either writes (which used to swallow an award and
- * write lastActivityTimestamp out of order). The once-per-session guard lives
- * in the Study store, mirroring StudyViewModel.awardedCardIds.
- */
 export async function rewardXp(db: DeutschFlowDB, points: number = XP_PER_CARD): Promise<UserStatsEntry> {
-  return db.transaction("rw", db.userStats, async () => {
+  return db.transaction("rw", db.userStats, db.activityLog, async () => {
     const stats = await getUserStatsOnce(db);
     const now = Date.now();
     const updated: UserStatsEntry = {
@@ -212,19 +254,19 @@ export async function rewardXp(db: DeutschFlowDB, points: number = XP_PER_CARD):
       lastActivityTimestamp: now,
     };
     await db.userStats.put(updated);
+
+    // Also update activity log
+    await addActivityXp(db, points);
+
     return updated;
   });
 }
 
-/* ---------------------------------------------------------------------------
-   Progress wiping — Settings → "Clear all progress"
-   --------------------------------------------------------------------------- */
-
-/** Clears the three Room tables; settings (dialect, API key) are kept. */
 export async function clearAllProgress(db: DeutschFlowDB): Promise<void> {
-  await db.transaction("rw", db.vocabulary, db.transcripts, db.userStats, async () => {
+  await db.transaction("rw", db.vocabulary, db.transcripts, db.userStats, db.activityLog, async () => {
     await db.vocabulary.clear();
     await db.transcripts.clear();
     await db.userStats.clear();
+    await db.activityLog.clear();
   });
 }

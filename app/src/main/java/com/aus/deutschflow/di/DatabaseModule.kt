@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.MIGRATIONS
+import com.aus.deutschflow.data.local.dao.ActivityDao
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
@@ -43,4 +44,7 @@ object DatabaseModule {
 
     @Provides
     fun provideUserStatsDao(database: AppDatabase): UserStatsDao = database.userStatsDao()
+
+    @Provides
+    fun provideActivityDao(database: AppDatabase): ActivityDao = database.activityDao()
 }

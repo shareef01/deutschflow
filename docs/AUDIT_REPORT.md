@@ -2,11 +2,11 @@
 
 > **Historical record — describes the app as of database version 5.**
 > This report is kept for the reasoning it captures, not as a description of current
-> state. The schema has since moved to v7 (`MIGRATION_5_6` added the grammatical
-> fields, `MIGRATION_6_7` made `germanText` unique and merged the duplicates), the
-> web PWA in `web/` did not exist when it was written, and recognition now binds the
-> on-device engine explicitly via `createOnDeviceSpeechRecognizer`. For current
-> state, read the README and the code.
+> state. The schema has since moved to v11 — v6 and v7 added the grammatical fields
+> and made `germanText` unique, and v8 to v11 carry spaced repetition, synonyms, the
+> activity log and the sync columns. The web PWA in `web/` did not exist when this
+> was written, and recognition now binds the on-device engine explicitly via
+> `createOnDeviceSpeechRecognizer`. For current state, read the README and the code.
 
 A line-by-line audit of the Kotlin / Compose / Room / SpeechRecognizer / Groq stack,
 followed by the refactor described below. Findings are ordered by impact. Each entry

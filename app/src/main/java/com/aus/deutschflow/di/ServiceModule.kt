@@ -1,7 +1,10 @@
 package com.aus.deutschflow.di
 
+import com.aus.deutschflow.service.CloudService
 import com.aus.deutschflow.service.GroqHelper
+import com.aus.deutschflow.service.MockCloudService
 import com.aus.deutschflow.service.VocabularyProcessor
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -10,18 +13,17 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object ServiceModule {
+abstract class ServiceModule {
 
-    /**
-     * VocabularyProcessor has no @Inject constructor - it is constructed directly by
-     * the tests that substitute a scripted subclass for it - so it needs a binding here.
-     *
-     * TTSHelper does not: it is already an @Singleton @Inject constructor, and the
-     * @Provides that used to sit here was a second, redundant way to say so.
-     */
-    @Provides
+    @Binds
     @Singleton
-    fun provideVocabularyProcessor(languageModel: GroqHelper): VocabularyProcessor {
-        return VocabularyProcessor(languageModel)
+    abstract fun bindCloudService(impl: MockCloudService): CloudService
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideVocabularyProcessor(languageModel: GroqHelper): VocabularyProcessor {
+            return VocabularyProcessor(languageModel)
+        }
     }
 }

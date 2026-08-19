@@ -22,15 +22,6 @@ import {
 import type { TFunction } from "@/lib/i18n";
 import type { VocabularyEntry } from "@/lib/db/schema";
 
-/**
- * VocabularyScreen — ui/screens/VocabularyScreen.kt + VocabularyDetailScreen.kt
- * port.
- *
- * Below 768px the detail view is a state swap inside this destination (with the
- * browser back gesture closing it — the BackHandler). At 768px and above the
- * list and detail sit side by side, separated by the same azure hairline the
- * navigation bar uses.
- */
 export default function VocabularyPage() {
   const {
     list,
@@ -46,7 +37,6 @@ export default function VocabularyPage() {
   } = useVocabulary();
 
   const isDesktop = useHasSplitView();
-  /** With nothing saved there is no detail to show, so there is no split. */
   const isLibraryEmpty = allVocabulary.length === 0;
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -64,18 +54,11 @@ export default function VocabularyPage() {
   const selectedItem = sortedList.find((item) => item.id === selectedId) ?? null;
   const editingItem = list.find((item) => item.id === editingId) ?? null;
 
-  // The model's own example when the word came from a translation, and a
-  // generated one only for words typed in by hand. Keyed on the resolved word
-  // rather than the id: the generator picks at random, so composing inline
-  // would reshuffle the sentence on every render.
   const exampleSentence = useMemo(() => {
     if (!selectedItem) return "";
     return selectedItem.exampleSentence || exampleFor(selectedItem.germanText);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedItem?.germanText, selectedItem?.exampleSentence]);
+  }, [selectedItem?.germanText, selectedItem?.exampleSentence, exampleFor]);
 
-  // On a compact width the detail view is a state swap, so the back gesture
-  // must close the word instead of leaving the library altogether.
   useBackHandler(!isDesktop && selectedItem != null, () => setSelectedId(null));
 
   const listProps = {
@@ -98,15 +81,10 @@ export default function VocabularyPage() {
       <ErrorBanner message={ttsError} />
 
       {isDesktop && !isLibraryEmpty ? (
-        // A proportional split with a floor, not a blind 50/50: the list needs a
-        // minimum before it is worth showing beside anything, and past that the
-        // detail pane takes the larger share because it holds the reading.
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(22rem,0.9fr)_1px_minmax(0,1.1fr)]">
           <div className="min-w-0">
             <VocabularyListContent {...listProps} />
           </div>
-          {/* The same azure hairline the navigation bar uses for its divider:
-              the one divider language in the app. */}
           <div className="self-stretch bg-[rgba(0,229,255,0.15)]" />
           <div className="min-w-0">
             <VocabularyDetail
@@ -119,9 +97,6 @@ export default function VocabularyPage() {
           </div>
         </div>
       ) : isLibraryEmpty ? (
-        // Nothing saved yet: the whole content area answers what to do next.
-        // Splitting the screen to put "select a word" beside "you have no
-        // words" spends half a monitor saying the same thing twice.
         <VocabularyListContent {...listProps} />
       ) : selectedItem ? (
         <VocabularyDetail
@@ -185,7 +160,6 @@ function VocabularyListContent({
   searchQuery: string;
   onSearchChange: (value: string) => void;
   vocabularyList: VocabularyEntry[];
-  /** The whole library, unfiltered — the stats strip counts this. */
   statsList: VocabularyEntry[];
   sortMode: "newest" | "alpha";
   onSortChange: (mode: "newest" | "alpha") => void;
@@ -210,15 +184,12 @@ function VocabularyListContent({
         />
       </div>
 
-      {/* What the library holds, in three real numbers: words, multi-word
-          phrases, and how many carry the model's example sentence. */}
       <div className="glass-surface mt-3 grid grid-cols-3 px-4 py-2.5">
         <StatCell value={String(words)} label={t("library.statWords")} />
         <StatCell value={String(phrases)} label={t("library.statPhrases")} />
         <StatCell value={String(withExample)} label={t("library.statExamples")} />
       </div>
 
-      {/* Order the rows by recency or by the German word. */}
       <div className="mt-3 flex gap-2">
         {(
           [
@@ -265,8 +236,6 @@ function VocabularyListContent({
         )}
       </div>
 
-      {/* The only way into the library that never touches the network. A glass
-          disc, not a solid block — the app has no solid primary buttons. */}
       <button
         type="button"
         onClick={onAdd}
@@ -298,9 +267,6 @@ function VocabularyItem({
 
   return (
     <li className="glass-surface">
-      {/* Top, not centre: entries are whole sentences, so the text block is
-          often three lines tall and the controls used to sit stranded in the
-          middle of it. */}
       <div className="flex items-start gap-1 p-2 pl-4">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 pr-2 text-left">
           <p lang="de" className="line-clamp-3 hyphens-auto break-words text-title-medium text-primary">{item.germanText}</p>
@@ -399,7 +365,6 @@ function VocabularyDetail({
     <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          {/* headlineMedium, not display: entries are whole sentences here. */}
           <h2 lang="de" className="hyphens-auto break-words text-headline-medium text-primary">{item.germanText}</h2>
           {grammar && (
             <p className="mt-1 text-label-large text-on-surface-variant">{grammar}</p>
@@ -407,8 +372,6 @@ function VocabularyDetail({
           <p className="mt-1 text-title-medium text-on-surface-variant">{item.englishTranslation}</p>
         </div>
 
-        {/* The same control that speaks everywhere: one size, one colour pair
-            for "hear this aloud". */}
         <button
           type="button"
           onClick={() => onSpeak(item.germanText)}
@@ -417,6 +380,16 @@ function VocabularyDetail({
         >
           <PlayArrowIcon className="size-7" />
         </button>
+      </div>
+
+      <div className="mt-8">
+        <h3 className="text-label-small font-bold text-primary uppercase tracking-wider">Linguistic Connections</h3>
+        <div className="mt-2 mb-4 h-px bg-surface-variant" />
+
+        <div className="grid grid-cols-2 gap-4">
+            <LinguisticBox title="SYNONYMS" content={item.synonyms} />
+            <LinguisticBox title="ANTONYMS" content={item.antonyms} />
+        </div>
       </div>
 
       <div className="mt-8">
@@ -432,10 +405,21 @@ function VocabularyDetail({
       <div className="flex-1" />
 
       <GlassButton type="button" onClick={onClose} className="mt-6 w-full">
-        <span className="text-label-large font-bold">{t("detail.back")}</span>
+        <span className="text-label-large font-bold uppercase">{t("detail.back")}</span>
       </GlassButton>
     </div>
   );
+}
+
+function LinguisticBox({ title, content }: { title: string; content: string }) {
+    return (
+        <div className="glass-surface p-4 flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-primary tracking-widest">{title}</span>
+            <p className={`text-sm ${content ? 'text-on-surface' : 'text-on-surface-variant opacity-50'}`}>
+                {content || "—"}
+            </p>
+        </div>
+    )
 }
 
 function VocabularyEditorDialog({
@@ -458,8 +442,6 @@ function VocabularyEditorDialog({
   const [germanText, setGermanText] = useState(initialGerman);
   const [translation, setTranslation] = useState(initialEnglish);
 
-  // Saving blank fields used to be allowed, which wrote two empty strings over
-  // a real entry and left an unreachable row in the library.
   const isValid = germanText.trim().length > 0 && translation.trim().length > 0;
 
   return (
@@ -503,7 +485,6 @@ function VocabularyEditorDialog({
   );
 }
 
-/** One cell of the library's stats strip. */
 function StatCell({ value, label }: { value: string; label: string }) {
   return (
     <div className="flex flex-col items-center">
