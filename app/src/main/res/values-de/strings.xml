@@ -37,8 +37,8 @@
     <string name="transcript_translation">Übersetzung</string>
     <string name="transcript_vocabulary">Wortschatz</string>
     <string name="transcript_save">In Bibliothek speichern</string>
-    <string name="transcript_saved">In deiner Bibliothek gespeichert.</string>
     <string name="transcript_placeholder">Deine Mitschrift erscheint hier.</string>
+    <string name="transcript_saved">In deiner Bibliothek gespeichert.</string>
     <string name="word_sheet_article">Artikel: %1$s</string>
     <string name="word_sheet_plural">Plural: %1$s</string>
     <string name="word_sheet_verb">Infinitiv: %1$s</string>
