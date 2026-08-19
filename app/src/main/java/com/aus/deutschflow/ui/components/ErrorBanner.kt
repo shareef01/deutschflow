@@ -37,7 +37,19 @@ import androidx.compose.ui.unit.dp
  * library now render it too.
  */
 @Composable
-fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
+fun ErrorBanner(
+    message: String?,
+    modifier: Modifier = Modifier,
+    /**
+     * An optional way out, for the conditions the user can actually undo.
+     *
+     * Most of what lands here is weather - a network blip, a recogniser that heard
+     * nothing - and reading it is all anyone can do. A refused microphone is not:
+     * it is fixable, in one place, and a banner that only names it leaves the person
+     * who most needs help with nowhere to go.
+     */
+    action: (@Composable () -> Unit)? = null
+) {
     // The last message outlives the null that starts the exit animation, so the
     // banner shrinks away with its text intact instead of blanking first.
     var lastMessage by remember { mutableStateOf("") }
@@ -96,6 +108,11 @@ fun ErrorBanner(message: String?, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
+
+            if (action != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                action()
+            }
         }
     }
 }

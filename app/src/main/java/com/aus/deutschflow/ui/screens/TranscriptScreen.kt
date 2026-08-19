@@ -1,5 +1,7 @@
 package com.aus.deutschflow.ui.screens
 
+import android.net.Uri
+import android.content.Intent
 import android.Manifest
 import android.content.ClipData
 import android.content.pm.PackageManager
@@ -90,6 +92,8 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
     val interrogatingWord by viewModel.interrogatingWord.collectAsState()
     val selectedDialect by viewModel.selectedDialect.collectAsState()
     val isFirstRun by viewModel.isFirstRun.collectAsState()
+    val listeningSeconds by viewModel.listeningSeconds.collectAsState()
+    val permissionDenied by viewModel.permissionDenied.collectAsState()
 
     val amplitude = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(viewModel) {
@@ -139,6 +143,16 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
             rmsAmplitude = amplitude,
             dialect = selectedDialect,
             isFirstRun = isFirstRun,
+            listeningSeconds = listeningSeconds,
+            permissionDenied = permissionDenied,
+            onOpenSettings = {
+                context.startActivity(
+                    Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null)
+                    )
+                )
+            },
             onStartListening = {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     viewModel.startListening()
@@ -189,6 +203,9 @@ fun TranscriptContent(
     rmsAmplitude: State<Float>,
     dialect: String,
     isFirstRun: Boolean,
+    listeningSeconds: Int,
+    permissionDenied: Boolean,
+    onOpenSettings: () -> Unit,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
     onWordClick: (String) -> Unit,
@@ -274,14 +291,40 @@ fun TranscriptContent(
 
         if (isListening) {
             Spacer(modifier = Modifier.height(Spacing.md))
-            AudioWaveform(
-                amplitude = rmsAmplitude,
-                isActive = true,
-                modifier = Modifier.fillMaxWidth().height(WaveformHeight)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AudioWaveform(
+                    amplitude = rmsAmplitude,
+                    isActive = true,
+                    modifier = Modifier.weight(1f).height(WaveformHeight)
+                )
+                Spacer(modifier = Modifier.width(Spacing.sm))
+                // The waveform moves for room noise too, so on its own it does not
+                // answer "did it hear me start". The count does.
+                Text(
+                    text = stringResource(
+                        R.string.transcript_elapsed,
+                        listeningSeconds / 60,
+                        listeningSeconds % 60
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        ErrorBanner(errorState)
+        ErrorBanner(
+            message = errorState,
+            action = if (permissionDenied) {
+                {
+                    TextButton(onClick = onOpenSettings) {
+                        Text(stringResource(R.string.action_open_settings))
+                    }
+                }
+            } else null
+        )
 
         if (translation.isNotEmpty()) {
             Spacer(modifier = Modifier.height(Spacing.xl))

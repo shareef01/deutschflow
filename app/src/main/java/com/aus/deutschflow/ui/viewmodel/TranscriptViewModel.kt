@@ -17,6 +17,8 @@ import com.aus.deutschflow.service.WordDetailsResult
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -71,6 +73,62 @@ class TranscriptViewModel @Inject constructor(
     ) { processing, translating -> processing || translating }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    /**
+     * What the screen is doing, as one value.
+     *
+     * The states were real but implicit - spread across isListening, isBusy,
+     * finalText and translation, and re-derived with a different combination at each
+     * place that needed one. Naming them means a screen renders one thing per state
+     * instead of inferring it from four booleans, and a state that is added later
+     * cannot be half-handled.
+     */
+    val phase: StateFlow<RecordingPhase> = combine(
+        speechRecognizerHelper.isListening,
+        isBusy,
+        speechRecognizerHelper.finalText
+    ) { listening, busy, final ->
+        when {
+            listening -> RecordingPhase.LISTENING
+            busy -> RecordingPhase.TRANSCRIBING
+            final.isNotBlank() -> RecordingPhase.RESULT
+            else -> RecordingPhase.IDLE
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecordingPhase.IDLE)
+
+    /**
+     * Seconds elapsed in the current recording.
+     *
+     * Speech recognition ends itself on silence, so without a count there is nothing
+     * on screen telling you whether it heard you start - only a waveform, which moves
+     * for room noise too.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val listeningSeconds: StateFlow<Int> = speechRecognizerHelper.isListening
+        .flatMapLatest { listening ->
+            if (!listening) {
+                flowOf(0)
+            } else {
+                flow {
+                    var elapsed = 0
+                    while (true) {
+                        emit(elapsed)
+                        delay(1_000)
+                        elapsed++
+                    }
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /**
+     * Whether the microphone was refused.
+     *
+     * Distinct from the error text, because it is the one failure on this screen the
+     * user can actually undo - and only if the app says where to go.
+     */
+    private val _permissionDenied = MutableStateFlow(false)
+    val permissionDenied: StateFlow<Boolean> = _permissionDenied
+
     private val _translation = MutableStateFlow("")
     val translation: StateFlow<String> = _translation
 
@@ -122,6 +180,7 @@ class TranscriptViewModel @Inject constructor(
     }
 
     fun startListening() {
+        _permissionDenied.value = false
         viewModelScope.launch {
             _translation.value = ""
             _suggestedWords.value = emptyList()
@@ -142,6 +201,7 @@ class TranscriptViewModel @Inject constructor(
 
     /** The user refused the microphone, so say so rather than doing nothing. */
     fun onPermissionDenied() {
+        _permissionDenied.value = true
         speechRecognizerHelper.reportPermissionDenied()
     }
 
@@ -297,3 +357,6 @@ class TranscriptViewModel @Inject constructor(
         speechRecognizerHelper.destroy()
     }
 }
+
+/** The states the transcript screen moves through, in the order they occur. */
+enum class RecordingPhase { IDLE, LISTENING, TRANSCRIBING, RESULT }
