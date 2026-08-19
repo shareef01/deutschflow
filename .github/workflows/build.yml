@@ -23,6 +23,12 @@ jobs:
   build:
     name: Tests, lint and release build
     runs-on: ubuntu-latest
+    # Bounded, because the default is six hours and nothing here legitimately runs
+    # for more than a few minutes. `playwright install --with-deps` stalled twice on
+    # an apt lock and burned 6h each time, on branches whose code had nothing to do
+    # with it; the re-run finished in 1m37s. A job that hangs should fail while
+    # someone is still looking at it.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +73,7 @@ jobs:
   web:
     name: PWA type check, tests and build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
@@ -117,6 +124,7 @@ jobs:
   instrumented:
     name: Instrumented tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
