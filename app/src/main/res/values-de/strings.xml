@@ -24,6 +24,7 @@
     <string name="action_save">Speichern</string>
     <string name="action_copy">Kopieren</string>
     <string name="action_ok">OK</string>
+    <string name="action_open_settings">Einstellungen öffnen</string>
 
     <!-- Transcript -->
     <string name="transcript_listening">Hört zu…</string>
@@ -40,6 +41,8 @@
     <string name="transcript_placeholder">Deine Mitschrift erscheint hier.</string>
     <string name="transcript_start">Aufnahme starten</string>
     <string name="transcript_stop">Aufnahme beenden</string>
+    <!-- Elapsed recording time, m:ss. -->
+    <string name="transcript_elapsed">%1$d:%2$02d</string>
     <string name="transcript_saved">In deiner Bibliothek gespeichert.</string>
     <string name="word_sheet_article">Artikel: %1$s</string>
     <string name="word_sheet_plural">Plural: %1$s</string>
