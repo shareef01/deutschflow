@@ -5,6 +5,12 @@ import android.content.ClipData
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.ripple
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -48,6 +54,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.ui.components.*
+import com.aus.deutschflow.ui.theme.pressScale
+import com.aus.deutschflow.ui.theme.RecordIconSize
+import com.aus.deutschflow.ui.theme.RecordButtonSize
+import com.aus.deutschflow.ui.theme.Motion
+import com.aus.deutschflow.ui.theme.LocalReducedMotion
 import com.aus.deutschflow.ui.theme.WaveformHeight
 import com.aus.deutschflow.ui.theme.TranscriptCardMinHeight
 import com.aus.deutschflow.ui.theme.UppercaseLabelTracking
@@ -339,35 +350,78 @@ fun TranscriptContent(
         Spacer(modifier = Modifier.height(Spacing.md))
     }
 
+    val micLabel = stringResource(
+        if (isListening) R.string.transcript_stop else R.string.transcript_start
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = Spacing.md),
         contentAlignment = Alignment.Center
     ) {
-            if (isListening) {
-                val pulseScale by rememberInfiniteTransition().animateFloat(
-                    initialValue = 1f, targetValue = 1.8f,
-                    animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart), label = ""
+            // A halo that keeps expanding for as long as recording lasts is the
+            // shape of motion most likely to make someone ill, so it is the first
+            // thing to go when less movement has been asked for. The button still
+            // turns red and shows a stop icon; the state is never carried by the
+            // animation alone.
+            if (isListening && !LocalReducedMotion.current) {
+                val pulseScale by rememberInfiniteTransition(label = "record").animateFloat(
+                    initialValue = 1f,
+                    targetValue = 1.8f,
+                    animationSpec = infiniteRepeatable(
+                        tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
+                        RepeatMode.Restart
+                    ),
+                    label = "pulse"
                 )
-                Box(Modifier.size(100.dp).scale(pulseScale).alpha(0.3f).background(primaryColor, CircleShape))
+                Box(
+                    Modifier
+                        .size(RecordButtonSize)
+                        .scale(pulseScale)
+                        .alpha(0.3f)
+                        .background(primaryColor, CircleShape)
+                )
             }
 
+            val interactionSource = remember { MutableInteractionSource() }
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(RecordButtonSize)
+                    // The spring already lived in Obsidian.kt and nothing used it.
+                    // The primary control of the app acknowledging a touch is the
+                    // one place it earns its keep.
+                    .pressScale(interactionSource)
                     .clip(CircleShape)
-                    .background(if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) else gradientBrush)
-                    .clickable { 
+                    .background(
+                        if (isListening) {
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.error,
+                                    MaterialTheme.colorScheme.errorContainer
+                                )
+                            )
+                        } else {
+                            gradientBrush
+                        }
+                    )
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = ripple(bounded = false)
+                    ) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (isListening) onStopListening() else onStartListening() 
+                        if (isListening) onStopListening() else onStartListening()
+                    }
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = micLabel
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                    // Announced on the button itself, above.
                     contentDescription = null,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(RecordIconSize),
                     tint = Color.White
                 )
             }
