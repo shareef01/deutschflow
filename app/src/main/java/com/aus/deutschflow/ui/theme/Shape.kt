@@ -60,3 +60,7 @@ val WaveformHeight = 40.dp
  * the layout does not jump the moment the first word lands.
  */
 val TranscriptCardMinHeight = 200.dp
+
+/** The record button, and the icon inside it. Kept as a pair, like the medallion. */
+val RecordButtonSize = 100.dp
+val RecordIconSize = 40.dp

@@ -36,6 +36,8 @@ import com.aus.deutschflow.ui.viewmodel.VocabularySort
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.SearchInput
+import com.aus.deutschflow.ui.theme.motionDuration
+import com.aus.deutschflow.ui.theme.Motion
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.SelectionDefaults
 import com.aus.deutschflow.ui.theme.Spacing
@@ -125,9 +127,10 @@ fun VocabularyScreen(
                 }
             }
         } else {
+            val fade = motionDuration(Motion.STANDARD)
             AnimatedContent(
                 targetState = selectedItem != null,
-                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+                transitionSpec = { fadeIn(tween(fade)) togetherWith fadeOut(tween(fade)) },
                 label = "vocabContent"
             ) { isDetailVisible ->
                 if (isDetailVisible) {
@@ -254,9 +257,10 @@ fun VocabularyListContent(
             Spacer(modifier = Modifier.height(Spacing.sm))
             }
 
+            val listFade = motionDuration(Motion.STANDARD)
             AnimatedContent(
                 targetState = vocabularyList.isEmpty(),
-                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+                transitionSpec = { fadeIn(tween(listFade)) togetherWith fadeOut(tween(listFade)) },
                 label = "vocabList"
             ) { isEmpty ->
                 if (isEmpty) {

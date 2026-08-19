@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.theme.Motion
+import com.aus.deutschflow.ui.theme.LocalReducedMotion
 import com.aus.deutschflow.ui.theme.Spacing
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.ui.theme.AzureGlow
@@ -124,10 +126,16 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                 }
 
                 Box(contentAlignment = Alignment.Center) {
-                    if (isListening) {
-                        val pulseScale by rememberInfiniteTransition().animateFloat(
-                            initialValue = 1f, targetValue = 1.5f,
-                            animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Restart), label = ""
+                    // Same halo, same reason for stopping it - see TranscriptScreen.
+                    if (isListening && !LocalReducedMotion.current) {
+                        val pulseScale by rememberInfiniteTransition(label = "record").animateFloat(
+                            initialValue = 1f,
+                            targetValue = 1.5f,
+                            animationSpec = infiniteRepeatable(
+                                tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
+                                RepeatMode.Restart
+                            ),
+                            label = "pulse"
                         )
                         Box(Modifier.size(64.dp).scale(pulseScale).alpha(0.3f).background(MaterialTheme.colorScheme.primary, CircleShape))
                     }
