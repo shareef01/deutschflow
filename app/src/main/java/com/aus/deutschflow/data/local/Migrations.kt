@@ -257,6 +257,32 @@ private const val UUID_V4 =
         "substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6)))"
 
 /**
+ * Reconciles the two shapes version 11 was briefly allowed to have.
+ *
+ * `transcripts.remoteId` and `lastModifiedAt` were declared NOT NULL with no SQL
+ * default, while MIGRATION_10_11 adds them *with* one. A database that migrated into
+ * v11 therefore carried `DEFAULT ''`, and one created fresh at v11 did not - the same
+ * version number over two different tables. Declaring the defaults on the entity
+ * fixed the divergence, but it also changed the DDL Room hashes, so a device already
+ * holding the older v11 opens with a matching version, a mismatched identity hash,
+ * and `IllegalStateException: Room cannot verify the data integrity` on launch.
+ *
+ * `fallbackToDestructiveMigration` does not catch that: the identity check runs in
+ * onOpen and throws whatever the fallback says, so debug builds crash exactly like
+ * release ones rather than quietly recreating.
+ *
+ * Nothing to do here. The columns exist on both shapes and the physical table on the
+ * migrated side already carries the defaults; only the *recorded* hash is stale, and
+ * stepping the version is what lets Room rewrite it. The migration exists so that
+ * step happens without anyone losing a library over an unreleased version number.
+ */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Deliberately empty - see above.
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -271,4 +297,4 @@ private const val UUID_V4 =
  * would therefore be untestable and unreachable, not a missing safety net.
  */
 val MIGRATIONS =
-    arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+    arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
