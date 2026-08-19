@@ -43,6 +43,8 @@ describe("parseResponse — translation extraction", () => {
       translation: "Hello, how are you?",
       keywords: ["Hallo", "Deutsch", "Lernen"],
       example: "Ich lerne jeden Tag Deutsch.",
+      // Absent from the answer, so the Grammar Spotlight has nothing to show.
+      grammarNotes: [],
     });
   });
 
@@ -83,6 +85,9 @@ describe("parseWordDetails — single-word interrogation", () => {
       conjugationOrInfinitive: "",
       meaning: "exercise",
       exampleSentence: "Ich mache meine Übungen.",
+      // Omitted by the model rather than empty - both read as "none known".
+      synonyms: [],
+      antonyms: [],
     });
   });
 

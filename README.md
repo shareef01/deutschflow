@@ -170,13 +170,20 @@ sequenceDiagram
 
 ### Database
 
-Room, version 7, with exported schemas and every migration (2→3→4→5→6→7)
+Room, version 11, with exported schemas and every migration (2→3→4→5→6→7→8→9→10→11)
 validated by test. Release builds have **no** destructive-migration fallback — a
 missing migration is a failing test, not a wiped library.
 
 `germanText` is unique under a `NOCASE` collation, so a word is one row however
 many times it is met; `MIGRATION_6_7` merged the duplicates that predate the
 constraint field by field rather than picking a survivor.
+
+Versions 8 to 11 carry the spaced-repetition work: `MIGRATION_7_8` added the SM-2
+columns (`nextReview`, `interval`, `easeFactor`, `reviewCount`) and the index the
+due-query reads, `MIGRATION_8_9` added synonyms and antonyms, `MIGRATION_9_10`
+added the `activity_log` table behind the heatmap, and `MIGRATION_10_11` added
+`remoteId` and `lastModifiedAt` to both content tables, backfilling a UUID for
+every row that predates them.
 
 ```mermaid
 erDiagram
@@ -303,7 +310,7 @@ Both apps are covered by the same GitHub Actions workflow.
 | --- | --- |
 | UI | Kotlin, Jetpack Compose, Material 3, navigation-compose, window size classes |
 | DI | Hilt (including EntryPoints for the widget and the worker) |
-| Persistence | Room v7 (exported schemas, migrations 2→7), DataStore Preferences |
+| Persistence | Room v11 (exported schemas, migrations 2→11), DataStore Preferences |
 | Background | WorkManager (periodic daily word, `KEEP` policy) |
 | Home screen | Glance app-widget |
 | Networking | `HttpURLConnection` + `org.json` (no HTTP/JSON dependencies) |
