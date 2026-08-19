@@ -518,7 +518,52 @@ class AppDatabaseMigrationTest {
     }
 
     /**
-     * The whole run a real install takes, 7 to 11 in one go.
+     * The 11 -> 12 step, which exists only to let Room rewrite a stale identity hash.
+     *
+     * The interesting assertion is not that a column arrived - none did - but that a
+     * database holding the *older* v11 opens at all. Before this migration it threw
+     * "Room cannot verify the data integrity" on first access, in debug builds as
+     * well as release, because the identity check runs in onOpen and ignores
+     * fallbackToDestructiveMigration entirely.
+     */
+    @Test
+    fun theOlderVersion11StillOpensAndKeepsItsRows() {
+        helper.createDatabase(TEST_DB, 11).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, exampleSentence, article, " +
+                    "plural, conjugation, nextReview, interval, easeFactor, reviewCount, " +
+                    "synonyms, antonyms, remoteId, lastModifiedAt) " +
+                    "VALUES ('der Baum', 'the tree', 1000, '', 'der', 'Bäume', '', " +
+                    "0, 0, 2.5, 0, '', '', 'fixture-uuid', 1000)"
+            )
+            db.execSQL(
+                "INSERT INTO transcripts (fullText, timestamp, remoteId, lastModifiedAt) " +
+                    "VALUES ('Guten Morgen', 500, 'fixture-uuid-2', 500)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 12, true, MIGRATION_11_12)
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+            assertEquals(1, saved.size)
+            assertEquals("der Baum", saved.first().germanText)
+            // Nothing about the row changes; the version step is purely so the
+            // recorded hash can be brought up to date.
+            assertEquals("fixture-uuid", saved.first().remoteId)
+
+            val transcripts = runBlocking { database.transcriptDao().getAllTranscripts().first() }
+            assertEquals(1, transcripts.size)
+            assertEquals("Guten Morgen", transcripts.first().fullText)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The whole run a real install takes, 7 to 12 in one go.
      *
      * The per-step tests each start from a hand-written fixture; this one is the only
      * check that the steps compose - that a row written by version 7 survives all four
@@ -537,8 +582,8 @@ class AppDatabaseMigrationTest {
         }
 
         helper.runMigrationsAndValidate(
-            TEST_DB, 11, true,
-            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11
+            TEST_DB, 12, true,
+            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12
         )
 
         val database = openAsReleaseWould()
