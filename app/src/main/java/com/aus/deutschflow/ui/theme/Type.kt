@@ -92,3 +92,25 @@ val Typography = Typography(
         letterSpacing = 0.1.sp
     )
 )
+
+/**
+ * The transcript itself - the one piece of text the whole app exists to show.
+ *
+ * Larger and more open than [Typography.bodyLarge], because it is read at arm's
+ * length while speaking rather than scanned. It was being produced by passing
+ * bodyLarge and then overriding fontSize and lineHeight at the call site, which is
+ * a hardcoded font size wearing a style's clothes.
+ */
+val TranscriptTextStyle = TextStyle(
+    fontWeight = FontWeight.Normal,
+    fontSize = 20.sp,
+    lineHeight = 30.sp
+)
+
+/**
+ * Tracking for the small uppercase section labels.
+ *
+ * Capitals set at label size need the extra room or they read as a block. One
+ * value, because four call sites had drifted to two.
+ */
+val UppercaseLabelTracking = 1.2.sp

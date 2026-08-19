@@ -46,6 +46,19 @@ class TranscriptViewModel @Inject constructor(
      * The recognition dialect, so the screen can say which German it is listening
      * for ("German · de-AT") rather than a bare "German".
      */
+    /**
+     * True until the first transcript exists.
+     *
+     * Derived from the data the app already keeps rather than a new persisted flag:
+     * "has this person ever recorded anything" is exactly what the transcripts table
+     * answers, and a preference for it would be a second source of the same truth.
+     * Gates the introductory copy, which is worth a screen's worth of space once and
+     * is in the way every time after that.
+     */
+    val isFirstRun: StateFlow<Boolean> = transcriptDao.getAllTranscripts()
+        .map { it.isEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val selectedDialect: StateFlow<String> = preferenceManager.selectedDialect
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "de-DE")
 
