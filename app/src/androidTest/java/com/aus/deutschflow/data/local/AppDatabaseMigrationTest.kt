@@ -9,6 +9,8 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -356,6 +358,208 @@ class AppDatabaseMigrationTest {
     }
 
     /**
+     * The 7 -> 8 upgrade, which puts every existing word into the SRS.
+     *
+     * The defaults are the whole point: a library built before spaced repetition
+     * existed has to arrive in the scheduler as a deck of new cards, not as rows the
+     * due-query cannot see. `nextReview = 0` is "due now", and 2.5 is SM-2's starting
+     * ease - the same state a word saved today gets.
+     */
+    @Test
+    fun theSrsColumnsArriveWithEveryOldWordDueNow() {
+        helper.createDatabase(TEST_DB, 7).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, exampleSentence, " +
+                    "article, plural, conjugation) " +
+                    "VALUES ('das Haus', 'the house', 1000, '', 'das', 'Häuser', '')"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8)
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+            assertEquals(1, saved.size)
+            assertEquals(0L, saved.first().nextReview)
+            assertEquals(0, saved.first().interval)
+            assertEquals(2.5f, saved.first().easeFactor, 0.0001f)
+            assertEquals(0, saved.first().reviewCount)
+            // The grammar it already had is untouched by the column addition.
+            assertEquals("Häuser", saved.first().plural)
+
+            // And the query Study actually runs finds it. A column that migrates in
+            // correctly but stays invisible to the due-query would empty the deck
+            // for every existing install without raising anything.
+            val due = runBlocking {
+                database.vocabularyDao().getDueVocabulary(System.currentTimeMillis()).first()
+            }
+            assertEquals(1, due.size)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The 8 -> 9 upgrade. Empty defaults, so a word that predates the synonym prompt
+     * reads exactly as a word the user typed by hand does - the detail screen's two
+     * boxes stay empty rather than showing something invented.
+     */
+    @Test
+    fun theSynonymColumnsArriveEmpty() {
+        helper.createDatabase(TEST_DB, 8).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, exampleSentence, " +
+                    "article, plural, conjugation, nextReview, interval, easeFactor, reviewCount) " +
+                    "VALUES ('schnell', 'fast', 1000, '', 'none', '', '', 0, 0, 2.5, 0)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 9, true, MIGRATION_8_9)
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+            assertEquals(1, saved.size)
+            assertEquals("", saved.first().synonyms)
+            assertEquals("", saved.first().antonyms)
+            assertEquals("fast", saved.first().englishTranslation)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The 9 -> 10 upgrade, which adds the table the heatmap reads.
+     *
+     * A new table cannot lose data, so what is worth asserting is that it is usable:
+     * `addXp` is a read-modify-write, and the date is the primary key, so a second
+     * award on the same day has to add to the first rather than replace it.
+     */
+    @Test
+    fun theActivityLogArrivesAndAccumulates() {
+        helper.createDatabase(TEST_DB, 9).use { /* no fixture needed */ }
+
+        helper.runMigrationsAndValidate(TEST_DB, 10, true, MIGRATION_9_10)
+
+        val database = openAsReleaseWould()
+        try {
+            runBlocking {
+                database.activityDao().addXp("2026-08-19", 10)
+                database.activityDao().addXp("2026-08-19", 10)
+                database.activityDao().addXp("2026-08-18", 30)
+            }
+
+            // Both fixture dates are inside any window; "0000-01-01" just means "all".
+            val log = runBlocking { database.activityDao().getActivitySince(ALL_TIME).first() }
+            assertEquals(2, log.size)
+            assertEquals(20, log.first { it.date == "2026-08-19" }.xpGained)
+            assertEquals(30, log.first { it.date == "2026-08-18" }.xpGained)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The 10 -> 11 upgrade, on both tables it touches.
+     *
+     * `remoteId` is the assertion that matters. The SQL default is the empty string,
+     * so a migration that only adds the column leaves every record that predates it -
+     * which is the user's entire library - with no cross-device identity, while
+     * everything saved afterwards gets a UUID from the entity default. Each row must
+     * come out with its own id, not one shared value.
+     */
+    @Test
+    fun theSyncColumnsArriveWithAnIdentityForEveryExistingRow() {
+        helper.createDatabase(TEST_DB, 10).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, exampleSentence, article, " +
+                    "plural, conjugation, nextReview, interval, easeFactor, reviewCount, " +
+                    "synonyms, antonyms) " +
+                    "VALUES ('der Hund', 'the dog', 1000, '', 'der', 'Hunde', '', " +
+                    "0, 0, 2.5, 0, '', '')"
+            )
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, exampleSentence, article, " +
+                    "plural, conjugation, nextReview, interval, easeFactor, reviewCount, " +
+                    "synonyms, antonyms) " +
+                    "VALUES ('die Katze', 'the cat', 2000, '', 'die', 'Katzen', '', " +
+                    "0, 0, 2.5, 0, '', '')"
+            )
+            db.execSQL("INSERT INTO transcripts (fullText, timestamp) VALUES ('Guten Tag', 500)")
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 11, true, MIGRATION_10_11)
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+            assertEquals(2, saved.size)
+            saved.forEach {
+                assertEquals(UUID_LENGTH, it.remoteId.length)
+                assertTrue("lastModifiedAt was not backfilled", it.lastModifiedAt > 0L)
+            }
+            // Per row, not per statement: one shared id would collide the moment two
+            // devices synced the same library.
+            assertNotEquals(saved[0].remoteId, saved[1].remoteId)
+
+            val transcripts = runBlocking { database.transcriptDao().getAllTranscripts().first() }
+            assertEquals(1, transcripts.size)
+            assertEquals(UUID_LENGTH, transcripts.first().remoteId.length)
+            assertTrue("lastModifiedAt was not backfilled", transcripts.first().lastModifiedAt > 0L)
+            assertEquals("Guten Tag", transcripts.first().fullText)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The whole run a real install takes, 7 to 11 in one go.
+     *
+     * The per-step tests each start from a hand-written fixture; this one is the only
+     * check that the steps compose - that a row written by version 7 survives all four
+     * and still reads correctly through the release configuration.
+     */
+    @Test
+    fun aWordWrittenAtVersion7SurvivesEveryUpgradeToTheCurrentSchema() {
+        helper.createDatabase(TEST_DB, 7).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary " +
+                    "(germanText, englishTranslation, timestamp, exampleSentence, " +
+                    "article, plural, conjugation) " +
+                    "VALUES ('die Übung', 'the exercise', 1000, 'Ich mache meine Übungen.', " +
+                    "'die', 'Übungen', '')"
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DB, 11, true,
+            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11
+        )
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+            assertEquals(1, saved.size)
+
+            val word = saved.first()
+            assertEquals("die Übung", word.germanText)
+            assertEquals("the exercise", word.englishTranslation)
+            assertEquals("Ich mache meine Übungen.", word.exampleSentence)
+            assertEquals("Übungen", word.plural)
+            assertEquals("", word.synonyms)
+            assertEquals(2.5f, word.easeFactor, 0.0001f)
+            assertEquals(UUID_LENGTH, word.remoteId.length)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
      * Mirrors DatabaseModule's release path exactly: the same migrations, and no
      * destructive fallback, so a missing migration surfaces as the same exception a
      * user would hit.
@@ -369,5 +573,11 @@ class AppDatabaseMigrationTest {
 
     private companion object {
         const val TEST_DB = "migration-test"
+
+        /** "8-4-4-4-12" plus four hyphens — the shape UUID.toString() produces. */
+        const val UUID_LENGTH = 36
+
+        /** A date bound low enough to mean "every row", for tests that want the lot. */
+        const val ALL_TIME = "0000-01-01"
     }
 }
