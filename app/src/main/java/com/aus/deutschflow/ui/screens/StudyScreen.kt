@@ -18,7 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.service.ReviewQuality
 import com.aus.deutschflow.ui.components.SegmentTab
@@ -35,7 +35,7 @@ import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
+fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
     var selectedTab by remember { mutableIntStateOf(1) } // Default to Study session for continuity
     val haptic = LocalHapticFeedback.current
 

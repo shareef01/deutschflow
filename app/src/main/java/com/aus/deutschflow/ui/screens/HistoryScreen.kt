@@ -45,7 +45,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.ui.components.EmptyState
@@ -71,7 +71,7 @@ import java.util.Locale
  */
 @Composable
 fun HistoryScreen(
-    viewModel: HistoryViewModel = viewModel(),
+    viewModel: HistoryViewModel = hiltViewModel(),
     onStartTranscript: () -> Unit = {}
 ) {
     val history by viewModel.transcripts.collectAsState()

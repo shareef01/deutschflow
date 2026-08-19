@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.theme.Spacing
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.GlassFill
 import com.aus.deutschflow.ui.theme.glassSurface
@@ -38,7 +38,7 @@ import com.aus.deutschflow.ui.viewmodel.ChatMessage
 import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
 
 @Composable
-fun RoleplayScreen(viewModel: RoleplayViewModel = viewModel()) {
+fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     val messages by viewModel.messages.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()

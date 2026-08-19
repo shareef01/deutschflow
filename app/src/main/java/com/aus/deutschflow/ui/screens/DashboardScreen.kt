@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.Spacing
@@ -31,8 +31,23 @@ import com.aus.deutschflow.ui.theme.TertiaryGreen
 import com.aus.deutschflow.ui.viewmodel.DashboardViewModel
 import java.time.LocalDate
 
+/*
+ * Defaults are hiltViewModel(), not viewModel().
+ *
+ * Every one of these view models is a @HiltViewModel with an @Inject constructor,
+ * and a NavBackStackEntry's default factory is not Hilt-aware - so `viewModel()`
+ * reached the plain NewInstanceFactory and threw "Cannot create an instance of ..."
+ * for anything with constructor arguments. It only ever worked because each
+ * composable() in Navigation.kt passed hiltViewModel() explicitly, which made the
+ * defaults dead code everywhere they were correct and a crash everywhere they were
+ * used: Practice supplied one of its two, and Study called DashboardScreen() with
+ * none. Both tabs crashed on open.
+ *
+ * With hiltViewModel() as the default, omitting the argument is no longer a way to
+ * get it wrong.
+ */
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
+fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     val userStats by viewModel.userStats.collectAsState()
     val activityLog by viewModel.activityLog.collectAsState()
     val masteryStats by viewModel.masteryStats.collectAsState()

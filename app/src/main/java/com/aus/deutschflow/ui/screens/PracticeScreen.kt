@@ -37,7 +37,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.SegmentTab
 import com.aus.deutschflow.ui.theme.AzureGlow
@@ -50,8 +50,8 @@ import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PracticeScreen(
-    viewModel: PracticeViewModel = viewModel(),
-    roleplayViewModel: RoleplayViewModel = viewModel()
+    viewModel: PracticeViewModel = hiltViewModel(),
+    roleplayViewModel: RoleplayViewModel = hiltViewModel()
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val haptic = LocalHapticFeedback.current

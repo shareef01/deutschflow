@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.viewmodel.VocabularyViewModel
@@ -44,7 +44,7 @@ import com.aus.deutschflow.ui.theme.glassSurface
 @Composable
 fun VocabularyScreen(
     windowSizeClass: WindowSizeClass,
-    viewModel: VocabularyViewModel = viewModel()
+    viewModel: VocabularyViewModel = hiltViewModel()
 ) {
     val vocabularyList by viewModel.vocabularyList.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
