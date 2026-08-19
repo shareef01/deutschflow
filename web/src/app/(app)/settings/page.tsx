@@ -189,6 +189,10 @@ export default function SettingsPage() {
       <SectionHeader title={t("settings.dialectHeader")} />
       <RadioGroup options={dialects} selected={selectedDialect} onSelect={saveDialect} />
 
+      {/* ---- Language (web parity for Android 13+ per-app language) ---------- */}
+      <SectionHeader title={t("settings.languageHeader")} />
+      <RadioGroup options={languages} selected={lang} onSelect={changeLang} />
+
       {/* ---- Data ------------------------------------------------------------- */}
       <SectionHeader title={t("settings.dataHeader")} />
       <button

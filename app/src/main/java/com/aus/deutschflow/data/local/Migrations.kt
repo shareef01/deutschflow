@@ -250,7 +250,10 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
 private const val UUID_V4 =
     "lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || " +
         "substr(hex(randomblob(2)), 2) || '-' || " +
-        "substr('89ab', abs(random()) % 4 + 1, 1) || " +
+        // `& 3` rather than `abs(...) % 4`: SQLite's abs() raises an integer
+        // overflow on exactly one input, random()'s most negative value, and a
+        // migration is the last place worth carrying a one-in-2^64 crash.
+        "substr('89ab', (random() & 3) + 1, 1) || " +
         "substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6)))"
 
 /**

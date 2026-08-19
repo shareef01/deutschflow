@@ -142,11 +142,26 @@ class StudyViewModelTest {
     fun againKeepsTheCardAndBanksNothing() = runBlocking {
         startSessionOf(2)
 
-        viewModel.submitReview(ReviewQuality.AGAIN)
-        awaitCondition { database.vocabularyDao().getAllVocabulary().first().any { it.reviewCount == 0 } }
+        val card = viewModel.studyList.value.first()
 
+        viewModel.submitReview(ReviewQuality.AGAIN)
+        // The ease penalty, not the review count: a seeded card already has
+        // reviewCount 0, so waiting on that would be true before the write landed
+        // and would let this test pass without the code doing anything.
+        awaitCondition {
+            database.vocabularyDao().findByGermanText(card.germanText)?.easeFactor == 2.3f
+        }
+
+        val written = database.vocabularyDao().findByGermanText(card.germanText)
+        assertEquals("Again costs ease", 2.3f, written?.easeFactor ?: 0f, 0.0001f)
+        assertEquals("and leaves the card due now", 0L, written?.nextReview)
         assertEquals("Again is not a success, so nothing is banked", null, xp())
         assertEquals("the card goes to the back, it does not leave", 2, viewModel.studyList.value.size)
+        assertEquals(
+            "with the failed card moved to the end",
+            card.germanText,
+            viewModel.studyList.value.last().germanText
+        )
     }
 
     /**
