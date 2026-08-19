@@ -3,6 +3,7 @@ package com.aus.deutschflow.ui.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -55,10 +56,20 @@ fun MainNavigation(
     // a dark ground and competes with the surfaces in front of it. Depth is carried
     // entirely by the surface/surfaceContainer elevation ramp from here on.
 
+    // Pinned, not collapsing: the title is the only thing telling you which tab you
+    // are on, so it stays. What this adds is the scrolled state - the bar takes a
+    // raised container colour the moment content passes beneath it, so the edge is
+    // visible. Without it the bar and the ground were the same value, and content
+    // scrolling under the title simply appeared to be sliced in half.
+    val topBarScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
-        modifier = Modifier.background(MaterialTheme.colorScheme.background),
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.background)
+            .nestedScroll(topBarScrollBehavior.nestedScrollConnection),
         topBar = {
             CenterAlignedTopAppBar(
+                scrollBehavior = topBarScrollBehavior,
                 title = {
                     Text(
                         text = stringResource(currentScreen.title),
@@ -102,7 +113,11 @@ fun MainNavigation(
                     // Solid, like the bottom bar: a transparent bar let the content
                     // scroll straight through the title, and the two edges of the
                     // screen disagreed about what an edge was.
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = MaterialTheme.colorScheme.background,
+                    // One step up the elevation ramp once anything is underneath, so
+                    // the bar reads as a surface over the content rather than a hole
+                    // the content vanishes into.
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         },
@@ -215,10 +230,22 @@ fun MainNavigation(
                 }
             ) {
                 composable(Screen.Transcript.route) { TranscriptScreen(hiltViewModel()) }
-                composable(Screen.History.route) { HistoryScreen(hiltViewModel()) }
+                composable(Screen.History.route) {
+                    HistoryScreen(
+                        viewModel = hiltViewModel(),
+                        onStartTranscript = { navigateToTab(navController, Screen.Transcript) }
+                    )
+                }
                 composable(Screen.Vocabulary.route) { VocabularyScreen(windowSizeClass, hiltViewModel()) }
                 composable(Screen.Study.route) { StudyScreen(hiltViewModel()) }
-                composable(Screen.Practice.route) { PracticeScreen(hiltViewModel()) }
+                composable(Screen.Practice.route) {
+                    // Both, explicitly. A NavBackStackEntry's default factory is not
+                    // Hilt-aware, so the `= viewModel()` default on the second
+                    // parameter reached the plain NewInstanceFactory and threw
+                    // "Cannot create an instance of RoleplayViewModel" - crashing the
+                    // tab on every open since the roleplay pane was added.
+                    PracticeScreen(hiltViewModel(), hiltViewModel())
+                }
                 composable(Screen.Settings.route) { SettingsScreen(hiltViewModel()) }
             }
         }

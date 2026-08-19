@@ -48,6 +48,10 @@
     <string name="history_search_hint">Verlauf durchsuchen…</string>
     <string name="history_empty_title">Keine Transkripte gefunden</string>
     <string name="history_empty_body">Deine Transkript-Sitzungen erscheinen hier.</string>
+    <string name="history_empty_action">Aufnahme starten</string>
+    <!-- Time and length of a transcript. A format string, not a template in
+         code: the separator is typographic but the order is not universal. -->
+    <string name="history_meta">%1$s · %2$s</string>
     <string name="history_today">Heute</string>
     <string name="history_yesterday">Gestern</string>
     <string name="history_time_format">HH:mm</string>

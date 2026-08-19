@@ -36,6 +36,8 @@ import com.aus.deutschflow.ui.viewmodel.VocabularySort
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.SearchInput
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.SelectionDefaults
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 
@@ -192,15 +194,23 @@ fun VocabularyListContent(
 ) {
     val haptic = LocalHapticFeedback.current
 
+    // The screen had one emptiness where it needed two. `vocabularyList` is empty
+    // both when the library holds nothing and when a search matched nothing, and
+    // the header was drawn for both - which is how three zeroes and a pair of sort
+    // chips ended up sitting above "Your library is empty", offering to sort and
+    // count things that do not exist.
+    val libraryIsEmpty = statsList.isEmpty()
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = Spacing.md)
                 .imePadding()
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Spacing.sm))
 
+            if (!libraryIsEmpty) {
             // The same glass input History uses - one component, one stroke.
             SearchInput(
                 value = searchQuery,
@@ -227,7 +237,8 @@ fun VocabularyListContent(
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSortChange(VocabularySort.NEWEST)
                     },
-                    label = { Text(stringResource(R.string.library_sort_newest)) }
+                    label = { Text(stringResource(R.string.library_sort_newest)) },
+                    colors = SelectionDefaults.filterChipColors()
                 )
                 FilterChip(
                     selected = sortMode == VocabularySort.ALPHABETICAL,
@@ -235,11 +246,13 @@ fun VocabularyListContent(
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSortChange(VocabularySort.ALPHABETICAL)
                     },
-                    label = { Text(stringResource(R.string.library_sort_alphabetical)) }
+                    label = { Text(stringResource(R.string.library_sort_alphabetical)) },
+                    colors = SelectionDefaults.filterChipColors()
                 )
             }
 
             Spacer(modifier = Modifier.height(Spacing.sm))
+            }
 
             AnimatedContent(
                 targetState = vocabularyList.isEmpty(),
@@ -251,12 +264,32 @@ fun VocabularyListContent(
                         icon = Icons.Default.AutoStories,
                         message = stringResource(R.string.library_empty_title),
                         // The library no longer depends on a working API key, so say so.
-                        description = stringResource(R.string.library_empty_body)
+                        description = stringResource(R.string.library_empty_body),
+                        // Named, and in the middle of the screen. The `+` in the
+                        // corner was the only way in, and an unlabelled icon is a
+                        // guess - especially as the body text says "Add a word"
+                        // while pointing at nothing.
+                        action = if (libraryIsEmpty) {
+                            {
+                                Button(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onAdd()
+                                    },
+                                    modifier = Modifier.height(ActionButtonHeight),
+                                    shape = MaterialTheme.shapes.medium
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(Spacing.sm))
+                                    Text(stringResource(R.string.library_add_word))
+                                }
+                            }
+                        } else null
                     )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         // Clears the add button so the last row is never trapped under it.
                         contentPadding = PaddingValues(bottom = Spacing.bottomActionClearance)
                     ) {
@@ -274,7 +307,9 @@ fun VocabularyListContent(
             }
         }
 
-        // The only way into the library that never touches the network.
+        // Populated only: with nothing in the library the empty state carries the
+        // action, and two "add" affordances on one screen is one too many.
+        if (!libraryIsEmpty) {
         FloatingActionButton(
             onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -286,9 +321,10 @@ fun VocabularyListContent(
             contentColor = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(24.dp)
+                .padding(Spacing.lg)
         ) {
             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.library_add_word))
+        }
         }
     }
 }

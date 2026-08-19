@@ -27,6 +27,17 @@ class HistoryViewModel @Inject constructor(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
 
+    /**
+     * Whether the history holds anything at all, regardless of the search box.
+     *
+     * [transcripts] is already filtered, so it cannot answer this: an empty result
+     * looks identical whether nothing was ever recorded or the query simply matched
+     * nothing, and the screen needs to say different things in those two cases.
+     */
+    val hasAnyHistory: StateFlow<Boolean> = transcriptDao.getAllTranscripts()
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val transcripts: StateFlow<List<TranscriptEntity>> = _query
         .combine(transcriptDao.getAllTranscripts()) { query, list ->
             if (query.isBlank()) {

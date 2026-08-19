@@ -48,6 +48,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.ui.components.*
+import com.aus.deutschflow.ui.theme.WaveformHeight
+import com.aus.deutschflow.ui.theme.TranscriptCardMinHeight
+import com.aus.deutschflow.ui.theme.UppercaseLabelTracking
+import com.aus.deutschflow.ui.theme.TranscriptTextStyle
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
 import com.aus.deutschflow.ui.theme.Spacing
@@ -73,6 +78,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
     val wordDetailError by viewModel.wordDetailError.collectAsState()
     val interrogatingWord by viewModel.interrogatingWord.collectAsState()
     val selectedDialect by viewModel.selectedDialect.collectAsState()
+    val isFirstRun by viewModel.isFirstRun.collectAsState()
 
     val amplitude = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(viewModel) {
@@ -121,6 +127,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = viewModel()) {
             errorState = errorState ?: aiError,
             rmsAmplitude = amplitude,
             dialect = selectedDialect,
+            isFirstRun = isFirstRun,
             onStartListening = {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     viewModel.startListening()
@@ -170,6 +177,7 @@ fun TranscriptContent(
     errorState: String?,
     rmsAmplitude: State<Float>,
     dialect: String,
+    isFirstRun: Boolean,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
     onWordClick: (String) -> Unit,
@@ -178,7 +186,7 @@ fun TranscriptContent(
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val gradientBrush = Brush.linearGradient(
-        colors = listOf(Color(0xFF00E5FF), primaryColor)
+        colors = listOf(AzureGlow, primaryColor)
     )
 
     val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
@@ -191,50 +199,51 @@ fun TranscriptContent(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (isEmpty) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 500.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                LanguageIndicator(dialect)
-                Spacer(modifier = Modifier.height(Spacing.lg))
-                Text(
-                    text = stringResource(R.string.transcript_empty_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(Spacing.sm))
-                Text(
-                    text = stringResource(R.string.transcript_empty_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
+        // The dialect chip has one home: directly under the header, on every state.
+        // It used to live inside the empty block, which meant it moved when the
+        // screen changed state and was the first thing the header sliced on scroll.
+        Spacer(modifier = Modifier.height(Spacing.sm))
+        LanguageIndicator(dialect)
         Spacer(modifier = Modifier.height(Spacing.md))
+
+        // Introductory copy, once. It explains the app to someone who has never used
+        // it, and after that it is a paragraph standing between them and the mic -
+        // which is what pushed the primary control of the whole app below the fold.
+        //
+        // The 500dp minimum this block used to carry is gone with it: it reserved
+        // half a screen and centred two lines in the middle of it, so the space read
+        // as something failing to load rather than as breathing room.
+        if (isEmpty && isFirstRun) {
+            Text(
+                text = stringResource(R.string.transcript_empty_title),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(Spacing.sm))
+            Text(
+                text = stringResource(R.string.transcript_empty_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(Spacing.lg))
+        }
 
         // Transcript Area
         OutlinedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 200.dp),
+                .heightIn(min = TranscriptCardMinHeight),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
         ) {
-            Box(modifier = Modifier.padding(24.dp)) {
+            Box(modifier = Modifier.padding(Spacing.lg)) {
                 Text(
                     text = if (isListening) partialText else finalText.ifEmpty { "Tap the mic to transcribe..." },
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontSize = 20.sp,
-                    lineHeight = 30.sp,
+                    style = TranscriptTextStyle,
                     color = if (finalText.isEmpty() && !isListening) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -245,11 +254,11 @@ fun TranscriptContent(
             AudioWaveform(
                 amplitude = rmsAmplitude,
                 isActive = true,
-                modifier = Modifier.fillMaxWidth().height(40.dp)
+                modifier = Modifier.fillMaxWidth().height(WaveformHeight)
             )
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(Spacing.xl))
 
         // Hero Interaction
         Box(contentAlignment = Alignment.Center) {
@@ -284,7 +293,7 @@ fun TranscriptContent(
         ErrorBanner(errorState)
 
         if (translation.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(Spacing.xl))
             
             // Grammar Spotlight Section
             if (grammarNotes.isNotEmpty()) {
@@ -293,15 +302,15 @@ fun TranscriptContent(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.2.sp,
-                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
+                    letterSpacing = UppercaseLabelTracking,
+                    modifier = Modifier.fillMaxWidth().padding(start = Spacing.xs)
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 grammarNotes.forEach { note ->
                     GrammarSpotlightCard(note)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Spacing.sm))
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(Spacing.lg))
             }
 
             // Results Section
@@ -315,8 +324,8 @@ fun TranscriptContent(
                     Spacer(modifier = Modifier.height(Spacing.lg))
                     SectionLabel("Vocabulary")
                     FlowRow(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                     ) {
                         suggestedWords.forEach { word ->
                             VocabularyChip(
@@ -328,14 +337,14 @@ fun TranscriptContent(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(Spacing.lg))
                 Button(
                     onClick = onSave,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RoundedCornerShape(20.dp)
+                    modifier = Modifier.fillMaxWidth().height(ActionButtonHeight),
+                    shape = MaterialTheme.shapes.large
                 ) {
                     Icon(Icons.Default.BookmarkAdd, null)
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(Spacing.sm))
                     Text(
                         stringResource(R.string.transcript_save),
                         style = MaterialTheme.typography.labelLarge,
@@ -345,7 +354,7 @@ fun TranscriptContent(
             }
         }
         
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(Spacing.bottomActionClearance))
     }
 }
 
@@ -354,19 +363,19 @@ fun GrammarSpotlightCard(note: GrammarNote) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(Spacing.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                    Text(note.case.uppercase(), modifier = Modifier.padding(horizontal = 6.dp), style = MaterialTheme.typography.labelSmall)
+                    Text(note.case.uppercase(), modifier = Modifier.padding(horizontal = Spacing.xs), style = MaterialTheme.typography.labelSmall)
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(text = note.phrase, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
             if (note.explanation.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 Text(text = note.explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -380,8 +389,8 @@ private fun SectionLabel(label: String) {
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
-        letterSpacing = 1.sp,
-        modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+        letterSpacing = UppercaseLabelTracking,
+        modifier = Modifier.padding(bottom = Spacing.sm, start = Spacing.xs)
     )
 }
 
@@ -393,7 +402,7 @@ private fun LanguageIndicator(dialect: String) {
     ) {
         Text(
             text = stringResource(R.string.transcript_listening_for, dialect),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSecondaryContainer
         )

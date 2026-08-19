@@ -29,6 +29,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.theme.UppercaseLabelTracking
+import com.aus.deutschflow.ui.theme.TertiaryGreen
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
@@ -59,7 +63,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = Spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Section: Cloud Sync (The Bridge)
@@ -68,11 +72,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.large,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
             tonalElevation = 2.dp
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(Spacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -82,9 +86,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                         Icon(
                             imageVector = Icons.Default.CloudSync,
                             contentDescription = null,
-                            tint = if (isCloudConnected) Color(0xFF30D158) else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isCloudConnected) TertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(Spacing.sm))
                         Column {
                             Text(
                                 text = stringResource(
@@ -115,7 +119,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(Spacing.md))
                 
                 Button(
                     onClick = { 
@@ -128,7 +132,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     )
                 ) {
                     Icon(if (isCloudConnected) Icons.Default.Logout else Icons.Default.Login, null)
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(Spacing.sm))
                     Text(
                         stringResource(
                             if (isCloudConnected) R.string.settings_cloud_sign_out
@@ -148,7 +152,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.settings_api_key_label)) },
             placeholder = { Text(if (hasApiKey) "Saved (Enter new to replace)" else "Paste your key here") },
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.medium,
             trailingIcon = {
                 IconButton(onClick = { 
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -171,16 +175,16 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
+            Column(modifier = Modifier.padding(Spacing.lg)) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     StatGridItem(Modifier.weight(1f), "VOCABULARY", totalVocab.toString())
                     StatGridItem(Modifier.weight(1f), "SESSIONS", totalTranscripts.toString())
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(Spacing.lg))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     StatGridItem(Modifier.weight(1f), "XP POINTS", (userStats?.xp ?: 0).toString())
                     StatGridItem(Modifier.weight(1f), "STREAK", "${userStats?.streak ?: 0} days")
@@ -194,12 +198,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.large,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.03f)),
             tonalElevation = 1.dp
         ) {
             Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                modifier = Modifier.padding(Spacing.md).fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -229,7 +233,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewModel.saveDialect(code) 
                     }
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RadioButton(
@@ -242,29 +246,29 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(start = 12.dp)
+                    modifier = Modifier.padding(start = Spacing.sm)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(Spacing.bottomActionClearance))
         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
         // Section: Actions
         Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), 
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xl), 
+            verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
             FilledTonalButton(
                 onClick = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.testNotification() 
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.fillMaxWidth().height(ActionButtonHeight),
+                shape = MaterialTheme.shapes.medium
             ) {
                 Icon(Icons.Default.NotificationsActive, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     stringResource(R.string.settings_test_notification),
                     style = MaterialTheme.typography.labelLarge,
@@ -277,15 +281,15 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     showDeleteConfirm = true 
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().height(ActionButtonHeight),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 ),
-                shape = RoundedCornerShape(16.dp)
+                shape = MaterialTheme.shapes.medium
             ) {
                 Icon(Icons.Default.DeleteForever, contentDescription = null)
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     stringResource(R.string.settings_clear),
                     style = MaterialTheme.typography.labelLarge,
@@ -299,7 +303,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 32.dp)
+            modifier = Modifier.padding(bottom = Spacing.xl)
         )
     }
 
@@ -349,7 +353,7 @@ fun LoginDialog(onDismiss: () -> Unit, onLogin: (String, String) -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_cloud_sign_in_title), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text(stringResource(R.string.settings_cloud_email)) })
                 OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text(stringResource(R.string.settings_cloud_password)) })
             }
@@ -370,7 +374,7 @@ fun SettingsHeader(title: String) {
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Black,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 12.dp, start = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(top = Spacing.xl, bottom = Spacing.sm, start = Spacing.xs)
     )
 }
 
@@ -378,8 +382,8 @@ fun SettingsHeader(title: String) {
 fun StatGridItem(modifier: Modifier, label: String, value: String) {
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-            .padding(16.dp),
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), MaterialTheme.shapes.small)
+            .padding(Spacing.md),
         horizontalAlignment = Alignment.Start
     ) {
         Text(
@@ -393,7 +397,7 @@ fun StatGridItem(modifier: Modifier, label: String, value: String) {
             style = MaterialTheme.typography.labelMedium, 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+            letterSpacing = UppercaseLabelTracking
         )
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.service.ReviewQuality
+import com.aus.deutschflow.ui.components.SegmentTab
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.ErrorBanner
 import com.aus.deutschflow.ui.components.GlassButton
@@ -39,27 +40,30 @@ fun StudyScreen(viewModel: StudyViewModel = viewModel()) {
     val haptic = LocalHapticFeedback.current
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // `contentColor` is what a Tab falls back to for *both* halves of its state,
+        // so setting it to primary painted the unselected tab in the accent too -
+        // both labels read as active and only the indicator said otherwise. Each Tab
+        // now names its own pair: accent when selected, muted when not.
         PrimaryTabRow(
             selectedTabIndex = selectedTab,
             containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.primary,
             divider = {}
         ) {
-            Tab(
+            SegmentTab(
                 selected = selectedTab == 0,
-                onClick = { 
+                label = stringResource(R.string.dashboard_tab),
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 0 
-                },
-                text = { Text(stringResource(R.string.dashboard_tab), style = MaterialTheme.typography.labelLarge) }
+                    selectedTab = 0
+                }
             )
-            Tab(
+            SegmentTab(
                 selected = selectedTab == 1,
-                onClick = { 
+                label = stringResource(R.string.dashboard_flashcards_tab),
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 1 
-                },
-                text = { Text(stringResource(R.string.dashboard_flashcards_tab), style = MaterialTheme.typography.labelLarge) }
+                    selectedTab = 1
+                }
             )
         }
 
@@ -87,7 +91,12 @@ fun StudySessionContent(viewModel: StudyViewModel) {
         viewModel.startSession()
     }
 
-    if (!hasLoaded) return
+    if (!hasLoaded) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        }
+        return
+    }
 
     if (studyList.isEmpty()) {
         EmptyState(

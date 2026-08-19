@@ -26,6 +26,13 @@ object Spacing {
     val xl = 32.dp
 
     /**
+     * The margin around a screen that holds one centred block - the empty states.
+     * Wider than [md] on purpose: it is what stops a centred paragraph running the
+     * full width of a phone and reading as a wall.
+     */
+    val xxl = 40.dp
+
+    /**
      * Clears a bottom-anchored control, so the last row of a scrolling list is not
      * trapped underneath it.
      */

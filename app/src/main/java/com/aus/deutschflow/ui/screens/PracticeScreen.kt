@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -38,6 +39,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.components.SegmentTab
+import com.aus.deutschflow.ui.theme.AzureGlow
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
+import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
 import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
@@ -55,24 +60,23 @@ fun PracticeScreen(
         PrimaryTabRow(
             selectedTabIndex = selectedTab,
             containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.primary,
             divider = {}
         ) {
-            Tab(
+            SegmentTab(
                 selected = selectedTab == 0,
-                onClick = { 
+                label = stringResource(R.string.practice_tab),
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 0 
-                },
-                text = { Text(stringResource(R.string.practice_tab), style = MaterialTheme.typography.labelLarge) }
+                    selectedTab = 0
+                }
             )
-            Tab(
+            SegmentTab(
                 selected = selectedTab == 1,
-                onClick = { 
+                label = stringResource(R.string.roleplay_tab),
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 1 
-                },
-                text = { Text(stringResource(R.string.roleplay_tab), style = MaterialTheme.typography.labelLarge) }
+                    selectedTab = 1
+                }
             )
         }
 
@@ -99,7 +103,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val gradientBrush = Brush.linearGradient(
-        colors = listOf(Color(0xFF00E5FF), primaryColor)
+        colors = listOf(AzureGlow, primaryColor)
     )
 
     val isPositive = feedback == PracticeFeedback.PERFECT
@@ -121,30 +125,35 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(Spacing.md)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Spacing.sm))
 
-        Text(
-            text = stringResource(R.string.practice_intro),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
+        // Until the first attempt is scored. It tells you what to do, and once you
+        // have done it the instruction is a paragraph between you and the sentence
+        // you are practising.
+        if (feedback == PracticeFeedback.NONE) {
+            Text(
+                text = stringResource(R.string.practice_intro),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(Spacing.lg))
+        }
 
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 6.dp),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(Spacing.lg),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val textStyle = MaterialTheme.typography.headlineMedium.copy(
@@ -181,7 +190,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                     )
                 }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(Spacing.lg))
                 
                 FilledTonalButton(
                     onClick = { 
@@ -189,14 +198,14 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                         viewModel.speak(targetSentence) 
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.small,
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
                         contentColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
                     Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(Spacing.sm))
                     Text(
                         stringResource(R.string.practice_listen_repeat),
                         style = MaterialTheme.typography.labelLarge,
@@ -206,7 +215,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(Spacing.xl))
 
         AnimatedVisibility(
             visible = errorState != null,
@@ -215,15 +224,15 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
         ) {
             Row(
                 modifier = Modifier
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = Spacing.md)
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
+                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), MaterialTheme.shapes.small)
+                    .padding(Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     text = errorState ?: "",
                     style = MaterialTheme.typography.labelMedium,
@@ -240,15 +249,15 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
             exit = fadeOut() + shrinkVertically()
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.lg),
                 color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
                         else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.medium,
                 border = BorderStroke(1.dp, if (isPositive) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
             ) {
                 Text(
                     text = feedbackText ?: "",
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(Spacing.md),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Black,
                     color = if (isPositive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
@@ -259,12 +268,12 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
 
         OutlinedCard(
             modifier = Modifier.fillMaxWidth().height(160.dp),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
         ) {
-            Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize().padding(Spacing.lg), contentAlignment = Alignment.Center) {
                 AnimatedContent(
                     targetState = spokenText,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -274,19 +283,18 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                         text = text.ifEmpty { "Waiting for your speech..." },
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (text.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 26.sp
+                        textAlign = TextAlign.Center
                     )
                 }
             }
         }
 
         Spacer(modifier = Modifier.weight(1f))
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(Spacing.xl))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
             Button(
                 onClick = { 
@@ -303,15 +311,34 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(64.dp)
-                    .background(if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) else gradientBrush, RoundedCornerShape(20.dp)),
+                    .height(ActionButtonHeight),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                 contentPadding = PaddingValues(0.dp),
-                shape = RoundedCornerShape(20.dp),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                shape = MaterialTheme.shapes.large,
+                // Flat. The container is transparent, so a 6dp shadow was being cast
+                // for a surface that is not drawn - which is what put a hard-edged
+                // lighter block inside the button's rounded shape.
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // The gradient lives inside the button and is clipped to its
+                        // shape. On the outer modifier it was painted around the
+                        // surface rather than as it, so nothing bounded it.
+                        .clip(MaterialTheme.shapes.large)
+                        .background(
+                            if (isListening) {
+                                Brush.linearGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.error,
+                                        MaterialTheme.colorScheme.errorContainer
+                                    )
+                                )
+                            } else {
+                                gradientBrush
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -321,9 +348,11 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                             modifier = Modifier.size(24.dp),
                             tint = Color.White
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(Spacing.sm))
                         Text(
-                            text = if (isListening) "Evaluate" else "Speak", 
+                            text = stringResource(
+                                if (isListening) R.string.practice_evaluate else R.string.practice_speak
+                            ),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Black,
                             color = Color.White
@@ -337,8 +366,8 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.nextSentence() 
                 },
-                modifier = Modifier.weight(1f).height(64.dp),
-                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.weight(1f).height(ActionButtonHeight),
+                shape = MaterialTheme.shapes.large,
                 border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
             ) {
                 Icon(
@@ -346,7 +375,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                     contentDescription = null,
                     modifier = Modifier.size(28.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     text = stringResource(R.string.practice_next),
                     style = MaterialTheme.typography.labelLarge,

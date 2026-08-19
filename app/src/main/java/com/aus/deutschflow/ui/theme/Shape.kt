@@ -36,3 +36,27 @@ val PillShape = RoundedCornerShape(percent = 50)
  * their screens and they were already being hand-set to 56 and 64 in different files.
  */
 val ActionButtonHeight = 56.dp
+
+/**
+ * The disc behind an empty state's icon, and the icon inside it.
+ *
+ * Kept as a pair: the icon is a little under half the disc, and changing one
+ * without the other is what makes the medallion look either hollow or crowded.
+ */
+val EmptyStateMedallionSize = 144.dp
+val EmptyStateIconSize = 68.dp
+
+/**
+ * The live audio waveform's height.
+ *
+ * A component dimension, not a gap - it briefly borrowed Spacing.xxl, which is the
+ * right number for the wrong reason and would have drifted the moment the spacing
+ * scale was tuned.
+ */
+val WaveformHeight = 40.dp
+
+/**
+ * The transcript card's floor, so it holds its shape before any speech arrives and
+ * the layout does not jump the moment the first word lands.
+ */
+val TranscriptCardMinHeight = 200.dp
