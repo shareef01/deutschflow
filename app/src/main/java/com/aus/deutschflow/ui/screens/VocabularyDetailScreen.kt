@@ -18,6 +18,7 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.GlassButton
+import com.aus.deutschflow.ui.theme.UppercaseLabelTracking
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 
@@ -105,7 +106,7 @@ fun VocabularyDetailScreen(
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            letterSpacing = 1.2.sp
+            letterSpacing = UppercaseLabelTracking
         )
         
         HorizontalDivider(

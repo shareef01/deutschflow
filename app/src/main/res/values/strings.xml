@@ -43,6 +43,10 @@
     <string name="history_search_hint">Search transcript history…</string>
     <string name="history_empty_title">No transcripts found</string>
     <string name="history_empty_body">Your transcript sessions will appear here.</string>
+    <string name="history_empty_action">Start a transcript</string>
+    <!-- Time and length of a transcript. A format string, not a template in
+         code: the separator is typographic but the order is not universal. -->
+    <string name="history_meta">%1$s · %2$s</string>
     <string name="history_today">Today</string>
     <string name="history_yesterday">Yesterday</string>
     <string name="history_time_format">HH:mm</string>

@@ -60,11 +60,11 @@ fun DailyGoalCard(xp: Int, streak: Int) {
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Row(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.padding(Spacing.lg),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
@@ -90,7 +90,7 @@ fun DailyGoalCard(xp: Int, streak: Int) {
                 }
             }
 
-            Spacer(modifier = Modifier.width(24.dp))
+            Spacer(modifier = Modifier.width(Spacing.lg))
 
             Column {
                 Text(text = stringResource(R.string.dashboard_daily_goal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -100,14 +100,14 @@ fun DailyGoalCard(xp: Int, streak: Int) {
                     style = MaterialTheme.typography.bodySmall,
                     color = if (progress >= 1f) TertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Spacing.sm))
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                     shape = CircleShape
                 ) {
                     Text(
                         text = stringResource(R.string.dashboard_streak, streak),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -122,13 +122,13 @@ fun DailyGoalCard(xp: Int, streak: Int) {
 fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp)
+        shape = MaterialTheme.shapes.extraLarge
     ) {
-        Column(modifier = Modifier.padding(24.dp)) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
             Text(text = stringResource(R.string.dashboard_retention), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.md))
             
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RetentionTile(Modifier.weight(1f), stringResource(R.string.dashboard_mastered), stats.masteredWords, TertiaryGreen)
                 RetentionTile(Modifier.weight(1f), stringResource(R.string.dashboard_learning), stats.learningWords, AzureGlow)
                 RetentionTile(Modifier.weight(1f), stringResource(R.string.dashboard_new), stats.newWords, MaterialTheme.colorScheme.onSurfaceVariant)
@@ -141,8 +141,8 @@ fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
 fun RetentionTile(modifier: Modifier, label: String, count: Int, color: Color) {
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-            .padding(12.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), MaterialTheme.shapes.small)
+            .padding(Spacing.md)
     ) {
         Text(text = count.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = color)
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -158,11 +158,11 @@ fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.Activ
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp)
+        shape = MaterialTheme.shapes.extraLarge
     ) {
-        Column(modifier = Modifier.padding(24.dp)) {
+        Column(modifier = Modifier.padding(Spacing.lg)) {
             Text(text = stringResource(R.string.dashboard_heatmap), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Spacing.md))
 
             Canvas(modifier = Modifier.fillMaxWidth().height(120.dp)) {
                 val cellSize = 12.dp.toPx()
@@ -187,7 +187,7 @@ fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.Activ
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Spacing.sm))
             Text(text = stringResource(R.string.dashboard_heatmap_sub), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

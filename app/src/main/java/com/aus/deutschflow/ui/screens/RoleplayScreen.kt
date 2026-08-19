@@ -68,8 +68,8 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = viewModel()) {
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
             items(messages) { message ->
                 ChatBubble(message, onSpeak = { viewModel.speak(it) })
@@ -111,7 +111,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = viewModel()) {
             tonalElevation = 8.dp
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(Spacing.md),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (isListening && partialText.isNotBlank()) {
@@ -119,7 +119,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = viewModel()) {
                         text = partialText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = Spacing.sm)
                     )
                 }
 
@@ -162,7 +162,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = viewModel()) {
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = Spacing.xs)
                 )
             }
         }
@@ -190,12 +190,12 @@ fun ChatBubble(message: ChatMessage, onSpeak: (String) -> Unit) {
                     ),
                     fill = if (isAI) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
                 )
-                .padding(12.dp)
+                .padding(Spacing.md)
         ) {
             Column {
                 Text(text = message.content, style = MaterialTheme.typography.bodyLarge)
                 if (isAI && !message.translation.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(Spacing.xs))
                     Text(
                         text = message.translation,
                         style = MaterialTheme.typography.bodySmall,

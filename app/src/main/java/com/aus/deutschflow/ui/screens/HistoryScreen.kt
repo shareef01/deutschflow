@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +50,7 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.SearchInput
+import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 import com.aus.deutschflow.ui.viewmodel.HistoryViewModel
@@ -67,9 +70,13 @@ import java.util.Locale
  * through a snackbar with Undo rather than a blocking dialog.
  */
 @Composable
-fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
+fun HistoryScreen(
+    viewModel: HistoryViewModel = viewModel(),
+    onStartTranscript: () -> Unit = {}
+) {
     val history by viewModel.transcripts.collectAsState()
     val historyQuery by viewModel.query.collectAsState()
+    val hasAnyHistory by viewModel.hasAnyHistory.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -85,15 +92,19 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
         ) {
         Spacer(modifier = Modifier.height(Spacing.sm))
 
-        // The same input the library uses - one component, one stroke.
-        SearchInput(
-            value = historyQuery,
-            onValueChange = { viewModel.setQuery(it) },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = stringResource(R.string.history_search_hint)
-        )
+        // Nothing to search until something has been recorded. A search field over
+        // an empty list asks the user to look for what they have not made yet.
+        if (hasAnyHistory) {
+            // The same input the library uses - one component, one stroke.
+            SearchInput(
+                value = historyQuery,
+                onValueChange = { viewModel.setQuery(it) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = stringResource(R.string.history_search_hint)
+            )
 
-        Spacer(modifier = Modifier.height(Spacing.md))
+            Spacer(modifier = Modifier.height(Spacing.md))
+        }
 
         AnimatedContent(
             targetState = history.isEmpty(),
@@ -104,7 +115,24 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
                 EmptyState(
                     icon = Icons.Default.History,
                     message = stringResource(R.string.history_empty_title),
-                    description = stringResource(R.string.history_empty_body)
+                    description = stringResource(R.string.history_empty_body),
+                    // The way out of an empty history is to record one, so the screen
+                    // offers that rather than describing the absence and stopping.
+                    // Only when there is genuinely nothing: a search that matched
+                    // nothing is fixed by editing the query, not by leaving.
+                    action = if (!hasAnyHistory) {
+                        {
+                            Button(
+                                onClick = onStartTranscript,
+                                modifier = Modifier.height(ActionButtonHeight),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(Icons.Default.Mic, contentDescription = null)
+                                Spacer(modifier = Modifier.width(Spacing.sm))
+                                Text(stringResource(R.string.history_empty_action))
+                            }
+                        }
+                    } else null
                 )
             } else {
                 val groups = groupByDay(history)
@@ -228,8 +256,11 @@ fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
                 // When it happened and how much was said - metadata, so it stays
                 // quiet below the words themselves.
                 Text(
-                    text = "$timeString · " +
-                        pluralStringResource(R.plurals.history_word_count, wordCount, wordCount),
+                    text = stringResource(
+                        R.string.history_meta,
+                        timeString,
+                        pluralStringResource(R.plurals.history_word_count, wordCount, wordCount)
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
