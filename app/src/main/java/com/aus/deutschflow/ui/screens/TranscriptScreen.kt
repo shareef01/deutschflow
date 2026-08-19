@@ -192,11 +192,25 @@ fun TranscriptContent(
     val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
     val isEmpty = !hasTranscript && !isListening && !isBusy
 
+    // Results are the only thing that makes this screen taller than the viewport,
+    // so they are also the only thing that needs it to scroll.
+    val hasResults = translation.isNotEmpty()
+    val isPlaceholder = finalText.isEmpty() && !isListening
+    val placeholder = stringResource(R.string.transcript_placeholder)
+    val cardText = if (isListening) partialText else finalText.ifEmpty { placeholder }
+
+    // The record button is the primary action of the whole app, so it is anchored
+    // rather than laid out in the flow: it used to sit between the transcript card
+    // and the results, which put it below the fold on an empty screen and buried it
+    // mid-scroll once a translation arrived. Everything else scrolls above it, the
+    // way Practice already places Speak and Next.
+    Column(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .weight(1f)
+            .fillMaxWidth()
             .padding(horizontal = Spacing.md)
-            .verticalScroll(rememberScrollState()),
+            .then(if (hasResults) Modifier.verticalScroll(rememberScrollState()) else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // The dialect chip has one home: directly under the header, on every state.
@@ -230,23 +244,21 @@ fun TranscriptContent(
             Spacer(modifier = Modifier.height(Spacing.lg))
         }
 
-        // Transcript Area
-        OutlinedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = TranscriptCardMinHeight),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            shape = MaterialTheme.shapes.extraLarge,
-            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-        ) {
-            Box(modifier = Modifier.padding(Spacing.lg)) {
-                Text(
-                    text = if (isListening) partialText else finalText.ifEmpty { "Tap the mic to transcribe..." },
-                    style = TranscriptTextStyle,
-                    color = if (finalText.isEmpty() && !isListening) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                )
-            }
+        // The workspace. With nothing below it, it takes the room rather than
+        // leaving a slab of ground between a short card and the button - the space
+        // is where the speech is going to land, so it belongs to the card.
+        if (hasResults) {
+            TranscriptCard(
+                text = cardText,
+                isPlaceholder = isPlaceholder,
+                modifier = Modifier.fillMaxWidth().heightIn(min = TranscriptCardMinHeight)
+            )
+        } else {
+            TranscriptCard(
+                text = cardText,
+                isPlaceholder = isPlaceholder,
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            )
         }
 
         if (isListening) {
@@ -256,38 +268,6 @@ fun TranscriptContent(
                 isActive = true,
                 modifier = Modifier.fillMaxWidth().height(WaveformHeight)
             )
-        }
-
-        Spacer(modifier = Modifier.height(Spacing.xl))
-
-        // Hero Interaction
-        Box(contentAlignment = Alignment.Center) {
-            if (isListening) {
-                val pulseScale by rememberInfiniteTransition().animateFloat(
-                    initialValue = 1f, targetValue = 1.8f,
-                    animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart), label = ""
-                )
-                Box(Modifier.size(100.dp).scale(pulseScale).alpha(0.3f).background(primaryColor, CircleShape))
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) else gradientBrush)
-                    .clickable { 
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (isListening) onStopListening() else onStartListening() 
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = Color.White
-                )
-            }
         }
 
         ErrorBanner(errorState)
@@ -354,7 +334,45 @@ fun TranscriptContent(
             }
         }
         
-        Spacer(modifier = Modifier.height(Spacing.bottomActionClearance))
+        // A gap, not a clearance: nothing is anchored over this column any more,
+        // so the last row only needs breathing room from the button below it.
+        Spacer(modifier = Modifier.height(Spacing.md))
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.md),
+        contentAlignment = Alignment.Center
+    ) {
+            if (isListening) {
+                val pulseScale by rememberInfiniteTransition().animateFloat(
+                    initialValue = 1f, targetValue = 1.8f,
+                    animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart), label = ""
+                )
+                Box(Modifier.size(100.dp).scale(pulseScale).alpha(0.3f).background(primaryColor, CircleShape))
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(if (isListening) Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)) else gradientBrush)
+                    .clickable { 
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        if (isListening) onStopListening() else onStartListening() 
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = Color.White
+                )
+            }
+        }
+
     }
 }
 
@@ -406,5 +424,37 @@ private fun LanguageIndicator(dialect: String) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSecondaryContainer
         )
+    }
+}
+
+/**
+ * The transcript itself, in the card that is this screen's workspace.
+ *
+ * Takes its own modifier so the caller decides whether it holds a floor or fills
+ * the space: with results below it needs a minimum, and with nothing below it the
+ * room is its own.
+ */
+@Composable
+private fun TranscriptCard(text: String, isPlaceholder: Boolean, modifier: Modifier = Modifier) {
+    OutlinedCard(
+        modifier = modifier,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = MaterialTheme.shapes.extraLarge,
+        elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Box(modifier = Modifier.padding(Spacing.lg)) {
+            Text(
+                text = text,
+                style = TranscriptTextStyle,
+                color = if (isPlaceholder) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        }
     }
 }
