@@ -26,7 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.BuildConfig
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.theme.UppercaseLabelTracking
@@ -36,7 +36,7 @@ import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
+fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val totalVocab by viewModel.totalVocabulary.collectAsState()
     val totalTranscripts by viewModel.totalTranscripts.collectAsState()
     val userStats by viewModel.userStats.collectAsState()
