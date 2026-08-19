@@ -3,6 +3,7 @@ package com.aus.deutschflow.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -51,10 +52,16 @@ private val DarkColorScheme = darkColorScheme(
 fun DeutschflowTheme(
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = DarkColorScheme,
-        typography = Typography,
-        shapes = AppShapes,
-        content = content
-    )
+    // Read once, here, so no screen has to reach for a Context to find out whether
+    // it is allowed to move.
+    val reducedMotion = systemPrefersReducedMotion()
+
+    CompositionLocalProvider(LocalReducedMotion provides reducedMotion) {
+        MaterialTheme(
+            colorScheme = DarkColorScheme,
+            typography = Typography,
+            shapes = AppShapes,
+            content = content
+        )
+    }
 }
