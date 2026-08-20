@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -263,7 +265,22 @@ fun VocabularyListContent(
                 transitionSpec = { fadeIn(tween(listFade)) togetherWith fadeOut(tween(listFade)) },
                 label = "vocabList"
             ) { isEmpty ->
-                if (isEmpty) {
+                if (isEmpty && !libraryIsEmpty) {
+                    // A search that matched nothing is not an empty library, and
+                    // saying "Your library is empty" over a library that holds
+                    // fifty words is simply false. The way out is the query, so
+                    // that is what the action clears.
+                    EmptyState(
+                        icon = Icons.Default.SearchOff,
+                        message = stringResource(R.string.library_no_match_title),
+                        description = stringResource(R.string.library_no_match_body, searchQuery),
+                        action = {
+                            TextButton(onClick = { onSearchChange("") }) {
+                                Text(stringResource(R.string.library_clear_search))
+                            }
+                        }
+                    )
+                } else if (isEmpty) {
                     EmptyState(
                         icon = Icons.Default.AutoStories,
                         message = stringResource(R.string.library_empty_title),
