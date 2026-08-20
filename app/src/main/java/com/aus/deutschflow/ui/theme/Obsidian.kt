@@ -45,7 +45,17 @@ val GlassShape = RoundedCornerShape(16.dp)
  * card from the ground. [alpha] lets focused inputs and recording controls turn
  * the edge up without a second treatment.
  */
-fun glassBorderBrush(glow: Color = AzureGlow, alpha: Float = 0.16f): Brush =
+/**
+ * The cyan edge on a glass surface.
+ *
+ * At 0.16 this composited to 1.38:1 against the card it outlined - the same
+ * invisibility the neutral Outline had, and for the same reason: the card is only
+ * 1.10:1 above the ground, so the edge is doing all the work of saying where it
+ * ends, and it was not doing any. 0.5 brings it to 3.21:1, the bar WCAG sets for a
+ * boundary that identifies a component. It stays cyan: the colour is the brand, the
+ * alpha was the bug.
+ */
+fun glassBorderBrush(glow: Color = AzureGlow, alpha: Float = 0.5f): Brush =
     SolidColor(glow.copy(alpha = alpha))
 
 /**

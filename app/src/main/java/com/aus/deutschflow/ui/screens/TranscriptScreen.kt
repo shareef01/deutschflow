@@ -540,7 +540,7 @@ private fun TranscriptCard(text: String, isPlaceholder: Boolean, modifier: Modif
         ),
         shape = MaterialTheme.shapes.extraLarge,
         elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Box(modifier = Modifier.padding(Spacing.lg)) {
             Text(
