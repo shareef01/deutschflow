@@ -91,8 +91,14 @@ val WarningContainer = Color(0xFF3A2A05)
 val OnWarningContainer = Color(0xFFFFE2B8)
 
 // Borders and dividers: cool grey-blues from the same family as the ground.
-val Outline = Color(0xFF232C3D)
-val OutlineVariant = Color(0xFF1A2231)
+//
+// Raised to carry the separation the surface ramp does not. Measured, a card sits
+// 1.10:1 above the ground - imperceptible - so the edge is what has to say where the
+// card ends, and at 1.38:1 it was saying nothing either. 3:1 is what WCAG 1.4.11
+// asks of a boundary that identifies a component; the divider is quieter at 2:1,
+// since it separates rather than identifies.
+val Outline = Color(0xFF565F70)
+val OutlineVariant = Color(0xFF3D4554)
 
 /**
  * The elevation ramp Material 3 components reach for on their own. Opaque (drawn

@@ -150,7 +150,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
             shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 6.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(
                 modifier = Modifier.padding(Spacing.lg),
@@ -271,7 +271,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
             shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(Spacing.lg), contentAlignment = Alignment.Center) {
                 AnimatedContent(
@@ -368,7 +368,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                 },
                 modifier = Modifier.weight(1f).height(ActionButtonHeight),
                 shape = MaterialTheme.shapes.large,
-                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.NavigateNext, 
