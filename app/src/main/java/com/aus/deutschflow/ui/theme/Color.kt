@@ -27,8 +27,13 @@ val OnSurfaceVariant = Color(0xFF98A2B3)
 /**
  * For text that should recede without becoming unreadable — a flat colour, never
  * alpha over a dark ground (alpha loses contrast far faster than it looks).
+ *
+ * Measured rather than judged. At 0xFF6E7889 this was 4.33:1 on the ground and
+ * 3.94:1 on a card, against the 4.5:1 WCAG asks for body text - so the one colour
+ * whose whole job is "quiet but readable" was neither. Ten points lighter on each
+ * channel carries it to 4.98:1 and 4.53:1 while staying the same steel blue.
  */
-val OnSurfaceMuted = Color(0xFF6E7889)
+val OnSurfaceMuted = Color(0xFF788293)
 
 /**
  * The accent ramp. Everything "live" is one of these two.

@@ -3,6 +3,7 @@ package com.aus.deutschflow.ui.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -147,20 +148,31 @@ fun MainNavigation(
                     containerColor = MaterialTheme.colorScheme.background,
                     tonalElevation = 0.dp
                 ) {
+                    // Five labels stop fitting on a phone somewhere around 1.3x, and
+                    // Material clips them rather than eliding - measured at 2x, three
+                    // of the five read "Transc", "Histor" and "Practi". A truncated
+                    // word carries less than the icon it sits under, so past that
+                    // point the bar drops to icons alone. Nothing is lost to a screen
+                    // reader: every icon already names its destination.
+                    val labelsFit = LocalDensity.current.fontScale <= 1.3f
+
                     navItems.forEach { screen ->
                         val isSelected = currentRoute == screen.route
                         NavigationBarItem(
                             icon = { Icon(screen.icon, contentDescription = stringResource(screen.title)) },
-                            label = {
-                                Text(
-                                    text = stringResource(screen.title),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1
-                                )
-                            },
-                            // Always: with labels only on the selected item the bar
-                            // was four unexplained grey glyphs and one word, and the
-                            // row jumped sideways as the label appeared and vanished.
+                            label = if (labelsFit) {
+                                {
+                                    Text(
+                                        text = stringResource(screen.title),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1
+                                    )
+                                }
+                            } else null,
+                            // Always, when there are labels at all: with labels only on
+                            // the selected item the bar was four unexplained grey
+                            // glyphs and one word, and the row jumped sideways as the
+                            // label appeared and vanished.
                             alwaysShowLabel = true,
                             selected = isSelected,
                             onClick = {
