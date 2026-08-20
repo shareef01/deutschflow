@@ -42,6 +42,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Two things a compiler cannot check and a person will not notice: whether
+      # every text colour still clears WCAG on the surface it is drawn on, and
+      # whether the two apps still agree on their palette. The second exists
+      # because they silently disagreed for a while - three tokens fixed on
+      # Android for measured contrast failures were left behind on the web, so
+      # the same failures survived there until someone thought to look.
+      - name: Design tokens
+        run: |
+          python tools/contrast.py
+          python tools/palette_parity.py
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --console=plain
 
