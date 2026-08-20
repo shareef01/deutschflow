@@ -38,6 +38,18 @@ class HistoryViewModel @Inject constructor(
         .map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    /**
+     * True until the database has answered once.
+     *
+     * [transcripts] starts at an empty list, which is indistinguishable from a
+     * history that really is empty - so the screen showed "No transcripts found"
+     * for a frame before the rows arrived, telling the user something false and
+     * then correcting itself.
+     */
+    val isLoading: StateFlow<Boolean> = transcriptDao.getAllTranscripts()
+        .map { false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val transcripts: StateFlow<List<TranscriptEntity>> = _query
         .combine(transcriptDao.getAllTranscripts()) { query, list ->
             if (query.isBlank()) {

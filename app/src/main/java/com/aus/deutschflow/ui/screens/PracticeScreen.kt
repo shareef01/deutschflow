@@ -40,6 +40,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.SegmentTab
+import com.aus.deutschflow.ui.theme.PracticeResultMinHeight
 import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.Spacing
@@ -106,6 +107,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
         colors = listOf(AzureGlow, primaryColor)
     )
 
+    val hasResult = feedback != PracticeFeedback.NONE
     val isPositive = feedback == PracticeFeedback.PERFECT
     val feedbackText = when (feedback) {
         PracticeFeedback.NONE -> null
@@ -126,7 +128,12 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .padding(Spacing.md)
-            .verticalScroll(rememberScrollState()),
+            // Only when there is something to scroll to. A scroll container that
+            // never scrolls still measures its children against an infinite height,
+            // which is why the weight below silently did nothing.
+            .then(
+                if (hasResult) Modifier.verticalScroll(rememberScrollState()) else Modifier
+            ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(Spacing.sm))
@@ -266,8 +273,13 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
             }
         }
 
+        // Fixed at 160dp it reserved a slab for a result that had not arrived, and
+        // left the gap between itself and the buttons doing nothing. With nothing
+        // below it in the flow, the space is its own.
         OutlinedCard(
-            modifier = Modifier.fillMaxWidth().height(160.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (hasResult) Modifier.height(PracticeResultMinHeight) else Modifier.weight(1f)),
             shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
@@ -280,7 +292,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                     label = "spokenTextAnim"
                 ) { text ->
                     Text(
-                        text = text.ifEmpty { "Waiting for your speech..." },
+                        text = text.ifEmpty { stringResource(R.string.practice_waiting) },
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (text.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
@@ -289,8 +301,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-        Spacer(modifier = Modifier.height(Spacing.xl))
+        Spacer(modifier = Modifier.height(Spacing.lg))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
