@@ -34,7 +34,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
+  // The app's ground, not pure black - the browser chrome was a different
+  // colour from the page underneath it.
+  themeColor: "#0a0e16",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

@@ -27,7 +27,8 @@ export function OracleMic({
   onClick: () => void;
   large?: boolean;
 }) {
-  const accent = isListening ? "#4ec9e8" : "#0a84ff";
+  // The token values, previously retyped as literals.
+  const accent = isListening ? "var(--color-azure-glow)" : "var(--color-azure-deep)";
 
   return (
     <button
@@ -56,7 +57,9 @@ export function OracleMic({
         }`}
         style={{
           borderColor: accent,
-          backgroundColor: isListening ? "rgba(78, 201, 232, 0.16)" : "#1a2233",
+          backgroundColor: isListening
+            ? "color-mix(in srgb, var(--color-azure-glow) 16%, transparent)"
+            : "var(--color-glass-raised)",
         }}
       >
         {isBusy ? (

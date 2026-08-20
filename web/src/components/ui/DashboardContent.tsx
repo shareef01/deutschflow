@@ -59,8 +59,9 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
           />
           <defs>
             <linearGradient id="azure-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#00E5FF" />
-              <stop offset="100%" stopColor="#00AEEF" />
+              {/* The palette's cyan, not a fourth one: #00E5FF was in neither theme. */}
+              <stop offset="0%" stopColor="var(--color-azure-glow)" />
+              <stop offset="100%" stopColor="var(--color-azure-deep)" />
             </linearGradient>
           </defs>
         </svg>
