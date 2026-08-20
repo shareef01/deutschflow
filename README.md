@@ -48,10 +48,12 @@ Four tabs — one per verb: **speak**, **keep**, **recall**, **produce**.
 | ![Transcript](docs/screenshots/01-transcript.png) | ![Library](docs/screenshots/03-library.png) |
 | **Library · Transcripts** — every session, grouped by day, swipe to delete with an undo. | **Word detail** — article, plural, conjugation, synonyms and antonyms for a single word. |
 | ![History](docs/screenshots/02-history.png) | ![Word detail](docs/screenshots/04-word-detail.png) |
-| **Study · Flashcards** — spaced repetition, graded *Again / Hard / Good / Easy*. The second pane is a dashboard: daily goal, streak, retention split and a three-month heatmap. | **Practice · Repetition** — repeat a sentence and get word-by-word scoring. The second pane is Roleplay, a short spoken exchange with an English gloss. |
-| ![Study](docs/screenshots/05-study.png) | ![Practice](docs/screenshots/06-practice.png) |
-| **Settings** — API key, recognition dialect, statistics and privacy controls. | |
-| ![Settings](docs/screenshots/07-settings.png) | |
+| **Study · Flashcards** — spaced repetition, graded *Again / Hard / Good / Easy*. | **Study · Dashboard** — daily goal, streak, the retention split, and three months of activity. |
+| ![Study](docs/screenshots/05-study.png) | ![Dashboard](docs/screenshots/10-dashboard.png) |
+| **Practice · Repetition** — repeat a sentence and get word-by-word scoring. The second pane is Roleplay, a short spoken exchange with an English gloss. | **Settings** — API key, recognition dialect, statistics and privacy controls. |
+| ![Practice](docs/screenshots/06-practice.png) | ![Settings](docs/screenshots/07-settings.png) |
+
+<sub>Screenshots use sample vocabulary rather than real recordings.</sub>
 
 <p align="center">
   <img src="docs/screenshots/09-widget-picker.png" alt="The daily word widget in the system picker" width="270">
