@@ -73,7 +73,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             shape = MaterialTheme.shapes.large,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             tonalElevation = 2.dp
         ) {
             Column(modifier = Modifier.padding(Spacing.md)) {
@@ -176,7 +176,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent),
             shape = MaterialTheme.shapes.extraLarge,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             elevation = CardDefaults.outlinedCardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(Spacing.lg)) {
@@ -199,7 +199,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
             shape = MaterialTheme.shapes.large,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.03f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             tonalElevation = 1.dp
         ) {
             Row(
