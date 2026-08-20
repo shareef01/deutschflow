@@ -164,6 +164,7 @@
 
     <!-- Practice -->
     <string name="practice_intro">Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.</string>
+    <string name="practice_waiting">Warte auf deine Stimme…</string>
     <string name="practice_listen_repeat">Hören und nachsprechen</string>
     <string name="practice_listen">Anhören</string>
     <string name="practice_speak">Sprechen</string>
