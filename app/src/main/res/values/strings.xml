@@ -69,6 +69,10 @@
     <string name="library_search_hint">Search words or translations…</string>
     <string name="library_empty_title">Your library is empty</string>
     <string name="library_empty_body">Your vocabulary will appear here as you learn. Add a word, or save one from a transcript.</string>
+    <string name="library_no_match_title">No matches</string>
+    <string name="library_no_match_body">No word in your library matches “%1$s”.</string>
+    <string name="library_clear_search">Clear search</string>
+    <string name="transcript_change_dialect">Change the language being recognised</string>
     <string name="library_add_word">Add a word</string>
     <string name="library_more_actions">More actions</string>
     <string name="library_stat_words">Words</string>

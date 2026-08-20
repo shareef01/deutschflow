@@ -74,6 +74,10 @@
     <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>
     <string name="library_empty_title">Deine Bibliothek ist leer</string>
     <string name="library_empty_body">Dein Wortschatz erscheint hier, während du lernst. Füge ein Wort hinzu oder speichere eins aus einem Transkript.</string>
+    <string name="library_no_match_title">Keine Treffer</string>
+    <string name="library_no_match_body">Kein Wort in deiner Bibliothek passt zu „%1$s“.</string>
+    <string name="library_clear_search">Suche zurücksetzen</string>
+    <string name="transcript_change_dialect">Erkannte Sprache ändern</string>
     <string name="library_add_word">Wort hinzufügen</string>
     <string name="library_more_actions">Weitere Aktionen</string>
     <string name="library_stat_words">Wörter</string>

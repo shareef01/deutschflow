@@ -179,6 +179,18 @@ class TranscriptViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    /**
+     * Switches the language recognition listens for.
+     *
+     * The chip on the Transcript screen already named the dialect; it just could not
+     * change it, so the one place you are reminded which language you are speaking
+     * was the one place you could not act on it. Writes the same preference the
+     * Settings radio group does - there is one dialect, not two.
+     */
+    fun selectDialect(dialect: String) {
+        viewModelScope.launch { preferenceManager.saveDialect(dialect) }
+    }
+
     fun startListening() {
         _permissionDenied.value = false
         viewModelScope.launch {
