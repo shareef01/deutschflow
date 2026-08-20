@@ -67,6 +67,8 @@
 
     <!-- Library -->
     <string name="library_search_hint">Search words or translations…</string>
+    <string name="library_tab_words">Words</string>
+    <string name="library_tab_transcripts">Transcripts</string>
     <string name="library_empty_title">Your library is empty</string>
     <string name="library_empty_body">Your vocabulary will appear here as you learn. Add a word, or save one from a transcript.</string>
     <string name="library_no_match_title">No matches</string>

@@ -72,6 +72,8 @@
 
     <!-- Library -->
     <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>
+    <string name="library_tab_words">Wörter</string>
+    <string name="library_tab_transcripts">Mitschriften</string>
     <string name="library_empty_title">Deine Bibliothek ist leer</string>
     <string name="library_empty_body">Dein Wortschatz erscheint hier, während du lernst. Füge ein Wort hinzu oder speichere eins aus einem Transkript.</string>
     <string name="library_no_match_title">Keine Treffer</string>

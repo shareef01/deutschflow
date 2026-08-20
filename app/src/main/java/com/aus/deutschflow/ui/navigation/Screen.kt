@@ -20,9 +20,15 @@ sealed class Screen(val route: String, @StringRes val title: Int, val icon: Imag
     object Settings : Screen("settings", R.string.nav_settings, Icons.Default.Settings)
 }
 
+/**
+ * The bottom bar's destinations - one per verb.
+ *
+ * History is not among them: it is a pane inside Library, which holds both what was
+ * said and the words taken from it. Four tabs rather than five, and the archive
+ * stops being two places to look for the same memory.
+ */
 val navItems = listOf(
     Screen.Transcript,
-    Screen.History,
     Screen.Vocabulary,
     Screen.Study,
     Screen.Practice

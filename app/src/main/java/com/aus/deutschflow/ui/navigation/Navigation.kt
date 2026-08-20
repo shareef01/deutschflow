@@ -46,7 +46,6 @@ fun MainNavigation(
 
     val currentScreen = when (currentRoute) {
         Screen.Transcript.route -> Screen.Transcript
-        Screen.History.route -> Screen.History
         Screen.Vocabulary.route -> Screen.Vocabulary
         Screen.Study.route -> Screen.Study
         Screen.Practice.route -> Screen.Practice
@@ -248,13 +247,12 @@ fun MainNavigation(
                 }
             ) {
                 composable(Screen.Transcript.route) { TranscriptScreen(hiltViewModel()) }
-                composable(Screen.History.route) {
-                    HistoryScreen(
-                        viewModel = hiltViewModel(),
+                composable(Screen.Vocabulary.route) {
+                    LibraryScreen(
+                        windowSizeClass = windowSizeClass,
                         onStartTranscript = { navigateToTab(navController, Screen.Transcript) }
                     )
                 }
-                composable(Screen.Vocabulary.route) { VocabularyScreen(windowSizeClass, hiltViewModel()) }
                 composable(Screen.Study.route) { StudyScreen(hiltViewModel()) }
                 composable(Screen.Practice.route) {
                     // Both, explicitly. A NavBackStackEntry's default factory is not
