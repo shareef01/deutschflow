@@ -1,10 +1,12 @@
 package com.aus.deutschflow.ui.screens
 
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +56,7 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.SearchInput
+import com.aus.deutschflow.ui.theme.HistoryRowSkeletonHeight
 import com.aus.deutschflow.ui.theme.motionDuration
 import com.aus.deutschflow.ui.theme.Motion
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
@@ -79,6 +86,7 @@ fun HistoryScreen(
     val history by viewModel.transcripts.collectAsState()
     val historyQuery by viewModel.query.collectAsState()
     val hasAnyHistory by viewModel.hasAnyHistory.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -111,11 +119,13 @@ fun HistoryScreen(
         // Hoisted: a transitionSpec lambda is not a composable scope.
         val fade = motionDuration(Motion.STANDARD)
         AnimatedContent(
-            targetState = history.isEmpty(),
+            targetState = if (isLoading) null else history.isEmpty(),
             transitionSpec = { fadeIn(tween(fade)) togetherWith fadeOut(tween(fade)) },
             label = "historyContent"
-        ) { isEmpty ->
-            if (isEmpty) {
+        ) { state ->
+            if (state == null) {
+                HistorySkeleton()
+            } else if (state) {
                 EmptyState(
                     icon = Icons.Default.History,
                     message = stringResource(R.string.history_empty_title),
@@ -153,9 +163,7 @@ fun HistoryScreen(
                             )
                         }
                         items(transcripts, key = { it.id }) { transcript ->
-                            HistoryItem(
-                                transcript = transcript,
-                                onDelete = {
+                            val onDelete: () -> Unit = {
                                     viewModel.deleteTranscript(transcript)
                                     // Undo, not a confirmation dialog: deletion is
                                     // one tap away, and the snackbar both confirms
@@ -169,8 +177,13 @@ fun HistoryScreen(
                                             viewModel.restoreTranscript(transcript)
                                         }
                                     }
-                                }
-                            )
+                            }
+                            // Swipe or tap - the same deletion, and the same undo
+                            // behind it. A row that can only be deleted by hitting a
+                            // small target is the one people give up on.
+                            SwipeToDeleteRow(onDelete = onDelete) {
+                                HistoryItem(transcript = transcript, onDelete = onDelete)
+                            }
                         }
                     }
                 }
@@ -280,6 +293,77 @@ fun HistoryItem(transcript: TranscriptEntity, onDelete: () -> Unit) {
                     modifier = Modifier.size(20.dp)
                 )
             }
+        }
+    }
+}
+
+/**
+ * A row that can be swiped away, wrapping one that can also be deleted by button.
+ *
+ * The gesture is the expectation on a list like this; the button stays because a
+ * gesture is invisible and undiscoverable on its own, and because a screen reader
+ * cannot perform one.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDeleteRow(onDelete: () -> Unit, content: @Composable () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onDelete()
+            }
+            // Never settle in the dismissed state: the row leaves because the list
+            // stopped containing it, and the snackbar can put it back.
+            false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = Spacing.lg),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    // The action is announced by the row's own delete button.
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        content = { content() }
+    )
+}
+
+/**
+ * Placeholder rows, shown only until the database answers.
+ *
+ * Not decoration: the list starts empty, so without this the screen said "No
+ * transcripts found" for a frame and then contradicted itself.
+ */
+@Composable
+private fun HistorySkeleton() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        repeat(4) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(HistoryRowSkeletonHeight)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+            )
         }
     }
 }

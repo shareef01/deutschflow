@@ -159,6 +159,7 @@
 
     <!-- Practice -->
     <string name="practice_intro">Listen and repeat the sentence accurately to master your pronunciation.</string>
+    <string name="practice_waiting">Waiting for your speech…</string>
     <string name="practice_listen_repeat">Listen and repeat</string>
     <string name="practice_listen">Listen</string>
     <string name="practice_speak">Speak</string>

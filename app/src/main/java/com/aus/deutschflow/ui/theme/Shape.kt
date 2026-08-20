@@ -64,3 +64,9 @@ val TranscriptCardMinHeight = 200.dp
 /** The record button, and the icon inside it. Kept as a pair, like the medallion. */
 val RecordButtonSize = 100.dp
 val RecordIconSize = 40.dp
+
+/** The Practice result card's floor, once a scored attempt sits in it. */
+val PracticeResultMinHeight = 160.dp
+
+/** One placeholder row while the history loads - roughly a real row's height. */
+val HistoryRowSkeletonHeight = 72.dp
