@@ -27,7 +27,9 @@
   --color-on-surface-variant: #98a2b3;
   /* Flat muted body colour (alpha-over-dark loses contrast faster than it
      looks like it should). */
-  --color-on-surface-muted: #6e7889;
+  /* Measured: at #6e7889 this was 4.33:1 on the ground and 3.94:1 on a card,
+     under the 4.5:1 WCAG asks of body text. Mirrors Color.kt. */
+  --color-on-surface-muted: #788293;
 
   /* ---- The accent ramp -------------------------------------------- */
   --color-azure-glow: #4ec9e8;
@@ -59,8 +61,12 @@
   --color-on-warning-container: #ffe2b8;
 
   /* ---- Borders and dividers (cool grey-blues) --------------------------- */
-  --color-outline: #232c3d;
-  --color-outline-variant: #1a2231;
+  /* The surfaces sit 1.04-1.10:1 above the ground - imperceptible - so the edge is
+     what says where a card ends. At #232c3d it was saying nothing either, at
+     1.38:1. 3:1 is what WCAG 1.4.11 asks of a boundary that identifies a
+     component; the divider is quieter, since it separates rather than identifies. */
+  --color-outline: #565f70;
+  --color-outline-variant: #3d4554;
 
   /* ---- Opaque elevation ramp (dialogs, menus, the nav bar) --------------- */
   --color-surface-container-lowest: #0a0e16;
