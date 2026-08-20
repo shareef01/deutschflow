@@ -11,6 +11,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ripple
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.*
@@ -24,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Mic
@@ -144,6 +148,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
             dialect = selectedDialect,
             isFirstRun = isFirstRun,
             listeningSeconds = listeningSeconds,
+            onSelectDialect = { viewModel.selectDialect(it) },
             permissionDenied = permissionDenied,
             onOpenSettings = {
                 context.startActivity(
@@ -204,6 +209,7 @@ fun TranscriptContent(
     dialect: String,
     isFirstRun: Boolean,
     listeningSeconds: Int,
+    onSelectDialect: (String) -> Unit,
     permissionDenied: Boolean,
     onOpenSettings: () -> Unit,
     onStartListening: () -> Unit,
@@ -245,7 +251,7 @@ fun TranscriptContent(
         // It used to live inside the empty block, which meant it moved when the
         // screen changed state and was the first thing the header sliced on scroll.
         Spacer(modifier = Modifier.height(Spacing.sm))
-        LanguageIndicator(dialect)
+        LanguageIndicator(dialect, onSelectDialect)
         Spacer(modifier = Modifier.height(Spacing.md))
 
         // Introductory copy, once. It explains the app to someone who has never used
@@ -509,18 +515,81 @@ private fun SectionLabel(label: String) {
     )
 }
 
+/** The dialects recognition can be asked for, paired with what to call them. */
+private val DIALECTS = listOf(
+    "de-DE" to R.string.settings_dialect_de,
+    "de-AT" to R.string.settings_dialect_at,
+    "de-CH" to R.string.settings_dialect_ch
+)
+
+/**
+ * Which language is being listened for - and the way to change it.
+ *
+ * It named the dialect and did nothing else, which made the one reminder of what
+ * you are about to speak the one thing you could not act on. Now it opens the same
+ * three choices Settings offers, two taps from where the decision actually matters.
+ */
 @Composable
-private fun LanguageIndicator(dialect: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-        shape = CircleShape
-    ) {
-        Text(
-            text = stringResource(R.string.transcript_listening_for, dialect),
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer
-        )
+private fun LanguageIndicator(dialect: String, onSelect: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val label = stringResource(R.string.transcript_change_dialect)
+
+    Box {
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+            shape = CircleShape,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                open = true
+            },
+            modifier = Modifier.semantics { contentDescription = label }
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    start = Spacing.md,
+                    end = Spacing.sm,
+                    top = Spacing.xs,
+                    bottom = Spacing.xs
+                ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.transcript_listening_for, dialect),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    // The Surface above carries the label for the whole control.
+                    contentDescription = null,
+                    modifier = Modifier.size(Spacing.md),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
+
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DIALECTS.forEach { (code, nameRes) ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(nameRes)) },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(code)
+                        open = false
+                    },
+                    trailingIcon = {
+                        if (code == dialect) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                )
+            }
+        }
     }
 }
 
