@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -121,7 +122,7 @@ fun DailyGoalCard(xp: Int, streak: Int) {
                     shape = CircleShape
                 ) {
                     Text(
-                        text = stringResource(R.string.dashboard_streak, streak),
+                        text = pluralStringResource(R.plurals.dashboard_streak, streak, streak),
                         modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,

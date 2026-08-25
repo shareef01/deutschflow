@@ -17,21 +17,10 @@
     <string name="action_delete">Delete</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
-    <string name="action_copy">Copy</string>
-    <string name="action_ok">OK</string>
     <string name="action_open_settings">Open settings</string>
 
-    <!-- Transcript -->
-    <string name="transcript_listening">Listening…</string>
-    <string name="transcript_hint">Tap to start</string>
-    <string name="transcript_transcribing">Transcribing…</string>
-    <string name="transcript_start_recording">Start recording</string>
-    <string name="transcript_stop_recording">Stop recording</string>
     <string name="transcript_empty_title">Speak German naturally.</string>
     <string name="transcript_empty_body">DeutschFlow transcribes what you say, translates it, and finds the words worth keeping.</string>
-    <string name="transcript_language">German · %1$s</string>
-    <string name="transcript_translation">Translation</string>
-    <string name="transcript_vocabulary">Vocabulary</string>
     <string name="transcript_save">Save to library</string>
     <string name="transcript_placeholder">Your transcript will appear here.</string>
     <string name="transcript_start">Start recording</string>
@@ -111,8 +100,6 @@
     <string name="study_tap_to_flip">Tap to flip</string>
     <string name="study_show_german">Show the German word</string>
     <string name="study_show_translation">Show the translation</string>
-    <string name="study_got_it">Got it</string>
-    <string name="study_progress">Progress: %1$d / %2$d</string>
 
     <string name="dashboard_daily_goal">Daily Goal</string>
     <string name="dashboard_goal_achieved">Goal achieved!</string>
@@ -123,7 +110,10 @@
     <string name="dashboard_new">New</string>
     <string name="dashboard_heatmap">Activity Heatmap</string>
     <string name="dashboard_heatmap_sub">Past 3 months of consistent effort</string>
-    <string name="dashboard_streak">🔥 %1$d Day Streak</string>
+    <plurals name="dashboard_streak">
+        <item quantity="one">🔥 %1$d Day Streak</item>
+        <item quantity="other">🔥 %1$d Days Streak</item>
+    </plurals>
     <string name="dashboard_xp">XP</string>
     <string name="dashboard_tab">Dashboard</string>
     <string name="dashboard_flashcards_tab">Flashcards</string>
@@ -151,7 +141,6 @@
     <string name="settings_cloud_sign_in">Sign in</string>
     <string name="settings_cloud_sign_out">Sign out</string>
     <string name="settings_cloud_sign_in_title">Sign in</string>
-    <string name="settings_cloud_sign_in_body">Accounts are ready for a backend that does not exist yet. Signing in changes nothing on this device.</string>
     <string name="settings_cloud_email">Email</string>
     <string name="settings_cloud_password">Password</string>
 
@@ -163,37 +152,16 @@
     <string name="practice_intro">Listen and repeat the sentence accurately to master your pronunciation.</string>
     <string name="practice_waiting">Waiting for your speech…</string>
     <string name="practice_listen_repeat">Listen and repeat</string>
-    <string name="practice_listen">Listen</string>
     <string name="practice_speak">Speak</string>
     <string name="practice_evaluate">Evaluate</string>
     <string name="practice_next">Next</string>
-    <string name="practice_word_match">Word match: %1$d%%</string>
-    <string name="practice_word_correct">Correct</string>
-    <string name="practice_word_try_again">Try again</string>
     <string name="practice_feedback_perfect">Excellent! Perfect pronunciation.</string>
     <string name="practice_feedback_good">Good! You got most of it.</string>
     <string name="practice_feedback_keep_going">Keep practicing! Try to match the highlighted words.</string>
 
     <!-- Settings -->
-    <string name="settings_ai_header">AI &amp; Translation</string>
     <string name="settings_api_key_label">Groq API key</string>
-    <string name="settings_api_key_hint">Paste your Groq key here</string>
-    <string name="settings_api_key_replace">Enter a new key to replace the saved one</string>
-    <string name="settings_api_key_saved_state">A key is saved on this device.</string>
-    <string name="settings_api_key_none">No key saved — translation is unavailable.</string>
-    <string name="settings_api_key_help">Required for automatic vocabulary extraction and translations. A key is free at console.groq.com.</string>
-    <string name="settings_show_key">Show API key</string>
-    <string name="settings_hide_key">Hide API key</string>
-    <string name="settings_progress_header">Learning progress</string>
-    <string name="settings_stat_vocabulary">Vocabulary</string>
-    <string name="settings_stat_sessions">Sessions</string>
-    <string name="settings_stat_xp">XP points</string>
-    <string name="settings_stat_streak">Streak</string>
-    <string name="settings_audio_header">Audio</string>
     <string name="settings_autoplay">Auto-play German audio</string>
-    <string name="settings_dialect_header">Speech recognition</string>
-    <string name="settings_notifications_header">Notifications</string>
-    <string name="settings_data_header">Data</string>
     <string name="settings_dialect_de">Germany (de-DE)</string>
     <string name="settings_dialect_at">Austria (de-AT)</string>
     <string name="settings_dialect_ch">Switzerland (de-CH)</string>
@@ -265,9 +233,4 @@
     <string name="widget_empty_subtitle">Lerne jetzt Deutsch!</string>
     <string name="widget_preview_word">die Übung</string>
     <string name="widget_preview_translation">practice</string>
-
-    <plurals name="streak_days">
-        <item quantity="one">%d day</item>
-        <item quantity="other">%d days</item>
-    </plurals>
 </resources>

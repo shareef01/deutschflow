@@ -22,21 +22,10 @@
     <string name="action_delete">Löschen</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_save">Speichern</string>
-    <string name="action_copy">Kopieren</string>
-    <string name="action_ok">OK</string>
     <string name="action_open_settings">Einstellungen öffnen</string>
 
-    <!-- Transcript -->
-    <string name="transcript_listening">Hört zu…</string>
-    <string name="transcript_hint">Zum Starten tippen</string>
-    <string name="transcript_transcribing">Wird transkribiert…</string>
-    <string name="transcript_start_recording">Aufnahme starten</string>
-    <string name="transcript_stop_recording">Aufnahme beenden</string>
     <string name="transcript_empty_title">Sprich einfach Deutsch.</string>
     <string name="transcript_empty_body">DeutschFlow transkribiert, übersetzt und findet die Wörter, die du behalten willst.</string>
-    <string name="transcript_language">Deutsch · %1$s</string>
-    <string name="transcript_translation">Übersetzung</string>
-    <string name="transcript_vocabulary">Wortschatz</string>
     <string name="transcript_save">In Bibliothek speichern</string>
     <string name="transcript_placeholder">Deine Mitschrift erscheint hier.</string>
     <string name="transcript_start">Aufnahme starten</string>
@@ -116,8 +105,6 @@
     <string name="study_tap_to_flip">Zum Umdrehen tippen</string>
     <string name="study_show_german">Das deutsche Wort zeigen</string>
     <string name="study_show_translation">Die Übersetzung zeigen</string>
-    <string name="study_got_it">Verstanden</string>
-    <string name="study_progress">Fortschritt: %1$d / %2$d</string>
 
     <string name="dashboard_daily_goal">Tagesziel</string>
     <string name="dashboard_goal_achieved">Ziel erreicht!</string>
@@ -128,7 +115,10 @@
     <string name="dashboard_new">Neu</string>
     <string name="dashboard_heatmap">Aktivitäts-Heatmap</string>
     <string name="dashboard_heatmap_sub">Letzte 3 Monate konsequenter Bemühungen</string>
-    <string name="dashboard_streak">🔥 %1$d Tage Serie</string>
+    <plurals name="dashboard_streak">
+        <item quantity="one">🔥 %1$d Tag Serie</item>
+        <item quantity="other">🔥 %1$d Tage Serie</item>
+    </plurals>
     <string name="dashboard_xp">XP</string>
     <string name="dashboard_tab">Übersicht</string>
     <string name="dashboard_flashcards_tab">Karteikarten</string>
@@ -156,7 +146,6 @@
     <string name="settings_cloud_sign_in">Anmelden</string>
     <string name="settings_cloud_sign_out">Abmelden</string>
     <string name="settings_cloud_sign_in_title">Anmelden</string>
-    <string name="settings_cloud_sign_in_body">Konten sind für ein Backend vorbereitet, das es noch nicht gibt. Das Anmelden ändert auf diesem Gerät nichts.</string>
     <string name="settings_cloud_email">E-Mail</string>
     <string name="settings_cloud_password">Passwort</string>
 
@@ -168,37 +157,16 @@
     <string name="practice_intro">Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.</string>
     <string name="practice_waiting">Warte auf deine Stimme…</string>
     <string name="practice_listen_repeat">Hören und nachsprechen</string>
-    <string name="practice_listen">Anhören</string>
     <string name="practice_speak">Sprechen</string>
     <string name="practice_evaluate">Auswerten</string>
     <string name="practice_next">Weiter</string>
-    <string name="practice_word_match">Worttreffer: %1$d%%</string>
-    <string name="practice_word_correct">Richtig</string>
-    <string name="practice_word_try_again">Noch einmal versuchen</string>
     <string name="practice_feedback_perfect">Ausgezeichnet! Perfekte Aussprache.</string>
     <string name="practice_feedback_good">Gut! Das meiste war richtig.</string>
     <string name="practice_feedback_keep_going">Weiter üben! Versuche, die markierten Wörter zu treffen.</string>
 
     <!-- Settings -->
-    <string name="settings_ai_header">KI &amp; Übersetzung</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
-    <string name="settings_api_key_hint">Füge hier deinen Groq-Schlüssel ein</string>
-    <string name="settings_api_key_replace">Neuen Schlüssel eingeben, um den gespeicherten zu ersetzen</string>
-    <string name="settings_api_key_saved_state">Ein Schlüssel ist auf diesem Gerät gespeichert.</string>
-    <string name="settings_api_key_none">Kein Schlüssel gespeichert — Übersetzung nicht verfügbar.</string>
-    <string name="settings_api_key_help">Erforderlich für automatische Übersetzungen und Wortschatz-Extraktion. Ein Schlüssel ist auf console.groq.com kostenlos.</string>
-    <string name="settings_show_key">API-Schlüssel anzeigen</string>
-    <string name="settings_hide_key">API-Schlüssel verbergen</string>
-    <string name="settings_progress_header">Lernfortschritt</string>
-    <string name="settings_stat_vocabulary">Wörter</string>
-    <string name="settings_stat_sessions">Sitzungen</string>
-    <string name="settings_stat_xp">XP-Punkte</string>
-    <string name="settings_stat_streak">Serie</string>
-    <string name="settings_audio_header">Audio</string>
     <string name="settings_autoplay">Deutsche Aussprache automatisch abspielen</string>
-    <string name="settings_dialect_header">Spracherkennung</string>
-    <string name="settings_notifications_header">Benachrichtigungen</string>
-    <string name="settings_data_header">Daten</string>
     <string name="settings_dialect_de">Deutschland (de-DE)</string>
     <string name="settings_dialect_at">Österreich (de-AT)</string>
     <string name="settings_dialect_ch">Schweiz (de-CH)</string>
@@ -265,9 +233,4 @@
     <string name="widget_preview_word">die Übung</string>
     <!-- The app always translates into English, so the second line stays English. -->
     <string name="widget_preview_translation">practice</string>
-
-    <plurals name="streak_days">
-        <item quantity="one">%d Tag</item>
-        <item quantity="other">%d Tage</item>
-    </plurals>
 </resources>
