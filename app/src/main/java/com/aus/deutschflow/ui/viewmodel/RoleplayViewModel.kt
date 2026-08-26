@@ -133,7 +133,7 @@ class RoleplayViewModel @Inject constructor(
     override fun onCleared() {
         // No super call: ViewModel.onCleared is @EmptySuper, and the rest of the
         // app's ViewModels omit it for the same reason.
-        speechRecognizerHelper.stopListening()
+        speechRecognizerHelper.destroy()
     }
 
     private companion object {

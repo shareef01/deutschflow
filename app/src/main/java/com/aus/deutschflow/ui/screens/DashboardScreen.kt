@@ -7,12 +7,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -22,33 +26,23 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
-import com.aus.deutschflow.ui.theme.AzureGlow
-import com.aus.deutschflow.ui.theme.Spacing
-import com.aus.deutschflow.ui.theme.TertiaryGreen
+import com.aus.deutschflow.ui.components.GlassmorphicCard
+import com.aus.deutschflow.ui.components.PrimaryActionButton
+import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.DashboardViewModel
 import java.time.LocalDate
 
-/*
- * Defaults are hiltViewModel(), not viewModel().
- *
- * Every one of these view models is a @HiltViewModel with an @Inject constructor,
- * and a NavBackStackEntry's default factory is not Hilt-aware - so `viewModel()`
- * reached the plain NewInstanceFactory and threw "Cannot create an instance of ..."
- * for anything with constructor arguments. It only ever worked because each
- * composable() in Navigation.kt passed hiltViewModel() explicitly, which made the
- * defaults dead code everywhere they were correct and a crash everywhere they were
- * used: Practice supplied one of its two, and Study called DashboardScreen() with
- * none. Both tabs crashed on open.
- *
- * With hiltViewModel() as the default, omitting the argument is no longer a way to
- * get it wrong.
- */
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun DashboardScreen(
+    onStartReview: () -> Unit = {},
+    viewModel: DashboardViewModel = hiltViewModel()
+) {
     val userStats by viewModel.userStats.collectAsState()
     val activityLog by viewModel.activityLog.collectAsState()
     val masteryStats by viewModel.masteryStats.collectAsState()
@@ -58,10 +52,14 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(Spacing.md),
-        verticalArrangement = Arrangement.spacedBy(Spacing.lg)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
-        DailyGoalCard(todayXp, userStats?.streak ?: 0)
+        DailyGoalCard(
+            xp = todayXp,
+            streak = userStats?.streak ?: 0,
+            onStartReview = onStartReview
+        )
         MasteryBreakdownCard(masteryStats)
         ActivityHeatmapCard(activityLog)
         Spacer(modifier = Modifier.height(Spacing.xl))
@@ -69,24 +67,34 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun DailyGoalCard(xp: Int, streak: Int) {
+fun DailyGoalCard(
+    xp: Int,
+    streak: Int,
+    onStartReview: () -> Unit
+) {
     val goal = 50f
     val progress = (xp.toFloat() / goal).coerceIn(0f, 1f)
     val primaryColor = MaterialTheme.colorScheme.primary
 
-    ElevatedCard(
+    GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        contentPadding = PaddingValues(Spacing.lg)
     ) {
         Row(
-            modifier = Modifier.padding(Spacing.lg),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
-                Canvas(modifier = Modifier.size(100.dp)) {
+                val progressPercent = (progress * 100).toInt()
+                Canvas(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .semantics {
+                            contentDescription = "$xp of ${goal.toInt()} XP, $progressPercent percent"
+                        }
+                ) {
                     drawArc(
-                        color = primaryColor.copy(alpha = 0.1f),
+                        color = primaryColor.copy(alpha = 0.12f),
                         startAngle = 0f,
                         sweepAngle = 360f,
                         useCenter = false,
@@ -101,29 +109,49 @@ fun DailyGoalCard(xp: Int, streak: Int) {
                     )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = xp.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                    Text(text = stringResource(R.string.dashboard_xp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = xp.toString(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.dashboard_xp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.width(Spacing.lg))
 
-            Column {
-                Text(text = stringResource(R.string.dashboard_daily_goal), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (progress >= 1f) stringResource(R.string.dashboard_goal_achieved) 
-                           else stringResource(R.string.dashboard_xp_remaining, (goal - xp).toInt()),
+                    text = stringResource(R.string.dashboard_daily_goal),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.dashboard_xp_format, xp, goal.toInt()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AzureGlow
+                )
+                Text(
+                    text = if (progress >= 1f) stringResource(R.string.dashboard_goal_achieved)
+                    else stringResource(R.string.dashboard_xp_remaining, (goal - xp).toInt()),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (progress >= 1f) TertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(Spacing.sm))
+                Spacer(modifier = Modifier.height(Spacing.xs))
                 Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                     shape = CircleShape
                 ) {
                     Text(
                         text = pluralStringResource(R.plurals.dashboard_streak, streak, streak),
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -131,24 +159,53 @@ fun DailyGoalCard(xp: Int, streak: Int) {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(Spacing.md))
+        PrimaryActionButton(
+            text = stringResource(R.string.dashboard_start_review),
+            icon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White) },
+            onClick = onStartReview,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
 @Composable
 fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
-    ElevatedCard(
+    GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge
+        contentPadding = PaddingValues(Spacing.lg)
     ) {
-        Column(modifier = Modifier.padding(Spacing.lg)) {
-            Text(text = stringResource(R.string.dashboard_retention), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(Spacing.md))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                RetentionTile(Modifier.weight(1f), stringResource(R.string.dashboard_mastered), stats.masteredWords, TertiaryGreen)
-                RetentionTile(Modifier.weight(1f), stringResource(R.string.dashboard_learning), stats.learningWords, AzureGlow)
-                RetentionTile(Modifier.weight(1f), stringResource(R.string.dashboard_new), stats.newWords, MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        Text(
+            text = stringResource(R.string.dashboard_retention),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(Spacing.md))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            RetentionTile(
+                modifier = Modifier.weight(1f),
+                label = stringResource(R.string.dashboard_mastered),
+                count = stats.masteredWords,
+                color = TertiaryGreen
+            )
+            RetentionTile(
+                modifier = Modifier.weight(1f),
+                label = stringResource(R.string.dashboard_learning),
+                count = stats.learningWords,
+                color = AzureGlow
+            )
+            RetentionTile(
+                modifier = Modifier.weight(1f),
+                label = stringResource(R.string.dashboard_new),
+                count = stats.newWords,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -157,11 +214,23 @@ fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
 fun RetentionTile(modifier: Modifier, label: String, count: Int, color: Color) {
     Column(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), MaterialTheme.shapes.small)
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(Spacing.md)
     ) {
-        Text(text = count.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = color)
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -170,41 +239,94 @@ fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.Activ
     val today = LocalDate.now()
     val weeksToShow = 12
     val daysToShow = weeksToShow * 7
-    val activityMap = logs.associate { it.date to it.xpGained }
+    val activityMap = remember(logs) { logs.associate { it.date to it.xpGained } }
 
-    ElevatedCard(
+    GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge
+        contentPadding = PaddingValues(Spacing.lg)
     ) {
-        Column(modifier = Modifier.padding(Spacing.lg)) {
-            Text(text = stringResource(R.string.dashboard_heatmap), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(Spacing.md))
+        Text(
+            text = stringResource(R.string.dashboard_heatmap),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(Spacing.sm))
+        Text(
+            text = stringResource(R.string.dashboard_heatmap_sub),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(Spacing.md))
 
-            Canvas(modifier = Modifier.fillMaxWidth().height(120.dp)) {
-                val cellSize = 12.dp.toPx()
-                val spacing = 4.dp.toPx()
-                for (i in 0 until daysToShow) {
-                    val date = today.minusDays((daysToShow - 1 - i).toLong())
-                    val xp = activityMap[date.toString()] ?: 0
-                    val col = i / 7
-                    val row = i % 7
-                    val color = when {
-                        xp >= 100 -> TertiaryGreen
-                        xp >= 50 -> TertiaryGreen.copy(alpha = 0.7f)
-                        xp >= 20 -> TertiaryGreen.copy(alpha = 0.4f)
-                        xp > 0 -> TertiaryGreen.copy(alpha = 0.2f)
-                        else -> Color.White.copy(alpha = 0.05f)
-                    }
-                    drawRoundRect(
-                        color = color,
-                        topLeft = Offset(col * (cellSize + spacing), row * (cellSize + spacing)),
-                        size = Size(cellSize, cellSize),
-                        cornerRadius = CornerRadius(2.dp.toPx())
-                    )
+        val activeDays = remember(activityMap) { activityMap.count { it.value > 0 } }
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(110.dp)
+                .semantics {
+                    contentDescription = "Activity heatmap, $activeDays active days in the last $daysToShow days"
                 }
+        ) {
+            val cellSize = 11.dp.toPx()
+            val spacing = 3.5.dp.toPx()
+            for (i in 0 until daysToShow) {
+                val date = today.minusDays((daysToShow - 1 - i).toLong())
+                val xp = activityMap[date.toString()] ?: 0
+                val col = i / 7
+                val row = i % 7
+                val color = when {
+                    xp >= 100 -> TertiaryGreen
+                    xp >= 50 -> TertiaryGreen.copy(alpha = 0.75f)
+                    xp >= 20 -> TertiaryGreen.copy(alpha = 0.45f)
+                    xp > 0 -> TertiaryGreen.copy(alpha = 0.25f)
+                    else -> Color.White.copy(alpha = 0.06f)
+                }
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(col * (cellSize + spacing), row * (cellSize + spacing)),
+                    size = Size(cellSize, cellSize),
+                    cornerRadius = CornerRadius(2.dp.toPx())
+                )
             }
-            Spacer(modifier = Modifier.height(Spacing.sm))
-            Text(text = stringResource(R.string.dashboard_heatmap_sub), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.sm))
+
+        // Heatmap Legend
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.dashboard_heatmap_less),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(Spacing.xs))
+            listOf(
+                Color.White.copy(alpha = 0.06f),
+                TertiaryGreen.copy(alpha = 0.25f),
+                TertiaryGreen.copy(alpha = 0.45f),
+                TertiaryGreen.copy(alpha = 0.75f),
+                TertiaryGreen
+            ).forEach { squareColor ->
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(squareColor)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+            }
+            Spacer(modifier = Modifier.width(Spacing.xs))
+            Text(
+                text = stringResource(R.string.dashboard_heatmap_more),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
+

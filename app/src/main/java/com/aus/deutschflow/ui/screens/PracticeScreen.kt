@@ -9,22 +9,23 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -35,51 +36,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
-import com.aus.deutschflow.ui.components.SegmentTab
-import com.aus.deutschflow.ui.theme.PracticeResultMinHeight
-import com.aus.deutschflow.ui.theme.AzureGlow
-import com.aus.deutschflow.ui.theme.ActionButtonHeight
-import com.aus.deutschflow.ui.theme.Spacing
+import com.aus.deutschflow.ui.components.GlassmorphicCard
+import com.aus.deutschflow.ui.components.PrimaryActionButton
+import com.aus.deutschflow.ui.components.SecondaryActionButton
+import com.aus.deutschflow.ui.components.SegmentedTabs
+import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
 import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PracticeScreen(
     viewModel: PracticeViewModel = hiltViewModel(),
     roleplayViewModel: RoleplayViewModel = hiltViewModel()
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val haptic = LocalHapticFeedback.current
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val tabLabels = listOf(
+        stringResource(R.string.practice_tab),
+        stringResource(R.string.roleplay_tab)
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
-        PrimaryTabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = Color.Transparent,
-            divider = {}
-        ) {
-            SegmentTab(
-                selected = selectedTab == 0,
-                label = stringResource(R.string.practice_tab),
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 0
-                }
-            )
-            SegmentTab(
-                selected = selectedTab == 1,
-                label = stringResource(R.string.roleplay_tab),
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 1
-                }
-            )
-        }
+        Spacer(modifier = Modifier.height(Spacing.xs))
+        SegmentedTabs(
+            selectedIndex = selectedTab,
+            tabs = tabLabels,
+            onTabSelected = { selectedTab = it }
+        )
+        Spacer(modifier = Modifier.height(Spacing.xs))
 
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == 0) {
@@ -103,12 +90,9 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
-    val gradientBrush = Brush.linearGradient(
-        colors = listOf(AzureGlow, primaryColor)
-    )
 
     val hasResult = feedback != PracticeFeedback.NONE
-    val isPositive = feedback == PracticeFeedback.PERFECT
+    val isPositive = feedback == PracticeFeedback.PERFECT || feedback == PracticeFeedback.GOOD
     val feedbackText = when (feedback) {
         PracticeFeedback.NONE -> null
         PracticeFeedback.PERFECT -> stringResource(R.string.practice_feedback_perfect)
@@ -127,103 +111,112 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(Spacing.md)
-            // Only when there is something to scroll to. A scroll container that
-            // never scrolls still measures its children against an infinite height,
-            // which is why the weight below silently did nothing.
-            .then(
-                if (hasResult) Modifier.verticalScroll(rememberScrollState()) else Modifier
-            ),
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+            .then(if (hasResult) Modifier.verticalScroll(rememberScrollState()) else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(Spacing.sm))
-
-        // Until the first attempt is scored. It tells you what to do, and once you
-        // have done it the instruction is a paragraph between you and the sentence
-        // you are practising.
         if (feedback == PracticeFeedback.NONE) {
             Text(
                 text = stringResource(R.string.practice_intro),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(vertical = Spacing.xs)
             )
-
-            Spacer(modifier = Modifier.height(Spacing.lg))
         }
 
-        OutlinedCard(
+        Spacer(modifier = Modifier.height(Spacing.xs))
+
+        // Target German Sentence Card
+        GlassmorphicCard(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            shape = MaterialTheme.shapes.extraLarge,
-            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 6.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            contentPadding = PaddingValues(Spacing.lg)
         ) {
             Column(
-                modifier = Modifier.padding(Spacing.lg),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val textStyle = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
-                    shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.3f),
-                        offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                        blurRadius = 4f
-                    )
-                )
-
                 if (wordResults.isEmpty()) {
                     Text(
                         text = targetSentence,
-                        style = textStyle,
-                        color = MaterialTheme.colorScheme.primary
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center
                     )
                 } else {
                     val annotatedString = buildAnnotatedString {
                         wordResults.forEach { result ->
-                            withStyle(style = SpanStyle(
-                                color = if (result.isCorrect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold
-                            )) {
+                            withStyle(
+                                style = SpanStyle(
+                                    color = if (result.isCorrect) TertiaryGreen else MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            ) {
                                 append(result.word + " ")
                             }
                         }
                     }
                     Text(
                         text = annotatedString,
-                        style = textStyle,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(Spacing.lg))
-                
-                FilledTonalButton(
-                    onClick = { 
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.speak(targetSentence) 
+
+                Spacer(modifier = Modifier.height(Spacing.md))
+
+                SecondaryActionButton(
+                    text = stringResource(R.string.practice_listen_repeat),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = MaterialTheme.shapes.small,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(Spacing.sm))
-                    Text(
-                        stringResource(R.string.practice_listen_repeat),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Black
-                    )
-                }
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.speak(targetSentence)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.xl))
+        Spacer(modifier = Modifier.height(Spacing.md))
 
+        // Feedback Banner
+        AnimatedVisibility(
+            visible = feedbackText != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = Spacing.sm),
+                color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.25f)
+                else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
+                shape = MaterialTheme.shapes.medium,
+                border = BorderStroke(
+                    1.dp,
+                    if (isPositive) TertiaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                )
+            ) {
+                Text(
+                    text = feedbackText ?: "",
+                    modifier = Modifier.padding(Spacing.md),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isPositive) TertiaryGreen else MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        // Error message if any
         AnimatedVisibility(
             visible = errorState != null,
             enter = fadeIn() + expandVertically(),
@@ -231,9 +224,9 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
         ) {
             Row(
                 modifier = Modifier
-                    .padding(bottom = Spacing.md)
+                    .padding(bottom = Spacing.sm)
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f), MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f), MaterialTheme.shapes.small)
                     .padding(Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
@@ -242,50 +235,25 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                 Spacer(modifier = Modifier.width(Spacing.sm))
                 Text(
                     text = errorState ?: "",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
 
-        AnimatedVisibility(
-            visible = feedbackText != null,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.lg),
-                color = if (isPositive) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
-                        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                shape = MaterialTheme.shapes.medium,
-                border = BorderStroke(1.dp, if (isPositive) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f))
-            ) {
-                Text(
-                    text = feedbackText ?: "",
-                    modifier = Modifier.padding(Spacing.md),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Black,
-                    color = if (isPositive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        // Fixed at 160dp it reserved a slab for a result that had not arrived, and
-        // left the gap between itself and the buttons doing nothing. With nothing
-        // below it in the flow, the space is its own.
-        OutlinedCard(
+        // Real-time Spoken Text Card
+        GlassmorphicCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (hasResult) Modifier.height(PracticeResultMinHeight) else Modifier.weight(1f)),
-            shape = MaterialTheme.shapes.extraLarge,
-            elevation = CardDefaults.outlinedCardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            contentPadding = PaddingValues(Spacing.md)
         ) {
-            Box(modifier = Modifier.fillMaxSize().padding(Spacing.lg), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 AnimatedContent(
                     targetState = spokenText,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -301,14 +269,31 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.lg))
+        Spacer(modifier = Modifier.height(Spacing.md))
 
+        // Action Buttons Row: Speak / Next
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
-            Button(
-                onClick = { 
+            PrimaryActionButton(
+                text = stringResource(
+                    if (isListening) R.string.practice_evaluate else R.string.practice_speak
+                ),
+                icon = {
+                    Icon(
+                        imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                gradientColors = if (isListening) {
+                    listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
+                } else {
+                    listOf(AzureGlow, primaryColor)
+                },
+                onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (isListening) {
                         viewModel.stopPractice()
@@ -320,79 +305,26 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                         }
                     }
                 },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(ActionButtonHeight),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(0.dp),
-                shape = MaterialTheme.shapes.large,
-                // Flat. The container is transparent, so a 6dp shadow was being cast
-                // for a surface that is not drawn - which is what put a hard-edged
-                // lighter block inside the button's rounded shape.
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // The gradient lives inside the button and is clipped to its
-                        // shape. On the outer modifier it was painted around the
-                        // surface rather than as it, so nothing bounded it.
-                        .clip(MaterialTheme.shapes.large)
-                        .background(
-                            if (isListening) {
-                                Brush.linearGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.error,
-                                        MaterialTheme.colorScheme.errorContainer
-                                    )
-                                )
-                            } else {
-                                gradientBrush
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic, 
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(Spacing.sm))
-                        Text(
-                            text = stringResource(
-                                if (isListening) R.string.practice_evaluate else R.string.practice_speak
-                            ),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-            
-            OutlinedButton(
-                onClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.nextSentence() 
+                modifier = Modifier.weight(1f)
+            )
+
+            SecondaryActionButton(
+                text = stringResource(R.string.practice_next),
+                icon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.NavigateNext,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp)
+                    )
                 },
-                modifier = Modifier.weight(1f).height(ActionButtonHeight),
-                shape = MaterialTheme.shapes.large,
-                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.NavigateNext, 
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(Spacing.sm))
-                Text(
-                    text = stringResource(R.string.practice_next),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.nextSentence()
+                },
+                modifier = Modifier.weight(1f)
+            )
         }
+        Spacer(modifier = Modifier.height(Spacing.xs))
     }
 }
+

@@ -45,13 +45,8 @@ class SRSEngine @Inject constructor() {
             }
             
             // Adjust Ease Factor: EF' = EF + (0.1 - (5-q)*(0.08 + (5-q)*0.02))
-            // Mapping our 0-3 scale to SM-2's 0-5 scale (where 5 is Easy, 3 is Good/Hard)
-            val q = when (quality) {
-                ReviewQuality.EASY -> 5
-                ReviewQuality.GOOD -> 4
-                ReviewQuality.HARD -> 3
-                ReviewQuality.AGAIN -> 0
-            }
+            // In this branch, quality is either EASY (q=5) or GOOD (q=4)
+            val q = if (quality == ReviewQuality.EASY) 5 else 4
             
             nextEaseFactor += (0.1f - (5 - q) * (0.08f + (5 - q) * 0.02f))
             nextReviewCount++

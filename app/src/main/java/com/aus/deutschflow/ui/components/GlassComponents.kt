@@ -5,23 +5,28 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -32,10 +37,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -52,14 +63,6 @@ import com.aus.deutschflow.ui.theme.rememberPressSource
 
 /**
  * A glassmorphic card: the app's one surface treatment, as a named component.
- *
- * Screens had been painting `.glassSurface()` by hand, which is why a card and the
- * search bar beside it could disagree on corner radius and edge. This is the single
- * place the fill, border and corner live, so a screen picks a role instead of a
- * number. The border is [glassBorderBrush] - the same stroke the inputs use.
- *
- * Modifier order here is the one the whole app obeys: clip -> background -> border ->
- * padding. Content padding sits *inside* the border so the edge never overlaps text.
  */
 @Composable
 fun GlassmorphicCard(
@@ -79,20 +82,7 @@ fun GlassmorphicCard(
 }
 
 /**
- * The one input container in the app.
- *
- * History, Library and Settings each carried a slightly different `OutlinedTextField`.
- * This is the one input: the same opaque fill as a card, the same hairline edge, the
- * same corner — and the edge turns up to the calm cyan while focused, which is the
- * only accent an input carries.
- *
- * Built on [BasicTextField] rather than Material's outlined field because the latter
- * draws its own solid border. Everything a caller needs - masking, keyboard options,
- * leading/trailing slots - is passed through unchanged, so the Settings password
- * field and the search bars are the same control.
- *
- * The placeholder is shown only while [value] is empty, and reads the *raw* value, so
- * a masked password still hides its hint the moment a character is typed.
+ * The unified text field container in the app with glassmorphic styling.
  */
 @Composable
 fun GlassTextField(
@@ -113,9 +103,8 @@ fun GlassTextField(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    // Focus turns the edge up; the fill stays put.
     val edge = if (isFocused) glassBorderBrush(AzureGlow, alpha = 0.55f)
-        else glassBorderBrush(AzureDeep, alpha = 0.16f)
+    else glassBorderBrush(AzureDeep, alpha = 0.16f)
 
     Column(modifier = modifier) {
         if (label != null) {
@@ -184,8 +173,7 @@ fun GlassTextField(
 }
 
 /**
- * A [GlassTextField] fixed to the search role, so the two search bars are literally
- * the same component rather than two fields that merely look alike.
+ * A [GlassTextField] specialized for search.
  */
 @Composable
 fun SearchInput(
@@ -213,13 +201,7 @@ fun SearchInput(
 }
 
 /**
- * The app's one primary action button: a quiet tinted fill, a hairline edge in the
- * accent colour, a bold label.
- *
- * Colour is what marks this as the action to take — a faint fill of the same hue as
- * the edge, never a solid neon block. [glow] recolours the edge and the fill, so the
- * Practice screen's "Stop" passes the error colour and a recording still reads as
- * stop-the-world.
+ * A tinted glass button with custom glow edge and press animation.
  */
 @Composable
 fun GlassButton(
@@ -251,3 +233,206 @@ fun GlassButton(
         content()
     }
 }
+
+/**
+ * High-emphasis primary action button with brand gradient, bold label, and spring press feedback.
+ */
+@Composable
+fun PrimaryActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true,
+    isLoading: Boolean = false,
+    gradientColors: List<Color> = listOf(AzureGlow, AzureDeep)
+) {
+    val interactionSource = rememberPressSource()
+    val disabledBg = MaterialTheme.colorScheme.surfaceVariant
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Button(
+        onClick = onClick,
+        enabled = enabled && !isLoading,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .height(ActionButtonHeight)
+            .pressScale(interactionSource),
+        shape = MaterialTheme.shapes.medium,
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+        contentPadding = PaddingValues(0.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+    ) {
+        val bgModifier = if (enabled) {
+            Modifier.background(Brush.linearGradient(gradientColors))
+        } else {
+            Modifier.background(disabledBg)
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(MaterialTheme.shapes.medium)
+                .then(bgModifier),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = Spacing.md)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(Spacing.sm))
+                } else if (icon != null) {
+                    icon()
+                    Spacer(modifier = Modifier.width(Spacing.sm))
+                }
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (enabled) Color.White else onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Secondary action button with a quiet border and subtle surface fill.
+ */
+@Composable
+fun SecondaryActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true
+) {
+    val interactionSource = rememberPressSource()
+
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .height(ActionButtonHeight)
+            .pressScale(interactionSource),
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = GlassFill,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            disabledContainerColor = GlassFill,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                icon()
+                Spacer(modifier = Modifier.width(Spacing.sm))
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+/**
+ * Destructive action button with distinct error tinting.
+ */
+@Composable
+fun DestructiveActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true
+) {
+    val interactionSource = rememberPressSource()
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .height(ActionButtonHeight)
+            .pressScale(interactionSource),
+        shape = MaterialTheme.shapes.medium,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        )
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                icon()
+                Spacer(modifier = Modifier.width(Spacing.sm))
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+/**
+ * Smoothly fades the top and/or bottom edges of a scrollable container
+ * so content transitions seamlessly into headers and docks without harsh clipping.
+ */
+fun Modifier.scrollFadingEdges(
+    topFadeHeight: Dp = 20.dp,
+    bottomFadeHeight: Dp = 28.dp,
+    fadeTop: Boolean = true,
+    fadeBottom: Boolean = true
+): Modifier = this
+    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    .drawWithContent {
+        drawContent()
+        val h = size.height
+        if (h <= 0f) return@drawWithContent
+
+        val topPx = topFadeHeight.toPx()
+        val bottomPx = bottomFadeHeight.toPx()
+
+        val topRatio = (topPx / h).coerceIn(0f, 0.25f)
+        val bottomRatio = (bottomPx / h).coerceIn(0f, 0.25f)
+
+        val stops = mutableListOf<Pair<Float, Color>>()
+        if (fadeTop) {
+            stops.add(0.0f to Color.Transparent)
+            stops.add(topRatio to Color.Black)
+        } else {
+            stops.add(0.0f to Color.Black)
+        }
+
+        if (fadeBottom) {
+            stops.add((1.0f - bottomRatio) to Color.Black)
+            stops.add(1.0f to Color.Transparent)
+        } else {
+            stops.add(1.0f to Color.Black)
+        }
+
+        drawRect(
+            brush = Brush.verticalGradient(colorStops = stops.toTypedArray()),
+            blendMode = BlendMode.DstIn
+        )
+    }
+
+

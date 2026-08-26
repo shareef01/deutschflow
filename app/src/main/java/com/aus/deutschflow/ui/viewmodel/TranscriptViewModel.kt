@@ -11,6 +11,7 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.AIResult
 import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.service.SpeechRecognizerHelper
+import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import com.aus.deutschflow.service.WordDetails
 import com.aus.deutschflow.service.WordDetailsResult
@@ -30,13 +31,22 @@ class TranscriptViewModel @Inject constructor(
     private val vocabularyDao: VocabularyDao,
     private val transcriptDao: TranscriptDao,
     private val preferenceManager: PreferenceManager,
-    private val widgetUpdater: WidgetUpdater
+    private val widgetUpdater: WidgetUpdater,
+    private val ttsHelper: TTSHelper
 ) : ViewModel() {
 
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
+    val ttsError: StateFlow<String?> = ttsHelper.error
+
+    fun speak(text: String) {
+        if (text.isNotBlank()) {
+            ttsHelper.speak(text)
+        }
+    }
+
 
     /**
      * Instantaneous input level 0..1, for the live waveform. The screen reads it in

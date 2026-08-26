@@ -2,7 +2,9 @@ package com.aus.deutschflow.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,18 +28,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
-import com.aus.deutschflow.ui.theme.Motion
-import com.aus.deutschflow.ui.theme.LocalReducedMotion
-import com.aus.deutschflow.ui.theme.Spacing
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.aus.deutschflow.ui.theme.AzureGlow
-import com.aus.deutschflow.ui.theme.GlassFill
-import com.aus.deutschflow.ui.theme.glassSurface
+import com.aus.deutschflow.ui.components.GlassmorphicCard
+import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.ChatMessage
 import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
 
@@ -50,7 +49,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
 
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom
+    // Auto-scroll to bottom when messages update
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -65,39 +64,98 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Scenario Header Bar
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.roleplay_tab).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = UppercaseLabelTracking
+                    )
+                    Text(
+                        text = stringResource(R.string.roleplay_scenario_berlin_bakery),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        viewModel.startSession("Ordering at a Berlin Bakery")
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.roleplay_restart_session),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        // Conversation Chat Timeline
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(Spacing.md),
+            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
             items(messages) { message ->
                 ChatBubble(message, onSpeak = { viewModel.speak(it) })
             }
-            
+
             if (isProcessing) {
                 item {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = Spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = AzureGlow
+                        )
+                        Spacer(modifier = Modifier.width(Spacing.sm))
+                        Text(
+                            text = stringResource(R.string.transcript_processing_status),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
-            // The turn that did not arrive, and the way back to it. Without this a
-            // failed opening line left the screen blank and unrecoverable.
             error?.let { message ->
                 item {
-                    Column(
+                    GlassmorphicCard(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                        contentPadding = PaddingValues(Spacing.md)
                     ) {
                         Text(
                             text = message,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
+                        Spacer(modifier = Modifier.height(Spacing.xs))
                         TextButton(onClick = { viewModel.retry() }) {
                             Text(stringResource(R.string.roleplay_retry))
                         }
@@ -106,43 +164,53 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
             }
         }
 
-        // Recording Interface
+        // Voice Input Control Footer
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(
-                modifier = Modifier.padding(Spacing.md),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (isListening && partialText.isNotBlank()) {
                     Text(
                         text = partialText,
                         style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = Spacing.sm)
                     )
                 }
 
                 Box(contentAlignment = Alignment.Center) {
-                    // Same halo, same reason for stopping it - see TranscriptScreen.
                     if (isListening && !LocalReducedMotion.current) {
-                        val pulseScale by rememberInfiniteTransition(label = "record").animateFloat(
+                        val pulseScale by rememberInfiniteTransition(label = "roleplayMicPulse").animateFloat(
                             initialValue = 1f,
-                            targetValue = 1.5f,
+                            targetValue = 1.6f,
                             animationSpec = infiniteRepeatable(
                                 tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
                                 RepeatMode.Restart
                             ),
                             label = "pulse"
                         )
-                        Box(Modifier.size(64.dp).scale(pulseScale).alpha(0.3f).background(MaterialTheme.colorScheme.primary, CircleShape))
+                        Box(
+                            Modifier
+                                .size(64.dp)
+                                .scale(pulseScale)
+                                .alpha(0.25f)
+                                .background(MaterialTheme.colorScheme.error, CircleShape)
+                        )
                     }
-                    
+
                     val micLabel = stringResource(
                         if (isListening) R.string.roleplay_send_turn else R.string.roleplay_start_speaking
                     )
+
                     IconButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -150,20 +218,27 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                         },
                         enabled = !isProcessing,
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(60.dp)
                             .clip(CircleShape)
-                            .background(if (isListening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                            .background(
+                                if (isListening) {
+                                    Brush.linearGradient(
+                                        listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
+                                    )
+                                } else {
+                                    Brush.linearGradient(listOf(AzureGlow, MaterialTheme.colorScheme.primary))
+                                }
+                            )
                     ) {
                         Icon(
                             imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                            // The screen's primary control: unlabelled, it did not
-                            // exist for TalkBack at all.
                             contentDescription = micLabel,
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 }
-                
+
                 Text(
                     text = stringResource(
                         if (isListening) R.string.roleplay_tap_to_send else R.string.roleplay_tap_to_speak
@@ -181,55 +256,95 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
 fun ChatBubble(message: ChatMessage, onSpeak: (String) -> Unit) {
     val isAI = message.role == "assistant"
     val haptic = LocalHapticFeedback.current
+    var showTranslation by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isAI) Alignment.Start else Alignment.End
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .glassSurface(
-                    shape = RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isAI) 2.dp else 16.dp,
-                        bottomEnd = if (isAI) 16.dp else 2.dp
-                    ),
-                    fill = if (isAI) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                )
-                .padding(Spacing.md)
+        Surface(
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (isAI) 4.dp else 16.dp,
+                bottomEnd = if (isAI) 16.dp else 4.dp
+            ),
+            color = if (isAI) MaterialTheme.colorScheme.surfaceContainerHigh
+            else MaterialTheme.colorScheme.primaryContainer,
+            border = BorderStroke(
+                1.dp,
+                if (isAI) MaterialTheme.colorScheme.outlineVariant
+                else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            ),
+            modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            Column {
-                Text(text = message.content, style = MaterialTheme.typography.bodyLarge)
+            Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isAI) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onPrimaryContainer
+                )
+
                 if (isAI && !message.translation.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    AnimatedVisibility(visible = showTranslation) {
+                        Column {
+                            Spacer(modifier = Modifier.height(Spacing.xs))
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                thickness = 0.5.dp
+                            )
+                            Spacer(modifier = Modifier.height(Spacing.xs))
+                            Text(
+                                text = message.translation,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isAI) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = Spacing.xs, top = 2.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSpeak(message.content)
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = stringResource(R.string.roleplay_speak_message),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                if (!message.translation.isNullOrBlank()) {
                     Text(
-                        text = message.translation,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(
+                            if (showTranslation) R.string.roleplay_hide_translation
+                            else R.string.roleplay_show_translation
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showTranslation = !showTranslation
+                            }
+                            .padding(horizontal = Spacing.xs, vertical = 4.dp)
                     )
                 }
             }
         }
-        
-        if (isAI) {
-            // 48dp, the minimum touch target the rest of the app now holds to; the
-            // icon inside stays small.
-            IconButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onSpeak(message.content)
-                },
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = stringResource(R.string.roleplay_speak_message),
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
     }
 }
+

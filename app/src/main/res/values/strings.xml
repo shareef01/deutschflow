@@ -17,14 +17,24 @@
     <string name="action_delete">Delete</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_copied">Copied to clipboard</string>
     <string name="action_open_settings">Open settings</string>
+    <string name="action_close">Close</string>
 
-    <string name="transcript_empty_title">Speak German naturally.</string>
-    <string name="transcript_empty_body">DeutschFlow transcribes what you say, translates it, and finds the words worth keeping.</string>
+    <string name="transcript_empty_title">Speak German naturally</string>
+    <string name="transcript_empty_body">Tap the microphone and start speaking German. DeutschFlow transcribes in real time, translates, and extracts vocabulary.</string>
+    <string name="transcript_idle_hint">Tap the microphone to speak German</string>
+    <string name="transcript_listening_status">Listening to German speech…</string>
+    <string name="transcript_processing_status">Processing and translating…</string>
     <string name="transcript_save">Save to library</string>
-    <string name="transcript_placeholder">Your transcript will appear here.</string>
+    <string name="transcript_placeholder">Your German transcript will appear here.</string>
     <string name="transcript_start">Start recording</string>
     <string name="transcript_stop">Stop recording</string>
+    <string name="transcript_copy">Copy transcript</string>
+    <string name="transcript_listen">Listen to transcript</string>
+    <string name="transcript_section_translation">Translation</string>
+    <string name="transcript_section_vocabulary">Key Vocabulary</string>
     <!-- Elapsed recording time, m:ss. -->
     <string name="transcript_elapsed">%1$d:%2$02d</string>
     <string name="transcript_saved">Saved to your library.</string>
@@ -35,9 +45,10 @@
 
     <!-- History -->
     <string name="history_search_hint">Search transcript history…</string>
-    <string name="history_empty_title">No transcripts found</string>
-    <string name="history_empty_body">Your transcript sessions will appear here.</string>
-    <string name="history_empty_action">Start a transcript</string>
+    <string name="history_empty_title">No transcripts yet</string>
+    <string name="history_empty_body">Your completed German speaking sessions will appear here.</string>
+    <string name="history_empty_action">Start speaking</string>
+    <string name="history_detail_title">Transcript Details</string>
     <!-- Time and length of a transcript. A format string, not a template in
          code: the separator is typographic but the order is not universal. -->
     <string name="history_meta">%1$s · %2$s</string>
@@ -52,43 +63,46 @@
         <item quantity="one">%1$d word</item>
         <item quantity="other">%1$d words</item>
     </plurals>
-    <!-- Localisable on purpose: day-month order differs by language. -->
 
     <!-- Library -->
     <string name="library_search_hint">Search words or translations…</string>
     <string name="library_tab_words">Words</string>
     <string name="library_tab_transcripts">Transcripts</string>
-    <string name="library_empty_title">Your library is empty</string>
-    <string name="library_empty_body">Your vocabulary will appear here as you learn. Add a word, or save one from a transcript.</string>
-    <string name="library_no_match_title">No matches</string>
+    <string name="library_empty_title">Build your vocabulary</string>
+    <string name="library_empty_body">Save words from your transcripts or add new vocabulary manually to build your study decks.</string>
+    <string name="library_no_match_title">No matches found</string>
     <string name="library_no_match_body">No word in your library matches “%1$s”.</string>
     <string name="library_clear_search">Clear search</string>
-    <string name="transcript_change_dialect">Change the language being recognised</string>
+    <string name="transcript_change_dialect">Change recognition dialect</string>
     <string name="library_add_word">Add a word</string>
     <string name="library_more_actions">More actions</string>
     <string name="library_stat_words">Words</string>
     <string name="library_stat_phrases">Phrases</string>
-    <string name="library_stat_examples">With example</string>
+    <string name="library_stat_examples">With examples</string>
     <string name="library_sort_newest">Newest</string>
     <string name="library_sort_alphabetical">A–Z</string>
-    <string name="library_dialog_add_title">Add a word</string>
+    <string name="library_dialog_add_title">Add New Word</string>
     <string name="library_dialog_add_confirm">Add to library</string>
-    <string name="library_dialog_edit_title">Edit word</string>
+    <string name="library_dialog_edit_title">Edit Word</string>
     <string name="library_dialog_edit_confirm">Save changes</string>
-    <string name="library_field_german">German</string>
-    <string name="library_field_translation">Translation</string>
+    <string name="library_field_german">German word or phrase</string>
+    <string name="library_field_translation">English translation</string>
 
     <!-- Word detail -->
     <string name="detail_empty_title">Select a word</string>
-    <string name="detail_empty_body">Choose an item from your library to view detailed information and examples.</string>
+    <string name="detail_empty_body">Choose an item from your library to view detailed grammar, synonyms, and examples.</string>
     <string name="detail_context">Context and usage</string>
     <string name="detail_example">Example sentence</string>
     <string name="detail_back">Back to library</string>
 
     <!-- Study / Dashboard -->
-    <string name="study_empty_title">Ready to study?</string>
-    <string name="study_empty_body">Save some German phrases and we\'ll build your first study session.</string>
+    <string name="study_empty_title">No cards to review yet</string>
+    <string name="study_empty_body">Save words or phrases to your library to automatically generate spaced-repetition flashcards.</string>
     <string name="study_session">Study session</string>
+    <string name="study_completed_title">Session Complete! 🎉</string>
+    <string name="study_completed_body">You reviewed all due cards for now. Great job keeping your German sharp!</string>
+    <string name="study_completed_action">View Dashboard</string>
+    <string name="study_completed_restart">Practice Again</string>
     <plurals name="study_remaining">
         <item quantity="one">%1$d card remaining</item>
         <item quantity="other">%1$d cards remaining</item>
@@ -97,19 +111,23 @@
     <string name="study_hard">Hard</string>
     <string name="study_good">Good</string>
     <string name="study_easy">Easy</string>
-    <string name="study_tap_to_flip">Tap to flip</string>
+    <string name="study_tap_to_flip">Tap card to flip</string>
     <string name="study_show_german">Show the German word</string>
     <string name="study_show_translation">Show the translation</string>
 
     <string name="dashboard_daily_goal">Daily Goal</string>
-    <string name="dashboard_goal_achieved">Goal achieved!</string>
+    <string name="dashboard_goal_achieved">Goal achieved today!</string>
     <string name="dashboard_xp_remaining">%1$d XP remaining</string>
+    <string name="dashboard_xp_format">%1$d / %2$d XP</string>
+    <string name="dashboard_start_review">Start Daily Review</string>
     <string name="dashboard_retention">Vocabulary Retention</string>
     <string name="dashboard_mastered">Mastered</string>
     <string name="dashboard_learning">Learning</string>
     <string name="dashboard_new">New</string>
-    <string name="dashboard_heatmap">Activity Heatmap</string>
-    <string name="dashboard_heatmap_sub">Past 3 months of consistent effort</string>
+    <string name="dashboard_heatmap">Activity Consistency</string>
+    <string name="dashboard_heatmap_sub">Past 12 weeks of daily practice</string>
+    <string name="dashboard_heatmap_less">Less</string>
+    <string name="dashboard_heatmap_more">More</string>
     <plurals name="dashboard_streak">
         <item quantity="one">🔥 %1$d Day Streak</item>
         <item quantity="other">🔥 %1$d Days Streak</item>
@@ -123,25 +141,29 @@
     <string name="roleplay_tap_to_speak">Tap to speak</string>
     <string name="roleplay_tap_to_send">Tap to send</string>
     <string name="roleplay_start_speaking">Start speaking</string>
-    <string name="roleplay_send_turn">Send what you said</string>
-    <string name="roleplay_speak_message">Play this reply aloud</string>
+    <string name="roleplay_send_turn">Send message</string>
+    <string name="roleplay_speak_message">Play response aloud</string>
+    <string name="roleplay_show_translation">Show translation</string>
+    <string name="roleplay_hide_translation">Hide translation</string>
     <string name="roleplay_retry">Try again</string>
+    <string name="roleplay_scenario_berlin_bakery">Ordering at a Berlin Bakery</string>
+    <string name="roleplay_restart_session">Restart conversation</string>
     <string name="practice_tab">Repetition</string>
-    <string name="study_skip">Skip for now</string>
+    <string name="study_skip">Skip card</string>
     <string name="study_word_grammar">%1$s %2$s (pl. %3$s)</string>
-    <string name="transcript_grammar_spotlight">Grammar spotlight</string>
-    <string name="transcript_listening_for">Listening for: %1$s</string>
-    <string name="detail_linguistic_connections">Linguistic connections</string>
+    <string name="transcript_grammar_spotlight">Grammar Spotlight</string>
+    <string name="transcript_listening_for">German · %1$s</string>
+    <string name="detail_linguistic_connections">Linguistic Connections</string>
 
-    <!-- Cloud sync. Not built yet; the copy says so rather than implying a backup. -->
-    <string name="settings_cloud_header">Cloud sync</string>
+    <!-- Cloud sync -->
+    <string name="settings_cloud_header">Cloud Synchronization</string>
     <string name="settings_cloud_signed_in">Signed in</string>
     <string name="settings_cloud_title">Cloud sync</string>
-    <string name="settings_cloud_unavailable">Not available yet — your library is saved on this device.</string>
+    <string name="settings_cloud_unavailable">Your learning library is securely saved locally on this device.</string>
     <string name="settings_cloud_sign_in">Sign in</string>
     <string name="settings_cloud_sign_out">Sign out</string>
-    <string name="settings_cloud_sign_in_title">Sign in</string>
-    <string name="settings_cloud_email">Email</string>
+    <string name="settings_cloud_sign_in_title">Sign in to DeutschFlow</string>
+    <string name="settings_cloud_email">Email address</string>
     <string name="settings_cloud_password">Password</string>
 
     <!-- Word detail -->
@@ -149,49 +171,64 @@
     <string name="detail_antonyms">Antonyms</string>
 
     <!-- Practice -->
-    <string name="practice_intro">Listen and repeat the sentence accurately to master your pronunciation.</string>
-    <string name="practice_waiting">Waiting for your speech…</string>
-    <string name="practice_listen_repeat">Listen and repeat</string>
+    <string name="practice_intro">Listen to the native German sentence, then tap Speak to repeat it accurately.</string>
+    <string name="practice_waiting">Waiting for your German speech…</string>
+    <string name="practice_listen_repeat">Listen to Sentence</string>
     <string name="practice_speak">Speak</string>
-    <string name="practice_evaluate">Evaluate</string>
-    <string name="practice_next">Next</string>
+    <string name="practice_evaluate">Evaluating…</string>
+    <string name="practice_next">Next Sentence</string>
     <string name="practice_feedback_perfect">Excellent! Perfect pronunciation.</string>
-    <string name="practice_feedback_good">Good! You got most of it.</string>
-    <string name="practice_feedback_keep_going">Keep practicing! Try to match the highlighted words.</string>
+    <string name="practice_feedback_good">Good job! Most words were clear.</string>
+    <string name="practice_feedback_keep_going">Keep practicing! Focus on the highlighted words.</string>
 
-    <!-- Settings -->
-    <string name="settings_api_key_label">Groq API key</string>
+    <!-- Settings Sections -->
+    <string name="settings_section_account">Account &amp; Sync</string>
+    <string name="settings_section_ai">AI &amp; Intelligence</string>
+    <string name="settings_section_audio">Speech &amp; Audio</string>
+    <string name="settings_section_learning">Learning &amp; Notifications</string>
+    <string name="settings_section_data">Data Management</string>
+    <string name="settings_section_about">About DeutschFlow</string>
+
+    <string name="settings_api_key_label">Groq API Key</string>
+    <string name="settings_api_key_helper">Used for real-time translation, grammar explanations, and roleplay.</string>
+    <string name="settings_api_key_saved_hint">Key saved securely in Android Keystore</string>
+    <string name="settings_api_key_active">Key Configured</string>
+    <string name="settings_api_key_not_set">Not Configured</string>
+    <string name="settings_api_key_placeholder">Paste your API key here</string>
+    <string name="settings_api_key_placeholder_saved">Key saved (Enter new to replace)</string>
     <string name="settings_autoplay">Auto-play German audio</string>
+    <string name="settings_autoplay_desc">Automatically pronounce words and roleplay responses</string>
+    <string name="settings_dialect_header">Recognition Dialect</string>
     <string name="settings_dialect_de">Germany (de-DE)</string>
     <string name="settings_dialect_at">Austria (de-AT)</string>
     <string name="settings_dialect_ch">Switzerland (de-CH)</string>
-    <string name="settings_test_notification">Test daily notification</string>
-    <string name="settings_clear">Clear all progress</string>
-    <string name="settings_wipe_title">Wipe all progress?</string>
-    <string name="settings_wipe_body">This will permanently delete your library, history, and earnings. This action is final.</string>
-    <string name="settings_wipe_confirm">Delete everything</string>
-    <string name="settings_wipe_cancel">Keep progress</string>
-    <string name="settings_version">DeutschFlow v%1$s</string>
+    <string name="settings_test_notification">Send Daily Word Reminder</string>
+    <string name="settings_clear">Clear All Progress</string>
+    <string name="settings_wipe_title">Clear all progress?</string>
+    <string name="settings_wipe_body">This will permanently delete your vocabulary library, speech history, XP, and streaks from this device. This action cannot be undone.</string>
+    <string name="settings_wipe_confirm">Delete Everything</string>
+    <string name="settings_wipe_cancel">Keep Progress</string>
+    <string name="settings_version">DeutschFlow Version %1$s</string>
 
     <!-- Settings outcomes -->
-    <string name="message_api_key_saved">API key saved.</string>
+    <string name="message_api_key_saved">API key saved securely.</string>
     <string name="message_api_key_not_saved">The key couldn\'t be stored. Try again, or restart the device.</string>
-    <string name="message_progress_cleared">Library, history and stats cleared.</string>
-    <string name="message_notification_sent">Notification sent.</string>
+    <string name="message_progress_cleared">All vocabulary, history, and stats have been reset.</string>
+    <string name="message_notification_sent">Daily reminder notification sent.</string>
     <string name="message_notifications_off">Notifications are turned off. Enable them for DeutschFlow in system settings.</string>
     <string name="message_library_empty">Save a word to your library first — there\'s nothing to send yet.</string>
-    <string name="message_cloud_connected">Signed in. Cloud sync isn\'t available yet — your library stays on this device.</string>
+    <string name="message_cloud_connected">Signed in. Data is stored on this device.</string>
     <string name="message_cloud_failed">Couldn\'t sign in. Check your details and try again.</string>
-    <string name="message_cloud_disconnected">Signed out. Your library is saved on this device, as it always was.</string>
-    <string name="message_sync_unavailable">Cloud sync isn\'t available yet. Your library is saved on this device.</string>
+    <string name="message_cloud_disconnected">Signed out. Your library remains saved locally.</string>
+    <string name="message_sync_unavailable">Cloud sync is currently in preview. Your library is safely stored locally.</string>
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Speech recognition isn\'t available on this device.</string>
     <string name="speech_start_failed">Couldn\'t start recording. Try again.</string>
     <string name="speech_error_audio">Microphone unavailable. Close anything else using it and try again.</string>
     <string name="speech_error_client">Recording couldn\'t start. Try again.</string>
-    <string name="speech_error_permission">Microphone access is off. Turn it on for DeutschFlow in Android\'s app settings.</string>
-    <string name="speech_error_network">No connection. Speech recognition needs network access.</string>
+    <string name="speech_error_permission">Microphone access is off. Turn it on for DeutschFlow in Android settings.</string>
+    <string name="speech_error_network">No connection. Speech recognition requires network access.</string>
     <string name="speech_error_network_timeout">The network timed out. Try again.</string>
     <string name="speech_error_no_match">Didn\'t catch that. Try speaking again, a little slower.</string>
     <string name="speech_error_busy">Still finishing the last recording. Try again in a moment.</string>
@@ -201,34 +238,28 @@
     <string name="speech_error_language_unsupported">This device can\'t recognise this dialect. Try another one in Settings.</string>
     <string name="speech_error_generic">Speech recognition failed. Try again.</string>
 
-    <!-- Text to speech.
-         Two problems, two remedies. A device with no synthesiser selected cannot be
-         fixed by installing a voice, which is what the single message these replace
-         told everyone to do. -->
-    <string name="tts_no_engine">No speech engine is set up. Choose one under Text-to-speech output in Android\'s settings.</string>
-    <string name="tts_no_german">German speech isn\'t installed. Add a German voice under Text-to-speech output in Android\'s settings.</string>
+    <!-- Text to speech -->
+    <string name="tts_no_engine">No speech engine is set up. Choose one under Text-to-speech output in Android settings.</string>
+    <string name="tts_no_german">German speech isn\'t installed. Add a German voice under Text-to-speech output in Android settings.</string>
 
     <!-- AI translation -->
-    <string name="ai_no_key">Add your Groq API key in Settings to get translations.</string>
+    <string name="ai_no_key">Add your Groq API key in Settings to get real-time translations.</string>
     <string name="ai_failed">Translation failed: %1$s</string>
-    <string name="ai_no_response">no response from Groq</string>
+    <string name="ai_no_response">No response from AI service.</string>
     <string name="ai_unreadable">Couldn\'t read the response. Try again.</string>
-    <string name="ai_key_rejected">That API key was rejected. Check it in Settings.</string>
-    <string name="ai_rate_limited">Too many requests for now. Try again in a minute.</string>
-    <string name="ai_status">The service answered with %1$d.</string>
+    <string name="ai_key_rejected">The API key was rejected. Please check it in Settings.</string>
+    <string name="ai_rate_limited">Too many requests right now. Try again in a minute.</string>
+    <string name="ai_status">The service answered with code %1$d.</string>
 
     <!-- Daily word notification -->
     <string name="notification_channel_name">Daily German Word</string>
     <string name="notification_channel_description">Notifications for your daily German word</string>
-    <!-- The heading stays German in every locale: it is the thing being taught. -->
     <string name="notification_title">Wort des Tages: %1$s</string>
     <string name="notification_text">Translation: %1$s</string>
 
     <!-- Widget -->
-    <string name="widget_description">A German word from your library, on your home screen.</string>
-    <!-- Title case, not caps: some screen readers spell an uppercase run out
-         letter by letter. Same reason the rest of the app dropped ALL CAPS. -->
-    <string name="widget_heading">Word of the day</string>
+    <string name="widget_description">A German word from your library on your home screen.</string>
+    <string name="widget_heading">Word of the Day</string>
     <string name="widget_empty_title">Öffne die App</string>
     <string name="widget_empty_subtitle">Lerne jetzt Deutsch!</string>
     <string name="widget_preview_word">die Übung</string>
