@@ -22,10 +22,16 @@
     <string name="action_delete">Löschen</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_save">Speichern</string>
+    <string name="action_copy">Kopieren</string>
+    <string name="action_copied">In die Zwischenablage kopiert</string>
     <string name="action_open_settings">Einstellungen öffnen</string>
+    <string name="action_close">Schließen</string>
 
     <string name="transcript_empty_title">Sprich einfach Deutsch.</string>
     <string name="transcript_empty_body">DeutschFlow transkribiert, übersetzt und findet die Wörter, die du behalten willst.</string>
+    <string name="transcript_idle_hint">Tippe auf das Mikrofon und sprich Deutsch</string>
+    <string name="transcript_listening_status">Höre dein Deutsch…</string>
+    <string name="transcript_processing_status">Wird verarbeitet und übersetzt…</string>
     <string name="transcript_save">In Bibliothek speichern</string>
     <string name="transcript_placeholder">Deine Mitschrift erscheint hier.</string>
     <string name="transcript_start">Aufnahme starten</string>
@@ -33,6 +39,10 @@
     <!-- Elapsed recording time, m:ss. -->
     <string name="transcript_elapsed">%1$d:%2$02d</string>
     <string name="transcript_saved">In deiner Bibliothek gespeichert.</string>
+    <string name="transcript_copy">Transkript kopieren</string>
+    <string name="transcript_listen">Transkript vorlesen</string>
+    <string name="transcript_section_translation">Übersetzung</string>
+    <string name="transcript_section_vocabulary">Wichtige Vokabeln</string>
     <string name="word_sheet_article">Artikel: %1$s</string>
     <string name="word_sheet_plural">Plural: %1$s</string>
     <string name="word_sheet_verb">Infinitiv: %1$s</string>
@@ -43,6 +53,7 @@
     <string name="history_empty_title">Keine Transkripte gefunden</string>
     <string name="history_empty_body">Deine Transkript-Sitzungen erscheinen hier.</string>
     <string name="history_empty_action">Aufnahme starten</string>
+    <string name="history_detail_title">Transkriptdetails</string>
     <!-- Time and length of a transcript. A format string, not a template in
          code: the separator is typographic but the order is not universal. -->
     <string name="history_meta">%1$s · %2$s</string>
@@ -94,6 +105,10 @@
     <string name="study_empty_title">Bereit zum Lernen?</string>
     <string name="study_empty_body">Speichere ein paar deutsche Sätze und wir bauen deine erste Lernsitzung.</string>
     <string name="study_session">Lernsitzung</string>
+    <string name="study_completed_title">Sitzung geschafft! 🎉</string>
+    <string name="study_completed_body">Alle fälligen Karten sind erledigt. Weiter so — dein Deutsch bleibt fit!</string>
+    <string name="study_completed_action">Zur Übersicht</string>
+    <string name="study_completed_restart">Nochmal üben</string>
     <plurals name="study_remaining">
         <item quantity="one">%1$d Karte übrig</item>
         <item quantity="other">%1$d Karten übrig</item>
@@ -109,12 +124,16 @@
     <string name="dashboard_daily_goal">Tagesziel</string>
     <string name="dashboard_goal_achieved">Ziel erreicht!</string>
     <string name="dashboard_xp_remaining">%1$d XP verbleibend</string>
+    <string name="dashboard_xp_format">%1$d / %2$d XP</string>
+    <string name="dashboard_start_review">Tageswiederholung starten</string>
     <string name="dashboard_retention">Wortschatz-Gedächtnis</string>
     <string name="dashboard_mastered">Meisterhaft</string>
     <string name="dashboard_learning">Lernend</string>
     <string name="dashboard_new">Neu</string>
     <string name="dashboard_heatmap">Aktivitäts-Heatmap</string>
     <string name="dashboard_heatmap_sub">Letzte 3 Monate konsequenter Bemühungen</string>
+    <string name="dashboard_heatmap_less">Weniger</string>
+    <string name="dashboard_heatmap_more">Mehr</string>
     <plurals name="dashboard_streak">
         <item quantity="one">🔥 %1$d Tag Serie</item>
         <item quantity="other">🔥 %1$d Tage Serie</item>
@@ -130,7 +149,11 @@
     <string name="roleplay_start_speaking">Sprechen beginnen</string>
     <string name="roleplay_send_turn">Das Gesagte senden</string>
     <string name="roleplay_speak_message">Diese Antwort vorlesen</string>
+    <string name="roleplay_show_translation">Übersetzung zeigen</string>
+    <string name="roleplay_hide_translation">Übersetzung ausblenden</string>
     <string name="roleplay_retry">Erneut versuchen</string>
+    <string name="roleplay_scenario_berlin_bakery">Bestellen in einer Berliner Bäckerei</string>
+    <string name="roleplay_restart_session">Gespräch neu starten</string>
     <string name="practice_tab">Wiederholung</string>
     <string name="study_skip">Vorerst überspringen</string>
     <string name="study_word_grammar">%1$s %2$s (Pl. %3$s)</string>
@@ -165,8 +188,22 @@
     <string name="practice_feedback_keep_going">Weiter üben! Versuche, die markierten Wörter zu treffen.</string>
 
     <!-- Settings -->
+    <string name="settings_section_account">Konto &amp; Sync</string>
+    <string name="settings_section_ai">KI &amp; Intelligenz</string>
+    <string name="settings_section_audio">Sprache &amp; Audio</string>
+    <string name="settings_section_learning">Lernen &amp; Benachrichtigungen</string>
+    <string name="settings_section_data">Datenverwaltung</string>
+    <string name="settings_section_about">Über DeutschFlow</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
+    <string name="settings_api_key_helper">Für Echtzeit-Übersetzung, Grammatikerklärungen und Rollenspiel.</string>
+    <string name="settings_api_key_saved_hint">Schlüssel sicher im Android Keystore gespeichert</string>
+    <string name="settings_api_key_active">Schlüssel eingerichtet</string>
+    <string name="settings_api_key_not_set">Nicht eingerichtet</string>
+    <string name="settings_api_key_placeholder">Füge hier deinen API-Schlüssel ein</string>
+    <string name="settings_api_key_placeholder_saved">Schlüssel gespeichert (zum Ersetzen neu eingeben)</string>
     <string name="settings_autoplay">Deutsche Aussprache automatisch abspielen</string>
+    <string name="settings_autoplay_desc">Spricht Wörter und Rollenspiel-Antworten automatisch aus</string>
+    <string name="settings_dialect_header">Erkannte Sprache</string>
     <string name="settings_dialect_de">Deutschland (de-DE)</string>
     <string name="settings_dialect_at">Österreich (de-AT)</string>
     <string name="settings_dialect_ch">Schweiz (de-CH)</string>
