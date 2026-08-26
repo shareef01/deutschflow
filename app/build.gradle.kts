@@ -78,7 +78,7 @@ android {
 
     sourceSets {
         // MigrationTestHelper reads the exported schemas from the test APK's assets.
-        getByName("androidTest").assets.srcDirs(files("$projectDir/schemas"))
+        getByName("androidTest").assets.directories += "$projectDir/schemas"
     }
 }
 
