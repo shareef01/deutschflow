@@ -71,6 +71,7 @@ class SettingsViewModelTest {
             widgetUpdater = WidgetUpdater(context),
             cloudService = cloudService,
             syncManager = SyncManager(
+                database = database,
                 vocabularyDao = database.vocabularyDao(),
                 transcriptDao = database.transcriptDao(),
                 preferenceManager = store.preferences,

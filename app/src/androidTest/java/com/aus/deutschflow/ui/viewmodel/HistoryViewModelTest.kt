@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
+import com.aus.deutschflow.service.TTSHelper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -32,7 +33,10 @@ class HistoryViewModelTest {
             AppDatabase::class.java
         ).allowMainThreadQueries().build()
 
-        viewModel = HistoryViewModel(database.transcriptDao())
+        viewModel = HistoryViewModel(
+            transcriptDao = database.transcriptDao(),
+            ttsHelper = TTSHelper(ApplicationProvider.getApplicationContext())
+        )
     }
 
     @After

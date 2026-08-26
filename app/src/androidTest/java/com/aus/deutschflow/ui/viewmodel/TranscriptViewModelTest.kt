@@ -9,6 +9,7 @@ import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
+import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import com.aus.deutschflow.service.WordDetails
 import com.aus.deutschflow.service.WordDetailsResult
@@ -69,7 +70,8 @@ class TranscriptViewModelTest {
             vocabularyDao = database.vocabularyDao(),
             transcriptDao = database.transcriptDao(),
             preferenceManager = store.preferences,
-            widgetUpdater = WidgetUpdater(context)
+            widgetUpdater = WidgetUpdater(context),
+            ttsHelper = TTSHelper(context)
         )
     }
 
@@ -198,7 +200,8 @@ class TranscriptViewModelTest {
         vocabularyDao = database.vocabularyDao(),
         transcriptDao = database.transcriptDao(),
         preferenceManager = store.preferences,
-        widgetUpdater = WidgetUpdater(context)
+        widgetUpdater = WidgetUpdater(context),
+        ttsHelper = TTSHelper(context)
     )
 
     /**
