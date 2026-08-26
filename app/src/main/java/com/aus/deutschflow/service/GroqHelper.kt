@@ -144,14 +144,14 @@ class GroqHelper @Inject constructor(
         }
 
         return try {
-            connection.outputStream.use { it.write(body.toByteArray()) }
+            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
 
             if (connection.responseCode in 200..299) {
-                connection.inputStream.bufferedReader().use { it.readText() }
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             } else {
                 // The body carries the reason - an expired key, a retired model, a
                 // rate limit - and all of them are worth putting in front of the user.
-                val body = connection.errorStream?.bufferedReader()?.use { it.readText() }
+                val body = connection.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
                 throw IllegalStateException(errorMessage(connection.responseCode, body))
             }
         } finally {
@@ -564,7 +564,7 @@ class GroqHelper @Inject constructor(
 
         private fun parseList(array: JSONArray?): List<String> {
             if (array == null) return emptyList()
-            return List(array.length()) { array.getString(it) }.filter { it.isNotBlank() }
+            return List(array.length()) { array.optString(it) }.filter { it.isNotBlank() }
         }
 
         /** The object literal inside an otherwise-decorated reply, if there is one. */

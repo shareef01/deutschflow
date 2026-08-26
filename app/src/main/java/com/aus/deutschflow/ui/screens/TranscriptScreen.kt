@@ -1,39 +1,34 @@
 package com.aus.deutschflow.ui.screens
 
-import android.net.Uri
-import android.content.Intent
 import android.Manifest
 import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.ripple
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,40 +39,27 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.ui.components.*
-import com.aus.deutschflow.ui.theme.pressScale
-import com.aus.deutschflow.ui.theme.RecordIconSize
-import com.aus.deutschflow.ui.theme.RecordButtonSize
-import com.aus.deutschflow.ui.theme.Motion
-import com.aus.deutschflow.ui.theme.LocalReducedMotion
-import com.aus.deutschflow.ui.theme.WaveformHeight
-import com.aus.deutschflow.ui.theme.TranscriptCardMinHeight
-import com.aus.deutschflow.ui.theme.UppercaseLabelTracking
-import com.aus.deutschflow.ui.theme.TranscriptTextStyle
-import com.aus.deutschflow.ui.theme.ActionButtonHeight
-import com.aus.deutschflow.ui.theme.AzureGlow
-import com.aus.deutschflow.ui.theme.DeutschflowTheme
-import com.aus.deutschflow.ui.theme.Spacing
-import com.aus.deutschflow.ui.theme.glassSurface
+import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.TranscriptViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -90,6 +72,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
     val suggestedWords by viewModel.suggestedWords.collectAsState()
     val grammarNotes by viewModel.grammarNotes.collectAsState()
     val errorState by viewModel.errorState.collectAsState()
+    val ttsError by viewModel.ttsError.collectAsState()
     val aiError by viewModel.aiError.collectAsState()
     val wordDetails by viewModel.wordDetails.collectAsState()
     val wordDetailError by viewModel.wordDetailError.collectAsState()
@@ -111,6 +94,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
     }
 
     val savedMessage = stringResource(R.string.transcript_saved)
+    val copiedMessage = stringResource(R.string.action_copied)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -143,7 +127,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
             suggestedWords = suggestedWords,
             grammarNotes = grammarNotes,
             loadingWord = interrogatingWord,
-            errorState = errorState ?: aiError,
+            errorState = errorState ?: aiError ?: ttsError,
             rmsAmplitude = amplitude,
             dialect = selectedDialect,
             isFirstRun = isFirstRun,
@@ -167,6 +151,13 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
             },
             onStopListening = { viewModel.stopListening() },
             onWordClick = { word -> viewModel.interrogateWord(word) },
+            onSpeakTranscript = { text -> viewModel.speak(text) },
+            onCopyTranscript = { text ->
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("German Transcript", text)
+                clipboard.setPrimaryClip(clip)
+                scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
+            },
             onSave = {
                 if (viewModel.saveToVocabulary(finalText, translation)) {
                     scope.launch { snackbarHostState.showSnackbar(savedMessage) }
@@ -215,319 +206,309 @@ fun TranscriptContent(
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
     onWordClick: (String) -> Unit,
+    onSpeakTranscript: (String) -> Unit,
+    onCopyTranscript: (String) -> Unit,
     onSave: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
-    val gradientBrush = Brush.linearGradient(
-        colors = listOf(AzureGlow, primaryColor)
-    )
+    val scrollState = rememberScrollState()
 
     val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
-    val isEmpty = !hasTranscript && !isListening && !isBusy
+    val isIdle = !hasTranscript && !isListening && !isBusy
+    val currentText = if (isListening) partialText else finalText
 
-    // Results are the only thing that makes this screen taller than the viewport,
-    // so they are also the only thing that needs it to scroll.
-    val hasResults = translation.isNotEmpty()
-    val isPlaceholder = finalText.isEmpty() && !isListening
-    val placeholder = stringResource(R.string.transcript_placeholder)
-    val cardText = if (isListening) partialText else finalText.ifEmpty { placeholder }
-
-    // The record button is the primary action of the whole app, so it is anchored
-    // rather than laid out in the flow: it used to sit between the transcript card
-    // and the results, which put it below the fold on an empty screen and buried it
-    // mid-scroll once a translation arrived. Everything else scrolls above it, the
-    // way Practice already places Speak and Next.
     Column(modifier = Modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .weight(1f)
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.md)
-            .then(if (hasResults) Modifier.verticalScroll(rememberScrollState()) else Modifier),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // The dialect chip has one home: directly under the header, on every state.
-        // It used to live inside the empty block, which meant it moved when the
-        // screen changed state and was the first thing the header sliced on scroll.
-        Spacer(modifier = Modifier.height(Spacing.sm))
-        LanguageIndicator(dialect, onSelectDialect)
-        Spacer(modifier = Modifier.height(Spacing.md))
+        // ==========================================
+        // 1. TOP FIXED HEADER / DIALECT REGION
+        // ==========================================
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Spacing.xs, bottom = Spacing.xs),
+            contentAlignment = Alignment.Center
+        ) {
+            LanguageIndicator(dialect, onSelectDialect)
+        }
 
-        // Introductory copy, once. It explains the app to someone who has never used
-        // it, and after that it is a paragraph standing between them and the mic -
-        // which is what pushed the primary control of the whole app below the fold.
-        //
-        // The 500dp minimum this block used to carry is gone with it: it reserved
-        // half a screen and centred two lines in the middle of it, so the space read
-        // as something failing to load rather than as breathing room.
-        if (isEmpty && isFirstRun) {
-            Text(
-                text = stringResource(R.string.transcript_empty_title),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+        val fadeTop by remember {
+            derivedStateOf { scrollState.value > 0 }
+        }
+        val fadeBottom by remember {
+            derivedStateOf { scrollState.value < scrollState.maxValue }
+        }
+
+        // ==========================================
+        // 2. SCROLLABLE CONTENT REGION
+        // ==========================================
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .scrollFadingEdges(
+                    topFadeHeight = 24.dp,
+                    bottomFadeHeight = 32.dp,
+                    fadeTop = fadeTop,
+                    fadeBottom = fadeBottom
+                )
+                .verticalScroll(scrollState)
+                .padding(horizontal = Spacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(Spacing.xs))
+
+            // Error or Permission Banner
+            ErrorBanner(
+                message = errorState,
+                action = if (permissionDenied) {
+                    {
+                        TextButton(onClick = onOpenSettings) {
+                            Text(stringResource(R.string.action_open_settings))
+                        }
+                    }
+                } else null
             )
-            Spacer(modifier = Modifier.height(Spacing.sm))
-            Text(
-                text = stringResource(R.string.transcript_empty_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+
+            if (isIdle) {
+                // Calm, instructional idle empty state
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = Spacing.xxl)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = AzureGlow,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.lg))
+                    Text(
+                        text = stringResource(R.string.transcript_empty_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    Text(
+                        text = stringResource(R.string.transcript_empty_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = Spacing.md)
+                    )
+                }
+            } else {
+                // Live / Final Transcript Card
+                TranscriptDisplayCard(
+                    text = currentText,
+                    isListening = isListening,
+                    isBusy = isBusy,
+                    listeningSeconds = listeningSeconds,
+                    rmsAmplitude = rmsAmplitude,
+                    onSpeak = { onSpeakTranscript(currentText) },
+                    onCopy = { onCopyTranscript(currentText) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = TranscriptCardMinHeight)
+                )
+            }
+
+            // Results Section: Grammar Spotlight, Translation, Key Vocabulary, Save
+            if (translation.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(Spacing.lg))
+
+                // Grammar Spotlight Section
+                if (grammarNotes.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.transcript_grammar_spotlight),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = UppercaseLabelTracking,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = Spacing.xs, bottom = Spacing.sm)
+                    )
+                    grammarNotes.forEach { note ->
+                        GrammarSpotlightCard(note)
+                        Spacer(modifier = Modifier.height(Spacing.sm))
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.md))
+                }
+
+                // Translation Section
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.transcript_section_translation).uppercase(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = UppercaseLabelTracking,
+                        modifier = Modifier.padding(bottom = Spacing.sm, start = Spacing.xs)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .glassSurface()
+                            .padding(Spacing.md)
+                    ) {
+                        Text(
+                            text = translation,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    if (suggestedWords.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(Spacing.lg))
+                        Text(
+                            text = stringResource(R.string.transcript_section_vocabulary).uppercase(),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = UppercaseLabelTracking,
+                            modifier = Modifier.padding(bottom = Spacing.sm, start = Spacing.xs)
+                        )
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                        ) {
+                            suggestedWords.forEach { word ->
+                                VocabularyChip(
+                                    word = word,
+                                    isLoading = loadingWord == word,
+                                    onClick = { onWordClick(word) }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(Spacing.lg))
+                    PrimaryActionButton(
+                        text = stringResource(R.string.transcript_save),
+                        onClick = onSave,
+                        icon = { Icon(Icons.Default.BookmarkAdd, contentDescription = null, tint = Color.White) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // Reserved bottom space inside the scroll container so content scrolls cleanly above the dock
             Spacer(modifier = Modifier.height(Spacing.lg))
         }
 
-        // The workspace. With nothing below it, it takes the room rather than
-        // leaving a slab of ground between a short card and the button - the space
-        // is where the speech is going to land, so it belongs to the card.
-        if (hasResults) {
-            TranscriptCard(
-                text = cardText,
-                isPlaceholder = isPlaceholder,
-                modifier = Modifier.fillMaxWidth().heightIn(min = TranscriptCardMinHeight)
-            )
-        } else {
-            TranscriptCard(
-                text = cardText,
-                isPlaceholder = isPlaceholder,
-                modifier = Modifier.fillMaxWidth().weight(1f)
-            )
-        }
-
-        if (isListening) {
-            Spacer(modifier = Modifier.height(Spacing.md))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        // ==========================================
+        // 3. PERSISTENT DOCKED MICROPHONE ACTION REGION
+        // ==========================================
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Spacing.xs, bottom = Spacing.sm),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                AudioWaveform(
-                    amplitude = rmsAmplitude,
-                    isActive = true,
-                    modifier = Modifier.weight(1f).height(WaveformHeight)
-                )
-                Spacer(modifier = Modifier.width(Spacing.sm))
-                // The waveform moves for room noise too, so on its own it does not
-                // answer "did it hear me start". The count does.
+                Box(
+                    modifier = Modifier.size(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isListening && !LocalReducedMotion.current) {
+                        val pulseScale by rememberInfiniteTransition(label = "recordPulse").animateFloat(
+                            initialValue = 1f,
+                            targetValue = 1.30f,
+                            animationSpec = infiniteRepeatable(
+                                tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
+                                RepeatMode.Restart
+                            ),
+                            label = "pulse"
+                        )
+                        Box(
+                            Modifier
+                                .size(RecordButtonSize)
+                                .scale(pulseScale)
+                                .alpha(0.3f)
+                                .background(MaterialTheme.colorScheme.error, CircleShape)
+                        )
+                    }
+
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val micLabel = stringResource(
+                        if (isListening) R.string.transcript_stop else R.string.transcript_start
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(RecordButtonSize)
+                            .pressScale(interactionSource)
+                            .clip(CircleShape)
+                            .background(
+                                if (isListening) {
+                                    Brush.linearGradient(
+                                        listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
+                                    )
+                                } else {
+                                    Brush.linearGradient(listOf(AzureGlow, primaryColor))
+                                }
+                            )
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = ripple(bounded = false)
+                            ) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                if (isListening) onStopListening() else onStartListening()
+                            }
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = micLabel
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isBusy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.White,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = null,
+                                modifier = Modifier.size(RecordIconSize),
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+
                 Text(
                     text = stringResource(
-                        R.string.transcript_elapsed,
-                        listeningSeconds / 60,
-                        listeningSeconds % 60
+                        if (isListening) R.string.transcript_stop else R.string.transcript_idle_hint
                     ),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-
-        ErrorBanner(
-            message = errorState,
-            action = if (permissionDenied) {
-                {
-                    TextButton(onClick = onOpenSettings) {
-                        Text(stringResource(R.string.action_open_settings))
-                    }
-                }
-            } else null
-        )
-
-        if (translation.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(Spacing.xl))
-            
-            // Grammar Spotlight Section
-            if (grammarNotes.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.transcript_grammar_spotlight),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = UppercaseLabelTracking,
-                    modifier = Modifier.fillMaxWidth().padding(start = Spacing.xs)
-                )
-                Spacer(modifier = Modifier.height(Spacing.sm))
-                grammarNotes.forEach { note ->
-                    GrammarSpotlightCard(note)
-                    Spacer(modifier = Modifier.height(Spacing.sm))
-                }
-                Spacer(modifier = Modifier.height(Spacing.lg))
-            }
-
-            // Results Section
-            Column(modifier = Modifier.fillMaxWidth()) {
-                SectionLabel("Translation")
-                Box(modifier = Modifier.fillMaxWidth().glassSurface().padding(Spacing.md)) {
-                    Text(text = translation, style = MaterialTheme.typography.bodyLarge)
-                }
-
-                if (suggestedWords.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(Spacing.lg))
-                    SectionLabel("Vocabulary")
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-                    ) {
-                        suggestedWords.forEach { word ->
-                            VocabularyChip(
-                                word = word,
-                                isLoading = loadingWord == word,
-                                onClick = { onWordClick(word) }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(Spacing.lg))
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier.fillMaxWidth().height(ActionButtonHeight),
-                    shape = MaterialTheme.shapes.large
-                ) {
-                    Icon(Icons.Default.BookmarkAdd, null)
-                    Spacer(modifier = Modifier.width(Spacing.sm))
-                    Text(
-                        stringResource(R.string.transcript_save),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-            }
-        }
-        
-        // A gap, not a clearance: nothing is anchored over this column any more,
-        // so the last row only needs breathing room from the button below it.
-        Spacer(modifier = Modifier.height(Spacing.md))
-    }
-
-    val micLabel = stringResource(
-        if (isListening) R.string.transcript_stop else R.string.transcript_start
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = Spacing.md),
-        contentAlignment = Alignment.Center
-    ) {
-            // A halo that keeps expanding for as long as recording lasts is the
-            // shape of motion most likely to make someone ill, so it is the first
-            // thing to go when less movement has been asked for. The button still
-            // turns red and shows a stop icon; the state is never carried by the
-            // animation alone.
-            if (isListening && !LocalReducedMotion.current) {
-                val pulseScale by rememberInfiniteTransition(label = "record").animateFloat(
-                    initialValue = 1f,
-                    targetValue = 1.8f,
-                    animationSpec = infiniteRepeatable(
-                        tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
-                        RepeatMode.Restart
-                    ),
-                    label = "pulse"
-                )
-                Box(
-                    Modifier
-                        .size(RecordButtonSize)
-                        .scale(pulseScale)
-                        .alpha(0.3f)
-                        .background(primaryColor, CircleShape)
-                )
-            }
-
-            val interactionSource = remember { MutableInteractionSource() }
-            Box(
-                modifier = Modifier
-                    .size(RecordButtonSize)
-                    // The spring already lived in Obsidian.kt and nothing used it.
-                    // The primary control of the app acknowledging a touch is the
-                    // one place it earns its keep.
-                    .pressScale(interactionSource)
-                    .clip(CircleShape)
-                    .background(
-                        if (isListening) {
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.error,
-                                    MaterialTheme.colorScheme.errorContainer
-                                )
-                            )
-                        } else {
-                            gradientBrush
-                        }
-                    )
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = ripple(bounded = false)
-                    ) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        if (isListening) onStopListening() else onStartListening()
-                    }
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = micLabel
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                    // Announced on the button itself, above.
-                    contentDescription = null,
-                    modifier = Modifier.size(RecordIconSize),
-                    tint = Color.White
-                )
-            }
-        }
-
     }
 }
-
-@Composable
-fun GrammarSpotlightCard(note: GrammarNote) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
-        shape = MaterialTheme.shapes.medium,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-    ) {
-        Column(modifier = Modifier.padding(Spacing.md)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                    Text(note.case.uppercase(), modifier = Modifier.padding(horizontal = Spacing.xs), style = MaterialTheme.typography.labelSmall)
-                }
-                Spacer(modifier = Modifier.width(Spacing.sm))
-                Text(text = note.phrase, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            }
-            if (note.explanation.isNotBlank()) {
-                Spacer(modifier = Modifier.height(Spacing.sm))
-                Text(text = note.explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(label: String) {
-    Text(
-        text = label.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        letterSpacing = UppercaseLabelTracking,
-        modifier = Modifier.padding(bottom = Spacing.sm, start = Spacing.xs)
-    )
-}
-
-/** The dialects recognition can be asked for, paired with what to call them. */
-private val DIALECTS = listOf(
-    "de-DE" to R.string.settings_dialect_de,
-    "de-AT" to R.string.settings_dialect_at,
-    "de-CH" to R.string.settings_dialect_ch
-)
 
 /**
- * Which language is being listened for - and the way to change it.
- *
- * It named the dialect and did nothing else, which made the one reminder of what
- * you are about to speak the one thing you could not act on. Now it opens the same
- * three choices Settings offers, two taps from where the decision actually matters.
+ * Human-readable recognition dialect selector.
  */
 @Composable
 private fun LanguageIndicator(dialect: String, onSelect: (String) -> Unit) {
@@ -535,10 +516,17 @@ private fun LanguageIndicator(dialect: String, onSelect: (String) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val label = stringResource(R.string.transcript_change_dialect)
 
+    val dialectLabel = when (dialect) {
+        "de-AT" -> stringResource(R.string.settings_dialect_at)
+        "de-CH" -> stringResource(R.string.settings_dialect_ch)
+        else -> stringResource(R.string.settings_dialect_de)
+    }
+
     Box {
         Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = CircleShape,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 open = true
@@ -549,30 +537,46 @@ private fun LanguageIndicator(dialect: String, onSelect: (String) -> Unit) {
                 modifier = Modifier.padding(
                     start = Spacing.md,
                     end = Spacing.sm,
-                    top = Spacing.xs,
-                    bottom = Spacing.xs
+                    top = 6.dp,
+                    bottom = 6.dp
                 ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = stringResource(R.string.transcript_listening_for, dialect),
+                    text = stringResource(R.string.transcript_listening_for, dialectLabel),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.width(Spacing.xs))
                 Icon(
                     imageVector = Icons.Default.ArrowDropDown,
-                    // The Surface above carries the label for the whole control.
                     contentDescription = null,
-                    modifier = Modifier.size(Spacing.md),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DIALECTS.forEach { (code, nameRes) ->
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            val dialects = listOf(
+                "de-DE" to R.string.settings_dialect_de,
+                "de-AT" to R.string.settings_dialect_at,
+                "de-CH" to R.string.settings_dialect_ch
+            )
+            dialects.forEach { (code, nameRes) ->
                 DropdownMenuItem(
-                    text = { Text(stringResource(nameRes)) },
+                    text = {
+                        Text(
+                            text = stringResource(nameRes),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (code == dialect) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(code)
@@ -594,33 +598,199 @@ private fun LanguageIndicator(dialect: String, onSelect: (String) -> Unit) {
 }
 
 /**
- * The transcript itself, in the card that is this screen's workspace.
- *
- * Takes its own modifier so the caller decides whether it holds a floor or fills
- * the space: with results below it needs a minimum, and with nothing below it the
- * room is its own.
+ * Modern transcript card with live audio visualization and copy/audio action controls.
  */
 @Composable
-private fun TranscriptCard(text: String, isPlaceholder: Boolean, modifier: Modifier = Modifier) {
-    OutlinedCard(
+private fun TranscriptDisplayCard(
+    text: String,
+    isListening: Boolean,
+    isBusy: Boolean,
+    listeningSeconds: Int,
+    rmsAmplitude: State<Float>,
+    onSpeak: () -> Unit,
+    onCopy: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    val wordCount = remember(text) {
+        if (text.isBlank()) 0 else text.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+    }
+
+    GlassmorphicCard(
         modifier = modifier,
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
-        shape = MaterialTheme.shapes.extraLarge,
-        elevation = CardDefaults.outlinedCardElevation(defaultElevation = 8.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        contentPadding = PaddingValues(Spacing.md)
     ) {
-        Box(modifier = Modifier.padding(Spacing.lg)) {
-            Text(
-                text = text,
-                style = TranscriptTextStyle,
-                color = if (isPlaceholder) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onSurface
+        // Card Top Bar: Word count badge and action buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isListening) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error)
+                    )
+                    Spacer(modifier = Modifier.width(Spacing.xs))
+                    Text(
+                        text = stringResource(R.string.transcript_listening_status),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
+            } else if (isBusy) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 2.dp,
+                        color = AzureGlow
+                    )
+                    Spacer(modifier = Modifier.width(Spacing.xs))
+                    Text(
+                        text = stringResource(R.string.transcript_processing_status),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AzureGlow,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            } else if (text.isNotBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = pluralStringResource(R.plurals.history_word_count, wordCount, wordCount),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp)
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.width(1.dp))
+            }
+
+            if (text.isNotBlank() && !isListening) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSpeak()
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = stringResource(R.string.transcript_listen),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onCopy()
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.transcript_copy),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Spacing.sm))
+
+        // Main Text Content
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.xs)
+        ) {
+            Text(
+                text = text.ifEmpty { stringResource(R.string.transcript_placeholder) },
+                style = TranscriptTextStyle,
+                color = if (text.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
             )
+        }
+
+        // Live Audio Waveform while listening
+        if (isListening) {
+            Spacer(modifier = Modifier.height(Spacing.md))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AudioWaveform(
+                    amplitude = rmsAmplitude,
+                    isActive = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(WaveformHeight)
+                )
+                Spacer(modifier = Modifier.width(Spacing.sm))
+                Text(
+                    text = stringResource(
+                        R.string.transcript_elapsed,
+                        listeningSeconds / 60,
+                        listeningSeconds % 60
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }
+
+@Composable
+fun GrammarSpotlightCard(note: GrammarNote) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.padding(Spacing.md)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = note.case.uppercase(),
+                        modifier = Modifier.padding(horizontal = Spacing.xs, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Spacer(modifier = Modifier.width(Spacing.sm))
+                Text(
+                    text = note.phrase,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (note.explanation.isNotBlank()) {
+                Spacer(modifier = Modifier.height(Spacing.xs))
+                Text(
+                    text = note.explanation,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+

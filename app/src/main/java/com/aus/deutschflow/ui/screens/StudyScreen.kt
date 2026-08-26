@@ -3,88 +3,75 @@ package com.aus.deutschflow.ui.screens
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.service.ReviewQuality
-import com.aus.deutschflow.ui.components.SegmentTab
-import com.aus.deutschflow.ui.components.EmptyState
-import com.aus.deutschflow.ui.components.ErrorBanner
-import com.aus.deutschflow.ui.components.GlassButton
-import com.aus.deutschflow.ui.theme.motionDuration
-import com.aus.deutschflow.ui.theme.Motion
-import com.aus.deutschflow.ui.theme.AzureDeep
-import com.aus.deutschflow.ui.theme.OnSurfaceMuted
-import com.aus.deutschflow.ui.theme.Spacing
-import com.aus.deutschflow.ui.theme.TertiaryGreen
-import com.aus.deutschflow.ui.theme.WarningAmber
-import com.aus.deutschflow.ui.theme.glassSurface
+import com.aus.deutschflow.ui.components.*
+import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
-    var selectedTab by remember { mutableIntStateOf(1) } // Default to Study session for continuity
-    val haptic = LocalHapticFeedback.current
+    var selectedTab by rememberSaveable { mutableIntStateOf(1) } // Default to Flashcards
+    val tabLabels = listOf(
+        stringResource(R.string.dashboard_tab),
+        stringResource(R.string.dashboard_flashcards_tab)
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // `contentColor` is what a Tab falls back to for *both* halves of its state,
-        // so setting it to primary painted the unselected tab in the accent too -
-        // both labels read as active and only the indicator said otherwise. Each Tab
-        // now names its own pair: accent when selected, muted when not.
-        PrimaryTabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = Color.Transparent,
-            divider = {}
-        ) {
-            SegmentTab(
-                selected = selectedTab == 0,
-                label = stringResource(R.string.dashboard_tab),
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 0
-                }
-            )
-            SegmentTab(
-                selected = selectedTab == 1,
-                label = stringResource(R.string.dashboard_flashcards_tab),
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedTab = 1
-                }
-            )
-        }
+        Spacer(modifier = Modifier.height(Spacing.xs))
+        SegmentedTabs(
+            selectedIndex = selectedTab,
+            tabs = tabLabels,
+            onTabSelected = { selectedTab = it }
+        )
+        Spacer(modifier = Modifier.height(Spacing.xs))
 
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == 0) {
-                DashboardScreen()
+                DashboardScreen(onStartReview = { selectedTab = 1 })
             } else {
-                StudySessionContent(viewModel)
+                StudySessionContent(
+                    viewModel = viewModel,
+                    onNavigateToDashboard = { selectedTab = 0 }
+                )
             }
         }
     }
 }
 
 @Composable
-fun StudySessionContent(viewModel: StudyViewModel) {
+fun StudySessionContent(
+    viewModel: StudyViewModel,
+    onNavigateToDashboard: () -> Unit
+) {
     val studyList by viewModel.studyList.collectAsState()
     val currentIndex by viewModel.currentIndex.collectAsState()
     val isFlipped by viewModel.isFlipped.collectAsState()
     val hasLoaded by viewModel.hasLoaded.collectAsState()
+    val allWordsCount by viewModel.allWordsCount.collectAsState()
+    val sessionReviewedCount by viewModel.sessionReviewedCount.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
     val haptic = LocalHapticFeedback.current
 
@@ -100,12 +87,75 @@ fun StudySessionContent(viewModel: StudyViewModel) {
         return
     }
 
-    if (studyList.isEmpty()) {
+    if (allWordsCount == 0) {
         EmptyState(
             icon = Icons.Default.School,
             message = stringResource(R.string.study_empty_title),
             description = stringResource(R.string.study_empty_body)
         )
+        return
+    }
+
+    // Celebratory Session Complete View
+    if (studyList.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(Spacing.lg),
+            contentAlignment = Alignment.Center
+        ) {
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(Spacing.xl)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.lg))
+                    Text(
+                        text = stringResource(R.string.study_completed_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    Text(
+                        text = stringResource(R.string.study_completed_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.xl))
+                    PrimaryActionButton(
+                        text = stringResource(R.string.study_completed_action),
+                        onClick = onNavigateToDashboard,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    SecondaryActionButton(
+                        text = stringResource(R.string.study_completed_restart),
+                        icon = { Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        onClick = { viewModel.restartSession() },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
         return
     }
 
@@ -119,9 +169,8 @@ fun StudySessionContent(viewModel: StudyViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         ErrorBanner(ttsError)
 
@@ -133,18 +182,24 @@ fun StudySessionContent(viewModel: StudyViewModel) {
             Text(
                 text = stringResource(R.string.study_session),
                 style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            // Show how many cards are left in the current due queue
-            val remaining = studyList.size
-            Text(
-                text = pluralStringResource(R.plurals.study_remaining, remaining, remaining),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = pluralStringResource(R.plurals.study_remaining, studyList.size, studyList.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.dp)
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.md))
+        Spacer(modifier = Modifier.height(Spacing.sm))
 
         val rotation by animateFloatAsState(
             targetValue = if (isFlipped) 180f else 0f,
@@ -152,17 +207,21 @@ fun StudySessionContent(viewModel: StudyViewModel) {
             label = "cardFlip"
         )
 
+        // 3D Flip Flashcard Container
         Box(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(vertical = Spacing.sm),
             contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 240.dp, max = 420.dp)
+                    .heightIn(min = 260.dp, max = 400.dp)
                     .graphicsLayer {
                         rotationY = rotation
-                        cameraDistance = 12f * density
+                        cameraDistance = 14f * density
                     }
                     .glassSurface(shape = MaterialTheme.shapes.extraLarge)
                     .clickable(
@@ -175,31 +234,48 @@ fun StudySessionContent(viewModel: StudyViewModel) {
                     }
             ) {
                 Box(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.lg),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(Spacing.lg),
                     contentAlignment = Alignment.Center
                 ) {
                     if (rotation <= 90f || rotation >= 270f) {
+                        // Card Front: German Word
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(24.dp)
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = stringResource(R.string.library_field_german),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = OnSurfaceMuted
-                            )
-                            Spacer(modifier = Modifier.height(Spacing.sm))
+                            if (currentItem.article != "none" && currentItem.article.isNotBlank()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = currentItem.article.uppercase(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(Spacing.sm))
+                            }
                             Text(
                                 text = currentItem.germanText,
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(Spacing.md))
-                            IconButton(onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.speak(currentItem.germanText)
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewModel.speak(currentItem.germanText)
+                                },
+                                modifier = Modifier.size(44.dp)
+                            ) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = stringResource(R.string.action_speak),
@@ -207,41 +283,57 @@ fun StudySessionContent(viewModel: StudyViewModel) {
                                     modifier = Modifier.size(28.dp)
                                 )
                             }
+                            Spacer(modifier = Modifier.height(Spacing.xs))
                             Text(
                                 text = stringResource(R.string.study_tap_to_flip),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = OnSurfaceMuted
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     } else {
+                        // Card Back: English Meaning & Details
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.graphicsLayer { rotationY = 180f }.padding(24.dp)
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer { rotationY = 180f }
                         ) {
                             Text(
-                                text = stringResource(R.string.library_field_translation),
+                                text = stringResource(R.string.library_field_translation).uppercase(),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = OnSurfaceMuted
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(Spacing.sm))
                             Text(
                                 text = currentItem.englishTranslation,
                                 style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            // Optional: Show more info like article/plural on the back
-                            if (currentItem.article != "none" || currentItem.plural.isNotBlank()) {
+                            if (currentItem.plural.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(Spacing.md))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.word_sheet_plural, currentItem.plural),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            if (currentItem.exampleSentence.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(Spacing.md))
                                 Text(
-                                    text = stringResource(
-                                        R.string.study_word_grammar,
-                                        currentItem.article,
-                                        currentItem.germanText,
-                                        currentItem.plural.ifBlank { "\u2014" }
-                                    ),
+                                    text = "„${currentItem.exampleSentence}“",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.secondary
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
@@ -250,9 +342,9 @@ fun StudySessionContent(viewModel: StudyViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(Spacing.lg))
+        Spacer(modifier = Modifier.height(Spacing.md))
 
-        // Ebbinghaus Feedback Row
+        // 4-Tier SRS Spaced Repetition Quality Buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
@@ -295,9 +387,9 @@ fun StudySessionContent(viewModel: StudyViewModel) {
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Skip Button for non-scored advancement
+        Spacer(modifier = Modifier.height(Spacing.sm))
+
+        // Skip Card button
         TextButton(onClick = {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             viewModel.skipCard()
@@ -305,11 +397,11 @@ fun StudySessionContent(viewModel: StudyViewModel) {
             Text(
                 text = stringResource(R.string.study_skip),
                 style = MaterialTheme.typography.labelMedium,
-                color = OnSurfaceMuted
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Spacing.xs))
     }
 }
 
@@ -333,3 +425,4 @@ private fun StudyFeedbackButton(
         )
     }
 }
+

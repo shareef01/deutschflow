@@ -172,9 +172,14 @@ class SettingsViewModel @Inject constructor(
         if (_isSyncing.value) return
         viewModelScope.launch {
             _isSyncing.value = true
-            syncManager.performSync()
-            _message.value = R.string.message_sync_unavailable
-            _isSyncing.value = false
+            try {
+                syncManager.performSync()
+                _message.value = R.string.message_sync_unavailable
+            } catch (_: Exception) {
+                _message.value = R.string.message_cloud_failed
+            } finally {
+                _isSyncing.value = false
+            }
         }
     }
 }

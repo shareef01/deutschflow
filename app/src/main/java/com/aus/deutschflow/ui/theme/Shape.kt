@@ -62,8 +62,8 @@ val WaveformHeight = 40.dp
 val TranscriptCardMinHeight = 200.dp
 
 /** The record button, and the icon inside it. Kept as a pair, like the medallion. */
-val RecordButtonSize = 100.dp
-val RecordIconSize = 40.dp
+val RecordButtonSize = 72.dp
+val RecordIconSize = 30.dp
 
 /** The Practice result card's floor, once a scored attempt sits in it. */
 val PracticeResultMinHeight = 160.dp

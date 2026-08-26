@@ -48,17 +48,38 @@ class StudyViewModel @Inject constructor(
     private val _hasLoaded = MutableStateFlow(false)
     val hasLoaded: StateFlow<Boolean> = _hasLoaded
 
+    private val _sessionReviewedCount = MutableStateFlow(0)
+    val sessionReviewedCount: StateFlow<Int> = _sessionReviewedCount
+
+    val allWordsCount: StateFlow<Int> = vocabularyDao.getAllVocabulary()
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     fun startSession() {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            val list = vocabularyDao.getDueVocabulary(now).firstOrNull().orEmpty()
-            
+            val dueList = vocabularyDao.getDueVocabulary(now).firstOrNull().orEmpty()
+            val allList = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
+            val targetList = if (dueList.isNotEmpty()) dueList else allList
+
             _currentIndex.value = 0
             _isFlipped.value = false
-            _studyList.value = list.shuffled()
+            _studyList.value = targetList.shuffled()
+            _sessionReviewedCount.value = 0
             _hasLoaded.value = true
         }
     }
+
+    fun restartSession() {
+        viewModelScope.launch {
+            val allList = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
+            _currentIndex.value = 0
+            _isFlipped.value = false
+            _studyList.value = allList.shuffled()
+            _sessionReviewedCount.value = 0
+        }
+    }
+
 
     fun flipCard() {
         _isFlipped.value = !_isFlipped.value
@@ -76,8 +97,10 @@ class StudyViewModel @Inject constructor(
             if (quality.value >= ReviewQuality.GOOD.value) {
                 rewardCurrentCard(XP_PER_CARD)
             }
+            _sessionReviewedCount.value++
 
             val newList = currentList.toMutableList().apply {
+
                 if (quality == ReviewQuality.AGAIN) {
                     removeAt(index)
                     add(updatedCard)

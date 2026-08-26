@@ -4,25 +4,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
+import com.aus.deutschflow.service.TTSHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Reads back what has already been transcribed.
- *
- * History used to share [TranscriptViewModel]. That looked like reuse, but
- * `hiltViewModel()` scopes to the navigation back stack entry, so the History
- * destination got an instance of its own anyway - one that built a
- * SpeechRecognizerHelper, subscribed to its results and destroyed it in onCleared,
- * for a screen that never records. Nothing was broken by it; it just meant a list and
- * a search box owned the microphone stack. This reads the one table it displays.
- */
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    private val transcriptDao: TranscriptDao
+    private val transcriptDao: TranscriptDao,
+    private val ttsHelper: TTSHelper
 ) : ViewModel() {
+
+    fun speak(text: String) {
+        if (text.isNotBlank()) {
+            ttsHelper.speak(text)
+        }
+    }
+
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query

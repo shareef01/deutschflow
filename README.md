@@ -9,53 +9,87 @@
 ![Target SDK](https://img.shields.io/badge/targetSdk-37-3DDC84?logo=android)
 ![License](https://img.shields.io/badge/license-MIT-999999)
 
-DeutschFlow is a modern Android application designed for learning German contextually. Instead of memorizing static word lists, DeutschFlow builds a personalized vocabulary library based on what you actually say. 
+DeutschFlow is a modern, native Android application designed for learning German contextually. Instead of memorizing static, disconnected word lists, DeutschFlow builds a personalized vocabulary library derived directly from what you speak in real life.
 
-Speak a sentence in German, and the app transcribes it on-device, translates it, extracts key vocabulary, and schedules those words for spaced repetition and pronunciation practice.
-
----
-
-## 📸 Screenshots
-
-| Transcript & Translation | Vocabulary Library | Spaced Repetition Study | Dashboard & Statistics |
-| :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/01-transcript.png" width="200"/> | <img src="docs/screenshots/03-library.png" width="200"/> | <img src="docs/screenshots/05-study.png" width="200"/> | <img src="docs/screenshots/10-dashboard.png" width="200"/> |
-
-| History | Word Details | Practice & Roleplay | Settings |
-| :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/02-history.png" width="200"/> | <img src="docs/screenshots/04-word-detail.png" width="200"/> | <img src="docs/screenshots/06-practice.png" width="200"/> | <img src="docs/screenshots/07-settings.png" width="200"/> |
+Speak a sentence in German, and the app transcribes it on-device in real time, translates it, extracts key vocabulary with grammatical cases and genders, and schedules those words for spaced repetition and pronunciation shadowing practice.
 
 ---
 
-## ✨ Key Features
+## 📸 Key Interfaces
 
-- **On-Device Speech Recognition:** Powered by `createOnDeviceSpeechRecognizer`, ensuring privacy and speed. Audio never leaves your device.
-- **AI-Powered Translations:** Integrates with Groq's `gpt-oss-120b` endpoint to provide natural translations, grammar notes, and contextual example sentences.
-- **Spaced Repetition System (SRS):** Built-in SuperMemo-2 scheduling algorithm to help you review vocabulary exactly when you're about to forget it.
-- **Pronunciation Practice & Roleplay:** Word-by-word pronunciation scoring and AI-driven conversational roleplay.
-- **Daily Widgets:** A home-screen Glance widget that serves you a new word from your library every morning.
-- **Privacy First:** AES-GCM encryption backed by the Android Keystore secures your API keys.
+| 🎙️ Real-Time Speaking & Translation | 📚 Vocabulary Library & Filters |
+| :---: | :---: |
+| <img src="docs/screenshots/01-transcript.png" width="320" alt="Transcript Screen"/> | <img src="docs/screenshots/02-library.png" width="320" alt="Library Screen"/> |
+
+| 🧠 Spaced Repetition (SM-2) Flashcards | 🗣️ Pronunciation Shadowing & Roleplay |
+| :---: | :---: |
+| <img src="docs/screenshots/03-study.png" width="320" alt="Study Flashcards"/> | <img src="docs/screenshots/04-practice.png" width="320" alt="Practice Screen"/> |
+
+---
+
+## ✨ Core Features
+
+- **🎙️ On-Device Speech Recognition:** Powered by `createOnDeviceSpeechRecognizer` with multi-dialect support (Germany `de-DE`, Austria `de-AT`, Switzerland `de-CH`). Instant transcription with full offline privacy.
+- **⚡ AI Grammar Spotlight & Translation:** Integrated with Groq AI (`gpt-oss-120b`) to provide instantaneous English translations, grammatical gender/case breakdowns (`der/die/das`, `Akkusativ`, `Dativ`), and contextual example sentences.
+- **🧠 Spaced Repetition System (SRS):** Built-in SuperMemo-2 (SM-2) scheduling algorithm with 4-tier grading (*Again*, *Hard*, *Good*, *Easy*) and daily XP goal tracking.
+- **🗣️ Pronunciation Shadowing & AI Roleplay:** Real-time speech diff scoring to pinpoint mispronounced German words alongside interactive situational roleplay scenarios.
+- **🔒 Keystore-Backed Security:** API credentials encrypted via AES-GCM hardware-backed Android Keystore.
+- **🎨 Glassmorphic Material 3 UI:** Fluid animations, spring interaction feedback, dynamic scroll fading edges, and dark theme support.
+
+---
 
 ## 🏗️ Architecture & Tech Stack
 
-Built on modern Android development standards:
+```
+com.aus.deutschflow
+├── data
+│   ├── db (Room Database & DAOs)
+│   ├── model (Word, Transcript, SRS stats)
+│   └── preferences (Encrypted DataStore)
+├── service
+│   ├── SpeechRecognitionService (On-Device STT)
+│   ├── TextToSpeechService (Native TTS)
+│   ├── SRSEngine (SuperMemo-2 Algorithm)
+│   └── GroqHelper (AI Translation & Grammar)
+├── ui
+│   ├── components (Design System, Glassmorphic Surfaces, SegmentedTabs)
+│   ├── screens (Transcript, Library, History, Study, Dashboard, Practice, Roleplay, Settings)
+│   ├── theme (Color Tokens, Spacing, Typography, Dynamic Fading Edges)
+│   └── viewmodel (StateFlow, Coroutines, MVVM)
+└── di (Hilt Dependency Injection)
+```
+
 - **UI:** 100% Jetpack Compose with Material 3.
-- **Architecture:** MVVM (Model-View-ViewModel) + Clean Architecture principles.
-- **Concurrency & State:** Kotlin Coroutines and `StateFlow` for reactive, thread-safe UI updates.
+- **Architecture:** MVVM + Unidirectional Data Flow (UDF).
+- **Concurrency & Reactivity:** Kotlin Coroutines & `StateFlow`.
 - **Dependency Injection:** Hilt.
-- **Local Persistence:** Room Database for vocabulary and transcripts; DataStore for preferences.
-- **Networking:** Lightweight, dependency-free `HttpURLConnection` to interact with AI endpoints.
+- **Storage:** Room SQLite Database + Jetpack DataStore.
+
+---
 
 ## 🚀 Getting Started
 
+### Prerequisites
+- Android Studio Ladybug / Meerkat or newer.
+- Android SDK 35+ (Min SDK 31 / Android 12).
+- Physical Android device or Emulator with Google Play services (for on-device speech model).
+
+### Installation
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/shareef01/deutschflow.git
+   cd deutschflow
    ```
-2. **Open the project** in Android Studio (Jellyfish or newer recommended).
-3. **Build and Run:** Sync Gradle and deploy to an emulator or physical device running Android 12 (API 31) or higher.
-4. **API Key:** To use translations, supply a Groq API key inside the app's settings screen.
+2. **Build and Run:**
+   ```bash
+   ./gradlew assembleDebug
+   ```
+3. **Configure API Key (Optional):**
+   - Open **Settings** inside the app (`⚙️` icon in top-right).
+   - Enter your [Groq API Key](https://console.groq.com/) for instant AI translations and grammar notes.
+
+---
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+Distributed under the [MIT License](LICENSE).
