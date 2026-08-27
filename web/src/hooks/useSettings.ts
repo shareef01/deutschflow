@@ -20,12 +20,27 @@ import { useLive } from "./useLive";
 import type { TKey } from "@/lib/i18n";
 import { mockCloudService } from "@/lib/ai/cloud";
 
+/**
+ * The recognition dialect alone, validated against the known set.
+ *
+ * Exported for screens that need this one scalar: the transcript page used to
+ * come through useSettings and so subscribed to the whole vocabulary and
+ * transcript tables just to read which German it should be listening for.
+ */
+export function useDialect(): Dialect {
+  const dialectRow = useLive(() => observeDialect(db), []);
+  return dialectRow &&
+    (dialectRow.value === "de-DE" || dialectRow.value === "de-AT" || dialectRow.value === "de-CH")
+    ? dialectRow.value
+    : DEFAULT_DIALECT;
+}
+
 export function useSettings() {
   const vocabulary = useLive(() => observeVocabulary(db), []) ?? [];
   const transcripts = useLive(() => observeTranscripts(db), []) ?? [];
   const stats = useLive(() => observeUserStats(db), []);
   const encryptedKey = useLive(() => getEncryptedApiKey(db), []);
-  const dialectRow = useLive(() => observeDialect(db), []);
+  const selectedDialect = useDialect();
   const autoPlayRow = useLive(() => observeAutoPlay(db), []);
 
   // Subscribed, not polled: the flag only changes in signIn and signOut.
@@ -43,10 +58,6 @@ export function useSettings() {
   const streak = stats?.streak ?? 0;
   const hasApiKey = encryptedKey !== undefined;
 
-  const selectedDialect: Dialect =
-    dialectRow && (dialectRow.value === "de-DE" || dialectRow.value === "de-AT" || dialectRow.value === "de-CH")
-      ? dialectRow.value
-      : DEFAULT_DIALECT;
   const isAutoPlayEnabled = autoPlayRow ? autoPlayRow.value === "true" : true;
 
   const saveApiKey = useCallback(async (apiKey: string): Promise<TKey> => {

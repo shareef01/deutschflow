@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
@@ -175,11 +176,18 @@ class SettingsViewModel @Inject constructor(
             try {
                 syncManager.performSync()
                 _message.value = R.string.message_sync_unavailable
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // The user gets the generic line; the log keeps the reason, the way
+                // every other layer that swallows into a message does.
+                Log.w(TAG, "Cloud sync failed", e)
                 _message.value = R.string.message_cloud_failed
             } finally {
                 _isSyncing.value = false
             }
         }
+    }
+
+    private companion object {
+        private const val TAG = "SettingsViewModel"
     }
 }

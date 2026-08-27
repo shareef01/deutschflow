@@ -173,6 +173,12 @@ export async function deleteVocabulary(db: DeutschFlowDB, entry: VocabularyEntry
 
 export const XP_PER_CARD = 10;
 
+/**
+ * The daily goal ring's target, written once: the dashboard drew its own literal
+ * 50 with nothing tying it to what a reviewed card pays out.
+ */
+export const DAILY_XP_GOAL = XP_PER_CARD * 5;
+
 export async function getUserStatsOnce(db: DeutschFlowDB): Promise<UserStatsEntry> {
   return (
     (await db.userStats.where("id").equals(1).first()) ?? {

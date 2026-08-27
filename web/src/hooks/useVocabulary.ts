@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
 import {
   deleteVocabulary as deleteVocabularyRow,
@@ -63,8 +63,11 @@ export function useVocabulary() {
     void saveVocabulary(db, entry);
   };
 
-  /** The fallback example, for words with none of their own. */
-  const exampleFor = (word: string): string => generateExample(word);
+  /**
+   * The fallback example, for words with none of their own. Memo-stable, so the
+   * word-detail useMemo that lists this as a dependency behaves like one.
+   */
+  const exampleFor = useCallback((word: string): string => generateExample(word), []);
 
   const speak = (text: string) => tts.speak(text);
 

@@ -18,7 +18,9 @@ export default defineConfig({
   webServer: {
     command: "npm run build && npx next start -p 3200",
     url: "http://localhost:3200",
-    reuseExistingServer: true,
+    // Local: reuse a server you already have running. CI: never - a leftover
+    // server from a previous run would serve the old build to this one's tests.
+    reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     // The gate is real in the smoke run: the server checks this signature.
     env: { SITE_PASSWORD: TEST_PASSWORD },

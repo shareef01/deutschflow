@@ -1,7 +1,5 @@
 package com.aus.deutschflow.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -40,15 +38,16 @@ import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.ui.components.EmptyState
 import com.aus.deutschflow.ui.components.GlassmorphicCard
 import com.aus.deutschflow.ui.components.SearchInput
+import com.aus.deutschflow.ui.components.copyToClipboard
+import com.aus.deutschflow.ui.components.rememberDateFormat
+import com.aus.deutschflow.ui.components.wordCount
 import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.HistoryViewModel
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
-import java.util.Locale
 
 @Composable
 fun HistoryScreen(
@@ -170,9 +169,7 @@ fun HistoryScreen(
                 onDismiss = { viewingTranscript = null },
                 onSpeak = { viewModel.speak(transcript.fullText) },
                 onCopy = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("German Transcript", transcript.fullText)
-                    clipboard.setPrimaryClip(clip)
+                    copyToClipboard(context, transcript.fullText)
                     scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
                 }
             )
@@ -203,7 +200,7 @@ private fun HistoryDayLabel(day: LocalDate, modifier: Modifier = Modifier) {
         today.minusDays(1) -> stringResource(R.string.history_yesterday)
         else -> {
             val pattern = stringResource(R.string.history_day_format)
-            val format = remember(pattern) { SimpleDateFormat(pattern, Locale.getDefault()) }
+            val format = rememberDateFormat(pattern)
             format.format(Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant()))
         }
     }
@@ -224,11 +221,9 @@ fun HistoryItem(
     onDelete: () -> Unit
 ) {
     val timePattern = stringResource(R.string.history_time_format)
-    val timeFormat = remember(timePattern) { SimpleDateFormat(timePattern, Locale.getDefault()) }
+    val timeFormat = rememberDateFormat(timePattern)
     val timeString = remember(transcript.timestamp) { timeFormat.format(Date(transcript.timestamp)) }
-    val wordCount = remember(transcript.fullText) {
-        transcript.fullText.split(Regex("\\s+")).count { it.isNotBlank() }
-    }
+    val words = remember(transcript.fullText) { wordCount(transcript.fullText) }
     val haptic = LocalHapticFeedback.current
 
     Box(
@@ -259,7 +254,7 @@ fun HistoryItem(
                     text = stringResource(
                         R.string.history_meta,
                         timeString,
-                        pluralStringResource(R.plurals.history_word_count, wordCount, wordCount)
+                        pluralStringResource(R.plurals.history_word_count, words, words)
                     ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -289,11 +284,9 @@ fun TranscriptDetailDialog(
 ) {
     val haptic = LocalHapticFeedback.current
     val timePattern = stringResource(R.string.history_time_format)
-    val timeFormat = remember(timePattern) { SimpleDateFormat(timePattern, Locale.getDefault()) }
+    val timeFormat = rememberDateFormat(timePattern)
     val timeString = remember(transcript.timestamp) { timeFormat.format(Date(transcript.timestamp)) }
-    val wordCount = remember(transcript.fullText) {
-        transcript.fullText.split(Regex("\\s+")).count { it.isNotBlank() }
-    }
+    val words = remember(transcript.fullText) { wordCount(transcript.fullText) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -350,7 +343,7 @@ fun TranscriptDetailDialog(
                     text = stringResource(
                         R.string.history_meta,
                         timeString,
-                        pluralStringResource(R.plurals.history_word_count, wordCount, wordCount)
+                        pluralStringResource(R.plurals.history_word_count, words, words)
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

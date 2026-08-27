@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranscript } from "@/hooks/useTranscript";
-import { useSettings } from "@/hooks/useSettings";
+import { useDialect } from "@/hooks/useSettings";
 import { useI18n } from "@/hooks/useI18n";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -29,10 +29,22 @@ export default function TranscriptPage() {
     dismissWordDetailError,
   } = useTranscript();
 
-  const { selectedDialect } = useSettings();
+  // One scalar, not the whole settings hook: this page reads nothing else, and
+  // useSettings would drag the full vocabulary and transcript tables into every
+  // re-render of a screen that is live while the microphone is open.
+  const selectedDialect = useDialect();
 
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const snackbarTimer = useRef<number | null>(null);
+
+  // The timer outlives the component that set it; a state-set after unmount is
+  // a no-op in React 19, but the timeout itself would still fire.
+  useEffect(
+    () => () => {
+      if (snackbarTimer.current !== null) window.clearTimeout(snackbarTimer.current);
+    },
+    []
+  );
 
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   useEffect(() => {
@@ -290,7 +302,7 @@ export default function TranscriptPage() {
             <GlassButton type="button" onClick={onSave} className="mt-8 w-full h-14">
               <span className="flex items-center justify-center gap-2">
                 <BookmarkAddIcon className="size-5" />
-                <span className="text-label-large font-bold">Save to Library</span>
+                <span className="text-label-large font-bold">{t("transcript.save")}</span>
               </span>
             </GlassButton>
           </aside>
