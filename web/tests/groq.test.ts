@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   contentOf,
   detailFrom,
@@ -117,5 +117,46 @@ describe("translateAndExtract — the no-key path", () => {
     if (result.kind === "failure") {
       expect(result.message).toContain("Groq");
     }
+  });
+});
+
+describe("translateAndExtract — the provider's error precedence", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const respond = (status: number, body: string) =>
+    vi.stubGlobal("fetch", async () => new Response(body, { status }));
+
+  it("a 401 reports the rejected key when the body carries no detail", async () => {
+    respond(401, '{"error":{}}');
+    const result = await translateAndExtract("Hallo", "gsk_key");
+    expect(result.kind).toBe("failure");
+    if (result.kind === "failure") expect(result.message).toContain("rejected");
+  });
+
+  it("a 429 reports rate limiting", async () => {
+    respond(429, '{"error":{}}');
+    const result = await translateAndExtract("Hallo", "gsk_key");
+    expect(result.kind).toBe("failure");
+    if (result.kind === "failure") expect(result.message).toContain("minute");
+  });
+
+  it("the body's own detail wins over the canned status text", async () => {
+    respond(401, '{"error":{"message":"quota exceeded for the day"}}');
+    const result = await translateAndExtract("Hallo", "gsk_key");
+    expect(result.kind).toBe("failure");
+    if (result.kind === "failure") expect(result.message).toContain("quota exceeded");
+  });
+
+  it("an unknown status reports the status code", async () => {
+    respond(503, "{}");
+    const result = await translateAndExtract("Hallo", "gsk_key");
+    expect(result.kind).toBe("failure");
+    if (result.kind === "failure") expect(result.message).toContain("503");
+  });
+
+  it("wraps all of it in the localized 'translation failed' frame", async () => {
+    respond(401, '{"error":{}}');
+    const result = await translateAndExtract("Hallo", "gsk_key");
+    if (result.kind === "failure") expect(result.message).toMatch(/failed|fehlgeschlagen/i);
   });
 });
