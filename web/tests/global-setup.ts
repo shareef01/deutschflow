@@ -12,7 +12,7 @@ import { createSessionToken, SESSION_COOKIE } from "../src/lib/auth/session";
  * login screen is worse than a red one.
  *
  * The cookie is minted with the app's own signer rather than stubbed, so the
- * middleware verifies a real signature and the gate is part of what is tested.
+ * proxy verifies a real signature and the gate is part of what is tested.
  */
 
 export const TEST_PASSWORD = "smoke-suite-key";

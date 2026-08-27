@@ -168,15 +168,15 @@ Transactional behaviors ported verbatim into `repository.ts`:
 
 ## 9. Maintenance notes
 
-**`npm audit` high advisories in sharp (<0.35.0, CVE-2026-33327 et al.) are tolerated
-deliberately.** Next 15 ships libvips 0.34.x through its optional `@img/sharp-*`
-binaries; the only non-forced fix is npm's own, which "will install next@16" — a
-framework major this app has not been upgraded to. What makes tolerance sound:
-nothing in this repository ever invokes sharp. There is no `next/image`, no OG image
-route, no satori; `_next/image` appears only as an exclusion in the middleware matcher.
-The vulnerable code is never imported at runtime, on Vercel or under `next start`,
-so the advisory describes bytes that merely sit in a node_modules nobody executes —
-the same condition as any unshipped binary. Revisit when either side moves: an
-upgrade to Next 16, or any use of next/image or ImageResponse, whichever arrives
-first.
+**The `npm audit` high advisories in sharp (<0.35.0, CVE-2026-33327 et al.) were
+resolved by upgrading to Next 16** (16.3.3), whose sharp no longer carries them;
+`npm audit` reports 0 vulnerabilities. The advisories were previously tolerated
+on the reasoning below - nothing invoked sharp, so vulnerable bytes were installed
+but never executed. That tolerance was sound but temporary by design; the recorded
+revisit triggers (a Next major, or any use of next/image / ImageResponse) have been
+consumed by this upgrade rather than left open. What the move actually required:
+`middleware.ts` became `proxy.ts` with a nodejs-only runtime (the gate's Web Crypto
+signing carried over unchanged), Turbopack took over as the default bundler, and
+the whole suite - typecheck, unit tests, build, and the browser smoke run including
+offline boot - was executed green before shipping.
 

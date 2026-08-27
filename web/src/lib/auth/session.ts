@@ -11,8 +11,8 @@
  * knowing the password, which is the thing the gate exists to check, and the
  * expiry is inside the signature so it cannot be extended by editing the cookie.
  *
- * Web Crypto only — this runs in Edge middleware as well as in the server
- * action, and node:crypto is not available there.
+ * Web Crypto only — this runs inside the server action and the network proxy,
+ * and keeps the two on one implementation rather than diverging per runtime.
  */
 
 export const SESSION_COOKIE = "df_access";
