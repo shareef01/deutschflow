@@ -24,9 +24,13 @@ class WidgetUpdater @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
+    // Glance tolerates a fresh instance per redraw, but this class is a @Singleton,
+    // so holding one costs nothing and says the widget is a thing, not a value.
+    private val widget = WordWidget()
+
     suspend fun refresh() {
         try {
-            WordWidget().updateAll(context)
+            widget.updateAll(context)
         } catch (e: CancellationException) {
             // Not a widget failure. The callers are viewModelScope launches, so this
             // is the screen going away mid-redraw; swallowing it would log a warning

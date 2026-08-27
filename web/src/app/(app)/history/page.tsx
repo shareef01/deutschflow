@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useHistory } from "@/hooks/useHistory";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -26,6 +26,13 @@ export default function HistoryPage() {
     null
   );
   const snackbarTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (snackbarTimer.current !== null) window.clearTimeout(snackbarTimer.current);
+    },
+    []
+  );
 
   const showSnackbar = (message: string, undo?: () => void) => {
     setSnackbar({ message, undo });

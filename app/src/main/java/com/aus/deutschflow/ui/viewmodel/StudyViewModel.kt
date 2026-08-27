@@ -187,6 +187,12 @@ class StudyViewModel @Inject constructor(
     companion object {
         const val XP_PER_CARD = 10
 
+        /**
+         * The daily goal ring's target, written once: the Dashboard drew its own
+         * literal 50 with nothing tying it to what a reviewed card pays out.
+         */
+        const val DAILY_XP_GOAL = XP_PER_CARD * 5
+
         internal fun nextStreak(currentStreak: Int, lastActivity: Long, now: Long): Int {
             if (lastActivity <= 0L || currentStreak <= 0) return 1
             return when (daysBetween(lastActivity, now)) {

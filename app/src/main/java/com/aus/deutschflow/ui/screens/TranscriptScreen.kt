@@ -1,9 +1,6 @@
 package com.aus.deutschflow.ui.screens
 
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -153,9 +150,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
             onWordClick = { word -> viewModel.interrogateWord(word) },
             onSpeakTranscript = { text -> viewModel.speak(text) },
             onCopyTranscript = { text ->
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("German Transcript", text)
-                clipboard.setPrimaryClip(clip)
+                copyToClipboard(context, text)
                 scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
             },
             onSave = {
@@ -615,9 +610,7 @@ private fun TranscriptDisplayCard(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    val wordCount = remember(text) {
-        if (text.isBlank()) 0 else text.trim().split(Regex("\\s+")).count { it.isNotBlank() }
-    }
+    val words = remember(text) { wordCount(text) }
 
     GlassmorphicCard(
         modifier = modifier,
@@ -666,7 +659,7 @@ private fun TranscriptDisplayCard(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = pluralStringResource(R.plurals.history_word_count, wordCount, wordCount),
+                        text = pluralStringResource(R.plurals.history_word_count, words, words),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp)

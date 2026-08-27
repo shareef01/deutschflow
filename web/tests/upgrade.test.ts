@@ -28,7 +28,8 @@ async function openLegacyV1(name: string): Promise<void> {
     settings: "key",
   });
   await db.open();
-  await db.vocabulary.bulkAdd([
+  // Untyped table access: the legacy database predates the shapes it will grow into.
+  await db.table("vocabulary").bulkAdd([
     {
       germanText: "Hund",
       germanTextKey: "hund",
@@ -50,8 +51,8 @@ async function openLegacyV1(name: string): Promise<void> {
       conjugation: "",
     },
   ]);
-  await db.transcripts.bulkAdd([{ fullText: "Ich habe einen Hund.", timestamp: 3 }]);
-  await db.userStats.add({ id: 1, xp: 40, streak: 2, lastActivityTimestamp: 3 });
+  await db.table("transcripts").bulkAdd([{ fullText: "Ich habe einen Hund.", timestamp: 3 }]);
+  await db.table("userStats").add({ id: 1, xp: 40, streak: 2, lastActivityTimestamp: 3 });
   db.close();
 }
 
@@ -160,7 +161,7 @@ describe("upgrade 2 → 4 — an SRS-era library gains the sync fields", () => {
       settings: "key",
     });
     await legacy.open();
-    await legacy.vocabulary.add({
+    await legacy.table("vocabulary").add({
       germanText: "Hund",
       germanTextKey: "hund",
       englishTranslation: "dog",

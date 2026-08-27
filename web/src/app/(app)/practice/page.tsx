@@ -34,7 +34,7 @@ export default function PracticePage() {
                         : "text-on-surface-variant hover:text-on-surface"
                     }`}
                 >
-                    {tab === "repetition" ? "Repetition" : "Roleplay"}
+                    {tab === "repetition" ? t("practice.tab") : t("roleplay.tab")}
                 </button>
             ))}
         </div>
@@ -171,13 +171,15 @@ function RepetitionMode() {
         >
           <span className="flex items-center justify-center gap-2">
             {isListening ? <StopIcon className="size-5" /> : <MicIcon className="size-5" />}
-            <span className="text-sm font-bold">{isListening ? "Evaluate" : "Speak"}</span>
+            <span className="text-sm font-bold">
+              {isListening ? t("practice.evaluate") : t("practice.speak")}
+            </span>
           </span>
         </GlassButton>
         <GlassButton type="button" onClick={nextSentence} className="w-full xs:flex-1 h-14">
           <span className="flex items-center justify-center gap-2">
             <NavigateNextIcon className="size-5" />
-            <span className="text-sm font-bold">Next</span>
+            <span className="text-sm font-bold">{t("practice.next")}</span>
           </span>
         </GlassButton>
       </div>
@@ -188,6 +190,7 @@ function RepetitionMode() {
 type Roleplay = ReturnType<typeof useRoleplay>;
 
 function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
+    const { t } = useI18n();
     const {
         messages, isProcessing, isListening, partialText,
         startSession, startListening, stopAndSend, speak
@@ -227,7 +230,7 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                 ))}
                 {isProcessing && (
                     <div className="flex justify-start">
-                        <div className="glass-surface p-4 opacity-50 animate-pulse">AI is thinking...</div>
+                        <div className="glass-surface p-4 opacity-50 animate-pulse">{t("roleplay.thinking")}</div>
                     </div>
                 )}
             </div>
@@ -254,7 +257,7 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                     </button>
                 </div>
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/50">
-                    {isListening ? 'Stop & Send' : 'Speak to Reply'}
+                    {isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
                 </span>
             </div>
         </div>

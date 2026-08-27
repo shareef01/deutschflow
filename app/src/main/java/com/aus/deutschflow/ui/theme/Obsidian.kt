@@ -38,14 +38,6 @@ import androidx.compose.ui.unit.dp
 val GlassShape = RoundedCornerShape(16.dp)
 
 /**
- * The single edge treatment every surface and input shares.
- *
- * A solid hairline in the accent colour at low alpha. Solid rather than gradient:
- * a gradient edge draws the eye to the lit corner; a hairline just separates the
- * card from the ground. [alpha] lets focused inputs and recording controls turn
- * the edge up without a second treatment.
- */
-/**
  * The cyan edge on a glass surface.
  *
  * At 0.16 this composited to 1.38:1 against the card it outlined - the same

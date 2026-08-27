@@ -55,10 +55,6 @@ class TranscriptViewModel @Inject constructor(
     val rmsLevel: StateFlow<Float> = speechRecognizerHelper.rmsLevel
 
     /**
-     * The recognition dialect, so the screen can say which German it is listening
-     * for ("German · de-AT") rather than a bare "German".
-     */
-    /**
      * True until the first transcript exists.
      *
      * Derived from the data the app already keeps rather than a new persisted flag:

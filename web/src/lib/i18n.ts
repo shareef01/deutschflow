@@ -127,6 +127,7 @@ export const STRINGS = {
     "cloud.syncUnavailable": "Cloud sync isn’t available yet. Your library is saved in this browser.",
 
     // Practice
+    "practice.tab": "Repetition",
     "practice.intro": "Listen and repeat the sentence accurately to master your pronunciation.",
     "practice.listenRepeat": "Listen and repeat",
     "practice.listen": "Listen",
@@ -139,6 +140,12 @@ export const STRINGS = {
     "practice.feedbackPerfect": "Excellent! Perfect pronunciation.",
     "practice.feedbackGood": "Good! You got most of it.",
     "practice.feedbackKeepGoing": "Keep practicing! Try to match the highlighted words.",
+
+    // Roleplay
+    "roleplay.tab": "Roleplay",
+    "roleplay.thinking": "AI is thinking...",
+    "roleplay.stopSend": "Stop & Send",
+    "roleplay.speakReply": "Speak to Reply",
 
     // Settings
     "settings.aiHeader": "AI & Translation",
@@ -323,6 +330,8 @@ export const STRINGS = {
     "cloud.password": "Passwort",
     "cloud.syncUnavailable": "Cloud-Synchronisierung ist noch nicht verfügbar. Deine Bibliothek ist in diesem Browser gespeichert.",
 
+    // Practice
+    "practice.tab": "Wiederholung",
     "practice.intro":
       "Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.",
     "practice.listenRepeat": "Hören und nachsprechen",
@@ -337,6 +346,12 @@ export const STRINGS = {
     "practice.feedbackGood": "Gut! Das meiste war richtig.",
     "practice.feedbackKeepGoing":
       "Weiter üben! Versuche, die markierten Wörter zu treffen.",
+
+    // Roleplay
+    "roleplay.tab": "Rollenspiel",
+    "roleplay.thinking": "Denkt nach...",
+    "roleplay.stopSend": "Stopp & senden",
+    "roleplay.speakReply": "Tippen, um zu antworten",
 
     "settings.aiHeader": "KI & Übersetzung",
     "settings.apiKeyLabel": "Groq-API-Schlüssel",

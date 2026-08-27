@@ -2,7 +2,7 @@
 
 import { useDashboard, type MasteryStats } from "@/hooks/useDashboard";
 import { useI18n } from "@/hooks/useI18n";
-import { todayKey } from "@/lib/db/repository";
+import { DAILY_XP_GOAL, todayKey } from "@/lib/db/repository";
 import type { ActivityEntry } from "@/lib/db/schema";
 import { useMemo } from "react";
 
@@ -28,7 +28,7 @@ export function DashboardContent() {
 }
 
 function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Translate }) {
-  const goal = 50;
+  const goal = DAILY_XP_GOAL;
   const progress = Math.min(xp / goal, 1);
   const radius = 40;
   const circumference = 2 * Math.PI * radius;

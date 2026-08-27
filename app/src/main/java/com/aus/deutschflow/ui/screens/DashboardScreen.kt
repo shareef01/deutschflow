@@ -36,6 +36,7 @@ import com.aus.deutschflow.ui.components.GlassmorphicCard
 import com.aus.deutschflow.ui.components.PrimaryActionButton
 import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.DashboardViewModel
+import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 import java.time.LocalDate
 
 @Composable
@@ -72,7 +73,9 @@ fun DailyGoalCard(
     streak: Int,
     onStartReview: () -> Unit
 ) {
-    val goal = 50f
+    // The goal the ring is drawn against, from the one place that knows what a
+    // reviewed card pays - not a bare literal that could drift from it.
+    val goal = StudyViewModel.DAILY_XP_GOAL.toFloat()
     val progress = (xp.toFloat() / goal).coerceIn(0f, 1f)
     val primaryColor = MaterialTheme.colorScheme.primary
 

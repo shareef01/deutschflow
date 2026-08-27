@@ -58,12 +58,20 @@ class KeystoreCipher @Inject constructor() {
      */
     fun decrypt(stored: String): String? = try {
         val bytes = Base64.decode(stored, Base64.NO_WRAP)
-        val iv = bytes.copyOfRange(0, IV_LENGTH)
-        val body = bytes.copyOfRange(IV_LENGTH, bytes.size)
+        if (bytes.size <= IV_LENGTH) {
+            // Too short to carry even the IV: a truncated or tampered value. The
+            // outcome for the user is the same as a lost Keystore entry - the key
+            // must be entered again - but the log now says which failure this was.
+            Log.w(TAG, "Stored key is truncated (${bytes.size} bytes); it will have to be entered again")
+            null
+        } else {
+            val iv = bytes.copyOfRange(0, IV_LENGTH)
+            val body = bytes.copyOfRange(IV_LENGTH, bytes.size)
 
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(TAG_LENGTH_BITS, iv))
-        String(cipher.doFinal(body), Charsets.UTF_8)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(TAG_LENGTH_BITS, iv))
+            String(cipher.doFinal(body), Charsets.UTF_8)
+        }
     } catch (e: Exception) {
         Log.w(TAG, "Could not read the stored key; it will have to be entered again", e)
         null
