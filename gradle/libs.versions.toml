@@ -3,7 +3,7 @@
 # to move alone: Hilt 2.60 will not apply below AGP 9, Room 2.8's compiler needs a
 # kotlinx-serialization newer than the Kotlin 2.1 KSP classpath carried, and KSP has
 # switched to KSP2 versioning, which is no longer tied to the Kotlin version.
-agp = "9.3.1"
+agp = "9.3.2"
 kotlin = "2.4.10"
 # KSP2. The old "<kotlin>-<ksp>" scheme is gone, and so is ksp.useKSP2=false in
 # gradle.properties, which pinned the build to a KSP1 that no longer ships.
