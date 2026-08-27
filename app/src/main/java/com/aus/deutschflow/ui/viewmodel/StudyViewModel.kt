@@ -51,6 +51,15 @@ class StudyViewModel @Inject constructor(
     private val _sessionReviewedCount = MutableStateFlow(0)
     val sessionReviewedCount: StateFlow<Int> = _sessionReviewedCount
 
+    /**
+     * True while a review is being persisted. The feedback buttons stay rendered
+     * but inert for that window: without it, two rapid taps both capture the same
+     * card and list — two SRS updates on one card, double XP, and the second
+     * splice overwriting the first from a stale snapshot.
+     */
+    private val _isSubmitting = MutableStateFlow(false)
+    val isSubmitting: StateFlow<Boolean> = _isSubmitting
+
     val allWordsCount: StateFlow<Int> = vocabularyDao.getAllVocabulary()
         .map { it.size }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -86,38 +95,47 @@ class StudyViewModel @Inject constructor(
     }
 
     fun submitReview(quality: ReviewQuality) {
+        // Set before the launch, not inside it: two taps in the same frame both
+        // read the old value and both got through — the same re-entry discipline
+        // RoleplayViewModel.sendInput applies.
+        if (_isSubmitting.value) return
         val currentList = _studyList.value
         val index = _currentIndex.value
         val card = currentList.getOrNull(index) ?: return
+        _isSubmitting.value = true
 
         viewModelScope.launch {
-            val updatedCard = srsEngine.calculateNextReview(card, quality)
-            vocabularyDao.updateVocabulary(updatedCard)
+            try {
+                val updatedCard = srsEngine.calculateNextReview(card, quality)
+                vocabularyDao.updateVocabulary(updatedCard)
 
-            if (quality.value >= ReviewQuality.GOOD.value) {
-                rewardCurrentCard(XP_PER_CARD)
-            }
-            _sessionReviewedCount.value++
-
-            val newList = currentList.toMutableList().apply {
-
-                if (quality == ReviewQuality.AGAIN) {
-                    removeAt(index)
-                    add(updatedCard)
-                } else {
-                    removeAt(index)
+                if (quality.value >= ReviewQuality.GOOD.value) {
+                    rewardCurrentCard(XP_PER_CARD)
                 }
+                _sessionReviewedCount.value++
+
+                val newList = currentList.toMutableList().apply {
+
+                    if (quality == ReviewQuality.AGAIN) {
+                        removeAt(index)
+                        add(updatedCard)
+                    } else {
+                        removeAt(index)
+                    }
+                }
+
+                _studyList.value = newList
+
+                if (newList.isEmpty()) {
+                    _currentIndex.value = 0
+                } else if (index >= newList.size) {
+                    _currentIndex.value = 0
+                }
+
+                _isFlipped.value = false
+            } finally {
+                _isSubmitting.value = false
             }
-            
-            _studyList.value = newList
-            
-            if (newList.isEmpty()) {
-                _currentIndex.value = 0
-            } else if (index >= newList.size) {
-                _currentIndex.value = 0
-            }
-            
-            _isFlipped.value = false
         }
     }
 

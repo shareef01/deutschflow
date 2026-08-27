@@ -1,7 +1,9 @@
 "use client";
 
-import { useDashboard } from "@/hooks/useDashboard";
+import { useDashboard, type MasteryStats } from "@/hooks/useDashboard";
 import { useI18n } from "@/hooks/useI18n";
+import { todayKey } from "@/lib/db/repository";
+import type { ActivityEntry } from "@/lib/db/schema";
 import { useMemo } from "react";
 
 /** The bound translator. Typed, so an unknown key is a compile error. */
@@ -90,7 +92,7 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
   );
 }
 
-function MasteryBreakdownCard({ stats, t }: { stats: any; t: Translate }) {
+function MasteryBreakdownCard({ stats, t }: { stats: MasteryStats; t: Translate }) {
   return (
     <div className="glass-surface p-8 space-y-6">
       <h3 className="text-sm font-black text-primary tracking-[0.2em] uppercase">
@@ -114,11 +116,11 @@ function RetentionTile({ label, count, color }: { label: string; count: number; 
   );
 }
 
-function ActivityHeatmapCard({ logs, t }: { logs: any[]; t: Translate }) {
+function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate }) {
   const weeksToShow = 12;
   const daysToShow = weeksToShow * 7;
   const activityMap = useMemo(() => {
-      const map = new Map();
+      const map = new Map<string, number>();
       logs.forEach(log => map.set(log.date, log.xpGained));
       return map;
   }, [logs]);
@@ -129,7 +131,10 @@ function ActivityHeatmapCard({ logs, t }: { logs: any[]; t: Translate }) {
       for (let i = 0; i < daysToShow; i++) {
           const d = new Date(today);
           d.setDate(today.getDate() - (daysToShow - 1 - i));
-          const dateStr = d.toISOString().split('T')[0];
+          // todayKey, not toISOString: the map is keyed by local calendar dates —
+          // the same key addActivityXp writes. A UTC key rolled evening XP onto
+          // the wrong cell for every user outside UTC.
+          const dateStr = todayKey(d);
           const xp = activityMap.get(dateStr) || 0;
           result.push({ date: dateStr, xp });
       }

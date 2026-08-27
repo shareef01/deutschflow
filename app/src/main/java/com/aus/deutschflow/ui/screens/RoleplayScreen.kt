@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.GlassmorphicCard
+import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.ChatMessage
 import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
@@ -45,9 +46,15 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     val isProcessing by viewModel.isProcessing.collectAsState()
     val partialText by viewModel.partialText.collectAsState()
     val error by viewModel.error.collectAsState()
+    val recognitionError by viewModel.errorState.collectAsState()
     val haptic = LocalHapticFeedback.current
 
     val listState = rememberLazyListState()
+
+    // The ViewModel is scoped to the saved back stack entry, so tab switches and
+    // backgrounding would otherwise leave the recogniser holding the microphone
+    // behind whatever screen the user moved on to.
+    OnLeavingScreen { viewModel.cancelListening() }
 
     // Auto-scroll to bottom when messages update
     LaunchedEffect(messages.size) {
@@ -59,7 +66,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     // Start session if empty
     LaunchedEffect(Unit) {
         if (messages.isEmpty()) {
-            viewModel.startSession("Ordering at a Berlin Bakery")
+            viewModel.startSession(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
         }
     }
 
@@ -96,7 +103,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.startSession("Ordering at a Berlin Bakery")
+                        viewModel.startSession(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
                     },
                     modifier = Modifier.size(36.dp)
                 ) {
@@ -159,6 +166,25 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                         TextButton(onClick = { viewModel.retry() }) {
                             Text(stringResource(R.string.roleplay_retry))
                         }
+                    }
+                }
+            }
+
+            // Recognition-side failures (no speech heard, engine error) never reach
+            // the AI error above, and the turn they ate never appears in the chat.
+            // Show them so a failed turn is an explained dead end, not a silent one;
+            // retrying is just tapping the microphone again.
+            recognitionError?.let { message ->
+                item {
+                    GlassmorphicCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(Spacing.md)
+                    ) {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }

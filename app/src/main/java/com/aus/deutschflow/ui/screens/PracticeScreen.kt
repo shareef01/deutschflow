@@ -40,6 +40,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.GlassmorphicCard
+import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.components.PrimaryActionButton
 import com.aus.deutschflow.ui.components.SecondaryActionButton
 import com.aus.deutschflow.ui.components.SegmentedTabs
@@ -91,6 +92,13 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
 
+    // This screen's banner combines the recogniser's and the voice engine's
+    // errors, so a stale TTS failure from another screen would greet the user
+    // here. Same entry discipline as Study and Vocabulary.
+    LaunchedEffect(Unit) {
+        viewModel.dismissTtsError()
+    }
+
     val hasResult = feedback != PracticeFeedback.NONE
     val isPositive = feedback == PracticeFeedback.PERFECT || feedback == PracticeFeedback.GOOD
     val feedbackText = when (feedback) {
@@ -105,8 +113,15 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
     ) { isGranted ->
         if (isGranted) {
             viewModel.startPractice()
+        } else {
+            viewModel.onPermissionDenied()
         }
     }
+
+    // The ViewModel is scoped to the saved back stack entry, so tab switches and
+    // backgrounding would otherwise leave the recogniser holding the microphone
+    // behind whatever screen the user moved on to.
+    OnLeavingScreen { viewModel.cancelListening() }
 
     Column(
         modifier = Modifier

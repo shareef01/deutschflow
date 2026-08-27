@@ -33,8 +33,9 @@ export function calculateNextReview(
       );
     }
 
-    const q =
-      quality === ReviewQuality.EASY ? 5 : quality === ReviewQuality.GOOD ? 4 : 3;
+    // quality >= GOOD here, so the SM-2 answer scale stops at 4; the unreachable
+    // `: 3` arm this ternary used to carry was a drift hazard against SRSEngine.kt.
+    const q = quality === ReviewQuality.EASY ? 5 : 4;
 
     nextEaseFactor += 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02);
     nextReviewCount++;

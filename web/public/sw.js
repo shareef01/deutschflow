@@ -59,6 +59,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
+          // A redirect here is the auth gate bouncing an expired session to
+          // /login — `fetch` follows it, so caching the response would store
+          // the login page under the app route that was requested, and an
+          // offline launch would serve the login screen at that route with
+          // nothing on screen saying why. Only final, non-redirected app
+          // responses enter the cache.
+          if (response.redirected || new URL(response.url).pathname === "/login") {
+            return response;
+          }
           const copy = response.clone();
           void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;

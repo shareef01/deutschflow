@@ -86,11 +86,14 @@ fun DailyGoalCard(
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
                 val progressPercent = (progress * 100).toInt()
+                val goalDescription = stringResource(
+                    R.string.dashboard_goal_progress_a11y, xp, goal.toInt(), progressPercent
+                )
                 Canvas(
                     modifier = Modifier
                         .size(100.dp)
                         .semantics {
-                            contentDescription = "$xp of ${goal.toInt()} XP, $progressPercent percent"
+                            contentDescription = goalDescription
                         }
                 ) {
                     drawArc(
@@ -260,12 +263,15 @@ fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.Activ
         Spacer(modifier = Modifier.height(Spacing.md))
 
         val activeDays = remember(activityMap) { activityMap.count { it.value > 0 } }
+        val heatmapDescription = stringResource(
+            R.string.dashboard_heatmap_a11y, activeDays, daysToShow
+        )
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(110.dp)
                 .semantics {
-                    contentDescription = "Activity heatmap, $activeDays active days in the last $daysToShow days"
+                    contentDescription = heatmapDescription
                 }
         ) {
             val cellSize = 11.dp.toPx()

@@ -9,7 +9,6 @@
 
     <!-- Navigation -->
     <string name="nav_transcript">Transkript</string>
-    <string name="nav_history">Verlauf</string>
     <string name="nav_library">Bibliothek</string>
     <string name="nav_study">Lernen</string>
     <string name="nav_practice">Üben</string>
@@ -141,6 +140,8 @@
     <string name="dashboard_xp">XP</string>
     <string name="dashboard_tab">Übersicht</string>
     <string name="dashboard_flashcards_tab">Karteikarten</string>
+    <string name="dashboard_goal_progress_a11y">%1$d von %2$d XP, %3$d Prozent</string>
+    <string name="dashboard_heatmap_a11y">Aktivitäts-Heatmap, %1$d aktive Tage in den letzten %2$d Tagen</string>
 
     <!-- Roleplay -->
     <string name="roleplay_tab">Rollenspiel</string>
@@ -201,6 +202,16 @@
     <string name="settings_api_key_not_set">Nicht eingerichtet</string>
     <string name="settings_api_key_placeholder">Füge hier deinen API-Schlüssel ein</string>
     <string name="settings_api_key_placeholder_saved">Schlüssel gespeichert (zum Ersetzen neu eingeben)</string>
+    <string name="settings_api_key_show">API-Schlüssel anzeigen</string>
+    <string name="settings_api_key_hide">API-Schlüssel verbergen</string>
+    <string name="settings_stat_vocabulary">Wörter</string>
+    <string name="settings_stat_sessions">Sitzungen</string>
+    <string name="settings_stat_xp">XP-Punkte</string>
+    <string name="settings_stat_streak">Serie</string>
+    <plurals name="settings_stat_streak_days">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
     <string name="settings_autoplay">Deutsche Aussprache automatisch abspielen</string>
     <string name="settings_autoplay_desc">Spricht Wörter und Rollenspiel-Antworten automatisch aus</string>
     <string name="settings_dialect_header">Erkannte Sprache</string>

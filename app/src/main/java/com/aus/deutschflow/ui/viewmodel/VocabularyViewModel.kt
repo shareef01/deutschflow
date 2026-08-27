@@ -32,15 +32,23 @@ class VocabularyViewModel @Inject constructor(
     /** Raised when a word could not be spoken, so the screen can say why. */
     val ttsError: StateFlow<String?> = ttsHelper.error
 
-    /** The whole library, unfiltered — the stats strip counts this, not the
-     * search result, so the headline numbers do not change while typing. */
-    val allVocabulary: StateFlow<List<VocabularyEntity>> = vocabularyDao.getAllVocabulary()
+    /**
+     * The whole library, unfiltered — the stats strip counts this, not the
+     * search result, so the headline numbers do not change while typing.
+     *
+     * One upstream StateFlow, held once: two separate collectors over
+     * `vocabularyDao.getAllVocabulary()` each opened their own Room observer
+     * and doubled every emission the screen received.
+     */
+    private val library: StateFlow<List<VocabularyEntity>> = vocabularyDao.getAllVocabulary()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allVocabulary: StateFlow<List<VocabularyEntity>> = library
 
     val vocabularyList: StateFlow<List<VocabularyEntity>> =
         combine(
             _searchQuery,
-            vocabularyDao.getAllVocabulary(),
+            library,
             _sortMode
         ) { query, list, sort ->
             val filtered = if (query.isBlank()) {

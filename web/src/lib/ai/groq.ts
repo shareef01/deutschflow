@@ -216,7 +216,7 @@ function parseRoleplayResponse(text: string): RoleplayResult {
 
     return aiResponse
         ? { kind: "success", aiResponse, englishContext }
-        : { kind: "failure", message: "AI returned an empty response" };
+        : { kind: "failure", message: t("ai.failed", [t(AI_MESSAGES.noResponse)]) };
 }
 
 export function contentOf(json: string): string {

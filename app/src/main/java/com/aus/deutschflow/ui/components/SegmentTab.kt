@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -104,19 +103,5 @@ fun SegmentedTabs(
             }
         }
     }
-}
-
-/**
- * One tab in a standard TabRow.
- */
-@Composable
-fun SegmentTab(selected: Boolean, label: String, onClick: () -> Unit) {
-    Tab(
-        selected = selected,
-        onClick = onClick,
-        selectedContentColor = MaterialTheme.colorScheme.primary,
-        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        text = { Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
-    )
 }
 
