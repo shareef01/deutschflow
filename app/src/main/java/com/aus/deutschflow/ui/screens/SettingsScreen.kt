@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
     val isCloudConnected by viewModel.isCloudConnected.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val message by viewModel.message.collectAsState()
 
     var apiKeyInput by remember(hasApiKey) { mutableStateOf("") }
     var isApiKeyVisible by remember { mutableStateOf(false) }
@@ -68,6 +70,38 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
+        // Outcomes from save/wipe/sync arrive as resource ids on the ViewModel. They
+        // used to be reported to nobody: a Keystore that refused to encrypt said
+        // "not saved" to an empty screen, and a wiped library confirmed nothing. A
+        // dismissible banner rather than a snackbar, so a failure stays until read.
+        val currentMessage = message
+        if (currentMessage != null) {
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(currentMessage),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { viewModel.dismissMessage() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.action_close),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // Section 1: Cloud Sync & Account
         SettingsSectionHeader(stringResource(R.string.settings_section_account))
         GlassmorphicCard(
@@ -237,7 +271,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         IconButton(onClick = { isApiKeyVisible = !isApiKeyVisible }) {
                             Icon(
                                 imageVector = if (isApiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (isApiKeyVisible) "Hide API Key" else "Show API Key"
+                                contentDescription = stringResource(
+                                    if (isApiKeyVisible) R.string.settings_api_key_hide
+                                    else R.string.settings_api_key_show
+                                )
                             )
                         }
                         if (apiKeyInput.isNotBlank()) {
@@ -354,16 +391,21 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                StatGridItem(Modifier.weight(1f), "VOCABULARY", totalVocab.toString())
-                StatGridItem(Modifier.weight(1f), "SESSIONS", totalTranscripts.toString())
+                StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_vocabulary), totalVocab.toString())
+                StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_sessions), totalTranscripts.toString())
             }
             Spacer(modifier = Modifier.height(Spacing.sm))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                StatGridItem(Modifier.weight(1f), "XP POINTS", (userStats?.xp ?: 0).toString())
-                StatGridItem(Modifier.weight(1f), "STREAK", "${userStats?.streak ?: 0} days")
+                StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_xp), (userStats?.xp ?: 0).toString())
+                val streak = userStats?.streak ?: 0
+                StatGridItem(
+                    Modifier.weight(1f),
+                    stringResource(R.string.settings_stat_streak),
+                    pluralStringResource(R.plurals.settings_stat_streak_days, streak, streak)
+                )
             }
         }
 

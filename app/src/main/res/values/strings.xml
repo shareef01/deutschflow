@@ -4,7 +4,6 @@
 
     <!-- Navigation -->
     <string name="nav_transcript">Transcript</string>
-    <string name="nav_history">History</string>
     <string name="nav_library">Library</string>
     <string name="nav_study">Study</string>
     <string name="nav_practice">Practice</string>
@@ -135,6 +134,8 @@
     <string name="dashboard_xp">XP</string>
     <string name="dashboard_tab">Dashboard</string>
     <string name="dashboard_flashcards_tab">Flashcards</string>
+    <string name="dashboard_goal_progress_a11y">%1$d of %2$d XP, %3$d percent</string>
+    <string name="dashboard_heatmap_a11y">Activity heatmap, %1$d active days in the last %2$d days</string>
 
     <!-- Roleplay -->
     <string name="roleplay_tab">Roleplay</string>
@@ -196,6 +197,16 @@
     <string name="settings_api_key_not_set">Not Configured</string>
     <string name="settings_api_key_placeholder">Paste your API key here</string>
     <string name="settings_api_key_placeholder_saved">Key saved (Enter new to replace)</string>
+    <string name="settings_api_key_show">Show API Key</string>
+    <string name="settings_api_key_hide">Hide API Key</string>
+    <string name="settings_stat_vocabulary">Vocabulary</string>
+    <string name="settings_stat_sessions">Sessions</string>
+    <string name="settings_stat_xp">XP Points</string>
+    <string name="settings_stat_streak">Streak</string>
+    <plurals name="settings_stat_streak_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <string name="settings_autoplay">Auto-play German audio</string>
     <string name="settings_autoplay_desc">Automatically pronounce words and roleplay responses</string>
     <string name="settings_dialect_header">Recognition Dialect</string>

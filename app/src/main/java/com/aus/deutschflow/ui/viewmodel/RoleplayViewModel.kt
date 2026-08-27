@@ -41,7 +41,7 @@ class RoleplayViewModel @Inject constructor(
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
 
-    private var currentScenario = "At a German bakery"
+    private var currentScenario = SCENARIO_BERLIN_BAKERY
 
     fun startSession(scenario: String) {
         currentScenario = scenario
@@ -53,7 +53,16 @@ class RoleplayViewModel @Inject constructor(
 
     fun startListening() {
         _error.value = null
+        // The recogniser's error outlives the turn that caused it, and this screen
+        // renders it, so a stale one would greet the new attempt. The banner should
+        // belong to the action the user just took.
+        speechRecognizerHelper.dismissError()
         speechRecognizerHelper.startListening()
+    }
+
+    /** Called when the screen leaves composition or the app is backgrounded. */
+    fun cancelListening() {
+        speechRecognizerHelper.cancel()
     }
 
     /**
@@ -136,11 +145,18 @@ class RoleplayViewModel @Inject constructor(
         speechRecognizerHelper.destroy()
     }
 
-    private companion object {
+    companion object {
+        /**
+         * Sent to the model as scene-setting, not shown in the UI - the header
+         * renders the localized resource for the same scenario. The screen's two
+         * startSession call sites and this default all share the one constant.
+         */
+        const val SCENARIO_BERLIN_BAKERY = "Ordering at a Berlin Bakery"
+
         /**
          * Long enough for the engine to finish an utterance it already heard, short
          * enough that a failed recognition returns the button rather than keeping it.
          */
-        const val RECOGNITION_TIMEOUT_MS = 5_000L
+        private const val RECOGNITION_TIMEOUT_MS = 5_000L
     }
 }

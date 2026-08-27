@@ -1,7 +1,6 @@
 package com.aus.deutschflow.ui.theme
 
 import android.provider.Settings
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.Composable
@@ -33,12 +32,6 @@ object Motion {
 
     /** Enters and exits. Material's standard curve, named so it stops being retyped. */
     val Standard: Easing = FastOutSlowInEasing
-
-    /**
-     * For something arriving that wants a little weight behind it - the record
-     * button's press release. Decelerates harder than [Standard].
-     */
-    val Emphasized: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 }
 
 /**

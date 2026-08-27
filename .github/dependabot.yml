@@ -1,0 +1,36 @@
+# Dependency automation - the one gap the 2026 audit found in an otherwise
+# pinned, permissioned CI. Weekly cadence, grouped so minor and patch bumps
+# arrive as one reviewable PR per ecosystem instead of a daily trickle.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # The workflow pins actions by SHA; Dependabot tracks the comment beside each
+  # pin, so a bump keeps the human-readable version marker in step.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

@@ -159,8 +159,10 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
                 scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
             },
             onSave = {
-                if (viewModel.saveToVocabulary(finalText, translation)) {
-                    scope.launch { snackbarHostState.showSnackbar(savedMessage) }
+                scope.launch {
+                    if (viewModel.saveToVocabulary(finalText, translation)) {
+                        snackbarHostState.showSnackbar(savedMessage)
+                    }
                 }
             }
         )
@@ -174,10 +176,11 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
             details = wordDetails,
             onDismiss = { viewModel.dismissWordDetails() },
             onSave = { details ->
-                val saved = viewModel.saveWordDetails(details)
                 viewModel.dismissWordDetails()
-                if (saved) {
-                    scope.launch { snackbarHostState.showSnackbar(savedMessage) }
+                scope.launch {
+                    if (viewModel.saveWordDetails(details)) {
+                        snackbarHostState.showSnackbar(savedMessage)
+                    }
                 }
             }
         )

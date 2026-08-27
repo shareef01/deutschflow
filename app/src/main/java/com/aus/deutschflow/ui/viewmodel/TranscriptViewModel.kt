@@ -259,24 +259,25 @@ class TranscriptViewModel @Inject constructor(
     }
 
     /**
-     * @return false when there was nothing to save, so the caller can stay quiet
-     * instead of confirming a write that did not happen. The screen's snackbar is the
-     * only acknowledgement this action gets; announcing a save that was rejected is
-     * the same lie [com.aus.deutschflow.data.local.PreferenceManager.saveApiKey]
-     * returns a Boolean to avoid.
+     * @return true only after the row is committed, so the snackbar that follows
+     * is a report of a completed write, not an intention; false when there was
+     * nothing to save, so the caller can stay quiet instead of confirming a write
+     * that did not happen. This used to launch the insert and return immediately,
+     * letting the screen confirm a save whose commit was still in flight.
+     *
+     * Suspending is what makes the Boolean honest - the same reason
+     * [com.aus.deutschflow.data.local.PreferenceManager.saveApiKey] returns one.
      */
-    fun saveToVocabulary(german: String, english: String): Boolean {
+    suspend fun saveToVocabulary(german: String, english: String): Boolean {
         if (german.isBlank() || english.isBlank()) return false
-        viewModelScope.launch {
-            vocabularyDao.save(
-                VocabularyEntity(
-                    germanText = german,
-                    englishTranslation = english,
-                    exampleSentence = _example.value
-                )
+        vocabularyDao.save(
+            VocabularyEntity(
+                germanText = german,
+                englishTranslation = english,
+                exampleSentence = _example.value
             )
-            widgetUpdater.refresh()
-        }
+        )
+        widgetUpdater.refresh()
         return true
     }
 
@@ -351,27 +352,26 @@ class TranscriptViewModel @Inject constructor(
      *
      * Through [VocabularyDao.save], so interrogating a word the library already holds
      * fills in the grammar it was missing instead of standing a second copy beside it.
+     * Suspends until committed, for the same reason [saveToVocabulary] does.
      */
-    fun saveWordDetails(details: WordDetails): Boolean {
+    suspend fun saveWordDetails(details: WordDetails): Boolean {
         if (details.word.isBlank() || details.meaning.isBlank()) return false
-        viewModelScope.launch {
-            vocabularyDao.save(
-                VocabularyEntity(
-                    germanText = details.word,
-                    englishTranslation = details.meaning,
-                    exampleSentence = details.exampleSentence,
-                    article = details.article,
-                    plural = details.plural,
-                    conjugation = details.conjugationOrInfinitive,
-                    // Comma-joined, the shape LinguisticBox on the detail screen
-                    // renders. Without these two the whole chain — prompt, parser,
-                    // MIGRATION_8_9, the two boxes — ended in a value nothing wrote.
-                    synonyms = details.synonyms.joinToString(", "),
-                    antonyms = details.antonyms.joinToString(", ")
-                )
+        vocabularyDao.save(
+            VocabularyEntity(
+                germanText = details.word,
+                englishTranslation = details.meaning,
+                exampleSentence = details.exampleSentence,
+                article = details.article,
+                plural = details.plural,
+                conjugation = details.conjugationOrInfinitive,
+                // Comma-joined, the shape LinguisticBox on the detail screen
+                // renders. Without these two the whole chain — prompt, parser,
+                // MIGRATION_8_9, the two boxes — ended in a value nothing wrote.
+                synonyms = details.synonyms.joinToString(", "),
+                antonyms = details.antonyms.joinToString(", ")
             )
-            widgetUpdater.refresh()
-        }
+        )
+        widgetUpdater.refresh()
         return true
     }
 

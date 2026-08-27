@@ -14,6 +14,12 @@ export default function PracticePage() {
   const [selectedTab, setSelectedTab] = useState<"repetition" | "roleplay">("repetition");
   const { t } = useI18n();
 
+  // Mounted at page level, not inside RoleplayMode: the hook holds the
+  // conversation, and unmounting it on every tab switch would silently reset the
+  // chat and re-greet the user. Its utterance subscription is gated by `active`,
+  // so exactly one mode listens at a time.
+  const roleplay = useRoleplay({ active: selectedTab === "roleplay" });
+
   return (
     <div className="flex h-full flex-col">
         {/* Tab Selector */}
@@ -34,7 +40,7 @@ export default function PracticePage() {
         </div>
 
         <div className="flex-1 min-h-0">
-            {selectedTab === "repetition" ? <RepetitionMode /> : <RoleplayMode />}
+            {selectedTab === "repetition" ? <RepetitionMode /> : <RoleplayMode roleplay={roleplay} />}
         </div>
     </div>
   );
@@ -179,11 +185,13 @@ function RepetitionMode() {
   );
 }
 
-function RoleplayMode() {
+type Roleplay = ReturnType<typeof useRoleplay>;
+
+function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const {
         messages, isProcessing, isListening, partialText,
         startSession, startListening, stopAndSend, speak
-    } = useRoleplay();
+    } = roleplay;
 
     const scrollRef = useRef<HTMLDivElement>(null);
 

@@ -188,8 +188,11 @@ export function observeUserStats(db: DeutschFlowDB) {
   return db.userStats.where("id").equals(1).first();
 }
 
-/** The heatmap's window, newest first — bounded, like the Room query. */
-export const HEATMAP_DAYS = 92;
+/**
+ * The heatmap's window, newest first — bounded, like the Room query, and exactly
+ * the dashboard's 12 weeks x 7 = 84 cells: 92 left eight queried days undrawable.
+ */
+export const HEATMAP_DAYS = 84;
 
 export async function observeActivityLog(db: DeutschFlowDB) {
     const since = todayKey(new Date(Date.now() - HEATMAP_DAYS * 86_400_000));

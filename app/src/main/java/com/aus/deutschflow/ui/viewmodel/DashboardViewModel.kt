@@ -68,7 +68,12 @@ class DashboardViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private companion object {
-        /** The window the heatmap card advertises as "the past three months". */
-        const val HEATMAP_DAYS = 92L
+        /**
+         * Exactly the heatmap card's grid — 12 weeks x 7 cells = 84. The query
+         * used to fetch 92 days, of which the card could draw 84: eight queried
+         * days were undrawable, and the legend's "twelve weeks" was a lie about
+         * the data underneath it.
+         */
+        const val HEATMAP_DAYS = 84L
     }
 }

@@ -72,6 +72,7 @@ fun StudySessionContent(
     val hasLoaded by viewModel.hasLoaded.collectAsState()
     val allWordsCount by viewModel.allWordsCount.collectAsState()
     val sessionReviewedCount by viewModel.sessionReviewedCount.collectAsState()
+    val isSubmitting by viewModel.isSubmitting.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
     val haptic = LocalHapticFeedback.current
 
@@ -353,6 +354,7 @@ fun StudySessionContent(
                 label = stringResource(R.string.study_again),
                 glow = MaterialTheme.colorScheme.error,
                 modifier = Modifier.weight(1f),
+                enabled = !isSubmitting,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.AGAIN)
@@ -362,6 +364,7 @@ fun StudySessionContent(
                 label = stringResource(R.string.study_hard),
                 glow = WarningAmber,
                 modifier = Modifier.weight(1f),
+                enabled = !isSubmitting,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.HARD)
@@ -371,6 +374,7 @@ fun StudySessionContent(
                 label = stringResource(R.string.study_good),
                 glow = AzureDeep,
                 modifier = Modifier.weight(1f),
+                enabled = !isSubmitting,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.GOOD)
@@ -380,6 +384,7 @@ fun StudySessionContent(
                 label = stringResource(R.string.study_easy),
                 glow = TertiaryGreen,
                 modifier = Modifier.weight(1f),
+                enabled = !isSubmitting,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.EASY)
@@ -410,11 +415,13 @@ private fun StudyFeedbackButton(
     label: String,
     glow: Color,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     GlassButton(
         onClick = onClick,
         modifier = modifier,
+        enabled = enabled,
         glow = glow
     ) {
         Text(

@@ -4,6 +4,7 @@ import { getApiKey, getDialect } from "@/lib/db/settings";
 import { insertTranscript, saveVocabulary } from "@/lib/db/repository";
 import { recognizer, type RecognizerState } from "@/lib/speech/recognizer";
 import { vocabularyProcessor } from "@/lib/ai/processor";
+import { t } from "@/lib/i18n";
 import type { WordDetails, GrammarNote } from "@/lib/ai/groq";
 
 export interface TranscriptState {
@@ -60,15 +61,38 @@ export function useTranscript() {
   const [state, setState] = useState<TranscriptState>(INITIAL_STATE);
   const interrogationToken = useRef(0);
 
+  /**
+   * Which utterance may write state, bumped on every issue and on session start.
+   *
+   * Two utterances delivered back-to-back each fire a fresh Groq call, and the
+   * results land in arrival order, not request order: a slow first call used to
+   * resolve after the second and overwrite it with stale text. Only the most
+   * recently issued utterance — and nothing issued before a cleared screen —
+   * gets to touch the state.
+   */
+  const utteranceToken = useRef(0);
+
   const errorState = recognizerState.errorState ?? state.aiError;
 
   const handleUtterance = useCallback(async (text: string) => {
-    await insertTranscript(db, text);
+    const token = ++utteranceToken.current;
+    try {
+      await insertTranscript(db, text);
+    } catch {
+      // Quota, private-mode eviction, a blocked database: the rejection used to
+      // escape as an unhandled promise rejection and the screen showed nothing.
+      // The utterance is still on the recogniser's card, so translation continues.
+      if (token === utteranceToken.current) {
+        setState((prev) => ({ ...prev, aiError: t("ai.storageFailed") }));
+      }
+    }
 
+    if (token !== utteranceToken.current) return;
     setState((prev) => ({ ...prev, isTranslating: true }));
     try {
       const apiKey = (await getApiKey(db)) ?? "";
       const result = await vocabularyProcessor.processText(text, apiKey);
+      if (token !== utteranceToken.current) return;
       setState((prev) => {
         if (result.kind === "success") {
           return {
@@ -82,8 +106,25 @@ export function useTranscript() {
         }
         return { ...prev, translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: result.message };
       });
+    } catch {
+      // The AI layer converts its own fetch failures into results, but a throw
+      // from the vault reading the key bypassed every error surface on the way
+      // down. Recoverable by re-entering the key, which is what the message asks.
+      if (token !== utteranceToken.current) return;
+      setState((prev) => ({
+        ...prev,
+        translation: "",
+        suggestedWords: [],
+        grammarNotes: [],
+        example: "",
+        aiError: t("ai.noKey"),
+      }));
     } finally {
-      setState((prev) => ({ ...prev, isTranslating: false }));
+      // A stale utterance must not clear the spinner of the newer one that
+      // replaced it.
+      if (token === utteranceToken.current) {
+        setState((prev) => ({ ...prev, isTranslating: false }));
+      }
     }
   }, []);
 
@@ -94,6 +135,9 @@ export function useTranscript() {
   }, [handleUtterance]);
 
   const startListening = useCallback(async () => {
+    // A new session clears the screen; an older utterance still in flight would
+    // otherwise repopulate it with a result for text that is no longer shown.
+    utteranceToken.current++;
     setState((prev) => ({ ...prev, translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
 
     const granted = await recognizer.requestMicrophonePermission();
@@ -135,6 +179,12 @@ export function useTranscript() {
             ? { ...prev, wordDetails: result.details }
             : { ...prev, wordDetailError: result.message }
         );
+      } catch {
+        // Same bypass as the utterance path: a vault throw here reached the
+        // console, never the sheet the user is staring at.
+        if (token === interrogationToken.current) {
+          setState((prev) => ({ ...prev, wordDetailError: t("ai.noKey") }));
+        }
       } finally {
         if (token === interrogationToken.current) {
           setState((prev) => ({ ...prev, interrogatingWord: null }));

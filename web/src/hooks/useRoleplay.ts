@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { db } from "@/lib/db";
 import { getApiKey, getDialect } from "@/lib/db/settings";
 import { processRoleplay } from "@/lib/ai/groq";
+import { t } from "@/lib/i18n";
 import { recognizer, type RecognizerState } from "@/lib/speech/recognizer";
 import { tts } from "@/lib/speech/tts";
 
@@ -29,8 +30,15 @@ const SERVER_RECOGNIZER_STATE: RecognizerState = {
  * same subscription the Transcript screen uses. Reading `finalText` off the
  * state instead would replay the previous turn whenever a recognition failed,
  * because that field keeps the last utterance until a new session starts.
+ *
+ * `active` gates the utterance subscription. The Practice page keeps this hook
+ * mounted across its two tabs so the conversation survives a tab switch (the
+ * Android ViewModel does), but Repetition subscribes to the same singleton —
+ * with both subscribed, one spoken sentence would be scored *and* sent as a
+ * roleplay turn. Only the active mode may listen.
  */
-export function useRoleplay() {
+export function useRoleplay(options?: { active?: boolean }) {
+    const active = options?.active ?? true;
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -97,18 +105,36 @@ export function useRoleplay() {
                 // used to leave the screen blank forever, with nothing to retry.
                 setError(result.message);
             }
+        } catch {
+            // The AI layer converts its own fetch failures into results, but a
+            // throw from the vault reading the key — or from the TTS engine —
+            // used to escape as an unhandled rejection and reset the spinner
+            // with no word of explanation.
+            setError(t("ai.noKey"));
         } finally {
             inFlight.current = false;
             setIsProcessing(false);
         }
     }, []);
 
-    /** One subscription for the hook's life; the turn it runs is always the current one. */
+    /** Subscribes only while this mode is on screen; see `active` above. */
     useEffect(() => {
+        if (!active) return;
         return recognizer.onUtterance((text) => {
             void runTurn(text);
         });
-    }, [runTurn]);
+    }, [active, runTurn]);
+
+    /**
+     * The microphone belongs to the recogniser singleton. Losing the foreground —
+     * tab switch away from the active mode, or Practice unmounting entirely — used
+     * to leave it open, so the next spoken sentence went to whatever screen was
+     * listening now. RepetitionMode applies the same discipline on its own unmount.
+     */
+    useEffect(() => {
+        if (!active) recognizer.cancel();
+    }, [active]);
+    useEffect(() => () => recognizer.cancel(), []);
 
     const startSession = useCallback(
         async (newScenario?: string) => {
