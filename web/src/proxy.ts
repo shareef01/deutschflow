@@ -3,7 +3,8 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, sitePassword, verifySessionToken } from "@/lib/auth/session";
 
 /**
- * The access gate.
+ * The access gate, run by the network-boundary proxy (the convention that
+ * replaced Next 15's middleware; its runtime is nodejs).
  *
  * Everything is private unless it appears in [PUBLIC_PREFIXES]. API routes are
  * deliberately *not* exempt: the matcher used to exclude them wholesale, which
@@ -25,7 +26,7 @@ function isPublic(pathname: string): boolean {
   );
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublic(pathname)) return NextResponse.next();
