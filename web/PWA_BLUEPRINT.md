@@ -165,3 +165,18 @@ Transactional behaviors ported verbatim into `repository.ts`:
 | `src/lib/db/settings.ts` | Reactive settings store (`dialect`, `auto_play`) — DataStore 1:1. |
 | `src/lib/db/vault.ts` | WebCrypto AES-256-GCM API-key vault — KeystoreCipher 1:1. |
 | `src/lib/db/index.ts` | Singleton DB + public repository surface. |
+
+## 9. Maintenance notes
+
+**`npm audit` high advisories in sharp (<0.35.0, CVE-2026-33327 et al.) are tolerated
+deliberately.** Next 15 ships libvips 0.34.x through its optional `@img/sharp-*`
+binaries; the only non-forced fix is npm's own, which "will install next@16" — a
+framework major this app has not been upgraded to. What makes tolerance sound:
+nothing in this repository ever invokes sharp. There is no `next/image`, no OG image
+route, no satori; `_next/image` appears only as an exclusion in the middleware matcher.
+The vulnerable code is never imported at runtime, on Vercel or under `next start`,
+so the advisory describes bytes that merely sit in a node_modules nobody executes —
+the same condition as any unshipped binary. Revisit when either side moves: an
+upgrade to Next 16, or any use of next/image or ImageResponse, whichever arrives
+first.
+
