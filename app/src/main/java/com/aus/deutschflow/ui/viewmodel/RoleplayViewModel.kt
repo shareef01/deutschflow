@@ -9,6 +9,7 @@ import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -57,7 +58,13 @@ class RoleplayViewModel @Inject constructor(
         // renders it, so a stale one would greet the new attempt. The banner should
         // belong to the action the user just took.
         speechRecognizerHelper.dismissError()
-        speechRecognizerHelper.startListening()
+        viewModelScope.launch {
+            // The stored dialect, not the de-DE default. Transcript and Practice both
+            // pass it; roleplay called the no-argument overload, so an Austrian or
+            // Swiss user's setting silently did not apply on the one screen where
+            // they speak the most.
+            speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
+        }
     }
 
     /** Called when the screen leaves composition or the app is backgrounded. */
@@ -104,7 +111,12 @@ class RoleplayViewModel @Inject constructor(
         _isProcessing.value = true
         _error.value = null
 
-        val history = _messages.value.map { it.role to it.content }
+        // Trimmed, because every turn resends the whole conversation: a long
+        // roleplay eventually exceeded the model's context window and surfaced as a
+        // generic "Translation failed" with no way to tell what had gone wrong.
+        val history = _messages.value
+            .takeLast(MAX_HISTORY_TURNS)
+            .map { it.role to it.content }
 
         if (userInput.isNotBlank()) {
             _messages.value += ChatMessage("user", userInput)
@@ -158,5 +170,14 @@ class RoleplayViewModel @Inject constructor(
          * enough that a failed recognition returns the button rather than keeping it.
          */
         private const val RECOGNITION_TIMEOUT_MS = 5_000L
+
+        /**
+         * How much of the conversation the model is shown.
+         *
+         * Enough for the scene to hold together, bounded so a long session cannot
+         * grow the request until the context window rejects it. The system prompt is
+         * always sent; this caps only the turns.
+         */
+        internal const val MAX_HISTORY_TURNS = 12
     }
 }

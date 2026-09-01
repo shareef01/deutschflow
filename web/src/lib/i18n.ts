@@ -29,6 +29,9 @@ export const STRINGS = {
     "action.ok": "OK",
 
     // Transcript
+    "speech.unavailableBody": "This browser can't recognise speech. Chrome, Edge and Safari can — or type a sentence below.",
+    "transcript.translateTyped": "Translate",
+    "transcript.typeInstead": "Type a German sentence",
     "transcript.listening": "Listening…",
     "transcript.hint": "Tap to start",
     "transcript.transcribing": "Transcribing…",
@@ -58,6 +61,7 @@ export const STRINGS = {
     "action.undo": "Undo",
 
     // Library
+    "library.wordDeleted": "Word deleted.",
     "library.searchHint": "Search words or translations…",
     "library.emptyTitle": "Your library is empty",
     "library.emptyBody": "Your vocabulary will appear here as you learn. Add a word, or save one from a transcript.",
@@ -84,6 +88,8 @@ export const STRINGS = {
     "detail.back": "Back to library",
 
     // Study
+    "study.extraPractice": "Nothing is due today — this is extra practice, so your schedule won't change.",
+    "study.reviewNotSaved": "Couldn't save that review. Try answering the card again.",
     "study.emptyTitle": "Ready to study?",
     "study.emptyBody": "Save some German phrases and we'll build your first study session.",
     "study.session": "Study session",
@@ -249,6 +255,9 @@ export const STRINGS = {
     "action.copy": "Kopieren",
     "action.ok": "OK",
 
+    "speech.unavailableBody": "Dieser Browser kann keine Sprache erkennen. Chrome, Edge und Safari können es — oder tippe unten einen Satz.",
+    "transcript.translateTyped": "Übersetzen",
+    "transcript.typeInstead": "Deutschen Satz eingeben",
     "transcript.listening": "Hört zu…",
     "transcript.hint": "Zum Starten tippen",
     "transcript.transcribing": "Wird transkribiert…",
@@ -276,6 +285,7 @@ export const STRINGS = {
     "history.words": "{0} Wörter",
     "action.undo": "Rückgängig",
 
+    "library.wordDeleted": "Wort gelöscht.",
     "library.searchHint": "Wörter oder Übersetzungen suchen…",
     "library.emptyTitle": "Deine Bibliothek ist leer",
     "library.emptyBody": "Dein Wortschatz erscheint hier, während du lernst. Füge ein Wort hinzu oder speichere eins aus einem Transkript.",
@@ -300,6 +310,8 @@ export const STRINGS = {
     "detail.example": "Beispielsatz",
     "detail.back": "Zurück zur Bibliothek",
 
+    "study.extraPractice": "Heute ist nichts fällig — das ist zusätzliche Übung, dein Plan ändert sich dadurch nicht.",
+    "study.reviewNotSaved": "Diese Bewertung konnte nicht gespeichert werden. Beantworte die Karte noch einmal.",
     "study.emptyTitle": "Bereit zum Lernen?",
     "study.emptyBody": "Speichere ein paar deutsche Sätze und wir bauen deine erste Lernsitzung.",
     "study.session": "Lernsitzung",

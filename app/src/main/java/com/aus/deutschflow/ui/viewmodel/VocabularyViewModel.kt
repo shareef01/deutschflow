@@ -124,6 +124,27 @@ class VocabularyViewModel @Inject constructor(
     }
 
     /**
+     * Puts a deleted word back, for the snackbar's Undo.
+     *
+     * Deleting was one tap in an overflow menu with no confirmation and no way back,
+     * while a *transcript* - the far less valuable thing - already had an Undo. A
+     * word can carry months of scheduling, a hand-edited translation and AI-fetched
+     * grammar, so the protections were exactly inverted.
+     *
+     * Through [VocabularyDao.save] with id 0 rather than a bare insert: the word is
+     * unique, and if the user typed the same word again in the seconds before
+     * pressing Undo, a plain insert would throw a constraint violation into a
+     * coroutine. Save folds the two together instead, which is what restoring onto
+     * an occupied name most likely means. The SRS fields ride along on the entity.
+     */
+    fun restoreVocabulary(vocabulary: VocabularyEntity) {
+        viewModelScope.launch {
+            vocabularyDao.save(vocabulary.copy(id = 0))
+            widgetUpdater.refresh()
+        }
+    }
+
+    /**
      * Applies an edit from the library dialog.
      *
      * Through [VocabularyDao.save] rather than a bare update: the word is unique now, so

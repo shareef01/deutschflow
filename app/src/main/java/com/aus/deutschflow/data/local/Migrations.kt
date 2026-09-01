@@ -283,6 +283,109 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
 }
 
 /**
+ * The German fold key, as a SQL expression over `germanText`.
+ *
+ * Uppercase umlauts are replaced before `lower()` because SQLite's `lower()` is
+ * ASCII-only and would leave them alone. The result matches
+ * [com.aus.deutschflow.data.local.entities.germanKey] for every input the app can
+ * produce, which AppDatabaseMigrationTest asserts on a fixture covering each case.
+ */
+private const val GERMAN_KEY =
+    "replace(replace(replace(replace(lower(" +
+        "replace(replace(replace(replace(trim(`germanText`), " +
+        "'Ä','ae'), 'Ö','oe'), 'Ü','ue'), 'ẞ','ss')" +
+        "), 'ä','ae'), 'ö','oe'), 'ü','ue'), 'ß','ss')"
+
+/**
+ * Makes duplicate detection understand German.
+ *
+ * Uniqueness was SQLite's NOCASE collation on `germanText`, which folds ASCII A-Z
+ * and nothing else - so "Hund" and "hund" were one word while "Übung" and "übung"
+ * were two. Every umlaut-initial noun escaped deduplication and quietly accumulated
+ * copies, which then read as repeat cards in Study, inflated the library count and
+ * took extra turns in the daily rotation: exactly the symptoms MIGRATION_6_7 was
+ * written to cure for the ASCII case.
+ *
+ * No table rebuild this time. The collation on `germanText` is staying (search and
+ * ordering still read it), so this only adds a column, fills it, folds together the
+ * rows that now collide, and moves the unique index - and DROP INDEX works on every
+ * SQLite this app supports, unlike the DROP COLUMN that forced the rebuild in
+ * MIGRATION_3_4.
+ *
+ * The duplicates are merged field by field under the rule [VocabularyEntity.mergedWith]
+ * applies at runtime: the richest row survives and keeps its id, each field takes the
+ * latest non-blank value in its group, and the row keeps the greatest timestamp. The
+ * surviving row also keeps the *furthest-along* SRS state in the group rather than
+ * its own, because losing review history is the one thing a merge must not do - a
+ * user who has been drilling "Übung" for a month and "übung" for a week should come
+ * out of this with the month.
+ */
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE vocabulary ADD COLUMN germanTextKey TEXT NOT NULL DEFAULT ''")
+        db.execSQL("UPDATE vocabulary SET germanTextKey = $GERMAN_KEY")
+
+        // The row each group collapses into: most grammar filled in, then most
+        // recently touched, then highest id. Same ranking as MIGRATION_6_7.
+        val winner =
+            "SELECT w.`id` FROM `vocabulary` w WHERE w.`germanTextKey` = v.`germanTextKey` " +
+                "ORDER BY (CASE WHEN w.`article` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`plural` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`conjugation` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`exampleSentence` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`synonyms` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`antonyms` <> '' THEN 1 ELSE 0 END) DESC, " +
+                "w.`timestamp` DESC, w.`id` DESC LIMIT 1"
+
+        // Fold every group's knowledge into its winner before anything is deleted.
+        db.execSQL(
+            "UPDATE `vocabulary` SET " +
+                latest("englishTranslation") + ", " +
+                latest("exampleSentence") + ", " +
+                latest("article") + ", " +
+                latest("plural") + ", " +
+                latest("conjugation") + ", " +
+                latest("synonyms") + ", " +
+                latest("antonyms") + ", " +
+                "`timestamp` = (SELECT MAX(w.`timestamp`) FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey`), " +
+                // The furthest-along schedule in the group, taken as a set so the
+                // four SRS fields stay consistent with each other.
+                "`nextReview` = (SELECT w.`nextReview` FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` " +
+                "ORDER BY w.`reviewCount` DESC, w.`interval` DESC, w.`id` ASC LIMIT 1), " +
+                "`interval` = (SELECT w.`interval` FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` " +
+                "ORDER BY w.`reviewCount` DESC, w.`interval` DESC, w.`id` ASC LIMIT 1), " +
+                "`easeFactor` = (SELECT w.`easeFactor` FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` " +
+                "ORDER BY w.`reviewCount` DESC, w.`interval` DESC, w.`id` ASC LIMIT 1), " +
+                "`reviewCount` = (SELECT MAX(w.`reviewCount`) FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey`) " +
+                "WHERE `id` IN (SELECT v.`id` FROM `vocabulary` v WHERE v.`id` = ($winner))"
+        )
+
+        // Then drop the rows that lost.
+        db.execSQL(
+            "DELETE FROM `vocabulary` WHERE `id` NOT IN " +
+                "(SELECT v.`id` FROM `vocabulary` v WHERE v.`id` = ($winner))"
+        )
+
+        db.execSQL("DROP INDEX IF EXISTS `index_vocabulary_germanText`")
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_vocabulary_germanTextKey` " +
+                "ON `vocabulary` (`germanTextKey`)"
+        )
+    }
+
+    /** The latest non-blank value of [column] among the rows sharing this row's key. */
+    private fun latest(column: String): String =
+        "`$column` = COALESCE((SELECT w.`$column` FROM `vocabulary` w " +
+            "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` AND w.`$column` <> '' " +
+            "ORDER BY w.`timestamp` DESC, w.`id` DESC LIMIT 1), `$column`)"
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -297,4 +400,8 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
  * would therefore be untestable and unreachable, not a missing safety net.
  */
 val MIGRATIONS =
-    arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+    arrayOf(
+        MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+        MIGRATION_12_13
+    )

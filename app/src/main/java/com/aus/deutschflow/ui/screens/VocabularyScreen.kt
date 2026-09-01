@@ -44,6 +44,7 @@ import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.SelectionDefaults
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
+import kotlinx.coroutines.launch
 
 @Composable
 fun VocabularyScreen(
@@ -82,6 +83,27 @@ fun VocabularyScreen(
 
     LaunchedEffect(Unit) { viewModel.dismissTtsError() }
 
+    // Undo rather than a confirmation dialog: a confirmation taxes every deletion to
+    // protect the rare mistaken one, where Undo costs nothing until it is needed.
+    // Same pattern History already uses for transcripts.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deletedMessage = stringResource(R.string.library_word_deleted)
+    val undoLabel = stringResource(R.string.action_undo)
+
+    val onDeleteWithUndo: (VocabularyEntity) -> Unit = { word ->
+        viewModel.deleteVocabulary(word)
+        // Closing the detail pane too, if the deleted word was the one open in it.
+        if (selectedId == word.id) selectedId = null
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = deletedMessage,
+                actionLabel = undoLabel
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.restoreVocabulary(word)
+        }
+    }
+
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     // On a compact width the detail view is a state swap inside this destination
@@ -91,6 +113,7 @@ fun VocabularyScreen(
         selectedId = null
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Speak buttons sit in both the list rows and the detail pane, so the banner
         // goes above whichever of the two is currently showing.
@@ -108,7 +131,7 @@ fun VocabularyScreen(
                         onSortChange = { viewModel.setSortMode(it) },
                         onItemClick = { selectedId = it.id },
                         onEdit = { editingId = it.id },
-                        onDelete = { viewModel.deleteVocabulary(it) },
+                        onDelete = onDeleteWithUndo,
                         onSpeak = { viewModel.speak(it) },
                         onAdd = { isAdding = true }
                     )
@@ -152,13 +175,21 @@ fun VocabularyScreen(
                         onSortChange = { viewModel.setSortMode(it) },
                         onItemClick = { selectedId = it.id },
                         onEdit = { editingId = it.id },
-                        onDelete = { viewModel.deleteVocabulary(it) },
+                        onDelete = onDeleteWithUndo,
                         onSpeak = { viewModel.speak(it) },
                         onAdd = { isAdding = true }
                     )
                 }
             }
         }
+    }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = Spacing.md)
+        )
     }
 
     if (editingItem != null) {

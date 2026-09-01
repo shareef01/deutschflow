@@ -12,6 +12,8 @@ import { GlassButton } from "@/components/ui/GlassButton";
 import { WordDetailsSheet } from "@/components/ui/WordDetailsSheet";
 import { Snackbar } from "@/components/ui/Snackbar";
 import { AudioWaveform } from "@/components/ui/AudioWaveform";
+import { GlassTextField } from "@/components/ui/GlassTextField";
+import type { TKey } from "@/lib/i18n";
 import { BookmarkAddIcon, ContentCopyIcon, MicIcon, StopIcon } from "@/components/icons";
 
 export default function TranscriptPage() {
@@ -19,6 +21,8 @@ export default function TranscriptPage() {
   const {
     state,
     isBusy,
+    speechSupported,
+    submitTypedText,
     startListening,
     stopListening,
     cancelListening,
@@ -111,20 +115,29 @@ export default function TranscriptPage() {
           {t("transcript.emptyBody")}
         </p>
 
-        <OracleMic
-          icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
-          label={
-            state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
-          }
-          isListening={state.isListening}
-          isBusy={isBusy}
-          onClick={state.isListening ? stopListening : () => void startListening()}
-          large
-        />
+        {speechSupported ? (
+          <>
+            <OracleMic
+              icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
+              label={
+                state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
+              }
+              isListening={state.isListening}
+              isBusy={isBusy}
+              onClick={state.isListening ? stopListening : () => void startListening()}
+              large
+            />
 
-        <ErrorBanner message={state.errorState} />
+            <ErrorBanner message={state.errorState} />
 
-        <p className="mt-6 text-label-large text-on-surface-variant">{t("transcript.hint")}</p>
+            <p className="mt-6 text-label-large text-on-surface-variant">{t("transcript.hint")}</p>
+          </>
+        ) : (
+          /* No Web Speech API here — Firefox. Everything downstream of recognition
+             takes a plain string, so typing gets the user the whole app rather than
+             a dead microphone. */
+          <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
+        )}
 
         <Snackbar message={snackbar} />
         <WordDetailsSheet
@@ -324,6 +337,54 @@ export default function TranscriptPage() {
           });
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * The keyboard route into the app, for browsers with no Web Speech API.
+ *
+ * Feeds the same handler an utterance does, so translation, grammar, word details
+ * and saving all behave identically — the only thing missing is the microphone.
+ */
+function TypedInput({
+  onSubmit,
+  isBusy,
+  t,
+}: {
+  onSubmit: (text: string) => void;
+  isBusy: boolean;
+  t: (key: TKey, params?: (string | number)[]) => string;
+}) {
+  const [text, setText] = useState("");
+
+  const submit = () => {
+    if (!text.trim() || isBusy) return;
+    onSubmit(text);
+    setText("");
+  };
+
+  return (
+    <div className="mt-8 w-full max-w-sm">
+      <p className="mb-3 text-center text-body-medium text-on-surface-variant">
+        {t("speech.unavailableBody")}
+      </p>
+      <GlassTextField
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") submit();
+        }}
+        label={t("transcript.typeInstead")}
+        disabled={isBusy}
+      />
+      <GlassButton
+        className="mt-3 h-12 w-full"
+        onClick={submit}
+        disabled={isBusy || text.trim().length === 0}
+      >
+        <span className="font-bold">{t("transcript.translateTyped")}</span>
+      </GlassButton>
     </div>
   );
 }

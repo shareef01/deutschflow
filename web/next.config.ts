@@ -78,8 +78,27 @@ const SECURITY_HEADERS = [
   { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
 ];
 
+/**
+ * One id per build, used for two things that must agree: the service worker's cache
+ * name and the query string the page registers it with.
+ *
+ * The cache name used to be the literal "deutschflow-v1" forever, so `activate`'s
+ * cleanup sweep — which deletes every cache whose key differs from the current one —
+ * never matched anything, and every deploy's hashed chunks accumulated indefinitely.
+ * Correctness was fine (hashed URLs cannot serve the wrong bytes) but Cache Storage
+ * counts against the origin's quota, and this origin's IndexedDB holds the only copy
+ * of the user's library. Unbounded growth there raises the odds of the eviction that
+ * costs them everything.
+ *
+ * The commit SHA on Vercel, a timestamp locally. Also passed to `generateBuildId` so
+ * the two never diverge.
+ */
+const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA ?? `dev-${Date.now()}`;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  generateBuildId: async () => BUILD_ID,
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },

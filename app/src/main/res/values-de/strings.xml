@@ -71,6 +71,7 @@
     <!-- Day before month, as German writes dates. -->
 
     <!-- Library -->
+    <string name="library_word_deleted">Wort gelöscht.</string>
     <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>
     <string name="library_tab_words">Wörter</string>
     <string name="library_tab_transcripts">Mitschriften</string>
@@ -102,6 +103,7 @@
     <string name="detail_back">Zurück zur Bibliothek</string>
 
     <!-- Study / Dashboard -->
+    <string name="study_review_not_saved">Diese Bewertung konnte nicht gespeichert werden. Beantworte die Karte noch einmal.</string>
     <string name="study_empty_title">Bereit zum Lernen?</string>
     <string name="study_empty_body">Speichere ein paar deutsche Sätze und wir bauen deine erste Lernsitzung.</string>
     <string name="study_session">Lernsitzung</string>

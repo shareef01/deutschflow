@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { useHasSplitView } from "@/hooks/useViewport";
 import { useBackHandler } from "@/hooks/useBackHandler";
@@ -10,6 +10,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SearchInput, GlassTextField } from "@/components/ui/GlassTextField";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { ModalDialog } from "@/components/ui/ModalDialog";
+import { Snackbar } from "@/components/ui/Snackbar";
 import {
   AddIcon,
   AutoStoriesIcon,
@@ -31,6 +32,7 @@ export default function VocabularyPage() {
     ttsError,
     addVocabulary,
     deleteVocabulary,
+    restoreVocabulary,
     updateVocabulary,
     exampleFor,
     speak,
@@ -43,6 +45,36 @@ export default function VocabularyPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [sortMode, setSortMode] = useState<"newest" | "alpha">("newest");
+
+  /**
+   * Undo rather than a confirmation dialog: a confirmation taxes every deletion to
+   * protect the rare mistaken one, where Undo costs nothing until it is needed.
+   * The same pattern History already uses for transcripts.
+   */
+  const [deleted, setDeleted] = useState<VocabularyEntry | null>(null);
+  const undoTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (undoTimer.current !== null) window.clearTimeout(undoTimer.current);
+    },
+    []
+  );
+
+  const onDeleteWithUndo = (item: VocabularyEntry) => {
+    deleteVocabulary(item);
+    // Closing the detail pane too, if the deleted word was the one open in it.
+    if (selectedId === item.id) setSelectedId(null);
+    setDeleted(item);
+    if (undoTimer.current !== null) window.clearTimeout(undoTimer.current);
+    undoTimer.current = window.setTimeout(() => setDeleted(null), 6_000);
+  };
+
+  const onUndoDelete = () => {
+    if (deleted) restoreVocabulary(deleted);
+    if (undoTimer.current !== null) window.clearTimeout(undoTimer.current);
+    setDeleted(null);
+  };
 
   const sortedList = useMemo(() => {
     if (sortMode === "alpha") {
@@ -70,7 +102,7 @@ export default function VocabularyPage() {
     onSortChange: setSortMode,
     onItemClick: (item: VocabularyEntry) => setSelectedId(item.id ?? null),
     onEdit: (item: VocabularyEntry) => setEditingId(item.id ?? null),
-    onDelete: deleteVocabulary,
+    onDelete: onDeleteWithUndo,
     onSpeak: speak,
     onAdd: () => setIsAdding(true),
     t,
@@ -139,6 +171,11 @@ export default function VocabularyPage() {
           t={t}
         />
       )}
+
+      <Snackbar
+        message={deleted ? t("library.wordDeleted") : null}
+        action={{ label: t("action.undo"), onClick: onUndoDelete }}
+      />
     </div>
   );
 }

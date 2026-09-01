@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { db } from "@/lib/db";
 import { getApiKey, getDialect } from "@/lib/db/settings";
 import { insertTranscript, saveVocabulary } from "@/lib/db/repository";
-import { recognizer, type RecognizerState } from "@/lib/speech/recognizer";
+import { isRecognitionSupported, recognizer, type RecognizerState } from "@/lib/speech/recognizer";
 import { vocabularyProcessor } from "@/lib/ai/processor";
 import { t } from "@/lib/i18n";
 import type { WordDetails, GrammarNote } from "@/lib/ai/groq";
@@ -43,6 +43,14 @@ const INITIAL_STATE: TranscriptState = {
   errorState: null,
 };
 
+/**
+ * Support is fixed for the life of the page, so this store never notifies. Hoisted
+ * rather than inlined: useSyncExternalStore resubscribes whenever `subscribe`
+ * changes identity, which an inline arrow does on every render.
+ */
+const NEVER_CHANGES = () => () => {};
+const RECOGNITION_UNSUPPORTED_ON_SERVER = () => false;
+
 const SERVER_RECOGNIZER_STATE: RecognizerState = {
   partialText: "",
   finalText: "",
@@ -53,6 +61,19 @@ const SERVER_RECOGNIZER_STATE: RecognizerState = {
 };
 
 export function useTranscript() {
+  /**
+   * Whether this browser can recognise speech at all.
+   *
+   * Read through useSyncExternalStore's server snapshot rather than useState, so
+   * the first client render matches the server's and hydration stays quiet — the
+   * value is constant for the life of the page.
+   */
+  const speechSupported = useSyncExternalStore(
+    NEVER_CHANGES,
+    isRecognitionSupported,
+    RECOGNITION_UNSUPPORTED_ON_SERVER
+  );
+
   const recognizerState = useSyncExternalStore(
     recognizer.subscribe,
     recognizer.getSnapshot,
@@ -148,6 +169,22 @@ export function useTranscript() {
     const dialect = await getDialect(db);
     recognizer.startListening(dialect);
   }, []);
+
+  /**
+   * Runs a typed sentence through the same path an utterance takes.
+   *
+   * Everything downstream of recognition already takes a plain string, so a browser
+   * without the Web Speech API can still use the whole app — translation, grammar,
+   * word details, saving — for the cost of typing. Without this, Firefox users had
+   * no way in at all.
+   */
+  const submitTypedText = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed) void handleUtterance(trimmed);
+    },
+    [handleUtterance]
+  );
 
   const stopListening = useCallback(() => recognizer.stopListening(), []);
   const cancelListening = useCallback(() => recognizer.cancel(), []);
@@ -255,6 +292,8 @@ export function useTranscript() {
   return {
     state: view,
     isBusy,
+    speechSupported,
+    submitTypedText,
     startListening,
     stopListening,
     cancelListening,

@@ -6,10 +6,12 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.data.local.entities.germanKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -599,6 +601,137 @@ class AppDatabaseMigrationTest {
             assertEquals("", word.synonyms)
             assertEquals(2.5f, word.easeFactor, 0.0001f)
             assertEquals(UUID_LENGTH, word.remoteId.length)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * MIGRATION_12_13: the fold key learns German, and the rows that now collide are
+     * merged rather than dropped.
+     *
+     * The fixture is every case that changes behaviour. Uniqueness was NOCASE on
+     * `germanText`, which folds ASCII A-Z and nothing else - so "Hund"/"hund" were
+     * already one row, while "Übung"/"übung", "Öl"/"öl" and "Straße"/"Strasse" were
+     * each two. This is the migration most able to lose a user's words, so it
+     * asserts on what survives, not just on the count.
+     */
+    @Test
+    fun theGermanFoldMergesUmlautDuplicatesWithoutLosingAnything() {
+        helper.createDatabase(TEST_DB, 12).use { db ->
+            fun insert(
+                german: String,
+                english: String,
+                timestamp: Long,
+                article: String = "",
+                plural: String = "",
+                example: String = "",
+                nextReview: Long = 0,
+                interval: Int = 0,
+                reviewCount: Int = 0
+            ) = db.execSQL(
+                "INSERT INTO vocabulary (germanText, englishTranslation, timestamp, " +
+                    "article, plural, exampleSentence, nextReview, interval, reviewCount) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                // Explicitly Any?, or Kotlin infers an intersection type for the
+                // mixed String/Long/Int arguments and warns about reifying it.
+                arrayOf<Any?>(
+                    german, english, timestamp, article, plural, example,
+                    nextReview, interval, reviewCount
+                )
+            )
+
+            // A month of reviews on one spelling, a week on the other.
+            insert("Übung", "exercise", 100, article = "die", plural = "Übungen",
+                nextReview = 5_000, interval = 30, reviewCount = 8)
+            insert("übung", "practice", 200, example = "Eine Übung.",
+                nextReview = 100, interval = 1, reviewCount = 1)
+
+            insert("Straße", "street", 300, article = "die", plural = "Straßen")
+            insert("Strasse", "road", 400, example = "Eine Strasse.")
+
+            insert("Öl", "oil", 500, article = "das")
+            insert("öl", "petroleum", 600, plural = "Öle")
+
+            // Untouched: no umlaut, no transliteration, nothing to fold together.
+            insert("Hund", "dog", 700, article = "der")
+            insert("gehen", "to go", 800)
+        }
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+
+            assertEquals("eight rows fold to five words", 5, saved.size)
+            assertEquals(
+                setOf("uebung", "strasse", "oel", "hund", "gehen"),
+                saved.map { it.germanTextKey }.toSet()
+            )
+
+            val uebung = saved.single { it.germanTextKey == "uebung" }
+            // Every field either copy knew, kept.
+            assertEquals("die", uebung.article)
+            assertEquals("Übungen", uebung.plural)
+            assertEquals("Eine Übung.", uebung.exampleSentence)
+            // Latest non-blank wins, and the group keeps its greatest timestamp.
+            assertEquals("practice", uebung.englishTranslation)
+            assertEquals(200L, uebung.timestamp)
+            // The month of reviews, not the week: a merge must never cost history.
+            assertEquals(8, uebung.reviewCount)
+            assertEquals(30, uebung.interval)
+            assertEquals(5_000L, uebung.nextReview)
+
+            val strasse = saved.single { it.germanTextKey == "strasse" }
+            assertEquals("die", strasse.article)
+            assertEquals("Straßen", strasse.plural)
+            assertEquals("Eine Strasse.", strasse.exampleSentence)
+
+            val oel = saved.single { it.germanTextKey == "oel" }
+            assertEquals("das", oel.article)
+            assertEquals("Öle", oel.plural)
+
+            // The words that were never duplicates come through untouched.
+            assertEquals("dog", saved.single { it.germanTextKey == "hund" }.englishTranslation)
+            assertEquals("to go", saved.single { it.germanTextKey == "gehen" }.englishTranslation)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The fold key the migration computes in SQL must equal the one the app computes
+     * in Kotlin, or a word saved after the upgrade would not find the row the
+     * upgrade made for it.
+     */
+    @Test
+    fun theMigrationsKeyMatchesTheKotlinOne() {
+        val words = listOf("Hund", "Übung", "übung", "Uebung", "Straße", "Strasse", "Öl", "Ärger")
+
+        helper.createDatabase(TEST_DB, 12).use { db ->
+            words.forEachIndexed { index, word ->
+                db.execSQL(
+                    "INSERT INTO vocabulary (germanText, englishTranslation, timestamp) VALUES (?, ?, ?)",
+                    arrayOf<Any?>(word, "meaning $index", index.toLong())
+                )
+            }
+        }
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+            for (row in saved) {
+                assertEquals(
+                    "SQL and Kotlin disagree on the key for \"${row.germanText}\"",
+                    germanKey(row.germanText),
+                    row.germanTextKey
+                )
+            }
+            // Every distinct word is still findable by any of its spellings.
+            runBlocking {
+                assertNotNull(database.vocabularyDao().findByGermanText("uebung"))
+                assertNotNull(database.vocabularyDao().findByGermanText("ÜBUNG"))
+                assertNotNull(database.vocabularyDao().findByGermanText("Strasse"))
+            }
         } finally {
             database.close()
         }

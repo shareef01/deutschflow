@@ -41,12 +41,10 @@ class SettingsViewModel @Inject constructor(
     /** Straight from the service. It was a two-second poll of an in-memory boolean. */
     val isCloudConnected: StateFlow<Boolean> = cloudService.isAuthenticated
 
-    val totalVocabulary: StateFlow<Int> = vocabularyDao.getAllVocabulary()
-        .map { it.size }
+    val totalVocabulary: StateFlow<Int> = vocabularyDao.countVocabulary()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val totalTranscripts: StateFlow<Int> = transcriptDao.getAllTranscripts()
-        .map { it.size }
+    val totalTranscripts: StateFlow<Int> = transcriptDao.countTranscripts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val userStats: StateFlow<UserStatsEntity?> = userStatsDao.getUserStats()

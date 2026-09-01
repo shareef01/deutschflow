@@ -66,6 +66,24 @@ function createRecognition(): SpeechRecognition | null {
   return null;
 }
 
+/**
+ * Whether this browser implements the Web Speech API at all.
+ *
+ * Read at mount rather than discovered inside startListening. Firefox ships no
+ * SpeechRecognition, so a Firefox user used to tap the microphone, be asked by the
+ * browser for permission — getUserMedia exists there, so the prompt appears — grant
+ * it, and only then be told the feature does not work. A permission prompt raised
+ * for a capability the app cannot use is the kind of thing people remember.
+ *
+ * `false` on the server, so the first client render agrees with the markup.
+ */
+export function isRecognitionSupported(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    typeof SpeechRecognition !== "undefined" || typeof webkitSpeechRecognition !== "undefined"
+  );
+}
+
 class Recognizer {
   private recognition: SpeechRecognition | null = null;
   private state: RecognizerState = {

@@ -65,6 +65,7 @@
     </plurals>
 
     <!-- Library -->
+    <string name="library_word_deleted">Word deleted.</string>
     <string name="library_search_hint">Search words or translations…</string>
     <string name="library_tab_words">Words</string>
     <string name="library_tab_transcripts">Transcripts</string>
@@ -96,6 +97,7 @@
     <string name="detail_back">Back to library</string>
 
     <!-- Study / Dashboard -->
+    <string name="study_review_not_saved">Couldn\'t save that review. Try answering the card again.</string>
     <string name="study_empty_title">No cards to review yet</string>
     <string name="study_empty_body">Save words or phrases to your library to automatically generate spaced-repetition flashcards.</string>
     <string name="study_session">Study session</string>

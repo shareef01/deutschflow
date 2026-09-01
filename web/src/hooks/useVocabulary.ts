@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { db } from "@/lib/db";
 import {
   deleteVocabulary as deleteVocabularyRow,
+  findByGermanText,
   observeVocabulary,
   saveVocabulary,
 } from "@/lib/db/repository";
@@ -58,6 +59,44 @@ export function useVocabulary() {
     void deleteVocabularyRow(db, entry);
   };
 
+  /**
+   * Puts a deleted word back, for the snackbar's Undo.
+   *
+   * Deleting was one menu tap with no confirmation and no way back, while a
+   * *transcript* — the far less valuable thing — already had an Undo. A word can
+   * carry months of scheduling, a hand-edited translation and AI-fetched grammar,
+   * so the protections were exactly inverted.
+   *
+   * Through saveVocabulary with the id dropped: the fold key is unique, and if the
+   * user typed the same word again in the seconds before pressing Undo, a bare
+   * insert would fail on the index. Save merges instead. The SRS fields are
+   * restored afterwards, since saveVocabulary treats an unknown word as new.
+   */
+  const restoreVocabulary = (entry: VocabularyEntry) => {
+    void (async () => {
+      await saveVocabulary(db, {
+        germanText: entry.germanText,
+        englishTranslation: entry.englishTranslation,
+        timestamp: entry.timestamp,
+        exampleSentence: entry.exampleSentence,
+        article: entry.article,
+        plural: entry.plural,
+        conjugation: entry.conjugation,
+        synonyms: entry.synonyms,
+        antonyms: entry.antonyms,
+      });
+      const restored = await findByGermanText(db, entry.germanText);
+      if (restored?.id !== undefined) {
+        await db.vocabulary.update(restored.id, {
+          nextReview: entry.nextReview,
+          interval: entry.interval,
+          easeFactor: entry.easeFactor,
+          reviewCount: entry.reviewCount,
+        });
+      }
+    })();
+  };
+
   /** Through saveVocabulary (merge-on-conflict), never a bare update. */
   const updateVocabulary = (entry: VocabularyEntry) => {
     void saveVocabulary(db, entry);
@@ -79,6 +118,7 @@ export function useVocabulary() {
     ttsError,
     addVocabulary,
     deleteVocabulary,
+    restoreVocabulary,
     updateVocabulary,
     exampleFor,
     speak,
