@@ -463,7 +463,15 @@ fun TranscriptContent(
                                     Brush.linearGradient(listOf(AzureGlow, primaryColor))
                                 }
                             )
+                            // Inert while a translation is in flight. Without this,
+                            // isListening is already false during TRANSCRIBING, so a
+                            // second tap started a fresh recording underneath the
+                            // request that was still running - and the older answer
+                            // then landed on the newer utterance's screen, where Save
+                            // would file it against the wrong German. The web port
+                            // has always disabled its microphone here.
                             .clickable(
+                                enabled = !isBusy,
                                 interactionSource = interactionSource,
                                 indication = ripple(bounded = false)
                             ) {

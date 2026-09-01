@@ -14,6 +14,7 @@
     <string name="action_speak">Speak</string>
     <string name="action_edit">Edit</string>
     <string name="action_delete">Delete</string>
+    <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
     <string name="action_copy">Copy</string>
@@ -164,8 +165,7 @@
     <string name="settings_cloud_sign_in">Sign in</string>
     <string name="settings_cloud_sign_out">Sign out</string>
     <string name="settings_cloud_sign_in_title">Sign in to DeutschFlow</string>
-    <string name="settings_cloud_email">Email address</string>
-    <string name="settings_cloud_password">Password</string>
+    <string name="settings_cloud_sign_in_body">Accounts are ready for a backend that does not exist yet. Turning this on changes nothing: your library stays on this device and nothing is uploaded.</string>
 
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyms</string>
@@ -228,7 +228,7 @@
     <string name="message_notification_sent">Daily reminder notification sent.</string>
     <string name="message_notifications_off">Notifications are turned off. Enable them for DeutschFlow in system settings.</string>
     <string name="message_library_empty">Save a word to your library first — there\'s nothing to send yet.</string>
-    <string name="message_cloud_connected">Signed in. Data is stored on this device.</string>
+    <string name="message_cloud_connected">Preview mode. Nothing is uploaded — your library stays on this device.</string>
     <string name="message_cloud_failed">Couldn\'t sign in. Check your details and try again.</string>
     <string name="message_cloud_disconnected">Signed out. Your library remains saved locally.</string>
     <string name="message_sync_unavailable">Cloud sync is currently in preview. Your library is safely stored locally.</string>

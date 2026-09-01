@@ -144,14 +144,20 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun signIn(email: String, pass: String) {
+    /**
+     * Turns on the cloud *preview*, which is all there is to turn on.
+     *
+     * Took an email and a password until the audit; [CloudService] is still a stub
+     * that pushes nowhere, so there was nothing to authenticate and the credentials
+     * were discarded unread. Reporting a connection on the strength of that is the
+     * one claim this app cannot afford to get wrong - the same reasoning
+     * [performSync] already carries.
+     */
+    fun enableCloudPreview() {
         viewModelScope.launch {
-            if (cloudService.signIn(email, pass)) {
-                _message.value = R.string.message_cloud_connected
-                performSync()
-            } else {
-                _message.value = R.string.message_cloud_failed
-            }
+            // Any input succeeded, so the branch that reported failure was dead.
+            cloudService.signIn("", "")
+            _message.value = R.string.message_cloud_connected
         }
     }
 

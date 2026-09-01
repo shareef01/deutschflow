@@ -298,7 +298,7 @@ export function parseWordDetails(text: string): WordDetails | null {
 
   return {
     word,
-    article: String(obj.article ?? "none").trim() || "none",
+    article: normalizeArticle(obj.article),
     plural: String(obj.plural ?? "").trim(),
     conjugationOrInfinitive: String(obj.conjugation_or_infinitive ?? "").trim(),
     meaning,
@@ -306,6 +306,21 @@ export function parseWordDetails(text: string): WordDetails | null {
     synonyms: Array.isArray(obj.synonyms) ? obj.synonyms.map(String) : [],
     antonyms: Array.isArray(obj.antonyms) ? obj.antonyms.map(String) : [],
   };
+}
+
+/** The four values the prompt allows. Anything else is the model improvising. */
+const ARTICLES = new Set(["der", "die", "das", "none"]);
+
+/**
+ * German has three definite articles. A model that answers with a sentence, a
+ * gendered guess in another language, or an empty string is not describing a noun -
+ * and whatever it said would be written into the library verbatim and then
+ * rehearsed as fact for months. "none" is the honest fallback: the detail sheet
+ * already renders it as "no article".
+ */
+function normalizeArticle(value: unknown): string {
+  const article = String(value ?? "").trim().toLowerCase();
+  return ARTICLES.has(article) ? article : "none";
 }
 
 function extractJsonObject(text: string): string | null {

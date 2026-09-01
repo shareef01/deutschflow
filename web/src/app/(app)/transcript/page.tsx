@@ -85,10 +85,11 @@ export default function TranscriptPage() {
       ? t("transcript.listening")
       : t("transcript.hint");
 
+  // Awaited: the snackbar reports a committed write, not an intention.
   const onSave = () => {
-    if (saveToVocabulary(state.finalText, state.translation)) {
-      showSnackbar(t("transcript.saved"));
-    }
+    void saveToVocabulary(state.finalText, state.translation).then((saved) => {
+      if (saved) showSnackbar(t("transcript.saved"));
+    });
   };
 
   const onCopy = () => {
@@ -130,9 +131,11 @@ export default function TranscriptPage() {
           details={state.wordDetails}
           onDismiss={dismissWordDetails}
           onSave={(details) => {
-            const saved = saveWordDetails(details);
+            // The sheet closes at once; the confirmation waits for the commit.
             dismissWordDetails();
-            if (saved) showSnackbar(t("transcript.saved"));
+            void saveWordDetails(details).then((saved) => {
+              if (saved) showSnackbar(t("transcript.saved"));
+            });
           }}
         />
       </div>
@@ -315,9 +318,10 @@ export default function TranscriptPage() {
         details={state.wordDetails}
         onDismiss={dismissWordDetails}
         onSave={(details) => {
-          const saved = saveWordDetails(details);
           dismissWordDetails();
-          if (saved) showSnackbar(t("transcript.saved"));
+          void saveWordDetails(details).then((saved) => {
+            if (saved) showSnackbar(t("transcript.saved"));
+          });
         }}
       />
     </div>

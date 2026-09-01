@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { useI18n } from "@/hooks/useI18n";
 import { GlassTextField } from "@/components/ui/GlassTextField";
@@ -34,6 +34,8 @@ export default function SettingsPage() {
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,
+    downloadBackup,
+    restoreBackup,
     signIn,
     signOut,
     performSync
@@ -46,6 +48,14 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const restoreInput = useRef<HTMLInputElement>(null);
+
+  const onRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Cleared either way, so choosing the same file twice fires change again.
+    event.target.value = "";
+    if (file) void restoreBackup(file).then((result) => setMessage(t(result)));
+  };
 
   const onSaveKey = () => {
     void saveApiKey(typedKey).then((result) => {
@@ -119,6 +129,35 @@ export default function SettingsPage() {
           </GlassButton>
       </div>
 
+      {/* ---- Backup ---------------------------------------------------------
+           The library lives only in this browser and the browser may reclaim it,
+           so this is the one control standing between the user and losing
+           everything. The Android app has Room on the filesystem and does not
+           need an equivalent. */}
+      <SectionHeader title={t("settings.backupHeader")} />
+
+      <div className="glass-surface border border-white/5 p-6">
+        <p className="text-body-medium text-on-surface-variant">{t("settings.backupBody")}</p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <GlassButton
+            className="h-12 flex-1"
+            onClick={() => void downloadBackup().then((result) => setMessage(t(result)))}
+          >
+            <span className="font-bold">{t("settings.backupDownload")}</span>
+          </GlassButton>
+          <GlassButton className="h-12 flex-1" onClick={() => restoreInput.current?.click()}>
+            <span className="font-bold">{t("settings.backupRestore")}</span>
+          </GlassButton>
+        </div>
+        <input
+          ref={restoreInput}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={onRestore}
+        />
+      </div>
+
       {/* ---- AI translation ------------------------------------------------- */}
       <SectionHeader title={t("settings.aiHeader")} />
 
@@ -188,6 +227,12 @@ export default function SettingsPage() {
       {/* ---- Recognition dialect --------------------------------------------- */}
       <SectionHeader title={t("settings.dialectHeader")} />
       <RadioGroup options={dialects} selected={selectedDialect} onSelect={saveDialect} />
+      {/* Said here rather than only in the docs: it is the one privacy property
+          where this app differs from the Android one, and the difference is not
+          something a user could infer from the screen. */}
+      <p className="mt-3 px-1 text-label-medium text-on-surface-variant">
+        {t("settings.speechPrivacy")}
+      </p>
 
       {/* ---- Language (web parity for Android 13+ per-app language) ---------- */}
       <SectionHeader title={t("settings.languageHeader")} />

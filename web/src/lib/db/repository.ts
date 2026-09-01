@@ -1,5 +1,6 @@
 import type { DeutschFlowDB, TranscriptEntry, UserStatsEntry, VocabularyEntry, ActivityEntry } from "./schema";
 import { foldGermanKey } from "./schema";
+import { requestPersistentStorage } from "./backup";
 
 /**
  * Repository — Room DAO transactions ported 1:1.
@@ -41,7 +42,22 @@ export const NEW_CARD_SCHEDULE = {
   reviewCount: 0,
 } as const;
 
+/**
+ * Asked once per session, on the first save.
+ *
+ * Here rather than at load: a browser that prompts (Firefox) should do it at a
+ * moment the user is doing something worth keeping, not while the app is booting.
+ */
+let persistenceRequested = false;
+
 export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput): Promise<void> {
+  if (!persistenceRequested) {
+    persistenceRequested = true;
+    // Deliberately not awaited: whether the browser grants it changes nothing
+    // about this write, and Safari never resolves it usefully.
+    void requestPersistentStorage();
+  }
+
   const now = Date.now();
 
   await db.transaction("rw", db.vocabulary, async () => {

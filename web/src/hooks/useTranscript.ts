@@ -152,12 +152,30 @@ export function useTranscript() {
   const stopListening = useCallback(() => recognizer.stopListening(), []);
   const cancelListening = useCallback(() => recognizer.cancel(), []);
 
+  /**
+   * @returns true only once the row is committed, so the snackbar that follows is a
+   * report rather than an intention.
+   *
+   * This used to fire the write and return `true` immediately, which meant a
+   * rejected write - quota, a blocked upgrade, private-mode eviction - surfaced as
+   * an unhandled promise rejection while the user was being told "Saved". Android's
+   * saveToVocabulary suspends for exactly this reason; the web is the only copy of
+   * the library, so a silently dropped save is worse here than there.
+   */
   const saveToVocabulary = useCallback(
-    (german: string, english: string): boolean => {
+    async (german: string, english: string): Promise<boolean> => {
       if (!german.trim() || !english.trim()) return false;
-      const example = state.example;
-      void saveVocabulary(db, { germanText: german, englishTranslation: english, exampleSentence: example });
-      return true;
+      try {
+        await saveVocabulary(db, {
+          germanText: german,
+          englishTranslation: english,
+          exampleSentence: state.example,
+        });
+        return true;
+      } catch {
+        setState((prev) => ({ ...prev, aiError: t("ai.storageFailed") }));
+        return false;
+      }
     },
     [state.example]
   );
@@ -193,19 +211,25 @@ export function useTranscript() {
     })();
   }, []);
 
-  const saveWordDetails = useCallback((details: WordDetails): boolean => {
+  /** Awaited for the same reason as [saveToVocabulary]. */
+  const saveWordDetails = useCallback(async (details: WordDetails): Promise<boolean> => {
     if (!details.word.trim() || !details.meaning.trim()) return false;
-    void saveVocabulary(db, {
-      germanText: details.word,
-      englishTranslation: details.meaning,
-      exampleSentence: details.exampleSentence,
-      article: details.article,
-      plural: details.plural,
-      conjugation: details.conjugationOrInfinitive,
-      synonyms: details.synonyms.join(", "),
-      antonyms: details.antonyms.join(", "),
-    });
-    return true;
+    try {
+      await saveVocabulary(db, {
+        germanText: details.word,
+        englishTranslation: details.meaning,
+        exampleSentence: details.exampleSentence,
+        article: details.article,
+        plural: details.plural,
+        conjugation: details.conjugationOrInfinitive,
+        synonyms: details.synonyms.join(", "),
+        antonyms: details.antonyms.join(", "),
+      });
+      return true;
+    } catch {
+      setState((prev) => ({ ...prev, wordDetailError: t("ai.storageFailed") }));
+      return false;
+    }
   }, []);
 
   const dismissWordDetails = useCallback(() => {

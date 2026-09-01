@@ -19,6 +19,7 @@ import {
 import { useLive } from "./useLive";
 import type { TKey } from "@/lib/i18n";
 import { mockCloudService } from "@/lib/ai/cloud";
+import { exportLibrary, importLibrary } from "@/lib/db/backup";
 
 /**
  * The recognition dialect alone, validated against the known set.
@@ -51,6 +52,43 @@ export function useSettings() {
   );
   const [isSyncing, setIsSyncing] = useState(false);
   const syncInFlight = useRef(false);
+
+  /**
+   * Writes the whole library out as a JSON file.
+   *
+   * IndexedDB is the only copy, and the browser may evict it, so this is the one
+   * control standing between a user and losing everything they have built. A blob
+   * download rather than anything server-side: there is no server.
+   */
+  const downloadBackup = useCallback(async (): Promise<TKey> => {
+    try {
+      const backup = await exportLibrary(db);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `deutschflow-${backup.exportedAt.slice(0, 10)}.json`;
+      anchor.click();
+      // Revoked on the next frame: revoking synchronously races the download in
+      // Safari, which has not read the blob by the time click() returns.
+      requestAnimationFrame(() => URL.revokeObjectURL(url));
+      return "settings.backupDownloaded";
+    } catch {
+      return "settings.backupFailed";
+    }
+  }, []);
+
+  /** Merges a previously exported file back in. Additive - see importLibrary. */
+  const restoreBackup = useCallback(async (file: File): Promise<TKey> => {
+    try {
+      await importLibrary(db, JSON.parse(await file.text()));
+      return "settings.backupRestored";
+    } catch {
+      return "settings.backupInvalid";
+    }
+  }, []);
 
   const totalVocabulary = vocabulary.length;
   const totalTranscripts = transcripts.length;
@@ -122,6 +160,8 @@ export function useSettings() {
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,
+    downloadBackup,
+    restoreBackup,
     signIn,
     signOut,
     performSync

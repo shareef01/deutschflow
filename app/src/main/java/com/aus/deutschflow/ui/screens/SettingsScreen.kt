@@ -474,8 +474,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     if (showLoginDialog) {
         LoginDialog(
             onDismiss = { showLoginDialog = false },
-            onLogin = { email, pass ->
-                viewModel.signIn(email, pass)
+            onEnablePreview = {
+                viewModel.enableCloudPreview()
                 showLoginDialog = false
             }
         )
@@ -508,34 +508,28 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     }
 }
 
+/**
+ * Explains what "cloud sync" currently is, which is nothing.
+ *
+ * This used to take an email address and a password. [MockCloudService.signIn]
+ * discards both, returns true for any input, and the app then said "Signed in" - so
+ * the form taught people to type a real, probably reused password into a control
+ * that sent it nowhere and confirmed a connection that did not exist. Neither half
+ * of that is acceptable, and the credentials cannot be made meaningful until there
+ * is a backend to check them against.
+ *
+ * The web port has always said this plainly in its dialog body; this is the same
+ * copy. When a backend does arrive, the fields come back with it.
+ */
 @Composable
-fun LoginDialog(onDismiss: () -> Unit, onLogin: (String, String) -> Unit) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-
+fun LoginDialog(onDismiss: () -> Unit, onEnablePreview: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_cloud_sign_in_title), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text(stringResource(R.string.settings_cloud_email)) },
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(stringResource(R.string.settings_cloud_password)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true
-                )
-            }
-        },
+        text = { Text(stringResource(R.string.settings_cloud_sign_in_body)) },
         confirmButton = {
-            Button(onClick = { onLogin(email, password) }) {
-                Text(stringResource(R.string.settings_cloud_sign_in))
+            Button(onClick = onEnablePreview) {
+                Text(stringResource(R.string.action_ok))
             }
         },
         dismissButton = {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ReviewQuality, calculateNextReview } from "@/lib/ai/srs";
+import {
+  MAX_EASE_FACTOR,
+  MAX_INTERVAL_DAYS,
+  ReviewQuality,
+  calculateNextReview,
+} from "@/lib/ai/srs";
 import type { VocabularyEntry } from "@/lib/db/schema";
 
 /**
@@ -81,16 +86,69 @@ describe("calculateNextReview — the SM-2 schedule", () => {
     expect(easy.easeFactor).toBeCloseTo(2.6, 5);
   });
 
-  it("shows a Hard card tomorrow and costs ease", () => {
+  it("shortens a Hard card's interval rather than resetting it", () => {
+    // 30 * 1.2 = 36. This used to return a flat 1, so a mature card lost its
+    // whole schedule for an answer that was still correct.
     const result = calculateNextReview(
       card({ interval: 30, easeFactor: 2.5, reviewCount: 5 }),
       ReviewQuality.HARD
     );
 
+    expect(result.interval).toBe(36);
+    expect(result.easeFactor).toBeCloseTo(2.35, 5);
+    // Hard is a success, so the streak advances.
+    expect(result.reviewCount).toBe(6);
+  });
+
+  it("keeps a long streak's schedule roughly intact through one Hard", () => {
+    // The regression this guards: five Good ratings reach 95 days, and one Hard
+    // used to drop that to 1 and take four more reviews to climb back.
+    const result = calculateNextReview(
+      card({ interval: 95, easeFactor: 2.5, reviewCount: 5 }),
+      ReviewQuality.HARD
+    );
+
+    expect(result.interval).toBeGreaterThanOrEqual(100);
+    expect(result.interval).toBeLessThanOrEqual(120);
+  });
+
+  it("charges Hard and Again different ease", () => {
+    // They shared a flat -0.2, so the two buttons told the scheduler nothing
+    // different about the card.
+    const base = card({ interval: 10, easeFactor: 2.5, reviewCount: 3 });
+    const hard = calculateNextReview(base, ReviewQuality.HARD);
+    const again = calculateNextReview(base, ReviewQuality.AGAIN);
+
+    expect(hard.easeFactor).toBeGreaterThan(again.easeFactor);
+    expect(hard.easeFactor).toBeCloseTo(2.35, 5);
+    expect(again.easeFactor).toBeCloseTo(2.3, 5);
+  });
+
+  it("never lets a Hard card schedule backwards or to zero", () => {
+    // A brand-new card has interval 0; 0 * 1.2 is still 0, and a card due
+    // "in zero days" would read as a lapse to the due query.
+    const result = calculateNextReview(card(), ReviewQuality.HARD);
+
     expect(result.interval).toBe(1);
-    expect(result.easeFactor).toBeCloseTo(2.3, 5);
-    // The history is not thrown away: only Again resets the count.
-    expect(result.reviewCount).toBe(5);
+    expect(result.nextReview).toBeGreaterThan(0);
+  });
+
+  it("caps the interval so a card is never scheduled out of reach", () => {
+    // Nine Easy ratings used to reach 220 years, which is deletion by another
+    // name. The cap is a year.
+    let current = card();
+    for (let i = 0; i < 10; i++) current = calculateNextReview(current, ReviewQuality.EASY);
+
+    expect(current.interval).toBe(MAX_INTERVAL_DAYS);
+    expect(current.nextReview - Date.now()).toBeLessThanOrEqual(MAX_INTERVAL_DAYS * DAY_MS);
+  });
+
+  it("never lets the ease climb above the ceiling", () => {
+    let current = card();
+    for (let i = 0; i < 20; i++) current = calculateNextReview(current, ReviewQuality.EASY);
+
+    expect(current.easeFactor).toBeLessThanOrEqual(MAX_EASE_FACTOR);
+    expect(current.easeFactor).toBeCloseTo(MAX_EASE_FACTOR, 5);
   });
 
   it("resets the card and leaves it due now on Again", () => {

@@ -1,16 +1,31 @@
 /**
- * API-key vault — KeystoreCipher 1:1, built on WebCrypto.
+ * API-key vault — the same construction as KeystoreCipher, built on WebCrypto.
  *
- * Mirrors app/src/main/java/com/aus/deutschflow/data/local/KeystoreCipher.kt:
- *   Android Keystore, AES/GCM/NoPadding, fresh random IV per encryption,
- *   IV prefixed to the ciphertext, no plaintext fallback.
+ * WHAT THIS PROTECTS, precisely: someone who copies the browser profile's
+ * `deutschflow` IndexedDB file without also copying `deutschflow-vault`.
  *
- * Web equivalent:
+ * WHAT IT DOES NOT PROTECT AGAINST: script running on this origin. `extractable:
+ * false` stops `exportKey` returning the raw AES bytes; it does not stop anyone
+ * *using* the key, and `settings.getApiKey()` is exactly that call — the app makes
+ * it before every request, so the plaintext key is reconstructed in memory
+ * routinely and then sent from the browser in an Authorization header. An XSS or a
+ * malicious extension reads it trivially.
+ *
+ * So this is NOT the analogue of a key in secure hardware, and the header here
+ * used to say it was. On Android the decrypt is mediated by the OS and the key
+ * material never enters the app's process; here it cannot be otherwise, because
+ * the browser is the thing making the API call. If that threat model ever needs to
+ * change, the answer is a server-side proxy route holding the key in an
+ * environment variable — not stronger client-side encryption.
+ *
+ * Mirrors app/src/main/java/com/aus/deutschflow/data/local/KeystoreCipher.kt in
+ * construction: AES/GCM/NoPadding, fresh random IV per encryption, IV prefixed to
+ * the ciphertext, no plaintext fallback.
+ *
+ * Web specifics:
  *   - AES-256-GCM via crypto.subtle.
- *   - The key is generated NON-EXTRACTABLE (`extractable: false`) and stored in
- *     a dedicated IndexedDB database, so the key material never leaves the
- *     browser as a plaintext value — the analogue of a key that lives in secure
- *     hardware and never enters the process.
+ *   - The key is generated non-extractable and stored in a dedicated IndexedDB
+ *     database, so it is at least not readable as a value from a copied profile.
  *   - A fresh 12-byte IV per encryption, prefixed to the ciphertext, base64.
  *   - If encryption fails, the key is NOT written: there is no plaintext
  *     fallback, and the UI must say so instead of claiming a save that did not

@@ -552,7 +552,7 @@ class GroqHelper @Inject constructor(
 
             return WordDetails(
                 word = word,
-                article = obj.optString("article", "none").trim().ifBlank { "none" },
+                article = normalizeArticle(obj.optString("article")),
                 plural = obj.optString("plural").trim(),
                 conjugationOrInfinitive = obj.optString("conjugation_or_infinitive").trim(),
                 meaning = meaning,
@@ -560,6 +560,23 @@ class GroqHelper @Inject constructor(
                 synonyms = parseList(obj.optJSONArray("synonyms")),
                 antonyms = parseList(obj.optJSONArray("antonyms"))
             )
+        }
+
+        /** The four values the prompt allows. Anything else is the model improvising. */
+        private val ARTICLES = setOf("der", "die", "das", "none")
+
+        /**
+         * German has three definite articles.
+         *
+         * A model that answers with a sentence, a gendered guess in another language,
+         * or an empty string is not describing a noun - and whatever it said was
+         * written into the library verbatim and then rehearsed as fact for months.
+         * "none" is the honest fallback, and the detail sheet already renders it as
+         * "no article".
+         */
+        internal fun normalizeArticle(value: String?): String {
+            val article = value?.trim()?.lowercase().orEmpty()
+            return if (article in ARTICLES) article else "none"
         }
 
         private fun parseList(array: JSONArray?): List<String> {

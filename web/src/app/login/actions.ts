@@ -8,6 +8,7 @@ import {
   createSessionToken,
   safeRedirectTarget,
   sitePassword,
+  timingSafeEqual,
 } from "@/lib/auth/session";
 
 /**
@@ -23,7 +24,11 @@ export async function login(prevState: { error: string } | null, formData: FormD
     return { error: "This instance has no security key configured. Set SITE_PASSWORD and redeploy." };
   }
 
-  if (password !== masterPassword) {
+  // Constant-time, like verifySessionToken two functions along in session.ts. A
+  // short-circuiting `!==` leaks the length and the matching prefix; barely
+  // exploitable across a network, but there is no reason for the gate's two
+  // comparisons to disagree about whether that matters.
+  if (!timingSafeEqual(password ?? "", masterPassword)) {
     return { error: "That key doesn't match. Check for stray spaces and try again." };
   }
 

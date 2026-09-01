@@ -1,7 +1,8 @@
 import Dexie, { type Table } from "dexie";
 
 /**
- * DeutschFlow database — Room v11 → Dexie 4.
+ * DeutschFlow database — the Dexie mirror of the Room schema (Room is at v12;
+ * the two version numbers are independent and need not match).
  *
  * Mirrors app/src/main/java/com/aus/deutschflow/data/local/:
  *   entities/TranscriptEntity.kt    → transcripts

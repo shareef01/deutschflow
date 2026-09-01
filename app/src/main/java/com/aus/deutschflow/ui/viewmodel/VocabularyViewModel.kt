@@ -10,6 +10,8 @@ import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.Collator
+import java.util.Locale
 import javax.inject.Inject
 
 /** How the library orders its rows. Purely a view concern — no persistence. */
@@ -63,14 +65,30 @@ class VocabularyViewModel @Inject constructor(
             // arrives; alphabetical re-orders by the word the user reads first.
             when (sort) {
                 VocabularySort.NEWEST -> filtered
-                VocabularySort.ALPHABETICAL ->
-                    filtered.sortedBy { it.germanText.lowercase() }
+                VocabularySort.ALPHABETICAL -> filtered.sortedWith(byGermanAlphabet)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    private companion object {
+
+        /**
+         * German dictionary order, not UTF-16 order.
+         *
+         * `sortedBy { lowercase() }` compares code units, and every umlaut sits above
+         * 'z' there - so Äpfel, Öl and Übung were all exiled to the bottom of an
+         * alphabetical library, which in a German app is the one list that has to be
+         * right. A Collator sorts them where a German speaker looks for them, next to
+         * A, O and U. The web already does this via localeCompare(_, "de").
+         */
+        private val germanCollator: Collator = Collator.getInstance(Locale.GERMAN)
+
+        val byGermanAlphabet: Comparator<VocabularyEntity> =
+            compareBy(germanCollator) { it.germanText }
     }
 
     fun setSortMode(mode: VocabularySort) {
