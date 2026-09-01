@@ -30,8 +30,14 @@ function LoginForm() {
           />
         </div>
 
+        {/* role="alert" so a screen reader hears the rejection: this was a styled
+            paragraph, silent to anyone not looking at it. The pulse is dropped under
+            prefers-reduced-motion, which the rest of the app already respects. */}
         {state?.error && (
-          <p className="text-[#FF453A] text-sm text-center font-bold animate-pulse">
+          <p
+            role="alert"
+            className="text-[#FF453A] text-sm text-center font-bold motion-safe:animate-pulse"
+          >
             {state.error}
           </p>
         )}

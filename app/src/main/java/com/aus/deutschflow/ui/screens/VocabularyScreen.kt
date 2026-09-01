@@ -45,6 +45,7 @@ import com.aus.deutschflow.ui.theme.SelectionDefaults
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 import kotlinx.coroutines.launch
+import com.aus.deutschflow.ui.components.OnLeavingScreen
 
 @Composable
 fun VocabularyScreen(
@@ -82,6 +83,11 @@ fun VocabularyScreen(
     }
 
     LaunchedEffect(Unit) { viewModel.dismissTtsError() }
+
+    // The voice is a @Singleton and outlives this screen; without this a word
+    // spoken here keeps playing after the user switches tabs or backgrounds the
+    // app. Same discipline the recording screens apply to the microphone.
+    OnLeavingScreen { viewModel.stopSpeaking() }
 
     // Undo rather than a confirmation dialog: a confirmation taxes every deletion to
     // protect the rare mistaken one, where Undo costs nothing until it is needed.

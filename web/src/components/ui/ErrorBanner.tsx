@@ -9,6 +9,9 @@ import { WarningIcon } from "@/components/icons";
  */
 export function ErrorBanner({ message }: { message: string | null }) {
   if (!message) return null;
+  // Announced, not just shown. The Compose counterpart posts the same thing through
+  // announceForAccessibility; on the web a live region does fire for content that
+  // appears, so this is the supported route rather than a workaround.
   return (
     <div
       // Announced when it appears rather than waiting to be found. A banner

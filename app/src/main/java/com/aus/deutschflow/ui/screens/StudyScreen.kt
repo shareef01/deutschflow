@@ -81,6 +81,11 @@ fun StudySessionContent(
         viewModel.startSession()
     }
 
+    // The voice is a @Singleton and outlives this screen; without this a word
+    // spoken here keeps playing after the user switches tabs or backgrounds the
+    // app. Same discipline the recording screens apply to the microphone.
+    OnLeavingScreen { viewModel.stopSpeaking() }
+
     if (!hasLoaded) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)

@@ -8,6 +8,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.aus.deutschflow.di.WorkerEntryPoint
 import dagger.hilt.android.EntryPointAccessors
+import com.aus.deutschflow.data.local.PreferenceManager
+import kotlinx.coroutines.flow.first
 import java.time.Duration
 import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
@@ -46,18 +48,54 @@ class DailyWordWorker(
          * Enqueued on every launch under [ExistingPeriodicWorkPolicy.KEEP], so an
          * already-scheduled run keeps its place rather than being pushed back a day
          * each time the user opens the app.
+         *
+         * KEEP has one cost, which [rescheduleIfZoneChanged] pays: the initial delay
+         * is honoured once and the work then repeats on elapsed time, so the 9am slot
+         * is really "every 24 hours from whenever it was first scheduled". Fly from
+         * Berlin to New York and the notification arrives at 3am, permanently, because
+         * nothing ever re-enqueues it.
          */
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<DailyWordWorker>(1, TimeUnit.DAYS)
-                .setInitialDelay(delayUntilNext(HOUR_OF_DAY), TimeUnit.MILLISECONDS)
-                .build()
-
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 UNIQUE_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
-                request
+                request()
             )
         }
+
+        /**
+         * Re-anchors the daily slot when the device's UTC offset has changed.
+         *
+         * [ExistingPeriodicWorkPolicy.UPDATE] rather than REPLACE: UPDATE keeps the
+         * work's identity and history and just moves it, where REPLACE cancels and
+         * re-creates. The offset is remembered rather than the zone id, because a
+         * zone id can change without the clock moving (a rename) and cannot change
+         * the delay when it does.
+         *
+         * @return true when the schedule was actually moved, which the caller may
+         * want for a log or a test.
+         */
+        suspend fun rescheduleIfZoneChanged(
+            context: Context,
+            preferences: PreferenceManager,
+            now: ZonedDateTime = ZonedDateTime.now()
+        ): Boolean {
+            val current = now.offset.totalSeconds
+            if (preferences.dailyWordZoneOffset.first() == current) return false
+
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                UNIQUE_NAME,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request(now)
+            )
+            preferences.setDailyWordZoneOffset(current)
+            return true
+        }
+
+        private fun request(now: ZonedDateTime = ZonedDateTime.now()) =
+            PeriodicWorkRequestBuilder<DailyWordWorker>(1, TimeUnit.DAYS)
+                .setInitialDelay(delayUntilNext(HOUR_OF_DAY, now), TimeUnit.MILLISECONDS)
+                .build()
 
         /**
          * Milliseconds from [now] until the next [hourOfDay] in the device's zone.

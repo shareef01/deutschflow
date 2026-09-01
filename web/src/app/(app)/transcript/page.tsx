@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranscript } from "@/hooks/useTranscript";
 import { useDialect } from "@/hooks/useSettings";
+import { db } from "@/lib/db";
+import { setDialect, DIALECTS, type Dialect } from "@/lib/db/settings";
 import { useI18n } from "@/hooks/useI18n";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
@@ -37,6 +39,7 @@ export default function TranscriptPage() {
   // useSettings would drag the full vocabulary and transcript tables into every
   // re-render of a screen that is live while the microphone is open.
   const selectedDialect = useDialect();
+  const saveDialect = (dialect: Dialect) => void setDialect(db, dialect);
 
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const snackbarTimer = useRef<number | null>(null);
@@ -103,10 +106,11 @@ export default function TranscriptPage() {
   if (isEmpty) {
     return (
       <div className="mx-auto flex min-h-0 w-full max-w-[var(--container-workspace)] flex-1 flex-col items-center justify-center px-[var(--gutter)] py-[var(--space-6)]">
-        <span className="flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container">
-          <span className="size-2 rounded-full bg-secondary" />
-          {t("transcript.language", [selectedDialect])}
-        </span>
+        {/* A button, not a label. Android's LanguageIndicator has always been one -
+            its comment reads "the one place you are reminded which language you are
+            speaking was the one place you could not act on it" - and the web port
+            kept the reminder without the fix. */}
+        <DialectChip selected={selectedDialect} onSelect={saveDialect} t={t} />
 
         <h2 className="mt-6 text-center text-headline-medium text-on-surface">
           {t("transcript.emptyTitle")}
@@ -385,6 +389,83 @@ function TypedInput({
       >
         <span className="font-bold">{t("transcript.translateTyped")}</span>
       </GlassButton>
+    </div>
+  );
+}
+
+/** The dialect names, keyed the way Settings keys them. */
+const DIALECT_LABELS: Record<Dialect, TKey> = {
+  "de-DE": "settings.dialectDe",
+  "de-AT": "settings.dialectAt",
+  "de-CH": "settings.dialectCh",
+};
+
+/**
+ * Which German the recogniser is listening for, and a way to change it.
+ *
+ * Shows the country rather than the tag: "German · de-DE" told the user the value
+ * of a variable, where Android has always shown "Listening for Germany".
+ */
+function DialectChip({
+  selected,
+  onSelect,
+  t,
+}: {
+  selected: Dialect;
+  onSelect: (dialect: Dialect) => void;
+  t: (key: TKey, params?: (string | number)[]) => string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="press-scale flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow"
+      >
+        <span className="size-2 rounded-full bg-secondary" />
+        {t("transcript.listeningFor", [t(DIALECT_LABELS[selected])])}
+        <svg className="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M7 10l5 5 5-5z" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label={t("action.cancel")}
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <ul
+            role="listbox"
+            className="glass-surface absolute left-1/2 top-11 z-50 w-48 -translate-x-1/2 p-1"
+          >
+            {DIALECTS.map((dialect) => (
+              <li key={dialect}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={dialect === selected}
+                  onClick={() => {
+                    onSelect(dialect);
+                    setOpen(false);
+                  }}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-body-medium hover:bg-white/5 ${
+                    dialect === selected ? "text-primary" : "text-on-surface"
+                  }`}
+                >
+                  {t(DIALECT_LABELS[dialect])}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

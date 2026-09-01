@@ -16,6 +16,19 @@ class HistoryViewModel @Inject constructor(
     private val ttsHelper: TTSHelper
 ) : ViewModel() {
 
+    /**
+     * Silences the engine when the screen goes away.
+     *
+     * TTSHelper is a @Singleton and was only ever torn down in
+     * MainActivity.onDestroy behind `isFinishing`, which is false when the app is
+     * merely backgrounded - so a word spoken here kept playing after the user
+     * switched tabs or left the app. The microphone was already released on both
+     * paths; the voice was not.
+     */
+    fun stopSpeaking() {
+        ttsHelper.stop()
+    }
+
     fun speak(text: String) {
         if (text.isNotBlank()) {
             ttsHelper.speak(text)

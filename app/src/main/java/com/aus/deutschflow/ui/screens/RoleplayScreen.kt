@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -54,7 +55,12 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     // The ViewModel is scoped to the saved back stack entry, so tab switches and
     // backgrounding would otherwise leave the recogniser holding the microphone
     // behind whatever screen the user moved on to.
-    OnLeavingScreen { viewModel.cancelListening() }
+    OnLeavingScreen {
+        viewModel.cancelListening()
+        // The reply is spoken automatically, so leaving mid-sentence used to carry
+        // the voice into whatever screen came next.
+        viewModel.stopSpeaking()
+    }
 
     // Auto-scroll to bottom when messages update
     LaunchedEffect(messages.size) {
@@ -126,7 +132,10 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
             contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
-            items(messages) { message ->
+            // Keyed by position and role. The list is append-only, so an index is
+            // stable for the life of a message; itemsIndexed rather than indexOf in a
+            // key lambda, which would be a linear scan per row on every composition.
+            itemsIndexed(messages, key = { index, message -> "$index-${message.role}" }) { _, message ->
                 ChatBubble(message, onSpeak = { viewModel.speak(it) })
             }
 

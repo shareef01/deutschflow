@@ -17,6 +17,7 @@ export const STRINGS = {
     "nav.study": "Study",
     "nav.practice": "Practice",
     "nav.settings": "Settings",
+    "action.skipToContent": "Skip to content",
     "action.back": "Back",
 
     // Shared actions
@@ -30,6 +31,7 @@ export const STRINGS = {
 
     // Transcript
     "speech.unavailableBody": "This browser can't recognise speech. Chrome, Edge and Safari can — or type a sentence below.",
+    "transcript.listeningFor": "Listening for {0}",
     "transcript.translateTyped": "Translate",
     "transcript.typeInstead": "Type a German sentence",
     "transcript.listening": "Listening…",
@@ -219,6 +221,7 @@ export const STRINGS = {
       "German speech isn't installed. Add a German voice under Text-to-speech output in your system's settings.",
 
     // AI translation
+    "db.upgradeBlocked": "DeutschFlow is open in another tab on an older version. Close the other tabs and reload to finish updating.",
     "ai.noKey": "Add your Groq API key in Settings to get translations.",
     "ai.failed": "Translation failed: {0}",
     "ai.noResponse": "no response from Groq",
@@ -245,6 +248,7 @@ export const STRINGS = {
     "nav.study": "Lernen",
     "nav.practice": "Üben",
     "nav.settings": "Einstellungen",
+    "action.skipToContent": "Zum Inhalt springen",
     "action.back": "Zurück",
 
     "action.speak": "Vorlesen",
@@ -256,6 +260,7 @@ export const STRINGS = {
     "action.ok": "OK",
 
     "speech.unavailableBody": "Dieser Browser kann keine Sprache erkennen. Chrome, Edge und Safari können es — oder tippe unten einen Satz.",
+    "transcript.listeningFor": "Hört auf {0}",
     "transcript.translateTyped": "Übersetzen",
     "transcript.typeInstead": "Deutschen Satz eingeben",
     "transcript.listening": "Hört zu…",
@@ -437,6 +442,7 @@ export const STRINGS = {
     "tts.noGerman":
       "Deutsche Sprachausgabe ist nicht installiert. Füge eine deutsche Stimme unter „Text-in-Sprache-Ausgabe“ in den Systemeinstellungen hinzu.",
 
+    "db.upgradeBlocked": "DeutschFlow ist in einem anderen Tab in einer älteren Version geöffnet. Schließe die anderen Tabs und lade neu, um das Update abzuschließen.",
     "ai.noKey": "Trage deinen Groq-API-Schlüssel in den Einstellungen ein, um Übersetzungen zu erhalten.",
     "ai.failed": "Übersetzung fehlgeschlagen: {0}",
     "ai.noResponse": "keine Antwort von Groq",
