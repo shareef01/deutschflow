@@ -306,7 +306,7 @@ function VocabularyItem({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <li className="glass-surface">
+    <li className="glass-surface list-row">
       <div className="flex items-start gap-1 p-2 pl-4">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 pr-2 text-left">
           <p lang="de" className="line-clamp-3 hyphens-auto break-words text-title-medium text-primary">{item.germanText}</p>

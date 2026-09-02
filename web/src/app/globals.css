@@ -393,6 +393,20 @@
   background: var(--color-outline-variant);
 }
 
+/* Rows in a long list, skipped while off screen.
+   The Android lists are LazyColumns, which only ever compose what is visible;
+   the web renders every row, so a library of a thousand words paid for a
+   thousand card subtrees on every keystroke in the search box. This is the
+   same win without a windowing dependency - the browser skips layout, paint
+   and style for anything outside the viewport, and `contain-intrinsic-size`
+   gives it a placeholder height so the scrollbar stays honest.
+   `auto` (not the height alone) lets the browser remember the real size once a
+   row has been rendered, so scroll position does not jump. */
+@utility list-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
 /* ============================================================================
    Base
    ========================================================================== */

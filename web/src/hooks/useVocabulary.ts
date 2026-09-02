@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { db } from "@/lib/db";
 import {
   deleteVocabulary as deleteVocabularyRow,
@@ -35,15 +42,27 @@ export function useVocabulary() {
     tts.dismissError();
   }, []);
 
+  /**
+   * The query the list is filtered by, which lags the one in the input box.
+   *
+   * Filtering is cheap; re-rendering a library of a thousand cards on every
+   * keystroke is not, and it happened between the keypress and the character
+   * appearing. Deferring rather than debouncing keeps the field itself at full
+   * speed and skips intermediate lists entirely when typing outruns rendering -
+   * where a debounce would make every user wait a fixed delay whether or not
+   * their library is big enough to need one.
+   */
+  const deferredQuery = useDeferredValue(searchQuery);
+
   const list = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (!q) return vocabulary;
     return vocabulary.filter(
       (v) =>
         v.germanText.toLowerCase().includes(q) ||
         v.englishTranslation.toLowerCase().includes(q)
     );
-  }, [vocabulary, searchQuery]);
+  }, [vocabulary, deferredQuery]);
 
   /**
    * Saves a word the user typed in by hand — the one path into the library

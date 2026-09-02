@@ -156,7 +156,7 @@ function HistoryRow({
   const wordCount = transcript.fullText.split(/\s+/).filter((w) => w.length > 0).length;
 
   return (
-    <div className="glass-surface p-5 shadow-md shadow-azure-glow/10 transition-shadow hover:shadow-lg hover:shadow-azure-glow/15">
+    <div className="glass-surface list-row p-5 shadow-md shadow-azure-glow/10 transition-shadow hover:shadow-lg hover:shadow-azure-glow/15">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p lang="de" className="mt-2 line-clamp-3 hyphens-auto break-words text-base leading-relaxed text-on-surface">
