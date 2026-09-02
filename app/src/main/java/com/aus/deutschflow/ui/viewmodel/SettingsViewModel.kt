@@ -83,7 +83,7 @@ class SettingsViewModel @Inject constructor(
         // Settings is the only screen that reads the key, so it is the one place
         // worth paying a Keystore round trip to re-encrypt one left in the clear by
         // an older build.
-        viewModelScope.launch { preferenceManager.migrateLegacyApiKey() }
+        launchGuarded(TAG) { preferenceManager.migrateLegacyApiKey() }
     }
 
     fun dismissMessage() {
@@ -123,7 +123,7 @@ class SettingsViewModel @Inject constructor(
      * "Wipe All Progress?".
      */
     fun clearAllProgress() {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _message.value = R.string.message_cloud_failed }) {
             database.withTransaction {
                 transcriptDao.deleteAll()
                 vocabularyDao.deleteAll()

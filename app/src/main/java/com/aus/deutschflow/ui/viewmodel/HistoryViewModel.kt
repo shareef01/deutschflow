@@ -91,7 +91,7 @@ class HistoryViewModel @Inject constructor(
     }
 
     fun deleteTranscript(transcript: TranscriptEntity) {
-        viewModelScope.launch {
+        launchGuarded(TAG) {
             transcriptDao.deleteTranscript(transcript)
         }
     }
@@ -102,8 +102,12 @@ class HistoryViewModel @Inject constructor(
      * it was in the list.
      */
     fun restoreTranscript(transcript: TranscriptEntity) {
-        viewModelScope.launch {
+        launchGuarded(TAG) {
             transcriptDao.insertTranscript(transcript.copy(id = 0))
         }
+    }
+
+    private companion object {
+        private const val TAG = "HistoryViewModel"
     }
 }

@@ -2,6 +2,7 @@ package com.aus.deutschflow.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.TTSHelper
@@ -70,11 +71,21 @@ class VocabularyViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** A write that did not land, so the screen can say so rather than look successful. */
+    private val _error = MutableStateFlow<Int?>(null)
+    val error: StateFlow<Int?> = _error
+
+    fun dismissError() {
+        _error.value = null
+    }
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
 
     private companion object {
+        private const val TAG = "VocabularyViewModel"
+
 
         /**
          * German dictionary order, not UTF-16 order.
@@ -108,7 +119,7 @@ class VocabularyViewModel @Inject constructor(
         val translation = english.trim()
         if (germanText.isBlank() || translation.isBlank()) return
 
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_save_failed }) {
             vocabularyDao.save(
                 VocabularyEntity(germanText = germanText, englishTranslation = translation)
             )
@@ -117,7 +128,7 @@ class VocabularyViewModel @Inject constructor(
     }
 
     fun deleteVocabulary(vocabulary: VocabularyEntity) {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_delete_failed }) {
             vocabularyDao.deleteVocabulary(vocabulary)
             widgetUpdater.refresh()
         }
@@ -138,7 +149,7 @@ class VocabularyViewModel @Inject constructor(
      * an occupied name most likely means. The SRS fields ride along on the entity.
      */
     fun restoreVocabulary(vocabulary: VocabularyEntity) {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_save_failed }) {
             vocabularyDao.save(vocabulary.copy(id = 0))
             widgetUpdater.refresh()
         }
@@ -153,7 +164,7 @@ class VocabularyViewModel @Inject constructor(
      * together instead, which is what the user asking for that name most likely meant.
      */
     fun updateVocabulary(vocabulary: VocabularyEntity) {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_save_failed }) {
             vocabularyDao.save(vocabulary)
             widgetUpdater.refresh()
         }

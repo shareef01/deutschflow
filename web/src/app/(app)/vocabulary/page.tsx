@@ -30,6 +30,7 @@ export default function VocabularyPage() {
     searchQuery,
     setSearchQuery,
     ttsError,
+    error,
     addVocabulary,
     deleteVocabulary,
     restoreVocabulary,
@@ -110,7 +111,9 @@ export default function VocabularyPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ErrorBanner message={ttsError} />
+      {/* A failed write outranks a failed voice: one means the library did not
+          change, the other means a word was not read aloud. */}
+      <ErrorBanner message={error ? t(error) : ttsError} />
 
       {isDesktop && !isLibraryEmpty ? (
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(22rem,0.9fr)_1px_minmax(0,1.1fr)]">

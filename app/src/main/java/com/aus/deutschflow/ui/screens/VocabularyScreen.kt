@@ -46,6 +46,7 @@ import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 import kotlinx.coroutines.launch
 import com.aus.deutschflow.ui.components.OnLeavingScreen
+import kotlinx.coroutines.delay
 
 @Composable
 fun VocabularyScreen(
@@ -57,6 +58,7 @@ fun VocabularyScreen(
     val sortMode by viewModel.sortMode.collectAsState()
     val allVocabulary by viewModel.allVocabulary.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
+    val writeError by viewModel.error.collectAsState()
 
     // Ids rather than entities, and saveable rather than remembered: VocabularyEntity
     // is not Parcelable, and rotating used to drop whichever word was open and
@@ -123,7 +125,21 @@ fun VocabularyScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         // Speak buttons sit in both the list rows and the detail pane, so the banner
         // goes above whichever of the two is currently showing.
-        ErrorBanner(ttsError, modifier = Modifier.padding(horizontal = 16.dp))
+        // A failed write outranks a failed voice: one means the library did not
+        // change, the other means a word was not read aloud.
+        ErrorBanner(
+            writeError?.let { stringResource(it) } ?: ttsError,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        // Cleared once the user has had a chance to read it, so it does not outlive
+        // the action that caused it - the same rule the recogniser's timed reset uses.
+        LaunchedEffect(writeError) {
+            if (writeError != null) {
+                delay(ERROR_VISIBLE_MS)
+                viewModel.dismissError()
+            }
+        }
 
         if (isExpanded) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -633,3 +649,6 @@ private fun VocabularyEditorDialog(
         }
     )
 }
+
+/** How long a failed-write banner stays up before it clears itself. */
+private const val ERROR_VISIBLE_MS = 4_000L

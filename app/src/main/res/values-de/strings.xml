@@ -71,6 +71,8 @@
     <!-- Day before month, as German writes dates. -->
 
     <!-- Library -->
+    <string name="library_save_failed">Das Wort konnte nicht gespeichert werden. Versuche es erneut.</string>
+    <string name="library_delete_failed">Das Wort konnte nicht gelöscht werden. Versuche es erneut.</string>
     <string name="library_word_deleted">Wort gelöscht.</string>
     <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>
     <string name="library_tab_words">Wörter</string>

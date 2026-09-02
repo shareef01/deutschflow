@@ -65,6 +65,8 @@
     </plurals>
 
     <!-- Library -->
+    <string name="library_save_failed">Couldn\'t save that word. Try again.</string>
+    <string name="library_delete_failed">Couldn\'t delete that word. Try again.</string>
     <string name="library_word_deleted">Word deleted.</string>
     <string name="library_search_hint">Search words or translations…</string>
     <string name="library_tab_words">Words</string>

@@ -63,6 +63,8 @@ export const STRINGS = {
     "action.undo": "Undo",
 
     // Library
+    "library.deleteFailed": "Couldn't delete that word. Try again.",
+    "library.saveFailed": "Couldn't save that word. Try again.",
     "library.wordDeleted": "Word deleted.",
     "library.searchHint": "Search words or translations…",
     "library.emptyTitle": "Your library is empty",
@@ -290,6 +292,8 @@ export const STRINGS = {
     "history.words": "{0} Wörter",
     "action.undo": "Rückgängig",
 
+    "library.deleteFailed": "Das Wort konnte nicht gelöscht werden. Versuche es erneut.",
+    "library.saveFailed": "Das Wort konnte nicht gespeichert werden. Versuche es erneut.",
     "library.wordDeleted": "Wort gelöscht.",
     "library.searchHint": "Wörter oder Übersetzungen suchen…",
     "library.emptyTitle": "Deine Bibliothek ist leer",
