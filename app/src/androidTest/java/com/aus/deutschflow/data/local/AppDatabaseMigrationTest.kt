@@ -658,17 +658,32 @@ class AppDatabaseMigrationTest {
             // Untouched: no umlaut, no transliteration, nothing to fold together.
             insert("Hund", "dog", 700, article = "der")
             insert("gehen", "to go", 800)
+
+            // An accented letter that is not an umlaut, in upper case. The backfill
+            // used to be a SQL expression around SQLite's lower(), which is
+            // ASCII-only: it hand-folded the four umlauts and left everything else,
+            // so this migrated to "cafÉ" and became a row no lookup could ever
+            // find again. germanKey() folds it properly, so both spellings meet.
+            insert("CAFÉ", "cafe", 900, article = "das")
+            insert("Café", "coffee house", 1000, plural = "Cafés")
         }
 
         val database = openAsReleaseWould()
         try {
             val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
 
-            assertEquals("eight rows fold to five words", 5, saved.size)
+            assertEquals("ten rows fold to six words", 6, saved.size)
             assertEquals(
-                setOf("uebung", "strasse", "oel", "hund", "gehen"),
+                setOf("uebung", "strasse", "oel", "hund", "gehen", "café"),
                 saved.map { it.germanTextKey }.toSet()
             )
+
+            // The case the ASCII-only SQL got wrong: one word, fully lower-cased,
+            // with both spellings' fields merged into it.
+            val cafe = saved.single { it.germanTextKey == "café" }
+            assertEquals("das", cafe.article)
+            assertEquals("Cafés", cafe.plural)
+            assertEquals("coffee house", cafe.englishTranslation)
 
             val uebung = saved.single { it.germanTextKey == "uebung" }
             // Every field either copy knew, kept.

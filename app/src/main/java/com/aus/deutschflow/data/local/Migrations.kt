@@ -2,6 +2,7 @@ package com.aus.deutschflow.data.local
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.aus.deutschflow.data.local.entities.germanKey
 
 /**
  * Adds the example sentence to the vocabulary table.
@@ -283,18 +284,35 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
 }
 
 /**
- * The German fold key, as a SQL expression over `germanText`.
+ * Backfills `germanTextKey` using the app's own fold, one row at a time.
  *
- * Uppercase umlauts are replaced before `lower()` because SQLite's `lower()` is
- * ASCII-only and would leave them alone. The result matches
- * [com.aus.deutschflow.data.local.entities.germanKey] for every input the app can
- * produce, which AppDatabaseMigrationTest asserts on a fixture covering each case.
+ * This was a SQL expression - uppercase umlauts replaced before `lower()`, the
+ * lowercase ones after - carrying a comment that claimed it "matches germanKey
+ * for every input the app can produce". It did not. SQLite's `lower()` is
+ * ASCII-only, so it folded the four umlauts this expression hand-rolled and
+ * nothing else: any *other* uppercase non-ASCII letter came through untouched,
+ * and "CAFÉ" migrated to `cafÉ` where [germanKey] gives `café`. A row keyed that
+ * way is invisible to every lookup the app makes, so it could never be found,
+ * merged or deduplicated again.
+ *
+ * Calling the real function removes the whole class of divergence rather than
+ * chasing accents one `replace()` at a time. The rows are read into memory first:
+ * updating through an open cursor over the same table is undefined.
  */
-private const val GERMAN_KEY =
-    "replace(replace(replace(replace(lower(" +
-        "replace(replace(replace(replace(trim(`germanText`), " +
-        "'Ä','ae'), 'Ö','oe'), 'Ü','ue'), 'ẞ','ss')" +
-        "), 'ä','ae'), 'ö','oe'), 'ü','ue'), 'ß','ss')"
+private fun backfillGermanKeys(db: SupportSQLiteDatabase) {
+    val keys = mutableListOf<Pair<Long, String>>()
+    db.query("SELECT `id`, `germanText` FROM `vocabulary`").use { cursor ->
+        while (cursor.moveToNext()) {
+            keys += cursor.getLong(0) to germanKey(cursor.getString(1))
+        }
+    }
+    for ((id, key) in keys) {
+        db.execSQL(
+            "UPDATE `vocabulary` SET `germanTextKey` = ? WHERE `id` = ?",
+            arrayOf<Any?>(key, id)
+        )
+    }
+}
 
 /**
  * Makes duplicate detection understand German.
@@ -323,7 +341,7 @@ private const val GERMAN_KEY =
 val MIGRATION_12_13 = object : Migration(12, 13) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE vocabulary ADD COLUMN germanTextKey TEXT NOT NULL DEFAULT ''")
-        db.execSQL("UPDATE vocabulary SET germanTextKey = $GERMAN_KEY")
+        backfillGermanKeys(db)
 
         // The row each group collapses into: most grammar filled in, then most
         // recently touched, then highest id. Same ranking as MIGRATION_6_7.

@@ -83,15 +83,32 @@ function num(value: unknown, fallback: number): number {
  * existing row keeps its own, because the schedule on this device reflects reviews
  * this device actually saw.
  */
+/**
+ * Why a restore failed, in a form the caller can translate.
+ *
+ * Every failure used to reach the user as "That file isn't a DeutschFlow library
+ * export" - including a backup from a newer version, which is a different problem
+ * with a different answer, and a mid-import storage failure, which is not the
+ * file's fault at all.
+ */
+export type ImportFailure = "invalid" | "newer" | "storage";
+
+export class ImportError extends Error {
+  constructor(readonly reason: ImportFailure, message: string) {
+    super(message);
+    this.name = "ImportError";
+  }
+}
+
 export async function importLibrary(
   db: DeutschFlowDB,
   backup: unknown
 ): Promise<ImportResult> {
   if (!isRecord(backup) || backup.format !== "deutschflow-library") {
-    throw new Error("That file is not a DeutschFlow library export.");
+    throw new ImportError("invalid", "That file is not a DeutschFlow library export.");
   }
   if (num(backup.version, 0) > BACKUP_VERSION) {
-    throw new Error("That backup was made by a newer version of DeutschFlow.");
+    throw new ImportError("newer", "That backup was made by a newer version of DeutschFlow.");
   }
 
   const result: ImportResult = {
@@ -100,6 +117,27 @@ export async function importLibrary(
     transcriptsAdded: 0,
   };
 
+  // One transaction for the whole import. Without it, a write that failed
+  // half-way - quota, an eviction, a blocked upgrade - left some of the backup
+  // applied while telling the user the *file* was invalid. saveVocabulary opens
+  // its own rw transaction on a subset of these tables, which Dexie nests
+  // happily, and the persistence request it fires is deliberately not awaited,
+  // so it cannot commit this one early.
+  await db.transaction(
+    "rw",
+    db.vocabulary, db.transcripts, db.userStats, db.activityLog,
+    () => applyImport(db, backup, result)
+  );
+
+  return result;
+}
+
+/** The body of [importLibrary], run inside its transaction. */
+async function applyImport(
+  db: DeutschFlowDB,
+  backup: Record<string, unknown>,
+  result: ImportResult
+): Promise<void> {
   const vocabulary = Array.isArray(backup.vocabulary) ? backup.vocabulary : [];
   for (const row of vocabulary) {
     if (!isRecord(row)) continue;
@@ -197,8 +235,6 @@ export async function importLibrary(
       timestamp: num(row.timestamp, Date.now()),
     });
   }
-
-  return result;
 }
 
 /**

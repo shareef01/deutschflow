@@ -112,6 +112,12 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewModel.startSession(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
                     },
+                    // Restarting mid-turn cleared the table and the list, then had
+                    // its own opening line swallowed by the in-flight guard - so the
+                    // reply to the *old* scene arrived as the new scene's first
+                    // message, with no greeting before it. The web port disables the
+                    // button for the same reason.
+                    enabled = !isProcessing,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(

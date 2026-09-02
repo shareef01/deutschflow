@@ -306,7 +306,12 @@ function VocabularyItem({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <li className="glass-surface list-row">
+    // `list-row` carries content-visibility, which applies paint containment
+    // whether or not the row is on screen - so it clipped this row's own overflow
+    // menu (Delete fell outside the ~80px row) and trapped the menu's
+    // `fixed inset-0` dismiss backdrop inside it. Containment lifts for the one
+    // row whose menu is open; the other several hundred keep the saving.
+    <li className={`glass-surface ${menuOpen ? "" : "list-row"}`}>
       <div className="flex items-start gap-1 p-2 pl-4">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 pr-2 text-left">
           <p lang="de" className="line-clamp-3 hyphens-auto break-words text-title-medium text-primary">{item.germanText}</p>

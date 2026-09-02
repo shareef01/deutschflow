@@ -42,7 +42,12 @@ export function useDialogFocus<T extends HTMLElement>(onDismiss: () => void) {
     // keeps it; otherwise the container takes it so the reader announces the
     // dialog rather than continuing from wherever the page was.
     if (!container.contains(document.activeElement)) {
-      (focusable()[0] ?? container).focus();
+      // Not focusable()[0]: the first focusable descendant is the full-screen
+      // dismiss backdrop, so opening a dialog announced "Dismiss, button" and the
+      // first Enter cancelled it. The container carries role="dialog" and
+      // tabIndex={-1}, so focusing it is what reads the dialog out; a field that
+      // wants focus has already taken it above.
+      container.focus();
     }
 
     const onKeyDown = (event: KeyboardEvent) => {

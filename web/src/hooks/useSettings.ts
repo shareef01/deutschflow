@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback } from "react";
 import { db } from "@/lib/db";
 import {
   clearAllProgress as clearAllProgressRows,
@@ -18,7 +18,7 @@ import {
 } from "@/lib/db/settings";
 import { useLive } from "./useLive";
 import type { TKey } from "@/lib/i18n";
-import { exportLibrary, importLibrary } from "@/lib/db/backup";
+import { ImportError, exportLibrary, importLibrary } from "@/lib/db/backup";
 
 /**
  * The recognition dialect alone, validated against the known set.
@@ -71,13 +71,26 @@ export function useSettings() {
     }
   }, []);
 
-  /** Merges a previously exported file back in. Additive - see importLibrary. */
+  /**
+   * Merges a previously exported file back in. Additive - see importLibrary.
+   *
+   * Each failure says which one it was. A single catch reported everything as
+   * "that file isn't a library export", which mislabelled a backup from a newer
+   * version - a different problem with a different answer - and blamed the file
+   * for a storage failure that had nothing to do with it.
+   */
   const restoreBackup = useCallback(async (file: File): Promise<TKey> => {
     try {
       await importLibrary(db, JSON.parse(await file.text()));
       return "settings.backupRestored";
-    } catch {
-      return "settings.backupInvalid";
+    } catch (error) {
+      if (error instanceof ImportError) {
+        return error.reason === "newer" ? "settings.backupNewer" : "settings.backupInvalid";
+      }
+      // Not a rejected file: JSON.parse choking on something that is not JSON is
+      // still "not a library export", but a write that failed part-way is not.
+      if (error instanceof SyntaxError) return "settings.backupInvalid";
+      return "settings.backupStorageFailed";
     }
   }, []);
 

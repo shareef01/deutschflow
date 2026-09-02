@@ -66,11 +66,21 @@ class DailyWordWorker(
         /**
          * Re-anchors the daily slot when the device's UTC offset has changed.
          *
-         * [ExistingPeriodicWorkPolicy.UPDATE] rather than REPLACE: UPDATE keeps the
-         * work's identity and history and just moves it, where REPLACE cancels and
-         * re-creates. The offset is remembered rather than the zone id, because a
-         * zone id can change without the clock moving (a rename) and cannot change
-         * the delay when it does.
+         * [ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE], not UPDATE. This used
+         * to use UPDATE, on the reasoning that it "keeps the work's identity and
+         * history and just moves it" - and it does keep the history, which is
+         * exactly why it cannot move it. UPDATE copies `lastEnqueueTime` and
+         * `periodCount` from the existing spec (WorkerUpdater.updateWorkImpl), and
+         * WorkSpec.Companion.calculateNextRunTime takes
+         * `lastEnqueueTime + intervalDuration` whenever `periodCount != 0`, reading
+         * `initialDelay` only on a spec that has never run. So after the very first
+         * notification the new delay was silently discarded, the offset was written
+         * anyway, and the slot stayed on the old wall clock for good. Cancelling and
+         * re-enqueuing resets both fields, which is what re-anchoring needs.
+         *
+         * The offset is remembered rather than the zone id, because a zone id can
+         * change without the clock moving (a rename) and cannot change the delay
+         * when it does.
          *
          * @return true when the schedule was actually moved, which the caller may
          * want for a log or a test.
@@ -85,7 +95,7 @@ class DailyWordWorker(
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 UNIQUE_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
                 request(now)
             )
             preferences.setDailyWordZoneOffset(current)

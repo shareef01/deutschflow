@@ -74,6 +74,12 @@ fun StudySessionContent(
     val sessionReviewedCount by viewModel.sessionReviewedCount.collectAsState()
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
+    // Both of these existed on the ViewModel and were rendered by nothing, so a
+    // review that failed to save looked exactly like one that succeeded, and an
+    // extra-practice sitting looked exactly like a scheduled one. The web port
+    // has shown both since they were added.
+    val reviewError by viewModel.reviewError.collectAsState()
+    val isExtraPractice by viewModel.isExtraPractice.collectAsState()
     val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(Unit) {
@@ -178,7 +184,21 @@ fun StudySessionContent(
             .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ErrorBanner(ttsError)
+        // The failed write wins the banner: it is about the action the user just
+        // took, where a TTS error may be left over from a card ago.
+        ErrorBanner(reviewError?.let { stringResource(it) } ?: ttsError)
+
+        // Nothing was due, so this sitting is a bonus. Said out loud, because a
+        // schedule that quietly does not move is indistinguishable from a broken one.
+        if (isExtraPractice && studyList.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.study_extra_practice),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs)
+            )
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
