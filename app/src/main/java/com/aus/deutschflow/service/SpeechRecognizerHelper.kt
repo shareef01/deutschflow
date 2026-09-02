@@ -87,17 +87,24 @@ class SpeechRecognizerHelper @Inject constructor(
                 speechRecognizer?.destroy()
                 speechRecognizer = null
 
-                if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                    _errorState.value = context.getString(R.string.speech_unavailable)
-                    return@post
-                }
-
-                // Clear the previous session first, so a stale result can never be
-                // mistaken for this one's.
+                // Cleared before the availability check, not after it.
+                //
+                // RoleplayViewModel.stopListeningAndSend awaits the first non-blank
+                // finalText, so if this returned early with the previous utterance
+                // still in the field, that await resolved instantly and re-sent the
+                // last turn - the exact failure its own comment says it was written
+                // to prevent.
                 _partialText.value = ""
                 _finalText.value = ""
                 _errorState.value = null
                 _isProcessing.value = false
+
+                if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+                    _errorState.value = context.getString(R.string.speech_unavailable)
+                    _isListening.value = false
+                    return@post
+                }
+
                 _isListening.value = true
 
                 val recognizer = createRecognizer()

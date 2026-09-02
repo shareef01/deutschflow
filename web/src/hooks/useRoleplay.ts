@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { db } from "@/lib/db";
+import { clearConversation, db, loadConversation, saveConversationTurn } from "@/lib/db";
 import { getApiKey, getDialect } from "@/lib/db/settings";
 import { processRoleplay } from "@/lib/ai/groq";
 import { t } from "@/lib/i18n";
@@ -69,6 +69,25 @@ export function useRoleplay(options?: { active?: boolean }) {
      */
     const historyRef = useRef<ChatMessage[]>([]);
 
+    /**
+     * Saves one turn, at the index it occupies in the conversation.
+     *
+     * The chat used to live in React state alone, so a reload lost it - on the one
+     * screen where the user stops to compose a German sentence, and where what is
+     * lost is the model's half of a conversation rather than anything they could
+     * retype. Mirrors RoleplayViewModel.persist.
+     */
+    const persist = useCallback((message: ChatMessage, position: number) => {
+        void saveConversationTurn(db, {
+            position,
+            scenario: scenarioRef.current,
+            role: message.role,
+            content: message.content,
+            translation: message.translation,
+            timestamp: Date.now(),
+        });
+    }, []);
+
     const runTurn = useCallback(async (userInput: string, appendUser = true) => {
         if (inFlight.current) return;
         inFlight.current = true;
@@ -85,6 +104,9 @@ export function useRoleplay(options?: { active?: boolean }) {
             const userMessage: ChatMessage = { role: "user", content: userInput };
             historyRef.current = [...historyRef.current, userMessage];
             setMessages(historyRef.current);
+            // Saved before the request rather than after it, so a turn that never
+            // gets an answer is still there to retry when the user comes back.
+            persist(userMessage, historyRef.current.length - 1);
         }
 
         try {
@@ -99,6 +121,7 @@ export function useRoleplay(options?: { active?: boolean }) {
                 };
                 historyRef.current = [...historyRef.current, reply];
                 setMessages(historyRef.current);
+                persist(reply, historyRef.current.length - 1);
                 tts.speak(result.aiResponse);
             } else {
                 // Shown in the chat rather than swallowed: a failed opening turn
@@ -115,7 +138,7 @@ export function useRoleplay(options?: { active?: boolean }) {
             inFlight.current = false;
             setIsProcessing(false);
         }
-    }, []);
+    }, [persist]);
 
     /** Subscribes only while this mode is on screen; see `active` above. */
     useEffect(() => {
@@ -138,15 +161,64 @@ export function useRoleplay(options?: { active?: boolean }) {
 
     const startSession = useCallback(
         async (newScenario?: string) => {
-            const activeScenario = newScenario ?? scenario;
+            const activeScenario = newScenario ?? scenarioRef.current;
             setScenario(activeScenario);
             scenarioRef.current = activeScenario;
             historyRef.current = [];
             setMessages([]);
+            // Awaited, not fired alongside: the clear and the opening turn's write
+            // both touch this table, and a clear that landed second would take the
+            // new scene's first line with it.
+            await clearConversation(db);
             // An empty input is the trigger for the model's opening line.
             await runTurn("");
         },
-        [runTurn, scenario]
+        [runTurn]
+    );
+
+    /**
+     * Reads the saved conversation back, once per mount.
+     *
+     * Memoised as a promise rather than a boolean: `openScenarioIfEmpty` has to
+     * *wait* for it, and a flag would leave the caller reading `messages` and
+     * "have we restored yet" as two independently-timed pieces of state.
+     */
+    const restored = useRef<Promise<void> | null>(null);
+    const restore = useCallback(() => {
+        restored.current ??= (async () => {
+            const saved = await loadConversation(db);
+            if (saved.length === 0 || historyRef.current.length > 0) return;
+            historyRef.current = saved.map((m) => ({
+                role: m.role,
+                content: m.content,
+                translation: m.translation,
+            }));
+            setMessages(historyRef.current);
+            setScenario(saved[0].scenario);
+            scenarioRef.current = saved[0].scenario;
+        })();
+        return restored.current;
+    }, []);
+
+    useEffect(() => {
+        void restore();
+    }, [restore]);
+
+    /**
+     * Opens [scenario] only if there is nothing to come back to.
+     *
+     * The component cannot make this call itself: it mounts before the restore
+     * has finished, sees an empty list, and would start a new scene over the one
+     * the user left. Mirrors RoleplayViewModel.openScenarioIfEmpty.
+     */
+    const openScenarioIfEmpty = useCallback(
+        async (newScenario?: string) => {
+            await restore();
+            if (historyRef.current.length === 0 && !inFlight.current) {
+                await startSession(newScenario);
+            }
+        },
+        [restore, startSession]
     );
 
     const startListening = useCallback(async () => {
@@ -186,6 +258,7 @@ export function useRoleplay(options?: { active?: boolean }) {
         partialText: recognizerState.partialText,
         errorState: recognizerState.errorState ?? error,
         startSession,
+        openScenarioIfEmpty,
         startListening,
         stopAndSend,
         retry,

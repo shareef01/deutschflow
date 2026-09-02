@@ -8,6 +8,21 @@ import { expect, test, type Page } from "@playwright/test";
 
 const ROUTES = ["/transcript", "/history", "/vocabulary", "/study", "/practice"] as const;
 
+/**
+ * The ground, per scheme. globals.css defines --color-background once in @theme
+ * and again under `@media (prefers-color-scheme: light)`; these are the two
+ * values, in the form getComputedStyle returns.
+ *
+ * These tests used to hardcode the dark one, which passed only because
+ * Playwright's default scheme happened to render it - it does not; the default
+ * is light, and the app was dark whatever the browser asked for. That is exactly
+ * the bug the light theme fixes, so the assertion now follows the scheme.
+ */
+const GROUND = {
+  light: "rgb(245, 247, 250)",
+  dark: "rgb(10, 14, 22)",
+} as const;
+
 for (const route of ROUTES) {
   test(`route ${route} loads`, async ({ page }) => {
     const response = await page.goto(route);
@@ -19,7 +34,7 @@ for (const route of ROUTES) {
     await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
     await expect(page.locator("h1")).toBeVisible();
     // The app shell (the glass surface language) renders behind every screen.
-    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(10, 14, 22)");
+    await expect(page.locator("body")).toHaveCSS("background-color", GROUND.light);
   });
 }
 
@@ -126,4 +141,91 @@ test("saving an API key reports in the current language", async ({ page }) => {
 
   await expect(page.getByText("API-Schlüssel gespeichert.")).toBeVisible();
   await page.getByRole("button", { name: "OK" }).click();
+});
+
+test.describe("the theme follows the system", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`prefers-color-scheme: ${scheme} paints its own ground`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/transcript");
+
+      await expect(page.locator("body")).toHaveCSS("background-color", GROUND[scheme]);
+
+      // The ground alone would pass on a page that never got its text colour, so
+      // check the ink flipped too - and that it is the readable end of the ramp,
+      // not the dark theme's white sitting on the light theme's near-white.
+      const ink = await page
+        .locator("h1")
+        .evaluate((el) => getComputedStyle(el).color);
+      expect(ink).toBe(scheme === "light" ? "rgb(10, 14, 22)" : "rgb(255, 255, 255)");
+    });
+  }
+
+  test("switching scheme at runtime re-themes without a reload", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/transcript");
+    await expect(page.locator("body")).toHaveCSS("background-color", GROUND.dark);
+
+    // No reload: the theme is CSS custom properties under a media query, so the
+    // browser repaints on its own. A JS-driven theme would need one.
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("body")).toHaveCSS("background-color", GROUND.light);
+  });
+});
+
+test.describe("the library row menu", () => {
+  /**
+   * The row carries `content-visibility: auto` so a thousand-word library does
+   * not paint what is off screen. That applies paint containment whether or not
+   * the row is visible, which clipped the row's own overflow menu — Delete fell
+   * outside the ~80px row and the menu's full-screen dismiss backdrop was
+   * trapped inside it. Nothing caught that, so this does: it drives the menu the
+   * way a user does, and Playwright's actionability check fails on an element
+   * that is painted but not hittable.
+   */
+  test("Edit and Delete are reachable on a row that is windowed", async ({ page }) => {
+    await page.goto("/vocabulary");
+
+    await page.getByRole("button", { name: "Add a word" }).click();
+    await page.getByLabel("German").fill("das Fahrrad");
+    await page.getByLabel("Translation").fill("the bicycle");
+    await page.getByRole("button", { name: "Add to library" }).click();
+
+    const row = page.locator("li", { hasText: "das Fahrrad" }).first();
+    await expect(row).toBeVisible();
+
+    await row.getByRole("button", { name: "More actions" }).click();
+
+    // Both live in the popover that used to be clipped away.
+    await expect(row.getByRole("button", { name: "Edit" })).toBeVisible();
+    await row.getByRole("button", { name: "Delete" }).click();
+
+    // The delete landed, and the undo path is offered rather than a silent loss.
+    await expect(page.getByText("Word deleted.")).toBeVisible();
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.locator("li", { hasText: "das Fahrrad" }).first()).toBeVisible();
+  });
+});
+
+test("a dialog gives focus to itself, not to its dismiss backdrop", async ({ page }) => {
+  // The focus trap took focusable()[0], and the first focusable descendant of the
+  // dialog is the full-screen Dismiss backdrop — so opening a dialog announced
+  // "Dismiss, button" to a screen reader and the first Enter cancelled it. This
+  // dialog is the one to check: it has no autoFocus field to mask the bug.
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Clear all progress" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+
+  const focused = await page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    return { role: el?.getAttribute("role"), label: el?.getAttribute("aria-label") };
+  });
+  expect(focused.role).toBe("dialog");
+  expect(focused.label).not.toBe("Dismiss");
+
+  // And Enter therefore does not throw the dialog away before it is read.
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeVisible();
 });

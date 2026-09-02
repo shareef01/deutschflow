@@ -23,7 +23,12 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    // "default", not "black-translucent". black-translucent draws the iOS status
+    // bar's text white whatever is behind it, which was fine while the app was
+    // dark-only and is white-on-near-white now. The layout already pads with
+    // env(safe-area-inset-top), which simply resolves to 0 when iOS reserves the
+    // bar itself. NOT verified on a device - there is no iOS here.
+    statusBarStyle: "default",
     title: APP_NAME,
   },
   formatDetection: { telephone: false },
@@ -34,9 +39,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // The app's ground, not pure black - the browser chrome was a different
-  // colour from the page underneath it.
-  themeColor: "#0a0e16",
+  // The app's ground, not pure black - the browser chrome was a different colour
+  // from the page underneath it. One entry per scheme now that the page has two,
+  // or the chrome stays dark above a light app.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0e16" },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

@@ -8,13 +8,12 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.ActivityDao
+import com.aus.deutschflow.data.local.dao.RoleplayDao
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
-import com.aus.deutschflow.service.CloudService
 import com.aus.deutschflow.service.DailyWordNotification
-import com.aus.deutschflow.service.SyncManager
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -28,25 +27,16 @@ class SettingsViewModel @Inject constructor(
     private val transcriptDao: TranscriptDao,
     private val userStatsDao: UserStatsDao,
     private val activityDao: ActivityDao,
+    private val roleplayDao: RoleplayDao,
     private val preferenceManager: PreferenceManager,
     private val dailyWordNotification: DailyWordNotification,
-    private val widgetUpdater: WidgetUpdater,
-    private val cloudService: CloudService,
-    private val syncManager: SyncManager
+    private val widgetUpdater: WidgetUpdater
 ) : ViewModel() {
 
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing
-
-    /** Straight from the service. It was a two-second poll of an in-memory boolean. */
-    val isCloudConnected: StateFlow<Boolean> = cloudService.isAuthenticated
-
-    val totalVocabulary: StateFlow<Int> = vocabularyDao.getAllVocabulary()
-        .map { it.size }
+    val totalVocabulary: StateFlow<Int> = vocabularyDao.countVocabulary()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val totalTranscripts: StateFlow<Int> = transcriptDao.getAllTranscripts()
-        .map { it.size }
+    val totalTranscripts: StateFlow<Int> = transcriptDao.countTranscripts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val userStats: StateFlow<UserStatsEntity?> = userStatsDao.getUserStats()
@@ -85,7 +75,7 @@ class SettingsViewModel @Inject constructor(
         // Settings is the only screen that reads the key, so it is the one place
         // worth paying a Keystore round trip to re-encrypt one left in the clear by
         // an older build.
-        viewModelScope.launch { preferenceManager.migrateLegacyApiKey() }
+        launchGuarded(TAG) { preferenceManager.migrateLegacyApiKey() }
     }
 
     fun dismissMessage() {
@@ -125,12 +115,16 @@ class SettingsViewModel @Inject constructor(
      * "Wipe All Progress?".
      */
     fun clearAllProgress() {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _message.value = R.string.message_clear_failed }) {
             database.withTransaction {
                 transcriptDao.deleteAll()
                 vocabularyDao.deleteAll()
                 userStatsDao.deleteAll()
                 activityDao.deleteAll()
+                // The saved roleplay is the user's speech too. A wipe that left a
+                // conversation behind would be the one thing the dialog promises not
+                // to do.
+                roleplayDao.deleteAll()
             }
             widgetUpdater.refresh()
             _message.value = R.string.message_progress_cleared
@@ -141,49 +135,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _message.value = dailyWordNotification.showNotification()
                 ?: R.string.message_notification_sent
-        }
-    }
-
-    fun signIn(email: String, pass: String) {
-        viewModelScope.launch {
-            if (cloudService.signIn(email, pass)) {
-                _message.value = R.string.message_cloud_connected
-                performSync()
-            } else {
-                _message.value = R.string.message_cloud_failed
-            }
-        }
-    }
-
-    fun signOut() {
-        cloudService.signOut()
-        _message.value = R.string.message_cloud_disconnected
-    }
-
-    /**
-     * Runs a sync and reports what actually happened.
-     *
-     * [MockCloudService] is a stub - it pushes nowhere and pulls nothing - so the
-     * only honest outcome today is "not available yet". Saying "your library is up
-     * to date" is the one claim this app cannot afford to get wrong: the library is
-     * the whole of the user's investment, and someone who believes it is backed up
-     * will eventually wipe a device on the strength of it.
-     */
-    fun performSync() {
-        if (_isSyncing.value) return
-        viewModelScope.launch {
-            _isSyncing.value = true
-            try {
-                syncManager.performSync()
-                _message.value = R.string.message_sync_unavailable
-            } catch (e: Exception) {
-                // The user gets the generic line; the log keeps the reason, the way
-                // every other layer that swallows into a message does.
-                Log.w(TAG, "Cloud sync failed", e)
-                _message.value = R.string.message_cloud_failed
-            } finally {
-                _isSyncing.value = false
-            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -27,7 +28,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.aus.deutschflow.R
 import com.aus.deutschflow.service.WordDetails
-import com.aus.deutschflow.ui.theme.AzureGlow
 import com.aus.deutschflow.ui.theme.Spacing
 
 /**
@@ -138,7 +138,7 @@ fun WordDetailsBottomSheet(
                     onSave(details)
                 },
                 modifier = Modifier.fillMaxWidth(),
-                contentColor = AzureGlow
+                contentColor = AppTheme.colors.azureGlow
             ) {
                 Icon(
                     imageVector = Icons.Default.BookmarkAdd,

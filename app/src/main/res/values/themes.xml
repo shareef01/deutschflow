@@ -2,11 +2,23 @@
 <resources>
 
     <!--
-        The launch theme, shown before Compose draws. DeutschflowTheme is dark-only,
-        so a light parent flashed white on every cold start.
+        The launch theme, shown before Compose draws.
+
+        DayNight, not a fixed dark parent: the app follows the system now, and a
+        dark launch window in front of a light app is the same flash the previous
+        comment here described, only the other way round. @color/window_background
+        has a values-night variant, so the window is the ground the app is about
+        to paint either way.
     -->
-    <style name="Theme.Deutschflow" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/background_dark</item>
+    <style name="Theme.Deutschflow" parent="android:Theme.DeviceDefault.DayNight">
+        <!--
+            DayNight has no .NoActionBar variant on the platform themes, so the bar
+            is switched off by attribute instead. Both are needed: windowActionBar
+            removes the bar, windowNoTitle stops the space being reserved for it.
+        -->
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/window_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>

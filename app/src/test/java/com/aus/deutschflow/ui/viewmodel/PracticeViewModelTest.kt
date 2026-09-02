@@ -58,7 +58,9 @@ class PracticeViewModelTest {
         assertTrue(results.first { it.word == "Ich" }.isCorrect)
         assertTrue(results.first { it.word == "lerne" }.isCorrect)
         assertFalse(results.first { it.word == "Deutsch" }.isCorrect)
-        assertEquals(PracticeFeedback.GOOD, feedback)
+        // Two of three is 67%, below the 75% bar. It used to pass at "over half",
+        // which reported "most words were clear" for getting half a sentence right.
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
     }
 
     @Test
@@ -130,21 +132,54 @@ class PracticeViewModelTest {
     }
 
     @Test
-    fun `word order does not matter`() {
+    fun `word order matters`() {
         val (results, feedback) = PracticeViewModel.evaluateMatch(
             targetSentence = "Ich lerne Deutsch",
             spokenText = "Deutsch lerne Ich"
         )
 
-        // All words are present regardless of order — this is a documented
-        // limitation of the simple bag-of-words algorithm.
+        // This assertion used to run the other way, calling it "a documented
+        // limitation of the simple bag-of-words algorithm" - which meant saying the
+        // sentence backwards scored perfect on the one screen whose job is telling
+        // you whether you said it right. The alignment keeps the longest ordered
+        // run, so reversing three words leaves exactly one in place.
         assertEquals(3, results.size)
+        assertEquals(1, results.count { it.isCorrect })
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
+    }
+
+    /** A repeated target word needs saying twice; a set membership check did not. */
+    @Test
+    fun `a repeated word must actually be repeated`() {
+        val once = PracticeViewModel.evaluateMatch(
+            targetSentence = "die Frau und die Katze",
+            spokenText = "die Frau und Katze"
+        )
+        assertEquals(4, once.first.count { it.isCorrect })
+        assertFalse(once.first[3].isCorrect)
+
+        val twice = PracticeViewModel.evaluateMatch(
+            targetSentence = "die Frau und die Katze",
+            spokenText = "die Frau und die Katze"
+        )
+        assertTrue(twice.first.all { it.isCorrect })
+        assertEquals(PracticeFeedback.PERFECT, twice.second)
+    }
+
+    /** Extra words around a correct sentence cost the speaker nothing. */
+    @Test
+    fun `filler around the target still scores it`() {
+        val (results, feedback) = PracticeViewModel.evaluateMatch(
+            targetSentence = "Ich lerne Deutsch",
+            spokenText = "also ähm Ich lerne Deutsch ja"
+        )
+
         assertTrue(results.all { it.isCorrect })
         assertEquals(PracticeFeedback.PERFECT, feedback)
     }
 
     @Test
-    fun `just over half counts as good`() {
+    fun `three of five is not good enough`() {
         val (results, feedback) = PracticeViewModel.evaluateMatch(
             targetSentence = "eins zwei drei vier fünf",
             spokenText = "eins zwei drei"
@@ -152,7 +187,18 @@ class PracticeViewModelTest {
 
         assertEquals(5, results.size)
         assertEquals(3, results.count { it.isCorrect })
-        // 3 of 5 > half, so "Good"
+        // 60%, under the 75% bar. This read as "Good" while the bar was "over half".
+        assertEquals(PracticeFeedback.KEEP_GOING, feedback)
+    }
+
+    @Test
+    fun `three quarters is good`() {
+        val (results, feedback) = PracticeViewModel.evaluateMatch(
+            targetSentence = "eins zwei drei vier",
+            spokenText = "eins zwei drei"
+        )
+
+        assertEquals(3, results.count { it.isCorrect })
         assertEquals(PracticeFeedback.GOOD, feedback)
     }
 

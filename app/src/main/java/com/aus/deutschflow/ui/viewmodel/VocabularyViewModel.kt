@@ -2,6 +2,7 @@ package com.aus.deutschflow.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.TTSHelper
@@ -10,6 +11,8 @@ import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.Collator
+import java.util.Locale
 import javax.inject.Inject
 
 /** How the library orders its rows. Purely a view concern — no persistence. */
@@ -63,14 +66,40 @@ class VocabularyViewModel @Inject constructor(
             // arrives; alphabetical re-orders by the word the user reads first.
             when (sort) {
                 VocabularySort.NEWEST -> filtered
-                VocabularySort.ALPHABETICAL ->
-                    filtered.sortedBy { it.germanText.lowercase() }
+                VocabularySort.ALPHABETICAL -> filtered.sortedWith(byGermanAlphabet)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** A write that did not land, so the screen can say so rather than look successful. */
+    private val _error = MutableStateFlow<Int?>(null)
+    val error: StateFlow<Int?> = _error
+
+    fun dismissError() {
+        _error.value = null
+    }
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    private companion object {
+        private const val TAG = "VocabularyViewModel"
+
+
+        /**
+         * German dictionary order, not UTF-16 order.
+         *
+         * `sortedBy { lowercase() }` compares code units, and every umlaut sits above
+         * 'z' there - so Äpfel, Öl and Übung were all exiled to the bottom of an
+         * alphabetical library, which in a German app is the one list that has to be
+         * right. A Collator sorts them where a German speaker looks for them, next to
+         * A, O and U. The web already does this via localeCompare(_, "de").
+         */
+        private val germanCollator: Collator = Collator.getInstance(Locale.GERMAN)
+
+        val byGermanAlphabet: Comparator<VocabularyEntity> =
+            compareBy(germanCollator) { it.germanText }
     }
 
     fun setSortMode(mode: VocabularySort) {
@@ -90,7 +119,7 @@ class VocabularyViewModel @Inject constructor(
         val translation = english.trim()
         if (germanText.isBlank() || translation.isBlank()) return
 
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_save_failed }) {
             vocabularyDao.save(
                 VocabularyEntity(germanText = germanText, englishTranslation = translation)
             )
@@ -99,8 +128,29 @@ class VocabularyViewModel @Inject constructor(
     }
 
     fun deleteVocabulary(vocabulary: VocabularyEntity) {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_delete_failed }) {
             vocabularyDao.deleteVocabulary(vocabulary)
+            widgetUpdater.refresh()
+        }
+    }
+
+    /**
+     * Puts a deleted word back, for the snackbar's Undo.
+     *
+     * Deleting was one tap in an overflow menu with no confirmation and no way back,
+     * while a *transcript* - the far less valuable thing - already had an Undo. A
+     * word can carry months of scheduling, a hand-edited translation and AI-fetched
+     * grammar, so the protections were exactly inverted.
+     *
+     * Through [VocabularyDao.save] with id 0 rather than a bare insert: the word is
+     * unique, and if the user typed the same word again in the seconds before
+     * pressing Undo, a plain insert would throw a constraint violation into a
+     * coroutine. Save folds the two together instead, which is what restoring onto
+     * an occupied name most likely means. The SRS fields ride along on the entity.
+     */
+    fun restoreVocabulary(vocabulary: VocabularyEntity) {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_save_failed }) {
+            vocabularyDao.save(vocabulary.copy(id = 0))
             widgetUpdater.refresh()
         }
     }
@@ -114,7 +164,7 @@ class VocabularyViewModel @Inject constructor(
      * together instead, which is what the user asking for that name most likely meant.
      */
     fun updateVocabulary(vocabulary: VocabularyEntity) {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = { _error.value = R.string.library_save_failed }) {
             vocabularyDao.save(vocabulary)
             widgetUpdater.refresh()
         }
@@ -129,6 +179,19 @@ class VocabularyViewModel @Inject constructor(
      * ones whose real example had been parsed and discarded.
      */
     fun exampleFor(word: String): String = vocabularyProcessor.generateExample(word)
+
+    /**
+     * Silences the engine when the screen goes away.
+     *
+     * TTSHelper is a @Singleton and was only ever torn down in
+     * MainActivity.onDestroy behind `isFinishing`, which is false when the app is
+     * merely backgrounded - so a word spoken here kept playing after the user
+     * switched tabs or left the app. The microphone was already released on both
+     * paths; the voice was not.
+     */
+    fun stopSpeaking() {
+        ttsHelper.stop()
+    }
 
     fun speak(text: String) {
         ttsHelper.speak(text)

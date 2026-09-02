@@ -7,7 +7,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { AudioWaveform } from "@/components/ui/AudioWaveform";
-import { MicIcon, NavigateNextIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
+import { MicIcon, NavigateNextIcon, RefreshIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
 import { PRACTICE_FEEDBACK_KEYS } from "@/lib/scoring";
 
 export default function PracticePage() {
@@ -23,7 +23,7 @@ export default function PracticePage() {
   return (
     <div className="flex h-full flex-col">
         {/* Tab Selector */}
-        <div className="flex w-full justify-center gap-8 border-b border-white/5 bg-background/50 backdrop-blur-md">
+        <div className="flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md">
             {(["repetition", "roleplay"] as const).map((tab) => (
                 <button
                     key={tab}
@@ -67,9 +67,18 @@ function RepetitionMode() {
 
   useEffect(() => () => cancelListening(), [cancelListening]);
 
-  const isPositive = feedback === "PERFECT";
+  // Android treats GOOD as a positive result too; this used to colour it as a
+  // failure, so the same attempt came back green on the phone and red here.
+  const isPositive = feedback === "PERFECT" || feedback === "GOOD";
+  // The banner reports the count it actually has. It used to say "Perfect
+  // pronunciation", which the screen has no way to know: the Web Speech API
+  // hands back a transcript, not a per-phoneme score, and its language model
+  // will happily resolve poor audio into the word you meant.
+  const heardCount = wordResults.filter((result) => result.isCorrect).length;
   const feedbackText =
-    feedback === "NONE" ? null : t(PRACTICE_FEEDBACK_KEYS[feedback]);
+    feedback === "NONE"
+      ? null
+      : t(PRACTICE_FEEDBACK_KEYS[feedback], [heardCount, wordResults.length]);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-[var(--container-workspace)] flex-col overflow-y-auto px-[var(--gutter)] py-[var(--space-6)]">
@@ -143,13 +152,8 @@ function RepetitionMode() {
               )}
 
               {wordResults.length > 0 && (
-                <p className="mt-4 text-label-large text-on-surface-variant">
-                  {t("practice.wordMatch", [
-                    Math.round(
-                      (wordResults.filter((result) => result.isCorrect).length * 100) /
-                        wordResults.length
-                    ),
-                  ])}
+                <p className="mt-3 max-w-[46ch] text-center text-label-medium text-on-surface-variant">
+                  {t("practice.feedbackCaption")}
                 </p>
               )}
 
@@ -193,14 +197,19 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const { t } = useI18n();
     const {
         messages, isProcessing, isListening, partialText,
-        startSession, startListening, stopAndSend, speak
+        openScenarioIfEmpty, startSession, startListening, stopAndSend, speak
     } = roleplay;
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Open a scene only if there is nothing to come back to. The decision belongs
+    // to the hook: the saved conversation is read asynchronously, so this mounts
+    // while `messages` is still empty and used to start a new scene over the one
+    // the user left. Keyed on mount rather than on `messages.length`, which also
+    // re-fired the check every time a turn was added.
     useEffect(() => {
-        if (messages.length === 0) void startSession();
-    }, [messages.length, startSession]);
+        void openScenarioIfEmpty();
+    }, [openScenarioIfEmpty]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -210,6 +219,31 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
 
     return (
         <div className="flex h-full flex-col p-4">
+            {/* The scenario, and the way out of it. Android has carried this
+                restart button all along; here a reload used to be the reset,
+                and now that the conversation is saved, a reload brings it
+                back — so without this there is no way out of a scene that has
+                gone wrong short of wiping all progress. */}
+            <div className="mb-3 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                    <p className="text-label-small uppercase tracking-wider text-on-surface-variant">
+                        {t("roleplay.tab")}
+                    </p>
+                    <p className="truncate text-label-large font-bold text-on-surface">
+                        {t("roleplay.scenarioBerlinBakery")}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => void startSession()}
+                    disabled={isProcessing}
+                    aria-label={t("roleplay.restart")}
+                    title={t("roleplay.restart")}
+                    className="glass-button press-scale flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:text-azure-glow disabled:opacity-40"
+                >
+                    <RefreshIcon className="size-5" />
+                </button>
+            </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pb-4">
                 {messages.map((msg, i) => (
                     <div key={i} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>

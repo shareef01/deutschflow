@@ -4,6 +4,7 @@ import { BookmarkAddIcon } from "@/components/icons";
 import { GlassButton } from "./GlassButton";
 import { GlassCard } from "./GlassCard";
 import { useI18n } from "@/hooks/useI18n";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import type { WordDetails } from "@/lib/ai/groq";
 
 /**
@@ -23,8 +24,24 @@ export function WordDetailsSheet({
   onDismiss: () => void;
   onSave: (details: WordDetails) => void;
 }) {
-  const { t } = useI18n();
+  // Split so the open sheet is its own component: useDialogFocus has to run on
+  // mount with the container in the tree, and a hook called above an early
+  // `return null` would run once against a ref that was never attached.
   if (details === null) return null;
+  return <OpenWordDetailsSheet details={details} onDismiss={onDismiss} onSave={onSave} />;
+}
+
+function OpenWordDetailsSheet({
+  details,
+  onDismiss,
+  onSave,
+}: {
+  details: WordDetails;
+  onDismiss: () => void;
+  onSave: (details: WordDetails) => void;
+}) {
+  const { t } = useI18n();
+  const sheetRef = useDialogFocus<HTMLDivElement>(onDismiss);
 
   const facts = [
     details.article && details.article !== "none"
@@ -37,7 +54,14 @@ export function WordDetailsSheet({
   ].filter(Boolean);
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={details.word}>
+    <div
+      ref={sheetRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label={details.word}
+    >
       {/* Backdrop */}
       <button
         type="button"

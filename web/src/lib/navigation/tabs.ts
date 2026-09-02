@@ -9,9 +9,15 @@ import {
 import type { TKey } from "@/lib/i18n";
 
 /**
- * The five tab destinations — ui/navigation/Screen.kt `navItems`.
- * Settings is deliberately NOT here: like the Android app, it is a full-screen
- * detail destination pushed on top of the tabs, not a tab itself.
+ * The five tab destinations.
+ *
+ * Android's `navItems` has four: History lives there as a pane inside Library
+ * (see LibraryScreen.kt's SegmentedTabs), where a wider phone screen has room for
+ * the split. Here it is a destination of its own. That is a deliberate difference
+ * and the only one in the navigation model.
+ *
+ * Settings is not a tab on either platform: it is a full-screen detail
+ * destination pushed on top, and it sheds both bars while it is open.
  */
 export interface TabConfig {
   route: string;

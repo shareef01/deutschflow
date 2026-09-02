@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """WCAG 2.1 contrast for every foreground/background pairing the app actually uses.
 
+Both palettes. The dark one is checked under its own names; the light one under
+the same names with a `Light` prefix, which is how Color.kt declares them. A
+light theme is the easier of the two to get wrong - pale accents that look fine
+on a designer's white card measure 1.7:1 - so it is held to exactly the same bar.
+
 Run from the repository root:
 
     python tools/contrast.py
@@ -73,24 +78,38 @@ PAIRS = [
 
 NEED = {'body': 4.5, 'large': 3.0, 'ui': 3.0, 'decorative': 1.5}
 
-rows, failures = [], []
-for fg, bg, what, kind in PAIRS:
-    if fg not in P or bg not in P:
-        print('  ?? missing from palette:', fg, bg); continue
-    r = ratio(P[fg], P[bg])
-    need = NEED[kind]
-    ok = r >= need
-    rows.append((ok, r, need, kind, what, fg, bg))
-    if not ok:
-        failures.append((r, need, kind, what, fg, bg))
+def check(label, prefix):
+    """Runs every pairing against one palette. Returns the failures."""
+    rows, failures, missing = [], [], []
+    for fg, bg, what, kind in PAIRS:
+        f, b = prefix + fg, prefix + bg
+        if f not in P or b not in P:
+            missing.append((f, b))
+            continue
+        r = ratio(P[f], P[b])
+        need = NEED[kind]
+        ok = r >= need
+        rows.append((ok, r, need, kind, what, f, b))
+        if not ok:
+            failures.append((r, need, kind, what, f, b))
 
-rows.sort(key=lambda t: t[1])
-print('%-6s %7s %6s  %-6s %s' % ('', 'ratio', 'needs', 'kind', 'pairing'))
-print('-' * 78)
-for ok, r, need, kind, what, fg, bg in rows:
-    print('%-6s %6.2f:1 %5.1f:1  %-6s %s  (%s on %s)' %
-          ('PASS' if ok else 'FAIL', r, need, kind, what, fg, bg))
+    rows.sort(key=lambda t: t[1])
+    print()
+    print('== %s ==' % label)
+    print('%-6s %7s %6s  %-6s %s' % ('', 'ratio', 'needs', 'kind', 'pairing'))
+    print('-' * 78)
+    for ok, r, need, kind, what, f, b in rows:
+        print('%-6s %6.2f:1 %5.1f:1  %-6s %s  (%s on %s)' %
+              ('PASS' if ok else 'FAIL', r, need, kind, what, f, b))
+    for f, b in missing:
+        print('  ?? missing from palette: %s / %s' % (f, b))
+        failures.append((0, 0, '', 'missing', f, b))
+    print('%d pairings, %d below threshold' % (len(rows), len(failures)))
+    return failures
 
+
+total = check('dark', '') + check('light', 'Light')
 print()
-print('%d pairings, %d below threshold' % (len(rows), len(failures)))
-sys.exit(1 if failures else 0)
+print('RESULT: %s' % ('all pairings pass in both themes' if not total
+                      else '%d failing pairing(s)' % len(total)))
+sys.exit(1 if total else 0)

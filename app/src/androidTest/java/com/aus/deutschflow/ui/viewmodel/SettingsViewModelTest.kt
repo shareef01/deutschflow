@@ -7,14 +7,13 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.R
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.DailyWord
 import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.service.DailyWordNotification
-import com.aus.deutschflow.service.MockCloudService
-import com.aus.deutschflow.service.SyncManager
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -48,7 +47,6 @@ class SettingsViewModelTest {
     private lateinit var database: AppDatabase
     private lateinit var viewModel: SettingsViewModel
 
-    private val cloudService = MockCloudService()
 
     @Before
     fun setup() {
@@ -68,15 +66,8 @@ class SettingsViewModelTest {
                 DailyWord(database.vocabularyDao())
             ),
             activityDao = database.activityDao(),
-            widgetUpdater = WidgetUpdater(context),
-            cloudService = cloudService,
-            syncManager = SyncManager(
-                database = database,
-                vocabularyDao = database.vocabularyDao(),
-                transcriptDao = database.transcriptDao(),
-                preferenceManager = store.preferences,
-                cloudService = cloudService
-            )
+            roleplayDao = database.roleplayDao(),
+            widgetUpdater = WidgetUpdater(context)
         )
     }
 
@@ -96,6 +87,15 @@ class SettingsViewModelTest {
         database.userStatsDao().insertOrUpdate(
             UserStatsEntity(xp = 250, streak = 7, lastActivityTimestamp = 1000)
         )
+        database.roleplayDao().insert(
+            RoleplayMessageEntity(
+                position = 0,
+                scenario = "Ordering at a Berlin Bakery",
+                role = "assistant",
+                content = "Guten Morgen! Was darf es sein?",
+                translation = "Good morning! What would you like?"
+            )
+        )
     }
 
     private suspend fun vocabularyIsEmpty() =
@@ -109,6 +109,7 @@ class SettingsViewModelTest {
         assertEquals(2, database.vocabularyDao().getAllVocabulary().first().size)
         assertEquals(1, database.transcriptDao().getAllTranscripts().first().size)
         assertNotNull(database.userStatsDao().getUserStatsOnce())
+        assertEquals(1, database.roleplayDao().getConversation().size)
 
         viewModel.clearAllProgress()
         awaitCondition { vocabularyIsEmpty() }
@@ -124,6 +125,10 @@ class SettingsViewModelTest {
         assertNull(
             "the XP and streak should be gone",
             database.userStatsDao().getUserStatsOnce()
+        )
+        assertTrue(
+            "the saved roleplay is the user's speech too, and the dialog says all",
+            database.roleplayDao().getConversation().isEmpty()
         )
     }
 

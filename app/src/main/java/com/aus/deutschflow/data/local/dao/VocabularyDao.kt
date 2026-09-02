@@ -2,12 +2,17 @@ package com.aus.deutschflow.data.local.dao
 
 import androidx.room.*
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.data.local.entities.germanKey
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VocabularyDao {
     @Query("SELECT * FROM vocabulary ORDER BY timestamp DESC")
     fun getAllVocabulary(): Flow<List<VocabularyEntity>>
+
+    /** How many, without reading any of them. See TranscriptDao.countTranscripts. */
+    @Query("SELECT COUNT(*) FROM vocabulary")
+    fun countVocabulary(): Flow<Int>
 
     /**
      * The words ready for review: those whose nextReview has passed.
@@ -36,9 +41,18 @@ interface VocabularyDao {
     @Query("DELETE FROM vocabulary")
     suspend fun deleteAll()
 
-    /** NOCASE, because the column is: "hund" finds the row saved as "Hund". */
-    @Query("SELECT * FROM vocabulary WHERE germanText = :germanText LIMIT 1")
-    suspend fun findByGermanText(germanText: String): VocabularyEntity?
+    /**
+     * The row holding this word, whatever case or umlaut spelling it was written in.
+     *
+     * Matched on the folded key rather than on germanText's NOCASE collation, which
+     * only ever folded ASCII - see [VocabularyEntity.germanTextKey].
+     */
+    @Query("SELECT * FROM vocabulary WHERE germanTextKey = :key LIMIT 1")
+    suspend fun findByKey(key: String): VocabularyEntity?
+
+    /** Convenience for callers holding the word as the user wrote it. */
+    suspend fun findByGermanText(germanText: String): VocabularyEntity? =
+        findByKey(germanKey(germanText))
 
     @Query("DELETE FROM vocabulary WHERE id = :id")
     suspend fun deleteById(id: Int)
@@ -55,8 +69,12 @@ interface VocabularyDao {
      * the same word at once would otherwise both find nothing and both insert.
      */
     @Transaction
-    suspend fun save(vocabulary: VocabularyEntity) {
-        val existing = findByGermanText(vocabulary.germanText)
+    suspend fun save(entry: VocabularyEntity) {
+        // Recomputed here rather than trusted from the caller: the key is derived
+        // from germanText, and `copy(germanText = ...)` on the edit path would
+        // otherwise carry the old word's key into the new one.
+        val vocabulary = entry.copy(germanTextKey = germanKey(entry.germanText))
+        val existing = findByKey(vocabulary.germanTextKey)
 
         when {
             // Nothing holds that word yet: a new entry, or a rename onto a free name.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { useHasSplitView } from "@/hooks/useViewport";
 import { useBackHandler } from "@/hooks/useBackHandler";
@@ -10,6 +10,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { SearchInput, GlassTextField } from "@/components/ui/GlassTextField";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { ModalDialog } from "@/components/ui/ModalDialog";
+import { Snackbar } from "@/components/ui/Snackbar";
 import {
   AddIcon,
   AutoStoriesIcon,
@@ -29,8 +30,10 @@ export default function VocabularyPage() {
     searchQuery,
     setSearchQuery,
     ttsError,
+    error,
     addVocabulary,
     deleteVocabulary,
+    restoreVocabulary,
     updateVocabulary,
     exampleFor,
     speak,
@@ -43,6 +46,36 @@ export default function VocabularyPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [sortMode, setSortMode] = useState<"newest" | "alpha">("newest");
+
+  /**
+   * Undo rather than a confirmation dialog: a confirmation taxes every deletion to
+   * protect the rare mistaken one, where Undo costs nothing until it is needed.
+   * The same pattern History already uses for transcripts.
+   */
+  const [deleted, setDeleted] = useState<VocabularyEntry | null>(null);
+  const undoTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (undoTimer.current !== null) window.clearTimeout(undoTimer.current);
+    },
+    []
+  );
+
+  const onDeleteWithUndo = (item: VocabularyEntry) => {
+    deleteVocabulary(item);
+    // Closing the detail pane too, if the deleted word was the one open in it.
+    if (selectedId === item.id) setSelectedId(null);
+    setDeleted(item);
+    if (undoTimer.current !== null) window.clearTimeout(undoTimer.current);
+    undoTimer.current = window.setTimeout(() => setDeleted(null), 6_000);
+  };
+
+  const onUndoDelete = () => {
+    if (deleted) restoreVocabulary(deleted);
+    if (undoTimer.current !== null) window.clearTimeout(undoTimer.current);
+    setDeleted(null);
+  };
 
   const sortedList = useMemo(() => {
     if (sortMode === "alpha") {
@@ -70,7 +103,7 @@ export default function VocabularyPage() {
     onSortChange: setSortMode,
     onItemClick: (item: VocabularyEntry) => setSelectedId(item.id ?? null),
     onEdit: (item: VocabularyEntry) => setEditingId(item.id ?? null),
-    onDelete: deleteVocabulary,
+    onDelete: onDeleteWithUndo,
     onSpeak: speak,
     onAdd: () => setIsAdding(true),
     t,
@@ -78,7 +111,9 @@ export default function VocabularyPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ErrorBanner message={ttsError} />
+      {/* A failed write outranks a failed voice: one means the library did not
+          change, the other means a word was not read aloud. */}
+      <ErrorBanner message={error ? t(error) : ttsError} />
 
       {isDesktop && !isLibraryEmpty ? (
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(22rem,0.9fr)_1px_minmax(0,1.1fr)]">
@@ -139,6 +174,11 @@ export default function VocabularyPage() {
           t={t}
         />
       )}
+
+      <Snackbar
+        message={deleted ? t("library.wordDeleted") : null}
+        action={{ label: t("action.undo"), onClick: onUndoDelete }}
+      />
     </div>
   );
 }
@@ -266,7 +306,12 @@ function VocabularyItem({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <li className="glass-surface">
+    // `list-row` carries content-visibility, which applies paint containment
+    // whether or not the row is on screen - so it clipped this row's own overflow
+    // menu (Delete fell outside the ~80px row) and trapped the menu's
+    // `fixed inset-0` dismiss backdrop inside it. Containment lifts for the one
+    // row whose menu is open; the other several hundred keep the saving.
+    <li className={`glass-surface ${menuOpen ? "" : "list-row"}`}>
       <div className="flex items-start gap-1 p-2 pl-4">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 pr-2 text-left">
           <p lang="de" className="line-clamp-3 hyphens-auto break-words text-title-medium text-primary">{item.germanText}</p>
@@ -305,7 +350,7 @@ function VocabularyItem({
               <div className="glass-surface absolute right-0 top-12 z-50 w-40 p-1">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-on-surface hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-on-surface hover:bg-on-surface/5"
                   onClick={() => {
                     setMenuOpen(false);
                     onEdit();
@@ -316,7 +361,7 @@ function VocabularyItem({
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-error hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-error hover:bg-on-surface/5"
                   onClick={() => {
                     setMenuOpen(false);
                     onDelete();

@@ -10,7 +10,13 @@
  * here: translations carry the user's own text and the API key is sent by the
  * page, not visible to this worker.
  */
-const CACHE_NAME = "deutschflow-v1";
+/**
+ * Named for the build that registered this worker — see PwaRegister and
+ * next.config.ts. It was the literal "deutschflow-v1" forever, so the activate
+ * sweep below never matched anything and every deploy's assets piled up.
+ */
+const BUILD = new URL(self.location.href).searchParams.get("v") || "dev";
+const CACHE_NAME = `deutschflow-${BUILD}`;
 
 const APP_SHELL = [
   "/",
@@ -29,7 +35,21 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
+      .then(async (cache) => {
+        // Individually, not addAll. Every shell route is behind the auth gate, so
+        // an expired session redirects them to /login — and Cache.put rejects a
+        // redirected response, which made addAll throw, install fail, and the new
+        // worker never activate, with nothing on screen saying so. A shell entry
+        // that cannot be precached is a worse offline experience, not a broken
+        // install; the fetch handler applies the same redirect rule at line ~68.
+        await Promise.allSettled(
+          APP_SHELL.map(async (url) => {
+            const response = await fetch(url);
+            if (!response.ok || response.redirected) return;
+            await cache.put(url, response);
+          })
+        );
+      })
       .then(() => self.skipWaiting())
   );
 });

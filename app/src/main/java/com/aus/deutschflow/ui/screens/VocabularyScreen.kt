@@ -44,6 +44,9 @@ import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.SelectionDefaults
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
+import kotlinx.coroutines.launch
+import com.aus.deutschflow.ui.components.OnLeavingScreen
+import kotlinx.coroutines.delay
 
 @Composable
 fun VocabularyScreen(
@@ -55,6 +58,7 @@ fun VocabularyScreen(
     val sortMode by viewModel.sortMode.collectAsState()
     val allVocabulary by viewModel.allVocabulary.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
+    val writeError by viewModel.error.collectAsState()
 
     // Ids rather than entities, and saveable rather than remembered: VocabularyEntity
     // is not Parcelable, and rotating used to drop whichever word was open and
@@ -82,6 +86,32 @@ fun VocabularyScreen(
 
     LaunchedEffect(Unit) { viewModel.dismissTtsError() }
 
+    // The voice is a @Singleton and outlives this screen; without this a word
+    // spoken here keeps playing after the user switches tabs or backgrounds the
+    // app. Same discipline the recording screens apply to the microphone.
+    OnLeavingScreen { viewModel.stopSpeaking() }
+
+    // Undo rather than a confirmation dialog: a confirmation taxes every deletion to
+    // protect the rare mistaken one, where Undo costs nothing until it is needed.
+    // Same pattern History already uses for transcripts.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val deletedMessage = stringResource(R.string.library_word_deleted)
+    val undoLabel = stringResource(R.string.action_undo)
+
+    val onDeleteWithUndo: (VocabularyEntity) -> Unit = { word ->
+        viewModel.deleteVocabulary(word)
+        // Closing the detail pane too, if the deleted word was the one open in it.
+        if (selectedId == word.id) selectedId = null
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = deletedMessage,
+                actionLabel = undoLabel
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.restoreVocabulary(word)
+        }
+    }
+
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     // On a compact width the detail view is a state swap inside this destination
@@ -91,10 +121,25 @@ fun VocabularyScreen(
         selectedId = null
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Speak buttons sit in both the list rows and the detail pane, so the banner
         // goes above whichever of the two is currently showing.
-        ErrorBanner(ttsError, modifier = Modifier.padding(horizontal = 16.dp))
+        // A failed write outranks a failed voice: one means the library did not
+        // change, the other means a word was not read aloud.
+        ErrorBanner(
+            writeError?.let { stringResource(it) } ?: ttsError,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        // Cleared once the user has had a chance to read it, so it does not outlive
+        // the action that caused it - the same rule the recogniser's timed reset uses.
+        LaunchedEffect(writeError) {
+            if (writeError != null) {
+                delay(ERROR_VISIBLE_MS)
+                viewModel.dismissError()
+            }
+        }
 
         if (isExpanded) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -108,7 +153,7 @@ fun VocabularyScreen(
                         onSortChange = { viewModel.setSortMode(it) },
                         onItemClick = { selectedId = it.id },
                         onEdit = { editingId = it.id },
-                        onDelete = { viewModel.deleteVocabulary(it) },
+                        onDelete = onDeleteWithUndo,
                         onSpeak = { viewModel.speak(it) },
                         onAdd = { isAdding = true }
                     )
@@ -152,13 +197,21 @@ fun VocabularyScreen(
                         onSortChange = { viewModel.setSortMode(it) },
                         onItemClick = { selectedId = it.id },
                         onEdit = { editingId = it.id },
-                        onDelete = { viewModel.deleteVocabulary(it) },
+                        onDelete = onDeleteWithUndo,
                         onSpeak = { viewModel.speak(it) },
                         onAdd = { isAdding = true }
                     )
                 }
             }
         }
+    }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = Spacing.md)
+        )
     }
 
     if (editingItem != null) {
@@ -596,3 +649,6 @@ private fun VocabularyEditorDialog(
         }
     )
 }
+
+/** How long a failed-write banner stays up before it clears itself. */
+private const val ERROR_VISIBLE_MS = 4_000L

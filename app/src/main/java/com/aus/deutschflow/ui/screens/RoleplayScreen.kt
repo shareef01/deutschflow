@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -54,7 +55,12 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     // The ViewModel is scoped to the saved back stack entry, so tab switches and
     // backgrounding would otherwise leave the recogniser holding the microphone
     // behind whatever screen the user moved on to.
-    OnLeavingScreen { viewModel.cancelListening() }
+    OnLeavingScreen {
+        viewModel.cancelListening()
+        // The reply is spoken automatically, so leaving mid-sentence used to carry
+        // the voice into whatever screen came next.
+        viewModel.stopSpeaking()
+    }
 
     // Auto-scroll to bottom when messages update
     LaunchedEffect(messages.size) {
@@ -63,11 +69,12 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
         }
     }
 
-    // Start session if empty
+    // Open a scene only if there is nothing to come back to. The decision belongs
+    // to the ViewModel: the saved conversation is read asynchronously, so this
+    // composes while `messages` is still empty and used to start a new scene over
+    // the one the user left.
     LaunchedEffect(Unit) {
-        if (messages.isEmpty()) {
-            viewModel.startSession(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
-        }
+        viewModel.openScenarioIfEmpty(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -105,6 +112,12 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewModel.startSession(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
                     },
+                    // Restarting mid-turn cleared the table and the list, then had
+                    // its own opening line swallowed by the in-flight guard - so the
+                    // reply to the *old* scene arrived as the new scene's first
+                    // message, with no greeting before it. The web port disables the
+                    // button for the same reason.
+                    enabled = !isProcessing,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
@@ -126,7 +139,10 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
             contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
-            items(messages) { message ->
+            // Keyed by position and role. The list is append-only, so an index is
+            // stable for the life of a message; itemsIndexed rather than indexOf in a
+            // key lambda, which would be a linear scan per row on every composition.
+            itemsIndexed(messages, key = { index, message -> "$index-${message.role}" }) { _, message ->
                 ChatBubble(message, onSpeak = { viewModel.speak(it) })
             }
 
@@ -139,7 +155,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
-                            color = AzureGlow
+                            color = AppTheme.colors.azureGlow
                         )
                         Spacer(modifier = Modifier.width(Spacing.sm))
                         Text(
@@ -252,14 +268,14 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                                         listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
                                     )
                                 } else {
-                                    Brush.linearGradient(listOf(AzureGlow, MaterialTheme.colorScheme.primary))
+                                    Brush.linearGradient(listOf(AppTheme.colors.azureGlow, MaterialTheme.colorScheme.primary))
                                 }
                             )
                     ) {
                         Icon(
                             imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                             contentDescription = micLabel,
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(28.dp)
                         )
                     }

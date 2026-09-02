@@ -4,6 +4,7 @@ import { getAllVocabulary, getDueVocabulary, rewardXp, XP_PER_CARD, updateVocabu
 import { getAutoPlay } from "@/lib/db/settings";
 import { tts } from "@/lib/speech/tts";
 import type { VocabularyEntry } from "@/lib/db/schema";
+import type { TKey } from "@/lib/i18n";
 import { ReviewQuality, calculateNextReview } from "@/lib/ai/srs";
 
 export function useStudy() {
@@ -11,6 +12,19 @@ export function useStudy() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+
+  /**
+   * True when this sitting is extra practice rather than the scheduler's queue.
+   *
+   * Nothing was due, so the whole library was offered instead. Worth keeping — but a
+   * bonus sitting must not be indistinguishable from a scheduled one, which it was:
+   * answering Good on a card due in 90 days re-multiplied its interval from today,
+   * so practising early pushed the material further away.
+   */
+  const [isExtraPractice, setIsExtraPractice] = useState(false);
+
+  /** A review that could not be written, so the screen can say so rather than lie. */
+  const [reviewError, setReviewError] = useState<TKey | null>(null);
 
   /**
    * A review in flight, read and written synchronously.
@@ -29,9 +43,11 @@ export function useStudy() {
     // Android's StudyViewModel falls back to the whole library when nothing is
     // due, so a user who cleared their queue can still re-drill. The web used
     // to dead-end on an empty state instead.
-    const list = due.length > 0 ? due : await getAllVocabulary(db);
+    const isExtra = due.length === 0;
+    const list = isExtra ? await getAllVocabulary(db) : due;
     setCurrentIndex(0);
     setIsFlipped(false);
+    setIsExtraPractice(isExtra);
     setStudyList(shuffle(list));
     setHasLoaded(true);
   }, []);
@@ -50,18 +66,25 @@ export function useStudy() {
     inFlight.current = true;
 
     try {
-      // 1. Calculate next SRS state
-      const updated = calculateNextReview(card, quality);
+      // 1. Calculate next SRS state.
+      //
+      // On extra practice a success changes nothing: the card was not due, and
+      // rewarding the user for drilling by pushing the word further away is the
+      // opposite of what they asked for. A failure still counts — finding out early
+      // that a card is not known is real information.
+      const rescheduled = calculateNextReview(card, quality);
+      const persisted =
+        !isExtraPractice || quality === ReviewQuality.AGAIN ? rescheduled : card;
 
-      // 2. Persist to Dexie
-      await updateVocabulary(db, updated);
+      // 2. Persist the schedule and the XP together, so a failure leaves neither.
+      await db.transaction("rw", db.vocabulary, db.userStats, db.activityLog, async () => {
+        await updateVocabulary(db, persisted);
+        if (quality >= ReviewQuality.GOOD) {
+          await rewardXp(db, XP_PER_CARD);
+        }
+      });
 
-      // 3. Award XP if successful
-      if (quality >= ReviewQuality.GOOD) {
-        await rewardXp(db, XP_PER_CARD);
-      }
-
-      // 4. Update the queue.
+      // 3. Update the queue.
       //
       // Computed here rather than inside a setStudyList updater. Updaters must be
       // pure, and that one called setCurrentIndex from inside itself; StrictMode
@@ -71,7 +94,7 @@ export function useStudy() {
       if (quality === ReviewQuality.AGAIN) {
         // Not a success, so the card goes to the back of the sitting rather than
         // leaving it — the schedule already has it due immediately.
-        nextList.push(updated);
+        nextList.push(persisted);
       }
 
       setStudyList(nextList);
@@ -79,10 +102,13 @@ export function useStudy() {
       // only moves when it ran off the end.
       setCurrentIndex(currentIndex >= nextList.length ? 0 : currentIndex);
       setIsFlipped(false);
+    } catch {
+      // The transaction rolled back, so the card is exactly where it was.
+      setReviewError("study.reviewNotSaved");
     } finally {
       inFlight.current = false;
     }
-  }, [studyList, currentIndex]);
+  }, [studyList, currentIndex, isExtraPractice]);
 
   const skipCard = useCallback(() => {
     if (studyList.length > 0) {
@@ -104,6 +130,9 @@ export function useStudy() {
     currentIndex,
     isFlipped,
     hasLoaded,
+    isExtraPractice,
+    reviewError,
+    dismissReviewError: () => setReviewError(null),
     ttsError,
     flipCard,
     submitReview,

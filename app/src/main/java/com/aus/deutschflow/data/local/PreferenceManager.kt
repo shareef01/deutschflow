@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -43,6 +44,12 @@ class PreferenceManager @Inject constructor(
     /** The plaintext entry this replaces. Read once, to migrate it, then removed. */
     private val KEY_API_KEY_LEGACY = stringPreferencesKey("groq_api_key")
 
+    /**
+     * The UTC offset, in seconds, the daily-word notification was last scheduled
+     * against. Absent until the first launch that records one.
+     */
+    private val KEY_DAILY_WORD_ZONE_OFFSET = intPreferencesKey("daily_word_zone_offset")
+
     private val KEY_DIALECT = stringPreferencesKey("dialect")
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
 
@@ -65,6 +72,17 @@ class PreferenceManager @Inject constructor(
             encrypted?.let { cipher.decrypt(it) } ?: legacy ?: ""
         }
         .flowOn(Dispatchers.IO)
+
+    /** Int.MIN_VALUE means "never recorded", which no real offset can be. */
+    val dailyWordZoneOffset: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[KEY_DAILY_WORD_ZONE_OFFSET] ?: Int.MIN_VALUE
+    }
+
+    suspend fun setDailyWordZoneOffset(offsetSeconds: Int) {
+        dataStore.edit { preferences ->
+            preferences[KEY_DAILY_WORD_ZONE_OFFSET] = offsetSeconds
+        }
+    }
 
     val selectedDialect: Flow<String> = dataStore.data.map { preferences ->
         preferences[KEY_DIALECT] ?: "de-DE"

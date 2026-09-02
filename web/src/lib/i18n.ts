@@ -17,6 +17,7 @@ export const STRINGS = {
     "nav.study": "Study",
     "nav.practice": "Practice",
     "nav.settings": "Settings",
+    "action.skipToContent": "Skip to content",
     "action.back": "Back",
 
     // Shared actions
@@ -29,6 +30,10 @@ export const STRINGS = {
     "action.ok": "OK",
 
     // Transcript
+    "speech.unavailableBody": "This browser can't recognise speech. Chrome, Edge and Safari can — or type a sentence below.",
+    "transcript.listeningFor": "Listening for {0}",
+    "transcript.translateTyped": "Translate",
+    "transcript.typeInstead": "Type a German sentence",
     "transcript.listening": "Listening…",
     "transcript.hint": "Tap to start",
     "transcript.transcribing": "Transcribing…",
@@ -58,6 +63,9 @@ export const STRINGS = {
     "action.undo": "Undo",
 
     // Library
+    "library.deleteFailed": "Couldn't delete that word. Try again.",
+    "library.saveFailed": "Couldn't save that word. Try again.",
+    "library.wordDeleted": "Word deleted.",
     "library.searchHint": "Search words or translations…",
     "library.emptyTitle": "Your library is empty",
     "library.emptyBody": "Your vocabulary will appear here as you learn. Add a word, or save one from a transcript.",
@@ -84,6 +92,8 @@ export const STRINGS = {
     "detail.back": "Back to library",
 
     // Study
+    "study.extraPractice": "Nothing is due today — this is extra practice, so your schedule won't change.",
+    "study.reviewNotSaved": "Couldn't save that review. Try answering the card again.",
     "study.emptyTitle": "Ready to study?",
     "study.emptyBody": "Save some German phrases and we'll build your first study session.",
     "study.session": "Study session",
@@ -114,40 +124,48 @@ export const STRINGS = {
     "dashboard.heatmapSub": "The past three months",
     "dashboard.xp": "XP",
 
-    // Cloud sync. Not built yet; the copy says so rather than implying a backup.
-    "cloud.header": "Cloud sync",
-    "cloud.signedIn": "Signed in",
-    "cloud.title": "Cloud sync",
-    "cloud.unavailable": "Not available yet — your library is saved in this browser.",
-    "cloud.signIn": "Sign in",
-    "cloud.signOut": "Sign out",
-    "cloud.signInBody": "Accounts are ready for a backend that does not exist yet. Signing in changes nothing here.",
-    "cloud.email": "Email",
-    "cloud.password": "Password",
-    "cloud.syncUnavailable": "Cloud sync isn’t available yet. Your library is saved in this browser.",
 
     // Practice
     "practice.tab": "Repetition",
-    "practice.intro": "Listen and repeat the sentence accurately to master your pronunciation.",
+    "practice.intro": "Listen to the German sentence, then tap Speak and say it back.",
     "practice.listenRepeat": "Listen and repeat",
     "practice.listen": "Listen",
     "practice.speak": "Speak",
     "practice.evaluate": "Evaluate",
     "practice.next": "Next",
-    "practice.wordMatch": "Word match: {0}%",
     "practice.wordCorrect": "Correct",
     "practice.wordTryAgain": "Try again",
-    "practice.feedbackPerfect": "Excellent! Perfect pronunciation.",
-    "practice.feedbackGood": "Good! You got most of it.",
-    "practice.feedbackKeepGoing": "Keep practicing! Try to match the highlighted words.",
+    // These say what was measured, not how well you speak. The screen used to
+    // report "Perfect pronunciation" on a result it has no way to judge: it
+    // compares the recogniser's transcript against the sentence, and the Web
+    // Speech API exposes nothing per-phoneme. A count of the words it reported
+    // back is the claim the data supports. The count governs no noun, so a
+    // single-word target does not read as "1 words".
+    "practice.feedbackPerfect": "All words heard, in order.",
+    "practice.feedbackGood": "Words heard: {0} of {1}.",
+    "practice.feedbackKeepGoing": "Words heard: {0} of {1}. Try the highlighted ones again.",
+    "practice.feedbackCaption": "This checks what the speech recogniser heard, not your accent.",
 
     // Roleplay
     "roleplay.tab": "Roleplay",
+    "roleplay.scenarioBerlinBakery": "Ordering at a Berlin Bakery",
+    "roleplay.restart": "Restart conversation",
     "roleplay.thinking": "AI is thinking...",
     "roleplay.stopSend": "Stop & Send",
     "roleplay.speakReply": "Speak to Reply",
 
     // Settings
+    "settings.backupHeader": "Backup",
+    "settings.backupBody": "Your library lives only in this browser. Clearing site data, switching browser, or the browser reclaiming space will take it. Keep a copy.",
+    "settings.backupDownload": "Download a copy",
+    "settings.backupRestore": "Restore from a file",
+    "settings.backupDownloaded": "Library downloaded.",
+    "settings.backupRestored": "Library restored. Existing words were merged, not replaced.",
+    "settings.backupFailed": "Couldn't build the backup. Try again.",
+    "settings.backupInvalid": "That file isn't a DeutschFlow library export.",
+    "settings.backupNewer": "That backup was made by a newer version of DeutschFlow. Update this app, then try again.",
+    "settings.backupStorageFailed": "The file was fine, but the library couldn't be written. Nothing was imported \u2014 free up space and try again.",
+    "settings.speechPrivacy": "Speech is recognised by your browser, which sends the audio to its vendor (Google in Chrome and Edge, Apple in Safari). The Android app recognises speech on the device instead.",
     "settings.aiHeader": "AI & Translation",
     "settings.apiKeyLabel": "Groq API key",
     "settings.apiKeyHint": "Paste your Groq key here",
@@ -204,6 +222,7 @@ export const STRINGS = {
       "German speech isn't installed. Add a German voice under Text-to-speech output in your system's settings.",
 
     // AI translation
+    "db.upgradeBlocked": "DeutschFlow is open in another tab on an older version. Close the other tabs and reload to finish updating.",
     "ai.noKey": "Add your Groq API key in Settings to get translations.",
     "ai.failed": "Translation failed: {0}",
     "ai.noResponse": "no response from Groq",
@@ -230,6 +249,7 @@ export const STRINGS = {
     "nav.study": "Lernen",
     "nav.practice": "Üben",
     "nav.settings": "Einstellungen",
+    "action.skipToContent": "Zum Inhalt springen",
     "action.back": "Zurück",
 
     "action.speak": "Vorlesen",
@@ -240,6 +260,10 @@ export const STRINGS = {
     "action.copy": "Kopieren",
     "action.ok": "OK",
 
+    "speech.unavailableBody": "Dieser Browser kann keine Sprache erkennen. Chrome, Edge und Safari können es — oder tippe unten einen Satz.",
+    "transcript.listeningFor": "Hört auf {0}",
+    "transcript.translateTyped": "Übersetzen",
+    "transcript.typeInstead": "Deutschen Satz eingeben",
     "transcript.listening": "Hört zu…",
     "transcript.hint": "Zum Starten tippen",
     "transcript.transcribing": "Wird transkribiert…",
@@ -267,6 +291,9 @@ export const STRINGS = {
     "history.words": "{0} Wörter",
     "action.undo": "Rückgängig",
 
+    "library.deleteFailed": "Das Wort konnte nicht gelöscht werden. Versuche es erneut.",
+    "library.saveFailed": "Das Wort konnte nicht gespeichert werden. Versuche es erneut.",
+    "library.wordDeleted": "Wort gelöscht.",
     "library.searchHint": "Wörter oder Übersetzungen suchen…",
     "library.emptyTitle": "Deine Bibliothek ist leer",
     "library.emptyBody": "Dein Wortschatz erscheint hier, während du lernst. Füge ein Wort hinzu oder speichere eins aus einem Transkript.",
@@ -291,6 +318,8 @@ export const STRINGS = {
     "detail.example": "Beispielsatz",
     "detail.back": "Zurück zur Bibliothek",
 
+    "study.extraPractice": "Heute ist nichts fällig — das ist zusätzliche Übung, dein Plan ändert sich dadurch nicht.",
+    "study.reviewNotSaved": "Diese Bewertung konnte nicht gespeichert werden. Beantworte die Karte noch einmal.",
     "study.emptyTitle": "Bereit zum Lernen?",
     "study.emptyBody": "Speichere ein paar deutsche Sätze und wir bauen deine erste Lernsitzung.",
     "study.session": "Lernsitzung",
@@ -319,40 +348,44 @@ export const STRINGS = {
     "dashboard.heatmapSub": "Die letzten drei Monate",
     "dashboard.xp": "XP",
 
-    "cloud.header": "Cloud-Synchronisierung",
-    "cloud.signedIn": "Angemeldet",
-    "cloud.title": "Cloud-Synchronisierung",
-    "cloud.unavailable": "Noch nicht verfügbar — deine Bibliothek ist in diesem Browser gespeichert.",
-    "cloud.signIn": "Anmelden",
-    "cloud.signOut": "Abmelden",
-    "cloud.signInBody": "Konten sind für ein Backend vorbereitet, das es noch nicht gibt. Das Anmelden ändert hier nichts.",
-    "cloud.email": "E-Mail",
-    "cloud.password": "Passwort",
-    "cloud.syncUnavailable": "Cloud-Synchronisierung ist noch nicht verfügbar. Deine Bibliothek ist in diesem Browser gespeichert.",
 
     // Practice
     "practice.tab": "Wiederholung",
     "practice.intro":
-      "Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.",
+      "Höre den deutschen Satz an, tippe dann auf Sprechen und sage ihn nach.",
     "practice.listenRepeat": "Hören und nachsprechen",
     "practice.listen": "Anhören",
     "practice.speak": "Sprechen",
     "practice.evaluate": "Auswerten",
     "practice.next": "Weiter",
-    "practice.wordMatch": "Worttreffer: {0}%",
     "practice.wordCorrect": "Richtig",
     "practice.wordTryAgain": "Noch einmal versuchen",
-    "practice.feedbackPerfect": "Ausgezeichnet! Perfekte Aussprache.",
-    "practice.feedbackGood": "Gut! Das meiste war richtig.",
+    "practice.feedbackPerfect": "Alle Wörter erkannt, in der richtigen Reihenfolge.",
+    "practice.feedbackGood": "Erkannte Wörter: {0} von {1}.",
     "practice.feedbackKeepGoing":
-      "Weiter üben! Versuche, die markierten Wörter zu treffen.",
+      "Erkannte Wörter: {0} von {1}. Versuche die markierten noch einmal.",
+    "practice.feedbackCaption":
+      "Geprüft wird, was die Spracherkennung verstanden hat, nicht deine Aussprache.",
 
     // Roleplay
     "roleplay.tab": "Rollenspiel",
+    "roleplay.scenarioBerlinBakery": "Bestellen in einer Berliner Bäckerei",
+    "roleplay.restart": "Gespräch neu starten",
     "roleplay.thinking": "Denkt nach...",
     "roleplay.stopSend": "Stopp & senden",
     "roleplay.speakReply": "Tippen, um zu antworten",
 
+    "settings.backupHeader": "Sicherung",
+    "settings.backupBody": "Deine Bibliothek liegt nur in diesem Browser. Wenn du die Websitedaten löschst, den Browser wechselst oder der Browser Speicher freigibt, ist sie weg. Bewahre eine Kopie auf.",
+    "settings.backupDownload": "Kopie herunterladen",
+    "settings.backupRestore": "Aus Datei wiederherstellen",
+    "settings.backupDownloaded": "Bibliothek heruntergeladen.",
+    "settings.backupRestored": "Bibliothek wiederhergestellt. Vorhandene Wörter wurden zusammengeführt, nicht ersetzt.",
+    "settings.backupFailed": "Die Sicherung konnte nicht erstellt werden. Versuche es erneut.",
+    "settings.backupInvalid": "Diese Datei ist kein DeutschFlow-Bibliotheksexport.",
+    "settings.backupNewer": "Diese Sicherung stammt aus einer neueren Version von DeutschFlow. Aktualisiere die App und versuche es erneut.",
+    "settings.backupStorageFailed": "Die Datei war in Ordnung, aber die Bibliothek konnte nicht geschrieben werden. Es wurde nichts importiert \u2014 schaffe Speicherplatz und versuche es erneut.",
+    "settings.speechPrivacy": "Die Spracherkennung übernimmt dein Browser und sendet die Aufnahme an dessen Anbieter (Google in Chrome und Edge, Apple in Safari). Die Android-App erkennt Sprache stattdessen auf dem Gerät.",
     "settings.aiHeader": "KI & Übersetzung",
     "settings.apiKeyLabel": "Groq-API-Schlüssel",
     "settings.apiKeyHint": "Füge hier deinen Groq-Schlüssel ein",
@@ -407,6 +440,7 @@ export const STRINGS = {
     "tts.noGerman":
       "Deutsche Sprachausgabe ist nicht installiert. Füge eine deutsche Stimme unter „Text-in-Sprache-Ausgabe“ in den Systemeinstellungen hinzu.",
 
+    "db.upgradeBlocked": "DeutschFlow ist in einem anderen Tab in einer älteren Version geöffnet. Schließe die anderen Tabs und lade neu, um das Update abzuschließen.",
     "ai.noKey": "Trage deinen Groq-API-Schlüssel in den Einstellungen ein, um Übersetzungen zu erhalten.",
     "ai.failed": "Übersetzung fehlgeschlagen: {0}",
     "ai.noResponse": "keine Antwort von Groq",

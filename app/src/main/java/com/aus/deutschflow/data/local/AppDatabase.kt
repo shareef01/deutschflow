@@ -3,10 +3,12 @@ package com.aus.deutschflow.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.aus.deutschflow.data.local.dao.ActivityDao
+import com.aus.deutschflow.data.local.dao.RoleplayDao
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.ActivityEntity
+import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
@@ -25,10 +27,13 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
  * destructive fallback, so a version without a migration is a crash on launch;
  * AppDatabaseMigrationTest is what turns that into a failing test instead.
  */
-const val DATABASE_VERSION = 12
+const val DATABASE_VERSION = 14
 
 @Database(
-    entities = [VocabularyEntity::class, TranscriptEntity::class, UserStatsEntity::class, ActivityEntity::class],
+    entities = [
+        VocabularyEntity::class, TranscriptEntity::class, UserStatsEntity::class,
+        ActivityEntity::class, RoleplayMessageEntity::class
+    ],
     version = DATABASE_VERSION,
     exportSchema = true
 )
@@ -37,6 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transcriptDao(): TranscriptDao
     abstract fun userStatsDao(): UserStatsDao
     abstract fun activityDao(): ActivityDao
+    abstract fun roleplayDao(): RoleplayDao
 
     companion object {
         const val NAME = "deutschflow_database"

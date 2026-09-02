@@ -1,14 +1,19 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.PreferenceManager
+import com.aus.deutschflow.data.local.dao.RoleplayDao
+import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -24,7 +29,8 @@ class RoleplayViewModel @Inject constructor(
     private val speechRecognizerHelper: SpeechRecognizerHelper,
     private val vocabularyProcessor: VocabularyProcessor,
     private val ttsHelper: TTSHelper,
-    private val preferenceManager: PreferenceManager
+    private val preferenceManager: PreferenceManager,
+    private val roleplayDao: RoleplayDao
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -43,12 +49,83 @@ class RoleplayViewModel @Inject constructor(
 
     private var currentScenario = SCENARIO_BERLIN_BAKERY
 
+    /**
+     * Reads the saved conversation back.
+     *
+     * The chat used to be StateFlow and nothing else, so process death lost it -
+     * on the one screen where the user routinely stops to compose a sentence, and
+     * where the thing lost is the model's half of a conversation rather than
+     * anything they could retype. Everything that decides whether to open a *new*
+     * scene joins this first; see [openScenarioIfEmpty].
+     */
+    private val restore: Job = viewModelScope.launch {
+        val saved = try {
+            roleplayDao.getConversation()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not read the saved conversation", e)
+            emptyList()
+        }
+        if (saved.isNotEmpty() && _messages.value.isEmpty()) {
+            currentScenario = saved.first().scenario
+            _messages.value = saved.map { ChatMessage(it.role, it.content, it.translation) }
+        }
+    }
+
+    /**
+     * Opens [scenario] only if there is nothing to come back to.
+     *
+     * The screen cannot make this decision itself: it composes before the restore
+     * has run, sees an empty list, and would start a new scene over the saved one.
+     * Joining the restore here rather than exposing a loading flag keeps the two
+     * from racing at all - a flag would still leave the screen reading `messages`
+     * and `isRestoring` from two independently-conflated collectors.
+     */
+    fun openScenarioIfEmpty(scenario: String) {
+        viewModelScope.launch {
+            restore.join()
+            if (_messages.value.isEmpty() && !_isProcessing.value) startSession(scenario)
+        }
+    }
+
     fun startSession(scenario: String) {
         currentScenario = scenario
         _messages.value = emptyList()
         _error.value = null
-        // The model opens: an empty user turn is the cue for its greeting.
-        sendInput("")
+        viewModelScope.launch {
+            // Sequenced, not fired alongside: the clear and the first turn's write
+            // both touch this table, and a delete that landed second would take the
+            // new scene's opening line with it.
+            write { roleplayDao.deleteAll() }
+            // The model opens: an empty user turn is the cue for its greeting.
+            sendInput("")
+        }
+    }
+
+    /**
+     * Storage must never take the screen down with it.
+     *
+     * A conversation that fails to save is a conversation the user still has in
+     * front of them; throwing out of a turn to report it would cost them the turn
+     * as well as the copy.
+     */
+    private suspend fun write(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not save the conversation", e)
+        }
+    }
+
+    private suspend fun persist(message: ChatMessage, position: Int) = write {
+        roleplayDao.insert(
+            RoleplayMessageEntity(
+                position = position,
+                scenario = currentScenario,
+                role = message.role,
+                content = message.content,
+                translation = message.translation
+            )
+        )
     }
 
     fun startListening() {
@@ -57,7 +134,13 @@ class RoleplayViewModel @Inject constructor(
         // renders it, so a stale one would greet the new attempt. The banner should
         // belong to the action the user just took.
         speechRecognizerHelper.dismissError()
-        speechRecognizerHelper.startListening()
+        viewModelScope.launch {
+            // The stored dialect, not the de-DE default. Transcript and Practice both
+            // pass it; roleplay called the no-argument overload, so an Austrian or
+            // Swiss user's setting silently did not apply on the one screen where
+            // they speak the most.
+            speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
+        }
     }
 
     /** Called when the screen leaves composition or the app is backgrounded. */
@@ -90,6 +173,9 @@ class RoleplayViewModel @Inject constructor(
     fun retry() {
         val last = _messages.value.lastOrNull()
         if (last?.role == "user") {
+            // Nothing to unsave: sendInput appends the same turn back at the same
+            // position, and the insert replaces the stored row in place. Deleting
+            // it first would only race the re-insert that follows.
             _messages.value = _messages.value.dropLast(1)
             sendInput(last.content)
         } else {
@@ -104,23 +190,36 @@ class RoleplayViewModel @Inject constructor(
         _isProcessing.value = true
         _error.value = null
 
-        val history = _messages.value.map { it.role to it.content }
+        // Trimmed, because every turn resends the whole conversation: a long
+        // roleplay eventually exceeded the model's context window and surfaced as a
+        // generic "Translation failed" with no way to tell what had gone wrong.
+        val history = _messages.value
+            .takeLast(MAX_HISTORY_TURNS)
+            .map { it.role to it.content }
 
         if (userInput.isNotBlank()) {
             _messages.value += ChatMessage("user", userInput)
         }
 
         viewModelScope.launch {
+            // The optimistic append, made durable. Saved before the request rather
+            // than after it, so a turn that never gets an answer is still there to
+            // retry when the user comes back.
+            _messages.value.lastOrNull()
+                ?.takeIf { userInput.isNotBlank() }
+                ?.let { persist(it, _messages.value.size - 1) }
             try {
                 val apiKey = preferenceManager.apiKey.first()
                 when (val result =
                     vocabularyProcessor.processRoleplay(userInput, history, currentScenario, apiKey)) {
                     is GroqHelper.RoleplayResult.Success -> {
-                        _messages.value += ChatMessage(
+                        val reply = ChatMessage(
                             "assistant",
                             result.aiResponse,
                             result.englishContext
                         )
+                        _messages.value += reply
+                        persist(reply, _messages.value.size - 1)
                         if (preferenceManager.isAutoPlayEnabled.first()) {
                             ttsHelper.speak(result.aiResponse)
                         }
@@ -135,6 +234,19 @@ class RoleplayViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Silences the engine when the screen goes away.
+     *
+     * TTSHelper is a @Singleton and was only ever torn down in
+     * MainActivity.onDestroy behind `isFinishing`, which is false when the app is
+     * merely backgrounded - so a word spoken here kept playing after the user
+     * switched tabs or left the app. The microphone was already released on both
+     * paths; the voice was not.
+     */
+    fun stopSpeaking() {
+        ttsHelper.stop()
+    }
+
     fun speak(text: String) {
         ttsHelper.speak(text)
     }
@@ -146,6 +258,8 @@ class RoleplayViewModel @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "RoleplayViewModel"
+
         /**
          * Sent to the model as scene-setting, not shown in the UI - the header
          * renders the localized resource for the same scenario. The screen's two
@@ -158,5 +272,14 @@ class RoleplayViewModel @Inject constructor(
          * enough that a failed recognition returns the button rather than keeping it.
          */
         private const val RECOGNITION_TIMEOUT_MS = 5_000L
+
+        /**
+         * How much of the conversation the model is shown.
+         *
+         * Enough for the scene to hold together, bounded so a long session cannot
+         * grow the request until the context window rejects it. The system prompt is
+         * always sent; this caps only the turns.
+         */
+        internal const val MAX_HISTORY_TURNS = 12
     }
 }

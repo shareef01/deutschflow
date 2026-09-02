@@ -177,11 +177,23 @@ class PracticeViewModel @Inject constructor(
             .replace("ß", "ss")
 
         /**
-         * Pure function: scores [spokenText] against [targetSentence] word-by-word.
+         * Scores [spokenText] against [targetSentence], in order.
          *
-         * Each word in the target is checked for presence in the spoken text, ignoring
-         * case and umlaut spelling. The feedback follows the same progression the UI
-         * shows: perfect match, mostly correct, or keep at it.
+         * What this measures, stated plainly because the feature used to claim more:
+         * how much of the target sentence the *recogniser* reported hearing. It is a
+         * recall and intelligibility check, not phoneme-level pronunciation scoring -
+         * neither SpeechRecognizer nor the Web Speech API exposes per-phoneme
+         * confidence, so that would need a forced-alignment model on the device. A
+         * speech engine's language model also resolves ambiguous audio toward
+         * plausible sentences, so it will often report the word you meant even when
+         * you said it poorly. Worth knowing when reading the result.
+         *
+         * The matching is a longest-common-subsequence alignment rather than the set
+         * membership this used to do, which was wrong in two ways a learner would
+         * notice: order was ignored, so saying the sentence backwards scored perfect;
+         * and repetition was ignored, so a target containing "die" twice was satisfied
+         * by saying it once. An LCS fixes both at once, because a subsequence is
+         * ordered and consumes each match.
          *
          * Extracted from the ViewModel so it can be tested without constructing any
          * Android dependencies — same pattern as [StudyViewModel.nextStreak].
@@ -194,19 +206,20 @@ class PracticeViewModel @Inject constructor(
                 .map { it.replace(NON_LETTERS, "") }
                 .filter { it.isNotBlank() }
 
-            val spokenKeys = spokenText.split(WORD_SPLIT)
+            val spokenWords = spokenText.split(WORD_SPLIT)
                 .map { it.replace(NON_LETTERS, "") }
                 .filter { it.isNotBlank() }
                 .map { it.foldGerman() }
-                .toSet()
 
-            val results = targetWords.map { targetWord ->
+            val matched = alignedTargetIndices(targetWords.map { it.foldGerman() }, spokenWords)
+
+            val results = targetWords.mapIndexed { index, targetWord ->
                 WordResult(
                     // The target as it was written, not as it was folded: the user reads
                     // this back, and showing them "uebung" for a word they saved as
                     // "Übung" would be a second, more visible wrong answer.
                     word = targetWord,
-                    isCorrect = spokenKeys.contains(targetWord.foldGerman())
+                    isCorrect = index in matched
                 )
             }
 
@@ -214,11 +227,52 @@ class PracticeViewModel @Inject constructor(
             val feedback = when {
                 results.isEmpty() -> PracticeFeedback.NONE
                 correctCount == results.size -> PracticeFeedback.PERFECT
-                correctCount * 2 > results.size -> PracticeFeedback.GOOD
+                // Three quarters, not half. "Most words were clear" was reported for
+                // getting half a sentence right, which is not most of anything.
+                correctCount * 4 >= results.size * 3 -> PracticeFeedback.GOOD
                 else -> PracticeFeedback.KEEP_GOING
             }
 
             return Pair(results, feedback)
+        }
+
+        /**
+         * Which target positions appear, in order, in what was heard.
+         *
+         * Standard longest-common-subsequence over the two folded token lists, then a
+         * walk back through the table to recover which target indices were matched.
+         * O(target x spoken), which for one sentence is nothing.
+         */
+        private fun alignedTargetIndices(target: List<String>, spoken: List<String>): Set<Int> {
+            if (target.isEmpty() || spoken.isEmpty()) return emptySet()
+
+            // lengths[i][j] = LCS length of target[i..] and spoken[j..]
+            val lengths = Array(target.size + 1) { IntArray(spoken.size + 1) }
+            for (i in target.indices.reversed()) {
+                for (j in spoken.indices.reversed()) {
+                    lengths[i][j] = if (target[i] == spoken[j]) {
+                        lengths[i + 1][j + 1] + 1
+                    } else {
+                        maxOf(lengths[i + 1][j], lengths[i][j + 1])
+                    }
+                }
+            }
+
+            val matched = mutableSetOf<Int>()
+            var i = 0
+            var j = 0
+            while (i < target.size && j < spoken.size) {
+                when {
+                    target[i] == spoken[j] -> {
+                        matched.add(i)
+                        i++
+                        j++
+                    }
+                    lengths[i + 1][j] >= lengths[i][j + 1] -> i++
+                    else -> j++
+                }
+            }
+            return matched
         }
     }
 }

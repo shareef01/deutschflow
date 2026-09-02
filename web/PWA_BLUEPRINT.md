@@ -36,7 +36,8 @@
 
 ```
 User speaks
-  → SpeechRecognition (on-device, browser engine) — audio never leaves the device
+  → SpeechRecognition (the browser's own engine) — see §7: on Chrome, Edge and
+    Safari the audio is sent to the browser vendor, unlike the Android app
   → interim + final results into the recognizer store (SharedFlow equivalent)
   → transcript row inserted (Dexie)                    [TranscriptDao.insertTranscript]
   → POST api.groq.com/openai/v1/chat/completions        [GroqHelper.translateAndExtract]
@@ -86,6 +87,14 @@ User speaks
 ---
 
 ## 3. Design system — Obsidian & Azure tokens (Tailwind v4)
+
+> Both schemes. §3's tokens are the dark palette; `globals.css` redefines the
+> same custom properties under `@media (prefers-color-scheme: light)`, so every
+> utility below re-themes without a class name changing. The light values are
+> not the dark ones inverted — a cyan built to glow on a blue-black ground
+> measures 1.68:1 on white — and both palettes are measured by
+> `tools/contrast.py` and cross-checked against Color.kt by
+> `tools/palette_parity.py`.
 
 Implemented in `src/app/globals.css` as `@theme` tokens + utilities (Phase 2 deliverable, §8). Exact port of `ui/theme/`:
 
@@ -144,7 +153,18 @@ Transactional behaviors ported verbatim into `repository.ts`:
 
 ## 7. Security & privacy parity (stated plainly, like the README)
 
-- **Audio never leaves the device** — Web Speech recognition is the browser's on-device engine.
+- **Audio does NOT stay on the device here.** The Web Speech API delegates to the
+  browser's own recognition service: Chrome and Edge stream the captured audio to
+  Google, Safari to Apple, and Firefox does not implement the API at all. There is
+  no offline hint the page can set — the API exposes none.
+
+  This is the one place the PWA cannot match the Android app, which binds
+  `createOnDeviceSpeechRecognizer` specifically so that the audio never leaves the
+  phone. The claim that used to sit on this line said the opposite, and it was
+  wrong in every browser where the feature actually works. Genuine on-device
+  recognition on the web needs a WASM model (Whisper, Vosk) shipped with the app.
+
+  The Settings screen states this to the user; it should not live only here.
 - **Text leaves twice, as in Android:** each utterance to Groq; and — unlike Android — the PWA's IndexedDB is **never** synced anywhere by default, so nothing extra leaves.
 - The API key is the one secret; WebCrypto vault per §5. No plaintext copy, ever.
 - Release discipline: no transcript or key content in `console.log` (the PWA analogue of R8 stripping `Log.d`).

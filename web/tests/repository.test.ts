@@ -50,13 +50,15 @@ describe("saveVocabulary — VocabularyDao.save() port", () => {
     expect(row.exampleSentence).toBe("");
   });
 
-  it("treats Übung and Uebung as distinct — NOCASE folds ASCII only", async () => {
-    // Room parity: SQLite's NOCASE does not equate umlauts with their
-    // transliterations, so the two spellings are different words here too
-    // (the umlaut-to-ue folding is pronunciation scoring, not identity).
+  it("treats Übung and Uebung as one word", async () => {
+    // This assertion used to run the other way, pinning Room's NOCASE behaviour as
+    // correct: NOCASE folds ASCII A-Z only, so the two spellings were two rows —
+    // and so were "Übung"/"übung" and "Öl"/"öl". Both platforms now fold the way
+    // German does, which is also the fold lib/scoring.ts has always used to judge
+    // pronunciation. See tests/germanfold.test.ts for the full table.
     await saveVocabulary(db, { germanText: "Übung", englishTranslation: "exercise" });
     await saveVocabulary(db, { germanText: "Uebung", englishTranslation: "exercise" });
-    expect(await db.vocabulary.count()).toBe(2);
+    expect(await db.vocabulary.count()).toBe(1);
   });
 
   it("takes the later timestamp so a touched word surfaces at the top", async () => {

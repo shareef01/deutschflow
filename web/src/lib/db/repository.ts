@@ -1,5 +1,9 @@
-import type { DeutschFlowDB, TranscriptEntry, UserStatsEntry, VocabularyEntry, ActivityEntry } from "./schema";
+import type {
+  DeutschFlowDB, TranscriptEntry, UserStatsEntry, VocabularyEntry, ActivityEntry,
+  RoleplayMessageEntry,
+} from "./schema";
 import { foldGermanKey } from "./schema";
+import { requestPersistentStorage } from "./backup";
 
 /**
  * Repository — Room DAO transactions ported 1:1.
@@ -41,7 +45,22 @@ export const NEW_CARD_SCHEDULE = {
   reviewCount: 0,
 } as const;
 
+/**
+ * Asked once per session, on the first save.
+ *
+ * Here rather than at load: a browser that prompts (Firefox) should do it at a
+ * moment the user is doing something worth keeping, not while the app is booting.
+ */
+let persistenceRequested = false;
+
 export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput): Promise<void> {
+  if (!persistenceRequested) {
+    persistenceRequested = true;
+    // Deliberately not awaited: whether the browser grants it changes nothing
+    // about this write, and Safari never resolves it usefully.
+    void requestPersistentStorage();
+  }
+
   const now = Date.now();
 
   await db.transaction("rw", db.vocabulary, async () => {
@@ -272,10 +291,53 @@ export async function rewardXp(db: DeutschFlowDB, points: number = XP_PER_CARD):
 }
 
 export async function clearAllProgress(db: DeutschFlowDB): Promise<void> {
-  await db.transaction("rw", db.vocabulary, db.transcripts, db.userStats, db.activityLog, async () => {
-    await db.vocabulary.clear();
-    await db.transcripts.clear();
-    await db.userStats.clear();
-    await db.activityLog.clear();
-  });
+  await db.transaction(
+    "rw",
+    db.vocabulary, db.transcripts, db.userStats, db.activityLog, db.roleplayMessages,
+    async () => {
+      await db.vocabulary.clear();
+      await db.transcripts.clear();
+      await db.userStats.clear();
+      await db.activityLog.clear();
+      // The saved roleplay is the user's speech too. "Clear all progress" that
+      // left a conversation behind would be the one thing it promised not to do.
+      await db.roleplayMessages.clear();
+    }
+  );
+}
+
+// --- roleplay conversation --------------------------------------------------
+//
+// Mirrors RoleplayDao. Only the current conversation is stored; starting a new
+// scenario clears it. Every one of these swallows its own failure: a chat that
+// cannot be saved is a chat the user still has in front of them, and throwing
+// out of a turn to report it would cost them the turn as well as the copy.
+
+/** The saved conversation, oldest turn first — the order the chat renders in. */
+export async function loadConversation(db: DeutschFlowDB): Promise<RoleplayMessageEntry[]> {
+  try {
+    return await db.roleplayMessages.orderBy("position").toArray();
+  } catch {
+    return [];
+  }
+}
+
+/** Writes one turn. `put`, so a resent turn replaces the row at its position. */
+export async function saveConversationTurn(
+  db: DeutschFlowDB,
+  message: RoleplayMessageEntry
+): Promise<void> {
+  try {
+    await db.roleplayMessages.put(message);
+  } catch {
+    // Storage is best-effort here; see the note above.
+  }
+}
+
+export async function clearConversation(db: DeutschFlowDB): Promise<void> {
+  try {
+    await db.roleplayMessages.clear();
+  } catch {
+    // As above.
+  }
 }

@@ -86,17 +86,78 @@ class SRSEngineTest {
         assertEquals(2.6f, easy.easeFactor, 0.0001f)
     }
 
+    /**
+     * Hard is a success with a shorter step, not a lapse.
+     *
+     * It used to return a flat 1, so a mature card lost its entire schedule for an
+     * answer that was still correct - which punished the honest button harder than
+     * the schedule punished a wrong one.
+     */
     @Test
-    fun hardShowsTheCardTomorrowAndCostsEase() {
+    fun hardShortensTheIntervalRatherThanResettingIt() {
         val result = engine.calculateNextReview(
             card(interval = 30, easeFactor = 2.5f, reviewCount = 5),
             ReviewQuality.HARD
         )
 
-        assertEquals("a card struggled with comes back tomorrow", 1, result.interval)
-        assertEquals(2.3f, result.easeFactor, 0.0001f)
-        // The history is not thrown away: only Again resets the count.
-        assertEquals(5, result.reviewCount)
+        assertEquals("30 * 1.2", 36, result.interval)
+        assertEquals(2.35f, result.easeFactor, 0.0001f)
+        // Hard is a success, so the streak advances.
+        assertEquals(6, result.reviewCount)
+    }
+
+    /** The regression: five Good ratings reach 95 days, and one Hard used to erase them. */
+    @Test
+    fun aLongStreakSurvivesOneHard() {
+        val result = engine.calculateNextReview(
+            card(interval = 95, easeFactor = 2.5f, reviewCount = 5),
+            ReviewQuality.HARD
+        )
+
+        assertTrue("expected 100..120, was ${result.interval}", result.interval in 100..120)
+    }
+
+    /**
+     * Hard and Again shared a flat -0.2, so the two buttons told the scheduler
+     * nothing different about the card.
+     */
+    @Test
+    fun hardAndAgainChargeDifferentEase() {
+        val base = card(interval = 10, easeFactor = 2.5f, reviewCount = 3)
+        val hard = engine.calculateNextReview(base, ReviewQuality.HARD)
+        val again = engine.calculateNextReview(base, ReviewQuality.AGAIN)
+
+        assertTrue(hard.easeFactor > again.easeFactor)
+        assertEquals(2.35f, hard.easeFactor, 0.0001f)
+        assertEquals(2.3f, again.easeFactor, 0.0001f)
+    }
+
+    /** A new card has interval 0, and 0 * 1.2 is still 0 - which reads as a lapse. */
+    @Test
+    fun hardNeverSchedulesBackwardsOrToZero() {
+        val result = engine.calculateNextReview(card(), ReviewQuality.HARD)
+
+        assertEquals(1, result.interval)
+        assertTrue(result.nextReview > 0)
+    }
+
+    /**
+     * Nine Easy ratings used to reach 220 years, which is deletion by another name.
+     */
+    @Test
+    fun theIntervalNeverExceedsTheCeiling() {
+        var current = card()
+        repeat(10) { current = engine.calculateNextReview(current, ReviewQuality.EASY) }
+
+        assertEquals(SRSEngine.MAX_INTERVAL_DAYS, current.interval)
+    }
+
+    @Test
+    fun theEaseNeverClimbsAboveTheCeiling() {
+        var current = card()
+        repeat(20) { current = engine.calculateNextReview(current, ReviewQuality.EASY) }
+
+        assertEquals(SRSEngine.MAX_EASE_FACTOR, current.easeFactor, 0.0001f)
     }
 
     @Test

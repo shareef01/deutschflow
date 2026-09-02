@@ -101,11 +101,18 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
 
     val hasResult = feedback != PracticeFeedback.NONE
     val isPositive = feedback == PracticeFeedback.PERFECT || feedback == PracticeFeedback.GOOD
+    // The banner reports the count it actually has. It used to say "Perfect
+    // pronunciation", which the screen has no way to know: the recogniser hands
+    // back a transcript, not a per-phoneme score, and its language model will
+    // happily resolve poor audio into the word you meant.
+    val heardCount = wordResults.count { it.isCorrect }
+    val totalCount = wordResults.size
     val feedbackText = when (feedback) {
         PracticeFeedback.NONE -> null
         PracticeFeedback.PERFECT -> stringResource(R.string.practice_feedback_perfect)
-        PracticeFeedback.GOOD -> stringResource(R.string.practice_feedback_good)
-        PracticeFeedback.KEEP_GOING -> stringResource(R.string.practice_feedback_keep_going)
+        PracticeFeedback.GOOD -> stringResource(R.string.practice_feedback_good, heardCount, totalCount)
+        PracticeFeedback.KEEP_GOING ->
+            stringResource(R.string.practice_feedback_keep_going, heardCount, totalCount)
     }
 
     val launcher = rememberLauncherForActivityResult(
@@ -164,7 +171,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                         wordResults.forEach { result ->
                             withStyle(
                                 style = SpanStyle(
-                                    color = if (result.isCorrect) TertiaryGreen else MaterialTheme.colorScheme.error,
+                                    color = if (result.isCorrect) AppTheme.colors.tertiaryGreen else MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.Bold
                                 )
                             ) {
@@ -217,17 +224,28 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                 shape = MaterialTheme.shapes.medium,
                 border = BorderStroke(
                     1.dp,
-                    if (isPositive) TertiaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                    if (isPositive) AppTheme.colors.tertiaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
                 )
             ) {
-                Text(
-                    text = feedbackText ?: "",
+                Column(
                     modifier = Modifier.padding(Spacing.md),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isPositive) TertiaryGreen else MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = feedbackText ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isPositive) AppTheme.colors.tertiaryGreen else MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Text(
+                        text = stringResource(R.string.practice_feedback_caption),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 
@@ -299,14 +317,14 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                     Icon(
                         imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                 },
                 gradientColors = if (isListening) {
                     listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
                 } else {
-                    listOf(AzureGlow, primaryColor)
+                    listOf(AppTheme.colors.azureGlow, primaryColor)
                 },
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)

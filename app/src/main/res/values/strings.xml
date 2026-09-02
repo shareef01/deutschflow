@@ -64,6 +64,9 @@
     </plurals>
 
     <!-- Library -->
+    <string name="library_save_failed">Couldn\'t save that word. Try again.</string>
+    <string name="library_delete_failed">Couldn\'t delete that word. Try again.</string>
+    <string name="library_word_deleted">Word deleted.</string>
     <string name="library_search_hint">Search words or translations…</string>
     <string name="library_tab_words">Words</string>
     <string name="library_tab_transcripts">Transcripts</string>
@@ -95,6 +98,8 @@
     <string name="detail_back">Back to library</string>
 
     <!-- Study / Dashboard -->
+    <string name="study_extra_practice">Nothing is due today, so this is extra practice \u2014 it won\'t change your schedule.</string>
+    <string name="study_review_not_saved">Couldn\'t save that review. Try answering the card again.</string>
     <string name="study_empty_title">No cards to review yet</string>
     <string name="study_empty_body">Save words or phrases to your library to automatically generate spaced-repetition flashcards.</string>
     <string name="study_session">Study session</string>
@@ -157,36 +162,36 @@
     <string name="detail_linguistic_connections">Linguistic Connections</string>
 
     <!-- Cloud sync -->
-    <string name="settings_cloud_header">Cloud Synchronization</string>
-    <string name="settings_cloud_signed_in">Signed in</string>
-    <string name="settings_cloud_title">Cloud sync</string>
-    <string name="settings_cloud_unavailable">Your learning library is securely saved locally on this device.</string>
-    <string name="settings_cloud_sign_in">Sign in</string>
-    <string name="settings_cloud_sign_out">Sign out</string>
-    <string name="settings_cloud_sign_in_title">Sign in to DeutschFlow</string>
-    <string name="settings_cloud_email">Email address</string>
-    <string name="settings_cloud_password">Password</string>
 
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyms</string>
     <string name="detail_antonyms">Antonyms</string>
 
     <!-- Practice -->
-    <string name="practice_intro">Listen to the native German sentence, then tap Speak to repeat it accurately.</string>
+    <string name="practice_intro">Listen to the German sentence, then tap Speak and say it back.</string>
     <string name="practice_waiting">Waiting for your German speech…</string>
     <string name="practice_listen_repeat">Listen to Sentence</string>
     <string name="practice_speak">Speak</string>
     <string name="practice_evaluate">Evaluating…</string>
     <string name="practice_next">Next Sentence</string>
-    <string name="practice_feedback_perfect">Excellent! Perfect pronunciation.</string>
-    <string name="practice_feedback_good">Good job! Most words were clear.</string>
-    <string name="practice_feedback_keep_going">Keep practicing! Focus on the highlighted words.</string>
+    <!--
+        These say what was measured, not how well you speak. The screen used to
+        report "Perfect pronunciation" on a result it had no way to judge: it
+        compares the recogniser\'s transcript against the sentence, and the engine
+        never exposes anything per-phoneme. A count of the words it reported back
+        is the claim the data supports. The count governs no noun, so a
+        single-word target does not read as "1 words".
+    -->
+    <string name="practice_feedback_perfect">All words heard, in order.</string>
+    <string name="practice_feedback_good">Words heard: %1$d of %2$d.</string>
+    <string name="practice_feedback_keep_going">Words heard: %1$d of %2$d. Try the highlighted ones again.</string>
+    <string name="practice_feedback_caption">This checks what the speech recogniser heard, not your accent.</string>
 
     <!-- Settings Sections -->
-    <string name="settings_section_account">Account &amp; Sync</string>
     <string name="settings_section_ai">AI &amp; Intelligence</string>
     <string name="settings_section_audio">Speech &amp; Audio</string>
     <string name="settings_section_learning">Learning &amp; Notifications</string>
+    <string name="settings_storage_local">Your learning library is stored on this device.</string>
     <string name="settings_section_data">Data Management</string>
     <string name="settings_section_about">About DeutschFlow</string>
 
@@ -224,14 +229,11 @@
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API key saved securely.</string>
     <string name="message_api_key_not_saved">The key couldn\'t be stored. Try again, or restart the device.</string>
+    <string name="message_clear_failed">Couldn\'t clear your progress. Please try again.</string>
     <string name="message_progress_cleared">All vocabulary, history, and stats have been reset.</string>
     <string name="message_notification_sent">Daily reminder notification sent.</string>
     <string name="message_notifications_off">Notifications are turned off. Enable them for DeutschFlow in system settings.</string>
     <string name="message_library_empty">Save a word to your library first — there\'s nothing to send yet.</string>
-    <string name="message_cloud_connected">Signed in. Data is stored on this device.</string>
-    <string name="message_cloud_failed">Couldn\'t sign in. Check your details and try again.</string>
-    <string name="message_cloud_disconnected">Signed out. Your library remains saved locally.</string>
-    <string name="message_sync_unavailable">Cloud sync is currently in preview. Your library is safely stored locally.</string>
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Speech recognition isn\'t available on this device.</string>

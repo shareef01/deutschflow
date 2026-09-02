@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark values. See values/colors.xml for why these are split. -->
+    <color name="window_background">#0A0E16</color>
+
+    <color name="widget_background">#000000</color>
+    <color name="widget_accent">#00E5FF</color>
+    <color name="widget_on_background">#F2F2F7</color>
+    <color name="widget_on_background_variant">#8892B0</color>
+</resources>

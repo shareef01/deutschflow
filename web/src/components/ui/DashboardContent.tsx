@@ -45,7 +45,7 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
             fill="transparent"
             stroke="currentColor"
             strokeWidth="8"
-            className="text-white/5"
+            className="text-on-surface/5"
           />
           <circle
             cx="64"
@@ -99,7 +99,10 @@ function MasteryBreakdownCard({ stats, t }: { stats: MasteryStats; t: Translate 
         {t("dashboard.retention")}
       </h3>
       <div className="grid grid-cols-1 xs:grid-cols-3 gap-4">
-        <RetentionTile label={t("dashboard.mastered")} count={stats.masteredWords} color="text-green-400" />
+        {/* The palette's success colour, not Tailwind's green-400. That green is
+            not in either theme - it never matched Android's TertiaryGreen, and on
+            a light ground it measures 1.7:1. */}
+        <RetentionTile label={t("dashboard.mastered")} count={stats.masteredWords} color="text-tertiary" />
         <RetentionTile label={t("dashboard.learning")} count={stats.learningWords} color="text-azure-glow" />
         <RetentionTile label={t("dashboard.new")} count={stats.newWords} color="text-on-surface-variant" />
       </div>
@@ -109,7 +112,7 @@ function MasteryBreakdownCard({ stats, t }: { stats: MasteryStats; t: Translate 
 
 function RetentionTile({ label, count, color }: { label: string; count: number; color: string }) {
   return (
-    <div className="bg-surface-variant/20 rounded-2xl p-5 border border-white/5">
+    <div className="bg-surface-variant/20 rounded-2xl p-5 border border-on-surface/5">
       <span className={`text-3xl font-black ${color}`}>{count}</span>
       <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">{label}</p>
     </div>
@@ -149,10 +152,10 @@ function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate 
 
       <div className="grid grid-flow-col grid-rows-7 gap-1.5 h-32 w-fit">
           {cells.map((cell, i) => {
-              const color = cell.xp >= 100 ? 'bg-green-400' :
-                           cell.xp >= 50 ? 'bg-green-400/70' :
-                           cell.xp >= 20 ? 'bg-green-400/40' :
-                           cell.xp > 0 ? 'bg-green-400/20' : 'bg-white/5';
+              const color = cell.xp >= 100 ? 'bg-tertiary' :
+                           cell.xp >= 50 ? 'bg-tertiary/70' :
+                           cell.xp >= 20 ? 'bg-tertiary/40' :
+                           cell.xp > 0 ? 'bg-tertiary/20' : 'bg-on-surface/5';
               return (
                   <div key={i} className={`size-3 rounded-[2px] ${color}`} title={`${cell.date}: ${cell.xp} XP`} />
               )

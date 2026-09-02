@@ -63,8 +63,8 @@ class TranscriptViewModel @Inject constructor(
      * Gates the introductory copy, which is worth a screen's worth of space once and
      * is in the way every time after that.
      */
-    val isFirstRun: StateFlow<Boolean> = transcriptDao.getAllTranscripts()
-        .map { it.isEmpty() }
+    val isFirstRun: StateFlow<Boolean> = transcriptDao.hasAnyTranscript()
+        .map { !it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val selectedDialect: StateFlow<String> = preferenceManager.selectedDialect
@@ -197,8 +197,23 @@ class TranscriptViewModel @Inject constructor(
         viewModelScope.launch { preferenceManager.saveDialect(dialect) }
     }
 
+    /**
+     * Which utterance may write state, bumped on every issue and on session start.
+     *
+     * A translation runs to completion even after the screen that asked for it has
+     * moved on, and [startListening] clears the result fields - so a slow answer
+     * used to repopulate a cleared screen with the *previous* utterance's
+     * translation while the user was speaking the next one. Save reads those fields,
+     * so the wrong English could be filed against the right German. Disabling the
+     * record button while busy closes most of that window; this closes the rest,
+     * including the lifecycle paths the button cannot see. The web port has always
+     * had it.
+     */
+    private var utteranceToken = 0
+
     fun startListening() {
         _permissionDenied.value = false
+        utteranceToken++
         viewModelScope.launch {
             _translation.value = ""
             _suggestedWords.value = emptyList()
@@ -229,11 +244,18 @@ class TranscriptViewModel @Inject constructor(
      */
     @VisibleForTesting
     internal suspend fun handleUtterance(text: String) {
+        val token = ++utteranceToken
         transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
 
         _isTranslating.value = true
         try {
-            when (val result = vocabularyProcessor.processText(text, preferenceManager.apiKey.first())) {
+            val result = vocabularyProcessor.processText(text, preferenceManager.apiKey.first())
+
+            // Superseded while the request was out: this answer belongs to a
+            // transcript the screen has already replaced, so it writes nothing.
+            if (token != utteranceToken) return
+
+            when (result) {
                 is AIResult.Success -> {
                     _translation.value = result.translation
                     _suggestedWords.value = result.keywords
@@ -250,7 +272,9 @@ class TranscriptViewModel @Inject constructor(
                 }
             }
         } finally {
-            _isTranslating.value = false
+            // A stale utterance must not clear the spinner of the newer one that
+            // replaced it.
+            if (token == utteranceToken) _isTranslating.value = false
         }
     }
 

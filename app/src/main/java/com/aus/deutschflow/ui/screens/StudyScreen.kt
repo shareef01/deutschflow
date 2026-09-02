@@ -74,12 +74,23 @@ fun StudySessionContent(
     val sessionReviewedCount by viewModel.sessionReviewedCount.collectAsState()
     val isSubmitting by viewModel.isSubmitting.collectAsState()
     val ttsError by viewModel.ttsError.collectAsState()
+    // Both of these existed on the ViewModel and were rendered by nothing, so a
+    // review that failed to save looked exactly like one that succeeded, and an
+    // extra-practice sitting looked exactly like a scheduled one. The web port
+    // has shown both since they were added.
+    val reviewError by viewModel.reviewError.collectAsState()
+    val isExtraPractice by viewModel.isExtraPractice.collectAsState()
     val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(Unit) {
         viewModel.dismissTtsError()
         viewModel.startSession()
     }
+
+    // The voice is a @Singleton and outlives this screen; without this a word
+    // spoken here keeps playing after the user switches tabs or backgrounds the
+    // app. Same discipline the recording screens apply to the microphone.
+    OnLeavingScreen { viewModel.stopSpeaking() }
 
     if (!hasLoaded) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -173,7 +184,21 @@ fun StudySessionContent(
             .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ErrorBanner(ttsError)
+        // The failed write wins the banner: it is about the action the user just
+        // took, where a TTS error may be left over from a card ago.
+        ErrorBanner(reviewError?.let { stringResource(it) } ?: ttsError)
+
+        // Nothing was due, so this sitting is a bonus. Said out loud, because a
+        // schedule that quietly does not move is indistinguishable from a broken one.
+        if (isExtraPractice && studyList.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.study_extra_practice),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs)
+            )
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -362,7 +387,7 @@ fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_hard),
-                glow = WarningAmber,
+                glow = AppTheme.colors.warningAmber,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
                 onClick = {
@@ -372,7 +397,7 @@ fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_good),
-                glow = AzureDeep,
+                glow = AppTheme.colors.azureDeep,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
                 onClick = {
@@ -382,7 +407,7 @@ fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_easy),
-                glow = TertiaryGreen,
+                glow = AppTheme.colors.tertiaryGreen,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
                 onClick = {
