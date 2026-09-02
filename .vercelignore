@@ -1,0 +1,15 @@
+# Vercel builds web/ (Root Directory = web). Nothing else needs uploading, and a
+# smaller payload is markedly more reliable over a proxied connection.
+app/
+docs/
+gradle/
+tools/
+gradlew
+gradlew.bat
+build.gradle.kts
+settings.gradle.kts
+gradle.properties
+local.properties
+*.md
+.github/
+.idea/

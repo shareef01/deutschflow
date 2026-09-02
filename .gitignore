@@ -27,3 +27,7 @@ keystore.properties
 
 # Session tooling metadata, not part of the project.
 .reasonix/
+
+# Vercel CLI link state (project/org ids, machine-local). web/.gitignore
+# already ignores this; the root needs it too now that deploys run from here.
+.vercel/
