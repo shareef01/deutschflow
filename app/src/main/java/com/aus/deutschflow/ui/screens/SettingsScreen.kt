@@ -46,14 +46,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val hasApiKey by viewModel.hasApiKey.collectAsState()
     val selectedDialect by viewModel.selectedDialect.collectAsState()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
-    val isCloudConnected by viewModel.isCloudConnected.collectAsState()
-    val isSyncing by viewModel.isSyncing.collectAsState()
     val message by viewModel.message.collectAsState()
 
     var apiKeyInput by remember(hasApiKey) { mutableStateOf("") }
     var isApiKeyVisible by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showLoginDialog by remember { mutableStateOf(false) }
 
     val haptic = LocalHapticFeedback.current
 
@@ -99,113 +96,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         )
                     }
                 }
-            }
-        }
-
-        // Section 1: Cloud Sync & Account
-        SettingsSectionHeader(stringResource(R.string.settings_section_account))
-        GlassmorphicCard(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(Spacing.lg)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isCloudConnected) TertiaryGreen.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.surfaceContainerHighest
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudSync,
-                            contentDescription = null,
-                            tint = if (isCloudConnected) TertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(Spacing.md))
-                    Column {
-                        Text(
-                            text = stringResource(
-                                if (isCloudConnected) R.string.settings_cloud_signed_in
-                                else R.string.settings_cloud_title
-                            ),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_cloud_unavailable),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                if (isCloudConnected) {
-                    IconButton(
-                        onClick = { viewModel.performSync() },
-                        enabled = !isSyncing,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        if (isSyncing) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                Icons.Default.CloudSync,
-                                contentDescription = stringResource(R.string.settings_cloud_header),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.md))
-
-            if (isCloudConnected) {
-                SecondaryActionButton(
-                    text = stringResource(R.string.settings_cloud_sign_out),
-                    icon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.signOut()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                PrimaryActionButton(
-                    text = stringResource(R.string.settings_cloud_sign_in),
-                    icon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Login,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        showLoginDialog = true
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         }
 
@@ -415,6 +305,16 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
+            // What the removed "Cloud Sync & Account" section was actually for.
+            // The sign-in it offered authenticated against a stub and uploaded
+            // nothing; this sentence was the only true thing on the card, and it
+            // belongs next to the data it describes.
+            Text(
+                text = stringResource(R.string.settings_storage_local),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             SecondaryActionButton(
                 text = stringResource(R.string.settings_test_notification),
                 icon = {
@@ -471,16 +371,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         Spacer(modifier = Modifier.height(Spacing.md))
     }
 
-    if (showLoginDialog) {
-        LoginDialog(
-            onDismiss = { showLoginDialog = false },
-            onEnablePreview = {
-                viewModel.enableCloudPreview()
-                showLoginDialog = false
-            }
-        )
-    }
-
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -506,38 +396,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             }
         )
     }
-}
-
-/**
- * Explains what "cloud sync" currently is, which is nothing.
- *
- * This used to take an email address and a password. [MockCloudService.signIn]
- * discards both, returns true for any input, and the app then said "Signed in" - so
- * the form taught people to type a real, probably reused password into a control
- * that sent it nowhere and confirmed a connection that did not exist. Neither half
- * of that is acceptable, and the credentials cannot be made meaningful until there
- * is a backend to check them against.
- *
- * The web port has always said this plainly in its dialog body; this is the same
- * copy. When a backend does arrive, the fields come back with it.
- */
-@Composable
-fun LoginDialog(onDismiss: () -> Unit, onEnablePreview: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_cloud_sign_in_title), fontWeight = FontWeight.Bold) },
-        text = { Text(stringResource(R.string.settings_cloud_sign_in_body)) },
-        confirmButton = {
-            Button(onClick = onEnablePreview) {
-                Text(stringResource(R.string.action_ok))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { onDismiss() }) {
-                Text(stringResource(R.string.action_cancel))
-            }
-        }
-    )
 }
 
 @Composable

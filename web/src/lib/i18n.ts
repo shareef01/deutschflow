@@ -124,17 +124,6 @@ export const STRINGS = {
     "dashboard.heatmapSub": "The past three months",
     "dashboard.xp": "XP",
 
-    // Cloud sync. Not built yet; the copy says so rather than implying a backup.
-    "cloud.header": "Cloud sync",
-    "cloud.signedIn": "Signed in",
-    "cloud.title": "Cloud sync",
-    "cloud.unavailable": "Not available yet — your library is saved in this browser.",
-    "cloud.signIn": "Sign in",
-    "cloud.signOut": "Sign out",
-    "cloud.signInBody": "Accounts are ready for a backend that does not exist yet. Signing in changes nothing here.",
-    "cloud.email": "Email",
-    "cloud.password": "Password",
-    "cloud.syncUnavailable": "Cloud sync isn’t available yet. Your library is saved in this browser.",
 
     // Practice
     "practice.tab": "Repetition",
@@ -357,16 +346,6 @@ export const STRINGS = {
     "dashboard.heatmapSub": "Die letzten drei Monate",
     "dashboard.xp": "XP",
 
-    "cloud.header": "Cloud-Synchronisierung",
-    "cloud.signedIn": "Angemeldet",
-    "cloud.title": "Cloud-Synchronisierung",
-    "cloud.unavailable": "Noch nicht verfügbar — deine Bibliothek ist in diesem Browser gespeichert.",
-    "cloud.signIn": "Anmelden",
-    "cloud.signOut": "Abmelden",
-    "cloud.signInBody": "Konten sind für ein Backend vorbereitet, das es noch nicht gibt. Das Anmelden ändert hier nichts.",
-    "cloud.email": "E-Mail",
-    "cloud.password": "Passwort",
-    "cloud.syncUnavailable": "Cloud-Synchronisierung ist noch nicht verfügbar. Deine Bibliothek ist in diesem Browser gespeichert.",
 
     // Practice
     "practice.tab": "Wiederholung",

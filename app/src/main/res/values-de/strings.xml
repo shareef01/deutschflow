@@ -19,7 +19,6 @@
     <string name="action_speak">Vorlesen</string>
     <string name="action_edit">Bearbeiten</string>
     <string name="action_delete">Löschen</string>
-    <string name="action_ok">OK</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_save">Speichern</string>
     <string name="action_copy">Kopieren</string>
@@ -168,14 +167,6 @@
     <string name="detail_linguistic_connections">Sprachliche Verbindungen</string>
 
     <!-- Cloud-Synchronisierung. Noch nicht gebaut; der Text sagt das auch. -->
-    <string name="settings_cloud_header">Cloud-Synchronisierung</string>
-    <string name="settings_cloud_signed_in">Angemeldet</string>
-    <string name="settings_cloud_title">Cloud-Synchronisierung</string>
-    <string name="settings_cloud_unavailable">Noch nicht verfügbar — deine Bibliothek ist auf diesem Gerät gespeichert.</string>
-    <string name="settings_cloud_sign_in">Anmelden</string>
-    <string name="settings_cloud_sign_out">Abmelden</string>
-    <string name="settings_cloud_sign_in_title">Anmelden</string>
-    <string name="settings_cloud_sign_in_body">Konten sind für ein Backend vorbereitet, das es noch nicht gibt. Das Einschalten ändert nichts: Deine Bibliothek bleibt auf diesem Gerät und es wird nichts hochgeladen.</string>
 
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyme</string>
@@ -194,10 +185,10 @@
     <string name="practice_feedback_caption">Geprüft wird, was die Spracherkennung verstanden hat, nicht deine Aussprache.</string>
 
     <!-- Settings -->
-    <string name="settings_section_account">Konto &amp; Sync</string>
     <string name="settings_section_ai">KI &amp; Intelligenz</string>
     <string name="settings_section_audio">Sprache &amp; Audio</string>
     <string name="settings_section_learning">Lernen &amp; Benachrichtigungen</string>
+    <string name="settings_storage_local">Deine Lernbibliothek wird auf diesem Gerät gespeichert.</string>
     <string name="settings_section_data">Datenverwaltung</string>
     <string name="settings_section_about">Über DeutschFlow</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
@@ -234,14 +225,11 @@
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API-Schlüssel gespeichert.</string>
     <string name="message_api_key_not_saved">Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.</string>
+    <string name="message_clear_failed">Fortschritt konnte nicht gelöscht werden. Bitte versuche es erneut.</string>
     <string name="message_progress_cleared">Bibliothek, Verlauf und Statistiken gelöscht.</string>
     <string name="message_notification_sent">Benachrichtigung gesendet.</string>
     <string name="message_notifications_off">Benachrichtigungen sind ausgeschaltet. Aktiviere sie für DeutschFlow in den Systemeinstellungen.</string>
     <string name="message_library_empty">Speichere zuerst ein Wort in deiner Bibliothek — es gibt noch nichts zu senden.</string>
-    <string name="message_cloud_connected">Vorschaumodus. Es wird nichts hochgeladen — deine Bibliothek bleibt auf diesem Gerät.</string>
-    <string name="message_cloud_failed">Anmeldung fehlgeschlagen. Prüfe deine Angaben und versuche es erneut.</string>
-    <string name="message_cloud_disconnected">Abgemeldet. Deine Bibliothek ist wie immer auf diesem Gerät gespeichert.</string>
-    <string name="message_sync_unavailable">Cloud-Synchronisierung ist noch nicht verfügbar. Deine Bibliothek ist auf diesem Gerät gespeichert.</string>
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>

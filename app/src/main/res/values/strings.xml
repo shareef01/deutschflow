@@ -14,7 +14,6 @@
     <string name="action_speak">Speak</string>
     <string name="action_edit">Edit</string>
     <string name="action_delete">Delete</string>
-    <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
     <string name="action_copy">Copy</string>
@@ -162,14 +161,6 @@
     <string name="detail_linguistic_connections">Linguistic Connections</string>
 
     <!-- Cloud sync -->
-    <string name="settings_cloud_header">Cloud Synchronization</string>
-    <string name="settings_cloud_signed_in">Signed in</string>
-    <string name="settings_cloud_title">Cloud sync</string>
-    <string name="settings_cloud_unavailable">Your learning library is securely saved locally on this device.</string>
-    <string name="settings_cloud_sign_in">Sign in</string>
-    <string name="settings_cloud_sign_out">Sign out</string>
-    <string name="settings_cloud_sign_in_title">Sign in to DeutschFlow</string>
-    <string name="settings_cloud_sign_in_body">Accounts are ready for a backend that does not exist yet. Turning this on changes nothing: your library stays on this device and nothing is uploaded.</string>
 
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyms</string>
@@ -196,10 +187,10 @@
     <string name="practice_feedback_caption">This checks what the speech recogniser heard, not your accent.</string>
 
     <!-- Settings Sections -->
-    <string name="settings_section_account">Account &amp; Sync</string>
     <string name="settings_section_ai">AI &amp; Intelligence</string>
     <string name="settings_section_audio">Speech &amp; Audio</string>
     <string name="settings_section_learning">Learning &amp; Notifications</string>
+    <string name="settings_storage_local">Your learning library is stored on this device.</string>
     <string name="settings_section_data">Data Management</string>
     <string name="settings_section_about">About DeutschFlow</string>
 
@@ -237,14 +228,11 @@
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API key saved securely.</string>
     <string name="message_api_key_not_saved">The key couldn\'t be stored. Try again, or restart the device.</string>
+    <string name="message_clear_failed">Couldn\'t clear your progress. Please try again.</string>
     <string name="message_progress_cleared">All vocabulary, history, and stats have been reset.</string>
     <string name="message_notification_sent">Daily reminder notification sent.</string>
     <string name="message_notifications_off">Notifications are turned off. Enable them for DeutschFlow in system settings.</string>
     <string name="message_library_empty">Save a word to your library first — there\'s nothing to send yet.</string>
-    <string name="message_cloud_connected">Preview mode. Nothing is uploaded — your library stays on this device.</string>
-    <string name="message_cloud_failed">Couldn\'t sign in. Check your details and try again.</string>
-    <string name="message_cloud_disconnected">Signed out. Your library remains saved locally.</string>
-    <string name="message_sync_unavailable">Cloud sync is currently in preview. Your library is safely stored locally.</string>
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Speech recognition isn\'t available on this device.</string>

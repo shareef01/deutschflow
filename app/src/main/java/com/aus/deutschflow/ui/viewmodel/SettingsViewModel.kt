@@ -13,9 +13,7 @@ import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
-import com.aus.deutschflow.service.CloudService
 import com.aus.deutschflow.service.DailyWordNotification
-import com.aus.deutschflow.service.SyncManager
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -32,16 +30,8 @@ class SettingsViewModel @Inject constructor(
     private val roleplayDao: RoleplayDao,
     private val preferenceManager: PreferenceManager,
     private val dailyWordNotification: DailyWordNotification,
-    private val widgetUpdater: WidgetUpdater,
-    private val cloudService: CloudService,
-    private val syncManager: SyncManager
+    private val widgetUpdater: WidgetUpdater
 ) : ViewModel() {
-
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing
-
-    /** Straight from the service. It was a two-second poll of an in-memory boolean. */
-    val isCloudConnected: StateFlow<Boolean> = cloudService.isAuthenticated
 
     val totalVocabulary: StateFlow<Int> = vocabularyDao.countVocabulary()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -125,7 +115,7 @@ class SettingsViewModel @Inject constructor(
      * "Wipe All Progress?".
      */
     fun clearAllProgress() {
-        launchGuarded(TAG, onError = { _message.value = R.string.message_cloud_failed }) {
+        launchGuarded(TAG, onError = { _message.value = R.string.message_clear_failed }) {
             database.withTransaction {
                 transcriptDao.deleteAll()
                 vocabularyDao.deleteAll()
@@ -145,55 +135,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _message.value = dailyWordNotification.showNotification()
                 ?: R.string.message_notification_sent
-        }
-    }
-
-    /**
-     * Turns on the cloud *preview*, which is all there is to turn on.
-     *
-     * Took an email and a password until the audit; [CloudService] is still a stub
-     * that pushes nowhere, so there was nothing to authenticate and the credentials
-     * were discarded unread. Reporting a connection on the strength of that is the
-     * one claim this app cannot afford to get wrong - the same reasoning
-     * [performSync] already carries.
-     */
-    fun enableCloudPreview() {
-        viewModelScope.launch {
-            // Any input succeeded, so the branch that reported failure was dead.
-            cloudService.signIn("", "")
-            _message.value = R.string.message_cloud_connected
-        }
-    }
-
-    fun signOut() {
-        cloudService.signOut()
-        _message.value = R.string.message_cloud_disconnected
-    }
-
-    /**
-     * Runs a sync and reports what actually happened.
-     *
-     * [MockCloudService] is a stub - it pushes nowhere and pulls nothing - so the
-     * only honest outcome today is "not available yet". Saying "your library is up
-     * to date" is the one claim this app cannot afford to get wrong: the library is
-     * the whole of the user's investment, and someone who believes it is backed up
-     * will eventually wipe a device on the strength of it.
-     */
-    fun performSync() {
-        if (_isSyncing.value) return
-        viewModelScope.launch {
-            _isSyncing.value = true
-            try {
-                syncManager.performSync()
-                _message.value = R.string.message_sync_unavailable
-            } catch (e: Exception) {
-                // The user gets the generic line; the log keeps the reason, the way
-                // every other layer that swallows into a message does.
-                Log.w(TAG, "Cloud sync failed", e)
-                _message.value = R.string.message_cloud_failed
-            } finally {
-                _isSyncing.value = false
-            }
         }
     }
 

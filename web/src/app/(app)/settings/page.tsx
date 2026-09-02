@@ -12,10 +12,7 @@ import {
   DeleteForeverIcon,
   VisibilityIcon,
   VisibilityOffIcon,
-  WarningIcon,
-  CloudSyncIcon,
-  LogoutIcon,
-  LoginIcon
+  WarningIcon
 } from "@/components/icons";
 import type { Lang } from "@/lib/i18n";
 
@@ -28,17 +25,12 @@ export default function SettingsPage() {
     hasApiKey,
     selectedDialect,
     isAutoPlayEnabled,
-    isCloudConnected,
-    isSyncing,
     saveApiKey,
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,
     downloadBackup,
     restoreBackup,
-    signIn,
-    signOut,
-    performSync
   } = useSettings();
 
   const { t, lang, changeLang } = useI18n();
@@ -46,7 +38,6 @@ export default function SettingsPage() {
   const [typedKey, setTypedKey] = useState("");
   const [isKeyVisible, setIsKeyVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const restoreInput = useRef<HTMLInputElement>(null);
 
@@ -88,47 +79,6 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-reading)] flex-col overflow-y-auto px-[var(--gutter)] pb-12">
 
-      {/* ---- Cloud Sync (The Bridge) ---------------------------------------- */}
-      <SectionHeader title={t("cloud.header")} />
-      <div className="glass-surface p-6 flex flex-col gap-6 shadow-xl shadow-azure-glow/5">
-          <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-xl ${isCloudConnected ? 'bg-green-500/10 text-green-400' : 'bg-white/5 text-on-surface-variant'}`}>
-                    <CloudSyncIcon className="size-6" />
-                  </div>
-                  <div className="flex flex-col">
-                      <span className="text-body-large font-black uppercase tracking-tight">
-                          {isCloudConnected ? t("cloud.signedIn") : t("cloud.title")}
-                      </span>
-                      <span className="text-xs text-on-surface-variant font-medium">
-                          {/* One line whatever the state: nothing here may imply a backup. */}
-                          {t("cloud.unavailable")}
-                      </span>
-                  </div>
-              </div>
-              {isCloudConnected && (
-                  <button
-                    onClick={() => void performSync().then((result) => setMessage(t(result)))}
-                    disabled={isSyncing}
-                    className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors disabled:opacity-30"
-                  >
-                      {isSyncing ? <div className="size-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : <CloudSyncIcon className="size-5" />}
-                  </button>
-              )}
-          </div>
-
-          <GlassButton
-            onClick={isCloudConnected ? signOut : () => setShowLoginDialog(true)}
-            className="w-full h-14"
-            glow={isCloudConnected ? "deep" : "azure"}
-          >
-              <div className="flex items-center gap-2">
-                {isCloudConnected ? <LogoutIcon className="size-5" /> : <LoginIcon className="size-5" />}
-                <span className="font-bold">{isCloudConnected ? t("cloud.signOut") : t("cloud.signIn")}</span>
-              </div>
-          </GlassButton>
-      </div>
-
       {/* ---- Backup ---------------------------------------------------------
            The library lives only in this browser and the browser may reclaim it,
            so this is the one control standing between the user and losing
@@ -137,6 +87,11 @@ export default function SettingsPage() {
       <SectionHeader title={t("settings.backupHeader")} />
 
       <div className="glass-surface border border-white/5 p-6">
+        {/* This already says what the removed "Cloud Sync" card's one true line
+            said - the library lives only in this browser - so nothing was lost
+            with it. What went was a sign-in that authenticated against a stub,
+            two fields that discarded whatever was typed into them, and a sync
+            button that uploaded nothing. */}
         <p className="text-body-medium text-on-surface-variant">{t("settings.backupBody")}</p>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <GlassButton
@@ -256,23 +211,6 @@ export default function SettingsPage() {
       </div>
 
       {/* ---- Modals ----------------------------------------------------------- */}
-      {showLoginDialog && (
-          <ModalDialog
-            title={t("cloud.signIn")}
-            onDismiss={() => setShowLoginDialog(false)}
-            actions={
-                <GlassButton onClick={() => setShowLoginDialog(false)}>{t("action.cancel")}</GlassButton>
-            }
-          >
-              <div className="space-y-4 pt-4">
-                  <GlassTextField label={t("cloud.email")} placeholder="you@example.com" onChange={() => {}} value="" />
-                  <GlassTextField label={t("cloud.password")} type="password" placeholder="••••••••" onChange={() => {}} value="" />
-                  <GlassButton className="w-full h-14" onClick={() => void signIn("", "")}>{t("cloud.signIn")}</GlassButton>
-                  <p className="text-[10px] text-center text-on-surface-variant">{t("cloud.signInBody")}</p>
-              </div>
-          </ModalDialog>
-      )}
-
       {showDeleteConfirm && (
         <ModalDialog
           title={t("settings.wipeTitle")}

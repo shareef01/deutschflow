@@ -18,7 +18,6 @@ import {
 } from "@/lib/db/settings";
 import { useLive } from "./useLive";
 import type { TKey } from "@/lib/i18n";
-import { mockCloudService } from "@/lib/ai/cloud";
 import { exportLibrary, importLibrary } from "@/lib/db/backup";
 
 /**
@@ -44,14 +43,6 @@ export function useSettings() {
   const selectedDialect = useDialect();
   const autoPlayRow = useLive(() => observeAutoPlay(db), []);
 
-  // Subscribed, not polled: the flag only changes in signIn and signOut.
-  const isCloudConnected = useSyncExternalStore(
-    mockCloudService.subscribe,
-    mockCloudService.isAuthenticated,
-    () => false
-  );
-  const [isSyncing, setIsSyncing] = useState(false);
-  const syncInFlight = useRef(false);
 
   /**
    * Writes the whole library out as a JSON file.
@@ -116,36 +107,6 @@ export function useSettings() {
     return "message.progressCleared";
   }, []);
 
-  /**
-   * Runs a sync and reports what actually happened.
-   *
-   * mockCloudService is a stub - it pushes nowhere and pulls nothing - so the only
-   * honest outcome today is "not available yet". Telling someone their library is
-   * up to date is the one claim this app cannot afford to get wrong.
-   *
-   * Guarded on a ref rather than state: two clicks in one tick both read the old value.
-   */
-  const performSync = useCallback(async (): Promise<TKey> => {
-      if (syncInFlight.current) return "cloud.syncUnavailable";
-      syncInFlight.current = true;
-      setIsSyncing(true);
-      try {
-          await mockCloudService.pullVocabulary(0);
-          return "cloud.syncUnavailable";
-      } finally {
-          syncInFlight.current = false;
-          setIsSyncing(false);
-      }
-  }, []);
-
-  const signIn = useCallback(async (email: string, pass: string) => {
-      const success = await mockCloudService.signIn(email, pass);
-      if (success) await performSync();
-      return success;
-  }, [performSync]);
-
-  const signOut = useCallback(() => mockCloudService.signOut(), []);
-
   return {
     totalVocabulary,
     totalTranscripts,
@@ -154,16 +115,11 @@ export function useSettings() {
     hasApiKey,
     selectedDialect,
     isAutoPlayEnabled,
-    isCloudConnected,
-    isSyncing,
     saveApiKey,
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,
     downloadBackup,
-    restoreBackup,
-    signIn,
-    signOut,
-    performSync
+    restoreBackup
   };
 }
