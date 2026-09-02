@@ -133,4 +133,32 @@ class GroqHelperTest {
         assertNull(GroqHelper.parseWordDetails("""{"word":"","meaning":"dog"}"""))
         assertNull(GroqHelper.parseWordDetails("""{"word":"Hund"}"""))
     }
+
+    /**
+     * The model decides the gender, and whatever it says is written into the library
+     * and then rehearsed as fact for months. Only the four values the prompt allows
+     * are accepted; anything else is the model improvising and becomes "none".
+     */
+    @Test
+    fun anArticleOutsideTheAllowedSetBecomesNone() {
+        assertEquals("der", GroqHelper.normalizeArticle("der"))
+        assertEquals("die", GroqHelper.normalizeArticle("Die"))
+        assertEquals("das", GroqHelper.normalizeArticle("  DAS  "))
+        assertEquals("none", GroqHelper.normalizeArticle("none"))
+
+        assertEquals("none", GroqHelper.normalizeArticle("el"))
+        assertEquals("none", GroqHelper.normalizeArticle("masculine"))
+        assertEquals("none", GroqHelper.normalizeArticle("der or die, depending"))
+        assertEquals("none", GroqHelper.normalizeArticle(""))
+        assertEquals("none", GroqHelper.normalizeArticle(null))
+    }
+
+    @Test
+    fun anImprovisedArticleDoesNotReachTheParsedWord() {
+        val details = GroqHelper.parseWordDetails(
+            """{"word":"Mädchen","article":"feminine","meaning":"girl"}"""
+        )
+
+        assertEquals("none", details?.article)
+    }
 }

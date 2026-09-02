@@ -394,10 +394,100 @@
 }
 
 /* ============================================================================
+   The light palette
+   ============================================================================
+
+   Both apps were dark-only and the README implied otherwise. The system's
+   setting now picks the scheme, here and on Android, with no in-app override to
+   keep in sync with it.
+
+   Tailwind emits every @theme token as a custom property on :root and every
+   utility as var(--color-...), so redefining the properties under a media query
+   re-themes the whole app without touching a single class name.
+
+   This is not the dark palette inverted. A cyan built to glow out of a
+   blue-black ground measures 1.68:1 on white; every value below was chosen for
+   its hue and then measured. `python tools/contrast.py` runs the same 24
+   pairings against both palettes, on both platforms, and exits non-zero if
+   either falls below its threshold. tools/palette_parity.py checks that these
+   values still match Color.kt's Light* set.
+
+   The figure-ground relationship flips: dark puts cards *above* the darkest
+   ground, light puts white cards above a tinted grey one. Both keep "the card
+   is nearer than the ground", which is what the design depends on. */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-background: #f5f7fa;
+    --color-surface: #ffffff;
+    --color-surface-variant: #e4e9f0;
+
+    --color-on-background: #101623;
+    --color-on-surface: #0a0e16;
+    --color-on-surface-variant: #4a5468;
+    --color-on-surface-muted: #5c6678;
+
+    --color-azure-glow: #0a7288;
+    --color-azure-deep: #0b62c4;
+
+    --color-glass-fill: #ffffff;
+    --color-glass-raised: #f0f3f8;
+
+    --color-primary: #0b62c4;
+    --color-primary-light: #3d8fe0;
+    --color-secondary: #0e7490;
+    --color-tertiary: #167a3c;
+    --color-warning: #8a5a00;
+    --color-error: #c3271c;
+
+    --color-primary-container: #d6e7fb;
+    --color-on-primary-container: #06305c;
+    --color-secondary-container: #d2eef5;
+    --color-on-secondary-container: #06333d;
+    --color-tertiary-container: #d3f2de;
+    --color-on-tertiary-container: #0a3d1e;
+    --color-error-container: #fbddda;
+    --color-on-error-container: #5c1710;
+    --color-warning-container: #fbebcb;
+    --color-on-warning-container: #4a3200;
+
+    --color-outline: #7a8598;
+    --color-outline-variant: #c3cbd8;
+
+    --color-surface-container-lowest: #ffffff;
+    --color-surface-container-low: #fafbfd;
+    --color-surface-container: #f5f7fa;
+    --color-surface-container-high: #eff2f7;
+    --color-surface-container-highest: #e8edf4;
+  }
+}
+
+/* Rows in a long list, skipped while off screen.
+   The Android lists are LazyColumns, which only ever compose what is visible;
+   the web renders every row, so a library of a thousand words paid for a
+   thousand card subtrees on every keystroke in the search box. This is the
+   same win without a windowing dependency - the browser skips layout, paint
+   and style for anything outside the viewport, and `contain-intrinsic-size`
+   gives it a placeholder height so the scrollbar stays honest.
+   `auto` (not the height alone) lets the browser remember the real size once a
+   row has been rendered, so scroll position does not jump. */
+@utility list-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+/* ============================================================================
    Base
    ========================================================================== */
 
 @layer base {
+  /* Native controls, scrollbars and the canvas behind the page follow the same
+     setting the tokens above do. Without this a light page keeps a dark
+     scrollbar and dark form widgets. */
+  :root {
+    color-scheme: light dark;
+  }
+
   html,
   body {
     @apply bg-background text-on-surface font-sans antialiased;

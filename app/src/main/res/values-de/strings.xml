@@ -70,6 +70,9 @@
     <!-- Day before month, as German writes dates. -->
 
     <!-- Library -->
+    <string name="library_save_failed">Das Wort konnte nicht gespeichert werden. Versuche es erneut.</string>
+    <string name="library_delete_failed">Das Wort konnte nicht gelöscht werden. Versuche es erneut.</string>
+    <string name="library_word_deleted">Wort gelöscht.</string>
     <string name="library_search_hint">Wörter oder Übersetzungen suchen…</string>
     <string name="library_tab_words">Wörter</string>
     <string name="library_tab_transcripts">Mitschriften</string>
@@ -101,6 +104,8 @@
     <string name="detail_back">Zurück zur Bibliothek</string>
 
     <!-- Study / Dashboard -->
+    <string name="study_extra_practice">Heute ist nichts f\u00e4llig, das hier ist also zus\u00e4tzliche \u00dcbung \u2014 dein Plan \u00e4ndert sich dadurch nicht.</string>
+    <string name="study_review_not_saved">Diese Bewertung konnte nicht gespeichert werden. Beantworte die Karte noch einmal.</string>
     <string name="study_empty_title">Bereit zum Lernen?</string>
     <string name="study_empty_body">Speichere ein paar deutsche Sätze und wir bauen deine erste Lernsitzung.</string>
     <string name="study_session">Lernsitzung</string>
@@ -163,36 +168,28 @@
     <string name="detail_linguistic_connections">Sprachliche Verbindungen</string>
 
     <!-- Cloud-Synchronisierung. Noch nicht gebaut; der Text sagt das auch. -->
-    <string name="settings_cloud_header">Cloud-Synchronisierung</string>
-    <string name="settings_cloud_signed_in">Angemeldet</string>
-    <string name="settings_cloud_title">Cloud-Synchronisierung</string>
-    <string name="settings_cloud_unavailable">Noch nicht verfügbar — deine Bibliothek ist auf diesem Gerät gespeichert.</string>
-    <string name="settings_cloud_sign_in">Anmelden</string>
-    <string name="settings_cloud_sign_out">Abmelden</string>
-    <string name="settings_cloud_sign_in_title">Anmelden</string>
-    <string name="settings_cloud_email">E-Mail</string>
-    <string name="settings_cloud_password">Passwort</string>
 
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyme</string>
     <string name="detail_antonyms">Antonyme</string>
 
     <!-- Practice -->
-    <string name="practice_intro">Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.</string>
+    <string name="practice_intro">Höre den deutschen Satz an, tippe dann auf Sprechen und sage ihn nach.</string>
     <string name="practice_waiting">Warte auf deine Stimme…</string>
     <string name="practice_listen_repeat">Hören und nachsprechen</string>
     <string name="practice_speak">Sprechen</string>
     <string name="practice_evaluate">Auswerten</string>
     <string name="practice_next">Weiter</string>
-    <string name="practice_feedback_perfect">Ausgezeichnet! Perfekte Aussprache.</string>
-    <string name="practice_feedback_good">Gut! Das meiste war richtig.</string>
-    <string name="practice_feedback_keep_going">Weiter üben! Versuche, die markierten Wörter zu treffen.</string>
+    <string name="practice_feedback_perfect">Alle Wörter erkannt, in der richtigen Reihenfolge.</string>
+    <string name="practice_feedback_good">Erkannte Wörter: %1$d von %2$d.</string>
+    <string name="practice_feedback_keep_going">Erkannte Wörter: %1$d von %2$d. Versuche die markierten noch einmal.</string>
+    <string name="practice_feedback_caption">Geprüft wird, was die Spracherkennung verstanden hat, nicht deine Aussprache.</string>
 
     <!-- Settings -->
-    <string name="settings_section_account">Konto &amp; Sync</string>
     <string name="settings_section_ai">KI &amp; Intelligenz</string>
     <string name="settings_section_audio">Sprache &amp; Audio</string>
     <string name="settings_section_learning">Lernen &amp; Benachrichtigungen</string>
+    <string name="settings_storage_local">Deine Lernbibliothek wird auf diesem Gerät gespeichert.</string>
     <string name="settings_section_data">Datenverwaltung</string>
     <string name="settings_section_about">Über DeutschFlow</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
@@ -229,14 +226,11 @@
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API-Schlüssel gespeichert.</string>
     <string name="message_api_key_not_saved">Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.</string>
+    <string name="message_clear_failed">Fortschritt konnte nicht gelöscht werden. Bitte versuche es erneut.</string>
     <string name="message_progress_cleared">Bibliothek, Verlauf und Statistiken gelöscht.</string>
     <string name="message_notification_sent">Benachrichtigung gesendet.</string>
     <string name="message_notifications_off">Benachrichtigungen sind ausgeschaltet. Aktiviere sie für DeutschFlow in den Systemeinstellungen.</string>
     <string name="message_library_empty">Speichere zuerst ein Wort in deiner Bibliothek — es gibt noch nichts zu senden.</string>
-    <string name="message_cloud_connected">Angemeldet. Cloud-Synchronisierung ist noch nicht verfügbar — deine Bibliothek bleibt auf diesem Gerät.</string>
-    <string name="message_cloud_failed">Anmeldung fehlgeschlagen. Prüfe deine Angaben und versuche es erneut.</string>
-    <string name="message_cloud_disconnected">Abgemeldet. Deine Bibliothek ist wie immer auf diesem Gerät gespeichert.</string>
-    <string name="message_sync_unavailable">Cloud-Synchronisierung ist noch nicht verfügbar. Deine Bibliothek ist auf diesem Gerät gespeichert.</string>
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>

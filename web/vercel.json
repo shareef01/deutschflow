@@ -50,6 +50,10 @@
           "value": "nosniff"
         },
         {
+          "key": "Permissions-Policy",
+          "value": "microphone=(self), camera=(), geolocation=()"
+        },
+        {
           "key": "X-Frame-Options",
           "value": "DENY"
         },

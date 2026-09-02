@@ -17,7 +17,7 @@ export default function StudyPage() {
   return (
     <div className="flex h-full flex-col">
         {/* Tab Selector */}
-        <div className="flex w-full justify-center gap-8 border-b border-white/5 bg-background/50 backdrop-blur-md">
+        <div className="flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md">
             {(["dashboard", "flashcards"] as const).map((tab) => (
                 <button
                     key={tab}
@@ -47,6 +47,8 @@ function FlashcardMode() {
     currentIndex,
     isFlipped,
     hasLoaded,
+    isExtraPractice,
+    reviewError,
     ttsError,
     flipCard,
     submitReview,
@@ -76,7 +78,16 @@ function FlashcardMode() {
 
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-8">
-      <ErrorBanner message={ttsError} />
+      <ErrorBanner message={reviewError ? t(reviewError) : ttsError} />
+
+      {/* Nothing was due, so this sitting is a bonus. Said out loud, because a
+          schedule that quietly does not move is indistinguishable from one that
+          is broken. */}
+      {isExtraPractice && studyList.length > 0 && (
+        <p className="px-1 pb-2 text-center text-label-medium text-on-surface-variant">
+          {t("study.extraPractice")}
+        </p>
+      )}
 
       <div className="flex w-full max-w-2xl items-center justify-between">
         <h2 className="text-title-medium text-on-surface">{t("study.session")}</h2>

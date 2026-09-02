@@ -48,6 +48,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
+import com.aus.deutschflow.ui.components.OnLeavingScreen
 
 @Composable
 fun HistoryScreen(
@@ -63,6 +64,11 @@ fun HistoryScreen(
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // The voice is a @Singleton and outlives this screen; without this a transcript
+    // read aloud here keeps playing after the user switches tabs or backgrounds the
+    // app. Same discipline the recording screens apply to the microphone.
+    OnLeavingScreen { viewModel.stopSpeaking() }
     val scope = rememberCoroutineScope()
     val deletedMessage = stringResource(R.string.history_deleted)
     val copiedMessage = stringResource(R.string.action_copied)

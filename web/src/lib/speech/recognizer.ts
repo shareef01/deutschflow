@@ -11,9 +11,16 @@
  * - `cancel()` abandons without delivering; `stopListening()` asks for a result.
  * - Recognition content is never logged.
  *
- * Deliberately a module-level singleton per recognizer session, owned by the
- * stores that subscribe to it — the web analogue of each ViewModel owning its
- * own unscoped instance.
+ * ONE module-level singleton, shared by every screen that records — which is the
+ * opposite of the Android arrangement, where each ViewModel owns an unscoped
+ * instance precisely so that a sentence spoken on Practice is not also filed as a
+ * transcript. The comment here used to claim the Android arrangement.
+ *
+ * What makes the shared instance safe is that exactly one consumer is ever
+ * subscribed: each hook registers its `onUtterance` listener in an effect and
+ * unsubscribes on unmount, and `useRoleplay` additionally gates on `active`
+ * because Practice keeps both its tabs mounted. Add a third consumer without that
+ * discipline and one utterance will be delivered twice.
  *
  * Known platform difference, stated plainly: the Web Speech API exposes no audio
  * level, so `rmsLevel` is a synthetic animation while listening — the Android
@@ -57,6 +64,24 @@ function createRecognition(): SpeechRecognition | null {
   if (typeof SpeechRecognition !== "undefined") return new SpeechRecognition();
   if (typeof webkitSpeechRecognition !== "undefined") return new webkitSpeechRecognition();
   return null;
+}
+
+/**
+ * Whether this browser implements the Web Speech API at all.
+ *
+ * Read at mount rather than discovered inside startListening. Firefox ships no
+ * SpeechRecognition, so a Firefox user used to tap the microphone, be asked by the
+ * browser for permission — getUserMedia exists there, so the prompt appears — grant
+ * it, and only then be told the feature does not work. A permission prompt raised
+ * for a capability the app cannot use is the kind of thing people remember.
+ *
+ * `false` on the server, so the first client render agrees with the markup.
+ */
+export function isRecognitionSupported(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    typeof SpeechRecognition !== "undefined" || typeof webkitSpeechRecognition !== "undefined"
+  );
 }
 
 class Recognizer {

@@ -1,6 +1,8 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { isUpgradeBlocked, subscribeUpgradeBlocked } from "@/lib/db";
 import type { ReactNode } from "react";
 import { useHasRail } from "@/hooks/useViewport";
 import { useI18n } from "@/hooks/useI18n";
@@ -20,6 +22,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isDesktop = useHasRail();
   const { t } = useI18n();
+  const upgradeBlocked = useSyncExternalStore(
+    subscribeUpgradeBlocked,
+    isUpgradeBlocked,
+    () => false
+  );
 
   const currentTab = tabForRoute(pathname);
   const isOnSettings = pathname === SETTINGS_ROUTE;
@@ -39,6 +46,23 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-on-surface">
+      {/* First thing in the tab order, visible only on focus. With a sticky header
+          and a five-item rail, a keyboard user otherwise tabs through the whole
+          navigation on every page before reaching anything they came for. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-surface-container-high focus:px-4 focus:py-2 focus:text-on-surface focus:outline-2 focus:outline-azure-glow"
+      >
+        {t("action.skipToContent")}
+      </a>
+
+      {/* Blocked upgrades are silent by default: IndexedDB waits forever for the
+          older tab rather than failing, so the page just never loads its data. */}
+      {upgradeBlocked && (
+        <p role="alert" className="bg-error-container px-4 py-2 text-center text-label-medium text-on-error-container">
+          {t("db.upgradeBlocked")}
+        </p>
+      )}
       {/* Top bar — full-width, like the Android bar: a transparent bar lets
           content scroll straight through the title. */}
       <header className="sticky top-0 z-30 border-b border-azure-glow/15 bg-background/95 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
@@ -81,7 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {showRail && (
           <nav
             aria-label="Primary"
-            className="sticky top-[var(--header-height)] flex h-[calc(100dvh-var(--header-height))] w-[var(--nav-rail-width)] shrink-0 flex-col gap-[var(--space-1)] overflow-y-auto border-r border-white/[0.06] bg-white/[0.02] px-[var(--space-3)] py-[var(--space-5)] backdrop-blur-xl"
+            className="sticky top-[var(--header-height)] flex h-[calc(100dvh-var(--header-height))] w-[var(--nav-rail-width)] shrink-0 flex-col gap-[var(--space-1)] overflow-y-auto border-r border-on-surface/[0.06] bg-on-surface/[0.02] px-[var(--space-3)] py-[var(--space-5)] backdrop-blur-xl"
           >
             {TABS.map((tab) => {
               const selected = pathname === tab.route;
@@ -101,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className={`group relative flex h-11 w-full items-center gap-[var(--space-3)] rounded-xl px-[var(--space-3)] text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow ${
                     selected
                       ? "bg-azure-glow/10 text-on-surface"
-                      : "text-on-surface-variant hover:bg-white/[0.05] hover:text-on-surface"
+                      : "text-on-surface-variant hover:bg-on-surface/[0.05] hover:text-on-surface"
                   }`}
                 >
                   {/* Not colour alone: the selected row carries a marker. */}
@@ -127,7 +151,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             the cards may use. */}
         <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col">
           <main
-            className={`flex min-w-0 min-h-0 flex-1 flex-col ${
+            id="main"
+            tabIndex={-1}
+            className={`flex min-w-0 min-h-0 flex-1 flex-col outline-none ${
               !isDesktop && !isOnSettings ? "pb-[calc(6rem+env(safe-area-inset-bottom))]" : ""
             }`}
           >

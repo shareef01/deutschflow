@@ -1,7 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary_blue">#00E5FF</color>
-    <color name="background_dark">#000000</color>
-    <color name="on_background_light">#F2F2F7</color>
-    <color name="on_surface_variant">#8892B0</color>
+    <!--
+        The XML-side colours: the launch window, and the Glance widget, which draws
+        outside Compose and so cannot read the theme's ColorScheme.
+
+        These are the LIGHT values; values-night/colors.xml carries the dark ones.
+        Both the launcher and the widget host resolve them against the system's
+        setting, which is the same signal DeutschflowTheme follows.
+
+        Renamed from background_dark / primary_blue / on_background_light: a name
+        that states a value cannot have two values. What they describe is where the
+        colour is used, not what shade it happens to be.
+    -->
+
+    <!--
+        Shown before Compose draws. It was @color/background_dark, i.e. #000000,
+        while the app's ground is #0A0E16 - so every cold start flashed pure black
+        and then stepped up. It now matches the ground it precedes, in both themes.
+    -->
+    <color name="window_background">#F5F7FA</color>
+
+    <color name="widget_background">#FFFFFF</color>
+    <color name="widget_accent">#0B62C4</color>
+    <color name="widget_on_background">#101623</color>
+    <color name="widget_on_background_variant">#4A5468</color>
 </resources>

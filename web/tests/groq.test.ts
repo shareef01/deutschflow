@@ -160,3 +160,33 @@ describe("translateAndExtract — the provider's error precedence", () => {
     if (result.kind === "failure") expect(result.message).toMatch(/failed|fehlgeschlagen/i);
   });
 });
+
+describe("parseWordDetails — the article the model returns", () => {
+  /**
+   * The model decides the gender, and whatever it says is written into the library
+   * and then rehearsed as fact for months. Only the four values the prompt allows
+   * survive; anything else is the model improvising and becomes "none".
+   */
+  it("keeps the three definite articles and 'none'", () => {
+    for (const [given, expected] of [
+      ["der", "der"],
+      ["Die", "die"],
+      ["  DAS  ", "das"],
+      ["none", "none"],
+    ] as const) {
+      const details = parseWordDetails(
+        JSON.stringify({ word: "Haus", article: given, meaning: "house" })
+      );
+      expect(details?.article).toBe(expected);
+    }
+  });
+
+  it("falls back to 'none' for anything the prompt did not allow", () => {
+    for (const given of ["feminine", "el", "der or die, depending", "", null]) {
+      const details = parseWordDetails(
+        JSON.stringify({ word: "Mädchen", article: given, meaning: "girl" })
+      );
+      expect(details?.article).toBe("none");
+    }
+  });
+});

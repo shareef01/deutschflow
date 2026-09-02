@@ -1,23 +1,23 @@
 import Dexie, { type Table } from "dexie";
 
 /**
- * DeutschFlow database — Room v11 → Dexie 4.
+ * DeutschFlow database — the Dexie mirror of the Room schema. The two version
+ * numbers are independent and need not match; neither is a count of the other.
  *
  * Mirrors app/src/main/java/com/aus/deutschflow/data/local/:
  *   entities/TranscriptEntity.kt    → transcripts
  *   entities/VocabularyEntity.kt    → vocabulary
  *   entities/UserStatsEntity.kt     → userStats
  *   entities/ActivityEntity.kt      → activityLog
+ *   entities/RoleplayMessageEntity.kt → roleplayMessages
  *   PreferenceManager (DataStore)   → settings (key-value rows)
  *
  * Index notes (ported from the Room @Index annotations):
  * - `timestamp` is indexed on transcripts and vocabulary — every screen orders
  *   by `timestamp DESC`.
  * - `nextReview` is indexed for the SRS due-query.
- * - `germanText` uniqueness is SQLite NOCASE. Dexie indexes are case-sensitive,
- *   so the unique index lives on `germanTextKey`, an ASCII-only fold of the
- *   word — the exact behaviour of SQLite's NOCASE, which folds ASCII and leaves
- *   umlauts alone ("Hund" ≡ "hund", but "Äpfel" ≢ "äpfel").
+ * - `germanText` uniqueness lives on `germanTextKey`, a full German fold of the
+ *   word — see [foldGermanKey]. Android enforces the same key on the same column.
  * - `user_stats` is a singleton row with `id = 1`.
  * - `activityLog` is keyed by a local "YYYY-MM-DD" date — see `todayKey`.
  *
@@ -71,21 +71,60 @@ export interface ActivityEntry {
     timestamp: number;
 }
 
+/**
+ * One turn of the saved roleplay conversation.
+ *
+ * Mirrors RoleplayMessageEntity. Only the current conversation is kept: there is
+ * no history UI to browse past sessions, so retaining them would grow a table
+ * nothing reads and nothing prunes. `position` is the turn's index, assigned by
+ * the hook, so a restored conversation and a live one order the same way.
+ */
+export interface RoleplayMessageEntry {
+  position: number;
+  scenario: string;
+  /** "user" or "assistant" — the same two values the Groq API takes. */
+  role: "user" | "assistant";
+  content: string;
+  /** The English gloss shown under an assistant turn; absent on user turns. */
+  translation?: string;
+  timestamp: number;
+}
+
 export interface SettingEntry {
   key: string;
   value: string;
 }
 
 /**
- * ASCII-only lowercase fold, matching SQLite's NOCASE collation.
+ * Folds a German word to the form all its spellings share.
  *
- * German capitalises its nouns; the words arrive either from the model (spelled
- * correctly) or from the user typing the word they mean — so folding ASCII only,
- * exactly like the Android app, costs nothing and keeps "Äpfel" distinct from
- * "äpfel" as the original does.
+ * This used to be an ASCII-only fold, chosen to match SQLite's NOCASE collation —
+ * and it matched it, including the part that was wrong. NOCASE folds A–Z and
+ * nothing else, so "Hund" and "hund" were one word while "Übung" and "übung" were
+ * two, as were "Öl"/"öl" and "Ärger"/"ärger". Every umlaut-initial German noun
+ * escaped deduplication and quietly accumulated copies. Both platforms were
+ * consistently wrong; both are now consistently right.
+ *
+ * Full case fold, then the standard transliteration for keyboards without umlauts,
+ * which also makes "Straße" and "Strasse" one word — the correct German
+ * equivalence, and the same fold `lib/scoring.ts` has always used to judge
+ * pronunciation. The app now answers "are these the same word" one way instead of
+ * two.
+ *
+ * `toLowerCase()` (not `toLocaleLowerCase`) is deliberate: locale-invariant, so a
+ * Turkish locale cannot map I to a dotless ı and break matching.
+ *
+ * Mirrors germanKey in
+ * app/src/main/java/com/aus/deutschflow/data/local/entities/VocabularyEntity.kt.
  */
 export function foldGermanKey(text: string): string {
-  return text.replace(/[A-Z]/g, (c) => c.toLowerCase());
+  return text
+    .trim()
+    .toLowerCase()
+    .replaceAll("ä", "ae")
+    .replaceAll("ö", "oe")
+    .replaceAll("ü", "ue")
+    .replaceAll("ß", "ss");
 }
 
 export class DeutschFlowDB extends Dexie {
@@ -93,10 +132,115 @@ export class DeutschFlowDB extends Dexie {
   transcripts!: Table<TranscriptEntry, number>;
   userStats!: Table<UserStatsEntry, number>;
   activityLog!: Table<ActivityEntry, string>;
+  roleplayMessages!: Table<RoleplayMessageEntry, number>;
   settings!: Table<SettingEntry, string>;
 
   constructor(name: string = "deutschflow") {
     super(name);
+
+    /**
+     * Version 6: roleplay conversations are kept.
+     *
+     * The chat lived in React state alone, so a reload lost it - on the one screen
+     * where the user stops to compose a German sentence, and where what is lost is
+     * the model's half of a conversation rather than anything they could retype.
+     *
+     * No `.upgrade()`: the table starts empty, and no existing record gains a
+     * field. The seeding rule above applies to indexed fields added to rows that
+     * already exist, which is not this.
+     */
+    this.version(6).stores({
+      vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+      transcripts: "++id, timestamp",
+      userStats: "id",
+      activityLog: "date",
+      roleplayMessages: "position",
+      settings: "key",
+    });
+
+    /**
+     * Version 5: the fold key learns German.
+     *
+     * [foldGermanKey] used to fold ASCII only, so "Übung" and "übung" were two
+     * rows. Re-keying alone would not do: rows that were distinct become
+     * collisions, and `&germanTextKey` is unique — so the duplicates have to be
+     * merged before the survivors are re-keyed, or the upgrade throws halfway
+     * through and leaves the database in neither shape.
+     *
+     * Losers are deleted before winners are re-keyed, so no intermediate state
+     * violates the index. The merge rule is the runtime one: the richest row
+     * survives, each field takes the latest non-blank value in its group, and the
+     * row keeps the greatest timestamp and the furthest-along schedule — losing
+     * review history is the one thing a merge must not do.
+     */
+    this.version(5)
+      .stores({
+        vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+        transcripts: "++id, timestamp",
+        userStats: "id",
+        activityLog: "date",
+        settings: "key",
+      })
+      .upgrade(async (tx) => {
+        const table = tx.table("vocabulary");
+        const rows: VocabularyEntry[] = await table.toArray();
+
+        const groups = new Map<string, VocabularyEntry[]>();
+        for (const row of rows) {
+          const key = foldGermanKey(row.germanText);
+          const group = groups.get(key);
+          if (group) group.push(row);
+          else groups.set(key, [row]);
+        }
+
+        for (const [key, group] of groups) {
+          if (group.length === 1) {
+            const only = group[0];
+            if (only.germanTextKey !== key && only.id !== undefined) {
+              await table.update(only.id, { germanTextKey: key });
+            }
+            continue;
+          }
+
+          const richness = (v: VocabularyEntry) =>
+            [v.article, v.plural, v.conjugation, v.exampleSentence, v.synonyms, v.antonyms]
+              .filter(Boolean).length;
+          const ranked = [...group].sort(
+            (a, b) => richness(b) - richness(a) || b.timestamp - a.timestamp || (b.id ?? 0) - (a.id ?? 0)
+          );
+          const winner = ranked[0];
+          const latest = [...group].sort((a, b) => b.timestamp - a.timestamp || (b.id ?? 0) - (a.id ?? 0));
+          const pick = (field: keyof VocabularyEntry) =>
+            (latest.find((v) => v[field])?.[field] ?? winner[field]) as string;
+          // Taken as a set, so the four SRS fields stay consistent with each other.
+          const furthest = [...group].sort(
+            (a, b) => b.reviewCount - a.reviewCount || b.interval - a.interval || (a.id ?? 0) - (b.id ?? 0)
+          )[0];
+
+          const merged: VocabularyEntry = {
+            ...winner,
+            germanTextKey: key,
+            englishTranslation: pick("englishTranslation"),
+            exampleSentence: pick("exampleSentence"),
+            article: pick("article"),
+            plural: pick("plural"),
+            conjugation: pick("conjugation"),
+            synonyms: pick("synonyms"),
+            antonyms: pick("antonyms"),
+            timestamp: Math.max(...group.map((v) => v.timestamp)),
+            nextReview: furthest.nextReview,
+            interval: furthest.interval,
+            easeFactor: furthest.easeFactor,
+            reviewCount: Math.max(...group.map((v) => v.reviewCount)),
+          };
+
+          // Losers first, so re-keying the winner cannot collide with one of them.
+          await table.bulkDelete(
+            group.filter((v) => v.id !== winner.id).map((v) => v.id!).filter((id) => id !== undefined)
+          );
+          await table.put(merged);
+        }
+      });
 
     // Version 4: Added activityLog and Cloud Sync fields.
     this.version(4).stores({

@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -27,8 +28,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.aus.deutschflow.ui.theme.AzureDeep
-import com.aus.deutschflow.ui.theme.GlassFillRaised
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.pressScale
 
@@ -65,13 +64,13 @@ fun SegmentedTabs(
                 val interactionSource = remember { MutableInteractionSource() }
 
                 val backgroundColor by animateColorAsState(
-                    targetValue = if (isSelected) AzureDeep else Color.Transparent,
+                    targetValue = if (isSelected) AppTheme.colors.azureDeep else Color.Transparent,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
                     label = "tabBg"
                 )
 
                 val textColor by animateColorAsState(
-                    targetValue = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     label = "tabText"
                 )
 

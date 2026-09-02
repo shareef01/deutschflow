@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { db } from "@/lib/db";
 import { getApiKey, getDialect } from "@/lib/db/settings";
 import { insertTranscript, saveVocabulary } from "@/lib/db/repository";
-import { recognizer, type RecognizerState } from "@/lib/speech/recognizer";
+import { isRecognitionSupported, recognizer, type RecognizerState } from "@/lib/speech/recognizer";
 import { vocabularyProcessor } from "@/lib/ai/processor";
 import { t } from "@/lib/i18n";
 import type { WordDetails, GrammarNote } from "@/lib/ai/groq";
@@ -43,6 +43,14 @@ const INITIAL_STATE: TranscriptState = {
   errorState: null,
 };
 
+/**
+ * Support is fixed for the life of the page, so this store never notifies. Hoisted
+ * rather than inlined: useSyncExternalStore resubscribes whenever `subscribe`
+ * changes identity, which an inline arrow does on every render.
+ */
+const NEVER_CHANGES = () => () => {};
+const RECOGNITION_UNSUPPORTED_ON_SERVER = () => false;
+
 const SERVER_RECOGNIZER_STATE: RecognizerState = {
   partialText: "",
   finalText: "",
@@ -53,6 +61,19 @@ const SERVER_RECOGNIZER_STATE: RecognizerState = {
 };
 
 export function useTranscript() {
+  /**
+   * Whether this browser can recognise speech at all.
+   *
+   * Read through useSyncExternalStore's server snapshot rather than useState, so
+   * the first client render matches the server's and hydration stays quiet — the
+   * value is constant for the life of the page.
+   */
+  const speechSupported = useSyncExternalStore(
+    NEVER_CHANGES,
+    isRecognitionSupported,
+    RECOGNITION_UNSUPPORTED_ON_SERVER
+  );
+
   const recognizerState = useSyncExternalStore(
     recognizer.subscribe,
     recognizer.getSnapshot,
@@ -149,15 +170,49 @@ export function useTranscript() {
     recognizer.startListening(dialect);
   }, []);
 
+  /**
+   * Runs a typed sentence through the same path an utterance takes.
+   *
+   * Everything downstream of recognition already takes a plain string, so a browser
+   * without the Web Speech API can still use the whole app — translation, grammar,
+   * word details, saving — for the cost of typing. Without this, Firefox users had
+   * no way in at all.
+   */
+  const submitTypedText = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed) void handleUtterance(trimmed);
+    },
+    [handleUtterance]
+  );
+
   const stopListening = useCallback(() => recognizer.stopListening(), []);
   const cancelListening = useCallback(() => recognizer.cancel(), []);
 
+  /**
+   * @returns true only once the row is committed, so the snackbar that follows is a
+   * report rather than an intention.
+   *
+   * This used to fire the write and return `true` immediately, which meant a
+   * rejected write - quota, a blocked upgrade, private-mode eviction - surfaced as
+   * an unhandled promise rejection while the user was being told "Saved". Android's
+   * saveToVocabulary suspends for exactly this reason; the web is the only copy of
+   * the library, so a silently dropped save is worse here than there.
+   */
   const saveToVocabulary = useCallback(
-    (german: string, english: string): boolean => {
+    async (german: string, english: string): Promise<boolean> => {
       if (!german.trim() || !english.trim()) return false;
-      const example = state.example;
-      void saveVocabulary(db, { germanText: german, englishTranslation: english, exampleSentence: example });
-      return true;
+      try {
+        await saveVocabulary(db, {
+          germanText: german,
+          englishTranslation: english,
+          exampleSentence: state.example,
+        });
+        return true;
+      } catch {
+        setState((prev) => ({ ...prev, aiError: t("ai.storageFailed") }));
+        return false;
+      }
     },
     [state.example]
   );
@@ -193,19 +248,25 @@ export function useTranscript() {
     })();
   }, []);
 
-  const saveWordDetails = useCallback((details: WordDetails): boolean => {
+  /** Awaited for the same reason as [saveToVocabulary]. */
+  const saveWordDetails = useCallback(async (details: WordDetails): Promise<boolean> => {
     if (!details.word.trim() || !details.meaning.trim()) return false;
-    void saveVocabulary(db, {
-      germanText: details.word,
-      englishTranslation: details.meaning,
-      exampleSentence: details.exampleSentence,
-      article: details.article,
-      plural: details.plural,
-      conjugation: details.conjugationOrInfinitive,
-      synonyms: details.synonyms.join(", "),
-      antonyms: details.antonyms.join(", "),
-    });
-    return true;
+    try {
+      await saveVocabulary(db, {
+        germanText: details.word,
+        englishTranslation: details.meaning,
+        exampleSentence: details.exampleSentence,
+        article: details.article,
+        plural: details.plural,
+        conjugation: details.conjugationOrInfinitive,
+        synonyms: details.synonyms.join(", "),
+        antonyms: details.antonyms.join(", "),
+      });
+      return true;
+    } catch {
+      setState((prev) => ({ ...prev, wordDetailError: t("ai.storageFailed") }));
+      return false;
+    }
   }, []);
 
   const dismissWordDetails = useCallback(() => {
@@ -231,6 +292,8 @@ export function useTranscript() {
   return {
     state: view,
     isBusy,
+    speechSupported,
+    submitTypedText,
     startListening,
     stopListening,
     cancelListening,

@@ -46,7 +46,7 @@ class WordWidget : GlanceAppWidget() {
                 // to a true-black ground the widget kept the old grey while its own
                 // preview - which reads the resource - went black. The two advertised
                 // different products on the same screen.
-                .background(ColorProvider(R.color.background_dark))
+                .background(ColorProvider(R.color.widget_background))
                 .padding(12.dp)
                 .clickable(actionStartActivity<MainActivity>()),
             verticalAlignment = Alignment.CenterVertically,
@@ -57,7 +57,7 @@ class WordWidget : GlanceAppWidget() {
                 // itself repeated it as a literal, so the two could drift apart.
                 text = LocalContext.current.getString(R.string.widget_heading),
                 style = TextStyle(
-                    color = ColorProvider(R.color.primary_blue),
+                    color = ColorProvider(R.color.widget_accent),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -68,7 +68,7 @@ class WordWidget : GlanceAppWidget() {
             Text(
                 text = vocab?.germanText ?: LocalContext.current.getString(R.string.widget_empty_title),
                 style = TextStyle(
-                    color = ColorProvider(R.color.on_background_light),
+                    color = ColorProvider(R.color.widget_on_background),
                     fontSize = 22.sp, 
                     fontWeight = FontWeight.Bold
                 )
@@ -78,7 +78,7 @@ class WordWidget : GlanceAppWidget() {
                 Text(
                     text = vocab.englishTranslation,
                     style = TextStyle(
-                        color = ColorProvider(R.color.on_surface_variant),
+                        color = ColorProvider(R.color.widget_on_background_variant),
                         fontSize = 14.sp
                     )
                 )
@@ -86,7 +86,7 @@ class WordWidget : GlanceAppWidget() {
                 Text(
                     text = LocalContext.current.getString(R.string.widget_empty_subtitle),
                     style = TextStyle(
-                        color = ColorProvider(R.color.on_surface_variant),
+                        color = ColorProvider(R.color.widget_on_background_variant),
                         fontSize = 12.sp
                     )
                 )

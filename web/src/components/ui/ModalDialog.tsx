@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 /**
  * ModalDialog — the AlertDialog equivalent (opaque surface from the elevation
@@ -18,8 +19,17 @@ export function ModalDialog({
   children: ReactNode;
   actions: ReactNode;
 }) {
+  const dialogRef = useDialogFocus<HTMLDivElement>(onDismiss);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title ?? "Dialog"}>
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title ?? "Dialog"}
+    >
       <button
         type="button"
         aria-label="Dismiss"

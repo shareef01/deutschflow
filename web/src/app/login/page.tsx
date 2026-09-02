@@ -26,12 +26,18 @@ function LoginForm() {
             required
             disabled={isPending}
             placeholder="Master Key"
-            className="w-full px-5 py-4 bg-[#131926] border border-white/5 rounded-2xl focus:outline-none focus:border-[#4EC9E8]/50 focus:ring-1 focus:ring-[#4EC9E8]/50 transition-all placeholder:text-[#6E7889] text-lg font-medium tracking-widest disabled:opacity-50"
+            className="w-full px-5 py-4 bg-glass-fill border border-on-surface/5 rounded-2xl focus:outline-none focus:border-azure-glow/50 focus:ring-1 focus:ring-azure-glow/50 transition-all placeholder:text-on-surface-muted text-lg font-medium tracking-widest disabled:opacity-50"
           />
         </div>
 
+        {/* role="alert" so a screen reader hears the rejection: this was a styled
+            paragraph, silent to anyone not looking at it. The pulse is dropped under
+            prefers-reduced-motion, which the rest of the app already respects. */}
         {state?.error && (
-          <p className="text-[#FF453A] text-sm text-center font-bold animate-pulse">
+          <p
+            role="alert"
+            className="text-error text-sm text-center font-bold motion-safe:animate-pulse"
+          >
             {state.error}
           </p>
         )}
@@ -40,7 +46,7 @@ function LoginForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="w-full py-4 px-6 bg-[#0A84FF] hover:bg-[#4CC2FF] active:scale-[0.98] text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
+        className="w-full py-4 px-6 bg-primary hover:bg-primary-light active:scale-[0.98] text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
       >
         {isPending ? (
           <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -60,17 +66,22 @@ function LoginForm() {
 /**
  * Personal Access Gate
  *
- * A minimal, premium login screen that guards the entire application.
- * Matches the 'Obsidian' theme of DeutschFlow.
+ * A minimal login screen that guards the entire application.
+ *
+ * Every colour here used to be a literal hex, which meant this page could not
+ * follow the theme and, worse, had quietly fallen behind it: the placeholder was
+ * #6E7889, the muted grey the palette moved off when it measured 4.33:1 against
+ * the 4.5:1 WCAG asks of body text. It is on the tokens now, like every other
+ * page, so it is light-themed and contrast-checked for free.
  */
 export default function LoginPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#0A0E16] p-4 font-inter text-[#F2F5FA]">
+    <main className="min-h-screen flex items-center justify-center bg-background p-4 font-inter text-on-background">
       <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
         <div className="text-center space-y-2">
-          <div className="inline-block p-3 rounded-2xl bg-[#131926] border border-white/5 shadow-2xl mb-4">
+          <div className="inline-block p-3 rounded-2xl bg-glass-fill border border-on-surface/5 shadow-2xl mb-4">
             <svg
-              className="w-10 h-10 text-[#4EC9E8]"
+              className="w-10 h-10 text-azure-glow"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -86,21 +97,21 @@ export default function LoginPage() {
           <h1 className="text-3xl font-black tracking-tight tracking-tighter uppercase">
             DeutschFlow
           </h1>
-          <p className="text-[#98A2B3] text-sm">
+          <p className="text-on-surface-variant text-sm">
             This is a private instance. Enter your security key to proceed.
           </p>
         </div>
 
         <Suspense fallback={
           <div className="flex justify-center py-12">
-            <div className="w-8 h-8 border-2 border-[#4EC9E8]/30 border-t-[#4EC9E8] rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-azure-glow/30 border-t-azure-glow rounded-full animate-spin" />
           </div>
         }>
           <LoginForm />
         </Suspense>
 
         <div className="text-center pt-8">
-          <p className="text-[#6E7889] text-[10px] uppercase tracking-widest">
+          <p className="text-on-surface-muted text-[10px] uppercase tracking-widest">
             DeutschFlow Obsidian Edition
           </p>
         </div>

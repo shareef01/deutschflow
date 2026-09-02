@@ -11,6 +11,12 @@ outline and outline-variant - were corrected on Android for measured WCAG failur
 and left unchanged on the web, so the same failures survived in the other app for
 as long as nobody thought to look.
 
+Both themes. The dark palette pairs Color.kt's bare names against the @theme
+block; the light one pairs its Light-prefixed names against the
+`@media (prefers-color-scheme: light)` override. The light palette is the more
+likely of the two to drift, because it is the newer one and neither app renders
+it by default on a developer's machine.
+
 Exits non-zero on a mismatch, so it can be wired into CI.
 """
 import io, re, sys
@@ -44,6 +50,18 @@ PAIRS = [
     ('OnSecondaryContainer', 'on-secondary-container'),
     ('ErrorContainer', 'error-container'),
     ('OnErrorContainer', 'on-error-container'),
+    ('TertiaryContainer', 'tertiary-container'),
+    ('OnTertiaryContainer', 'on-tertiary-container'),
+    ('WarningContainer', 'warning-container'),
+    ('OnWarningContainer', 'on-warning-container'),
+    ('PrimaryBlue', 'primary'),
+    ('PrimaryBlueLight', 'primary-light'),
+    ('SecondaryCyan', 'secondary'),
+    ('SurfaceContainerLowest', 'surface-container-lowest'),
+    ('SurfaceContainerLow', 'surface-container-low'),
+    ('SurfaceContainer', 'surface-container'),
+    ('SurfaceContainerHigh', 'surface-container-high'),
+    ('SurfaceContainerHighest', 'surface-container-highest'),
 ]
 
 
@@ -53,28 +71,65 @@ def android():
             for m in re.finditer(r'val\s+(\w+)\s*=\s*Color\(0x([0-9A-Fa-f]{8})\)', s)}
 
 
-def web():
-    s = io.open(CSS, encoding='utf-8').read()
+def _tokens(block):
     return {m.group(1): m.group(2).lstrip('#').lower()
-            for m in re.finditer(r'--color-([a-z-]+):\s*(#[0-9A-Fa-f]{6})', s)}
+            for m in re.finditer(r'--color-([a-z-]+):\s*(#[0-9A-Fa-f]{6})', block)}
 
 
-A, W = android(), web()
-drift, missing = [], []
+def _brace_block(s, start):
+    """The {...} beginning at or after `start`, matched rather than regexed."""
+    i = s.index('{', start)
+    depth = 0
+    for j in range(i, len(s)):
+        if s[j] == '{':
+            depth += 1
+        elif s[j] == '}':
+            depth -= 1
+            if depth == 0:
+                return s[i:j]
+    raise ValueError('unbalanced braces from %d' % start)
 
-for a_name, w_name in PAIRS:
-    a_val, w_val = A.get(a_name), W.get(w_name)
-    if a_val is None or w_val is None:
-        missing.append((a_name, w_name, a_val, w_val))
-    elif a_val != w_val:
-        drift.append((a_name, w_name, a_val, w_val))
 
-for a_name, w_name, a_val, w_val in missing:
-    print('  MISSING  %-22s android=%s  web=%s' % (a_name, a_val or '-', w_val or '-'))
-for a_name, w_name, a_val, w_val in drift:
-    print('  DRIFT    %-22s android=#%s  web=#%s' % (a_name, a_val, w_val))
+def web():
+    """The dark tokens from @theme, the light ones from the media override.
 
-total = len(PAIRS)
-bad = len(drift) + len(missing)
-print('%d paired tokens, %d in agreement, %d to reconcile' % (total, total - bad, bad))
+    Parsed as two separate blocks on purpose: read as one flat file, the light
+    values would silently overwrite the dark ones under the same names and every
+    dark comparison would be against the wrong palette.
+    """
+    s = io.open(CSS, encoding='utf-8').read()
+    dark = _tokens(_brace_block(s, s.index('@theme')))
+    light = _tokens(_brace_block(s, s.index('@media (prefers-color-scheme: light)')))
+    return dark, light
+
+
+A = android()
+W_DARK, W_LIGHT = web()
+
+
+def compare(label, prefix, web_tokens):
+    drift, missing = [], []
+    for a_name, w_name in PAIRS:
+        a_val, w_val = A.get(prefix + a_name), web_tokens.get(w_name)
+        if a_val is None or w_val is None:
+            missing.append((prefix + a_name, w_name, a_val, w_val))
+        elif a_val != w_val:
+            drift.append((prefix + a_name, w_name, a_val, w_val))
+
+    print()
+    print('== %s ==' % label)
+    for a_name, w_name, a_val, w_val in missing:
+        print('  MISSING  %-28s android=%s  web=%s' % (a_name, a_val or '-', w_val or '-'))
+    for a_name, w_name, a_val, w_val in drift:
+        print('  DRIFT    %-28s android=#%s  web=#%s' % (a_name, a_val, w_val))
+    bad = len(drift) + len(missing)
+    print('  %d paired tokens, %d in agreement, %d to reconcile'
+          % (len(PAIRS), len(PAIRS) - bad, bad))
+    return bad
+
+
+bad = compare('dark', '', W_DARK) + compare('light', 'Light', W_LIGHT)
+print()
+print('RESULT: %s' % ('both palettes agree across the two apps' if not bad
+                      else '%d token(s) to reconcile' % bad))
 sys.exit(1 if bad else 0)

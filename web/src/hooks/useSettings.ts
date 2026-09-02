@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback } from "react";
 import { db } from "@/lib/db";
 import {
   clearAllProgress as clearAllProgressRows,
@@ -18,7 +18,7 @@ import {
 } from "@/lib/db/settings";
 import { useLive } from "./useLive";
 import type { TKey } from "@/lib/i18n";
-import { mockCloudService } from "@/lib/ai/cloud";
+import { ImportError, exportLibrary, importLibrary } from "@/lib/db/backup";
 
 /**
  * The recognition dialect alone, validated against the known set.
@@ -43,14 +43,56 @@ export function useSettings() {
   const selectedDialect = useDialect();
   const autoPlayRow = useLive(() => observeAutoPlay(db), []);
 
-  // Subscribed, not polled: the flag only changes in signIn and signOut.
-  const isCloudConnected = useSyncExternalStore(
-    mockCloudService.subscribe,
-    mockCloudService.isAuthenticated,
-    () => false
-  );
-  const [isSyncing, setIsSyncing] = useState(false);
-  const syncInFlight = useRef(false);
+
+  /**
+   * Writes the whole library out as a JSON file.
+   *
+   * IndexedDB is the only copy, and the browser may evict it, so this is the one
+   * control standing between a user and losing everything they have built. A blob
+   * download rather than anything server-side: there is no server.
+   */
+  const downloadBackup = useCallback(async (): Promise<TKey> => {
+    try {
+      const backup = await exportLibrary(db);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `deutschflow-${backup.exportedAt.slice(0, 10)}.json`;
+      anchor.click();
+      // Revoked on the next frame: revoking synchronously races the download in
+      // Safari, which has not read the blob by the time click() returns.
+      requestAnimationFrame(() => URL.revokeObjectURL(url));
+      return "settings.backupDownloaded";
+    } catch {
+      return "settings.backupFailed";
+    }
+  }, []);
+
+  /**
+   * Merges a previously exported file back in. Additive - see importLibrary.
+   *
+   * Each failure says which one it was. A single catch reported everything as
+   * "that file isn't a library export", which mislabelled a backup from a newer
+   * version - a different problem with a different answer - and blamed the file
+   * for a storage failure that had nothing to do with it.
+   */
+  const restoreBackup = useCallback(async (file: File): Promise<TKey> => {
+    try {
+      await importLibrary(db, JSON.parse(await file.text()));
+      return "settings.backupRestored";
+    } catch (error) {
+      if (error instanceof ImportError) {
+        return error.reason === "newer" ? "settings.backupNewer" : "settings.backupInvalid";
+      }
+      // Not a rejected file: JSON.parse choking on something that is not JSON is
+      // still "not a library export", but a write that failed part-way is not.
+      if (error instanceof SyntaxError) return "settings.backupInvalid";
+      return "settings.backupStorageFailed";
+    }
+  }, []);
 
   const totalVocabulary = vocabulary.length;
   const totalTranscripts = transcripts.length;
@@ -78,36 +120,6 @@ export function useSettings() {
     return "message.progressCleared";
   }, []);
 
-  /**
-   * Runs a sync and reports what actually happened.
-   *
-   * mockCloudService is a stub - it pushes nowhere and pulls nothing - so the only
-   * honest outcome today is "not available yet". Telling someone their library is
-   * up to date is the one claim this app cannot afford to get wrong.
-   *
-   * Guarded on a ref rather than state: two clicks in one tick both read the old value.
-   */
-  const performSync = useCallback(async (): Promise<TKey> => {
-      if (syncInFlight.current) return "cloud.syncUnavailable";
-      syncInFlight.current = true;
-      setIsSyncing(true);
-      try {
-          await mockCloudService.pullVocabulary(0);
-          return "cloud.syncUnavailable";
-      } finally {
-          syncInFlight.current = false;
-          setIsSyncing(false);
-      }
-  }, []);
-
-  const signIn = useCallback(async (email: string, pass: string) => {
-      const success = await mockCloudService.signIn(email, pass);
-      if (success) await performSync();
-      return success;
-  }, [performSync]);
-
-  const signOut = useCallback(() => mockCloudService.signOut(), []);
-
   return {
     totalVocabulary,
     totalTranscripts,
@@ -116,14 +128,11 @@ export function useSettings() {
     hasApiKey,
     selectedDialect,
     isAutoPlayEnabled,
-    isCloudConnected,
-    isSyncing,
     saveApiKey,
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,
-    signIn,
-    signOut,
-    performSync
+    downloadBackup,
+    restoreBackup
   };
 }

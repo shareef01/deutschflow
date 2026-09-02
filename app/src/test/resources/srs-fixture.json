@@ -1,0 +1,189 @@
+{
+  "_comment": [
+    "The scheduler's expected outputs, read by BOTH test suites:",
+    "  app/src/test/java/com/aus/deutschflow/service/SRSSharedFixtureTest.kt",
+    "  web/tests/srs-shared-fixture.test.ts",
+    "",
+    "SRSEngine.kt and lib/ai/srs.ts are the same algorithm written twice, by hand, in",
+    "two languages. They had already drifted once - Kotlin truncated interval * ease",
+    "where TypeScript rounded it, so the same card scheduled 15 days on the phone and",
+    "16 in the browser - and the comment saying they were mirrors did not catch it.",
+    "Colour tokens are the one shared rule in this repository with a machine check",
+    "(tools/palette_parity.py), and colour is the one shared rule that has not",
+    "drifted. This is that mechanism, for the rule that matters most.",
+    "",
+    "A row is: given a card in `given`, rating it `rating` must produce `expect`.",
+    "Add a case here and both suites pick it up; change one engine and one of them",
+    "fails."
+  ],
+  "cases": [
+    {
+      "name": "first success schedules tomorrow",
+      "given": {
+        "interval": 0,
+        "easeFactor": 2.5,
+        "reviewCount": 0
+      },
+      "rating": "GOOD",
+      "expect": {
+        "interval": 1,
+        "easeFactor": 2.5,
+        "reviewCount": 1
+      }
+    },
+    {
+      "name": "second success schedules six days",
+      "given": {
+        "interval": 1,
+        "easeFactor": 2.5,
+        "reviewCount": 1
+      },
+      "rating": "GOOD",
+      "expect": {
+        "interval": 6,
+        "easeFactor": 2.5,
+        "reviewCount": 2
+      }
+    },
+    {
+      "name": "later successes multiply by the ease",
+      "given": {
+        "interval": 6,
+        "easeFactor": 2.5,
+        "reviewCount": 2
+      },
+      "rating": "GOOD",
+      "expect": {
+        "interval": 15,
+        "easeFactor": 2.5,
+        "reviewCount": 3
+      }
+    },
+    {
+      "name": "a fractional interval rounds rather than truncating",
+      "given": {
+        "interval": 6,
+        "easeFactor": 2.6,
+        "reviewCount": 3
+      },
+      "rating": "GOOD",
+      "expect": {
+        "interval": 16,
+        "easeFactor": 2.6,
+        "reviewCount": 4
+      }
+    },
+    {
+      "name": "easy stretches the interval and raises the ease",
+      "given": {
+        "interval": 10,
+        "easeFactor": 2.5,
+        "reviewCount": 3
+      },
+      "rating": "EASY",
+      "expect": {
+        "interval": 33,
+        "easeFactor": 2.6,
+        "reviewCount": 4
+      }
+    },
+    {
+      "name": "hard shortens rather than resetting",
+      "given": {
+        "interval": 30,
+        "easeFactor": 2.5,
+        "reviewCount": 5
+      },
+      "rating": "HARD",
+      "expect": {
+        "interval": 36,
+        "easeFactor": 2.35,
+        "reviewCount": 6
+      }
+    },
+    {
+      "name": "a long streak survives one hard",
+      "given": {
+        "interval": 95,
+        "easeFactor": 2.5,
+        "reviewCount": 5
+      },
+      "rating": "HARD",
+      "expect": {
+        "interval": 114,
+        "easeFactor": 2.35,
+        "reviewCount": 6
+      }
+    },
+    {
+      "name": "hard on a new card still schedules tomorrow",
+      "given": {
+        "interval": 0,
+        "easeFactor": 2.5,
+        "reviewCount": 0
+      },
+      "rating": "HARD",
+      "expect": {
+        "interval": 1,
+        "easeFactor": 2.35,
+        "reviewCount": 1
+      }
+    },
+    {
+      "name": "again resets the card and leaves it due now",
+      "given": {
+        "interval": 30,
+        "easeFactor": 2.5,
+        "reviewCount": 5
+      },
+      "rating": "AGAIN",
+      "expect": {
+        "interval": 0,
+        "easeFactor": 2.3,
+        "reviewCount": 0
+      }
+    },
+    {
+      "name": "the ease never falls below the floor",
+      "given": {
+        "interval": 5,
+        "easeFactor": 1.35,
+        "reviewCount": 3
+      },
+      "rating": "AGAIN",
+      "expect": {
+        "interval": 0,
+        "easeFactor": 1.3,
+        "reviewCount": 0
+      }
+    },
+    {
+      "name": "the ease never climbs above the ceiling",
+      "given": {
+        "interval": 200,
+        "easeFactor": 3.0,
+        "reviewCount": 9
+      },
+      "rating": "EASY",
+      "expect": {
+        "interval": 365,
+        "easeFactor": 3.0,
+        "reviewCount": 10
+      }
+    },
+    {
+      "name": "the interval is capped at a year",
+      "given": {
+        "interval": 300,
+        "easeFactor": 2.5,
+        "reviewCount": 8
+      },
+      "rating": "GOOD",
+      "expect": {
+        "interval": 365,
+        "easeFactor": 2.5,
+        "reviewCount": 9
+      }
+    }
+  ]
+}

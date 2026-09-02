@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,8 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.aus.deutschflow.ui.theme.AzureGlow
-import com.aus.deutschflow.ui.theme.GlassFillRaised
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassBorderBrush
 import com.aus.deutschflow.ui.theme.pressScale
@@ -44,9 +43,9 @@ fun VocabularyChip(
     Row(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
-            .background(GlassFillRaised, MaterialTheme.shapes.small)
+            .background(AppTheme.colors.glassFillRaised, MaterialTheme.shapes.small)
             .border(
-                BorderStroke(1.dp, glassBorderBrush(AzureGlow, alpha = 0.22f)),
+                BorderStroke(1.dp, glassBorderBrush(AppTheme.colors.azureGlow, alpha = 0.22f)),
                 MaterialTheme.shapes.small
             )
             .clickable(
@@ -67,7 +66,7 @@ fun VocabularyChip(
             Spacer(modifier = Modifier.width(Spacing.xs))
             CircularProgressIndicator(
                 modifier = Modifier.size(14.dp),
-                color = AzureGlow,
+                color = AppTheme.colors.azureGlow,
                 strokeWidth = 2.dp
             )
         }

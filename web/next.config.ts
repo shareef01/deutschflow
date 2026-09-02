@@ -3,11 +3,15 @@ import type { NextConfig } from "next";
 /**
  * DeutschFlow PWA build config.
  *
- * The app is local-first: every byte of user data lives in IndexedDB (Dexie),
- * speech is the browser's on-device engine, and the only network call is the
- * Groq translation request made directly from the client. There is therefore no
- * server-side data, no SSR state, and no route-level fetching — the PWA service
- * worker (Phase 6) will precache the static build output for offline boot.
+ * The app is local-first for *data*: every byte of user data lives in IndexedDB
+ * (Dexie), and there is no server-side state, no SSR data and no route-level
+ * fetching — which is what lets the service worker precache the static build
+ * output and boot offline.
+ *
+ * It is not local-first for *speech*. Recognition is the browser's own engine, and
+ * Chrome, Edge and Safari all send the captured audio to their vendor. That is
+ * stated in PWA_BLUEPRINT.md §7 and surfaced to the user in Settings, because it
+ * is the one privacy property where this app differs from the Android one.
  */
 /**
  * Security headers travel with the build, not with the host.
@@ -21,8 +25,8 @@ import type { NextConfig } from "next";
  *
  * `'unsafe-inline'` in script-src is Next's requirement for its bootstrap, and it
  * is the boundary of what the key vault protects: the vault defends a copied
- * profile directory, not script running on this origin. That trade is stated in
- * the README's privacy section rather than left for a reader to infer.
+ * profile directory, not script running on this origin. That trade is stated at
+ * the top of lib/db/vault.ts rather than left for a reader to infer.
  *
  * Both documented ways out were tried, and both cost more than they buy here:
  *
@@ -59,15 +63,42 @@ const CONTENT_SECURITY_POLICY = [
   "form-action 'self'",
 ].join("; ");
 
+/**
+ * The microphone is the only powerful feature this app uses, and only from its own
+ * pages. Naming it here stops an embedded third party (there are none today) from
+ * inheriting the grant.
+ */
+const PERMISSIONS_POLICY = "microphone=(self), camera=(), geolocation=()";
+
 const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Permissions-Policy", value: PERMISSIONS_POLICY },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
 ];
 
+/**
+ * One id per build, used for two things that must agree: the service worker's cache
+ * name and the query string the page registers it with.
+ *
+ * The cache name used to be the literal "deutschflow-v1" forever, so `activate`'s
+ * cleanup sweep — which deletes every cache whose key differs from the current one —
+ * never matched anything, and every deploy's hashed chunks accumulated indefinitely.
+ * Correctness was fine (hashed URLs cannot serve the wrong bytes) but Cache Storage
+ * counts against the origin's quota, and this origin's IndexedDB holds the only copy
+ * of the user's library. Unbounded growth there raises the odds of the eviction that
+ * costs them everything.
+ *
+ * The commit SHA on Vercel, a timestamp locally. Also passed to `generateBuildId` so
+ * the two never diverge.
+ */
+const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA ?? `dev-${Date.now()}`;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  generateBuildId: async () => BUILD_ID,
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
