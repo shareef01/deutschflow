@@ -67,9 +67,18 @@ function RepetitionMode() {
 
   useEffect(() => () => cancelListening(), [cancelListening]);
 
-  const isPositive = feedback === "PERFECT";
+  // Android treats GOOD as a positive result too; this used to colour it as a
+  // failure, so the same attempt came back green on the phone and red here.
+  const isPositive = feedback === "PERFECT" || feedback === "GOOD";
+  // The banner reports the count it actually has. It used to say "Perfect
+  // pronunciation", which the screen has no way to know: the Web Speech API
+  // hands back a transcript, not a per-phoneme score, and its language model
+  // will happily resolve poor audio into the word you meant.
+  const heardCount = wordResults.filter((result) => result.isCorrect).length;
   const feedbackText =
-    feedback === "NONE" ? null : t(PRACTICE_FEEDBACK_KEYS[feedback]);
+    feedback === "NONE"
+      ? null
+      : t(PRACTICE_FEEDBACK_KEYS[feedback], [heardCount, wordResults.length]);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-[var(--container-workspace)] flex-col overflow-y-auto px-[var(--gutter)] py-[var(--space-6)]">
@@ -143,13 +152,8 @@ function RepetitionMode() {
               )}
 
               {wordResults.length > 0 && (
-                <p className="mt-4 text-label-large text-on-surface-variant">
-                  {t("practice.wordMatch", [
-                    Math.round(
-                      (wordResults.filter((result) => result.isCorrect).length * 100) /
-                        wordResults.length
-                    ),
-                  ])}
+                <p className="mt-3 max-w-[46ch] text-center text-label-medium text-on-surface-variant">
+                  {t("practice.feedbackCaption")}
                 </p>
               )}
 

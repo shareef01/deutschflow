@@ -101,11 +101,18 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
 
     val hasResult = feedback != PracticeFeedback.NONE
     val isPositive = feedback == PracticeFeedback.PERFECT || feedback == PracticeFeedback.GOOD
+    // The banner reports the count it actually has. It used to say "Perfect
+    // pronunciation", which the screen has no way to know: the recogniser hands
+    // back a transcript, not a per-phoneme score, and its language model will
+    // happily resolve poor audio into the word you meant.
+    val heardCount = wordResults.count { it.isCorrect }
+    val totalCount = wordResults.size
     val feedbackText = when (feedback) {
         PracticeFeedback.NONE -> null
         PracticeFeedback.PERFECT -> stringResource(R.string.practice_feedback_perfect)
-        PracticeFeedback.GOOD -> stringResource(R.string.practice_feedback_good)
-        PracticeFeedback.KEEP_GOING -> stringResource(R.string.practice_feedback_keep_going)
+        PracticeFeedback.GOOD -> stringResource(R.string.practice_feedback_good, heardCount, totalCount)
+        PracticeFeedback.KEEP_GOING ->
+            stringResource(R.string.practice_feedback_keep_going, heardCount, totalCount)
     }
 
     val launcher = rememberLauncherForActivityResult(
@@ -220,14 +227,25 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                     if (isPositive) TertiaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
                 )
             ) {
-                Text(
-                    text = feedbackText ?: "",
+                Column(
                     modifier = Modifier.padding(Spacing.md),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isPositive) TertiaryGreen else MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = feedbackText ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isPositive) TertiaryGreen else MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Text(
+                        text = stringResource(R.string.practice_feedback_caption),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 

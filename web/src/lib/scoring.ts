@@ -37,32 +37,84 @@ export function foldGerman(word: string): string {
     .replaceAll("ß", "ss");
 }
 
+function tokenize(text: string): string[] {
+  return text
+    .split(WORD_SPLIT)
+    .map((w) => w.replace(NON_LETTERS, ""))
+    .filter((w) => w.length > 0);
+}
+
 /**
- * Scores [spokenText] against [targetSentence] word-by-word. Each word in the
- * target is checked for presence in the spoken text, ignoring case and umlaut
- * spelling; the feedback follows the same progression the UI shows: perfect
- * match, mostly correct, or keep at it.
+ * Which target positions appear, in order, in what was heard.
+ *
+ * Standard longest-common-subsequence over the two folded token lists, then a
+ * walk back through the table to recover which target indices were matched.
+ * O(target x spoken), which for one sentence is nothing. Mirrors
+ * PracticeViewModel.alignedTargetIndices exactly.
+ */
+function alignedTargetIndices(target: string[], spoken: string[]): Set<number> {
+  const matched = new Set<number>();
+  if (target.length === 0 || spoken.length === 0) return matched;
+
+  // lengths[i][j] = LCS length of target[i..] and spoken[j..]
+  const lengths: number[][] = Array.from({ length: target.length + 1 }, () =>
+    new Array<number>(spoken.length + 1).fill(0)
+  );
+  for (let i = target.length - 1; i >= 0; i--) {
+    for (let j = spoken.length - 1; j >= 0; j--) {
+      lengths[i][j] =
+        target[i] === spoken[j]
+          ? lengths[i + 1][j + 1] + 1
+          : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+    }
+  }
+
+  let i = 0;
+  let j = 0;
+  while (i < target.length && j < spoken.length) {
+    if (target[i] === spoken[j]) {
+      matched.add(i);
+      i++;
+      j++;
+    } else if (lengths[i + 1][j] >= lengths[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return matched;
+}
+
+/**
+ * Scores [spokenText] against [targetSentence], in order.
+ *
+ * What this measures, stated plainly because the feature used to claim more:
+ * how much of the target sentence the *recogniser* reported hearing. It is a
+ * recall and intelligibility check, not phoneme-level pronunciation scoring —
+ * neither SpeechRecognizer nor the Web Speech API exposes per-phoneme
+ * confidence, so that would need a forced-alignment model. A speech engine's
+ * language model also resolves ambiguous audio toward plausible sentences, so
+ * it will often report the word you meant even when you said it poorly.
+ *
+ * The matching is a longest-common-subsequence alignment rather than the set
+ * membership this used to do, which was wrong in two ways a learner would
+ * notice: order was ignored, so saying the sentence backwards scored perfect;
+ * and repetition was ignored, so a target containing "die" twice was satisfied
+ * by saying it once. An LCS fixes both at once, because a subsequence is
+ * ordered and consumes each match.
  */
 export function evaluateMatch(
   targetSentence: string,
   spokenText: string
 ): { results: WordResult[]; feedback: PracticeFeedback } {
-  const targetWords = targetSentence
-    .split(WORD_SPLIT)
-    .map((w) => w.replace(NON_LETTERS, ""))
-    .filter((w) => w.length > 0);
+  const targetWords = tokenize(targetSentence);
+  const spokenWords = tokenize(spokenText).map(foldGerman);
 
-  const spokenKeys = new Set(
-    spokenText
-      .split(WORD_SPLIT)
-      .map((w) => w.replace(NON_LETTERS, ""))
-      .filter((w) => w.length > 0)
-      .map(foldGerman)
-  );
+  const matched = alignedTargetIndices(targetWords.map(foldGerman), spokenWords);
 
-  const results: WordResult[] = targetWords.map((targetWord) => ({
+  const results: WordResult[] = targetWords.map((targetWord, index) => ({
     word: targetWord,
-    isCorrect: spokenKeys.has(foldGerman(targetWord)),
+    isCorrect: matched.has(index),
   }));
 
   const correctCount = results.filter((r) => r.isCorrect).length;
@@ -71,7 +123,9 @@ export function evaluateMatch(
       ? "NONE"
       : correctCount === results.length
         ? "PERFECT"
-        : correctCount * 2 > results.length
+        : // Three quarters, not half. "Most words were clear" was reported for
+          // getting half a sentence right, which is not most of anything.
+          correctCount * 4 >= results.length * 3
           ? "GOOD"
           : "KEEP_GOING";
 

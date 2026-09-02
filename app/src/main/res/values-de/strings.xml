@@ -182,15 +182,16 @@
     <string name="detail_antonyms">Antonyme</string>
 
     <!-- Practice -->
-    <string name="practice_intro">Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.</string>
+    <string name="practice_intro">Höre den deutschen Satz an, tippe dann auf Sprechen und sage ihn nach.</string>
     <string name="practice_waiting">Warte auf deine Stimme…</string>
     <string name="practice_listen_repeat">Hören und nachsprechen</string>
     <string name="practice_speak">Sprechen</string>
     <string name="practice_evaluate">Auswerten</string>
     <string name="practice_next">Weiter</string>
-    <string name="practice_feedback_perfect">Ausgezeichnet! Perfekte Aussprache.</string>
-    <string name="practice_feedback_good">Gut! Das meiste war richtig.</string>
-    <string name="practice_feedback_keep_going">Weiter üben! Versuche, die markierten Wörter zu treffen.</string>
+    <string name="practice_feedback_perfect">Alle Wörter erkannt, in der richtigen Reihenfolge.</string>
+    <string name="practice_feedback_good">Erkannte Wörter: %1$d von %2$d.</string>
+    <string name="practice_feedback_keep_going">Erkannte Wörter: %1$d von %2$d. Versuche die markierten noch einmal.</string>
+    <string name="practice_feedback_caption">Geprüft wird, was die Spracherkennung verstanden hat, nicht deine Aussprache.</string>
 
     <!-- Settings -->
     <string name="settings_section_account">Konto &amp; Sync</string>

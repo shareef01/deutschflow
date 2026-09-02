@@ -138,18 +138,24 @@ export const STRINGS = {
 
     // Practice
     "practice.tab": "Repetition",
-    "practice.intro": "Listen and repeat the sentence accurately to master your pronunciation.",
+    "practice.intro": "Listen to the German sentence, then tap Speak and say it back.",
     "practice.listenRepeat": "Listen and repeat",
     "practice.listen": "Listen",
     "practice.speak": "Speak",
     "practice.evaluate": "Evaluate",
     "practice.next": "Next",
-    "practice.wordMatch": "Word match: {0}%",
     "practice.wordCorrect": "Correct",
     "practice.wordTryAgain": "Try again",
-    "practice.feedbackPerfect": "Excellent! Perfect pronunciation.",
-    "practice.feedbackGood": "Good! You got most of it.",
-    "practice.feedbackKeepGoing": "Keep practicing! Try to match the highlighted words.",
+    // These say what was measured, not how well you speak. The screen used to
+    // report "Perfect pronunciation" on a result it has no way to judge: it
+    // compares the recogniser's transcript against the sentence, and the Web
+    // Speech API exposes nothing per-phoneme. A count of the words it reported
+    // back is the claim the data supports. The count governs no noun, so a
+    // single-word target does not read as "1 words".
+    "practice.feedbackPerfect": "All words heard, in order.",
+    "practice.feedbackGood": "Words heard: {0} of {1}.",
+    "practice.feedbackKeepGoing": "Words heard: {0} of {1}. Try the highlighted ones again.",
+    "practice.feedbackCaption": "This checks what the speech recogniser heard, not your accent.",
 
     // Roleplay
     "roleplay.tab": "Roleplay",
@@ -363,19 +369,20 @@ export const STRINGS = {
     // Practice
     "practice.tab": "Wiederholung",
     "practice.intro":
-      "Höre zu und wiederhole den Satz genau, um deine Aussprache zu verbessern.",
+      "Höre den deutschen Satz an, tippe dann auf Sprechen und sage ihn nach.",
     "practice.listenRepeat": "Hören und nachsprechen",
     "practice.listen": "Anhören",
     "practice.speak": "Sprechen",
     "practice.evaluate": "Auswerten",
     "practice.next": "Weiter",
-    "practice.wordMatch": "Worttreffer: {0}%",
     "practice.wordCorrect": "Richtig",
     "practice.wordTryAgain": "Noch einmal versuchen",
-    "practice.feedbackPerfect": "Ausgezeichnet! Perfekte Aussprache.",
-    "practice.feedbackGood": "Gut! Das meiste war richtig.",
+    "practice.feedbackPerfect": "Alle Wörter erkannt, in der richtigen Reihenfolge.",
+    "practice.feedbackGood": "Erkannte Wörter: {0} von {1}.",
     "practice.feedbackKeepGoing":
-      "Weiter üben! Versuche, die markierten Wörter zu treffen.",
+      "Erkannte Wörter: {0} von {1}. Versuche die markierten noch einmal.",
+    "practice.feedbackCaption":
+      "Geprüft wird, was die Spracherkennung verstanden hat, nicht deine Aussprache.",
 
     // Roleplay
     "roleplay.tab": "Rollenspiel",
