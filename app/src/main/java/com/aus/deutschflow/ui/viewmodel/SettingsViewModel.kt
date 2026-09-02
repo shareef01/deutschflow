@@ -8,6 +8,7 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.ActivityDao
+import com.aus.deutschflow.data.local.dao.RoleplayDao
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
@@ -28,6 +29,7 @@ class SettingsViewModel @Inject constructor(
     private val transcriptDao: TranscriptDao,
     private val userStatsDao: UserStatsDao,
     private val activityDao: ActivityDao,
+    private val roleplayDao: RoleplayDao,
     private val preferenceManager: PreferenceManager,
     private val dailyWordNotification: DailyWordNotification,
     private val widgetUpdater: WidgetUpdater,
@@ -129,6 +131,10 @@ class SettingsViewModel @Inject constructor(
                 vocabularyDao.deleteAll()
                 userStatsDao.deleteAll()
                 activityDao.deleteAll()
+                // The saved roleplay is the user's speech too. A wipe that left a
+                // conversation behind would be the one thing the dialog promises not
+                // to do.
+                roleplayDao.deleteAll()
             }
             widgetUpdater.refresh()
             _message.value = R.string.message_progress_cleared

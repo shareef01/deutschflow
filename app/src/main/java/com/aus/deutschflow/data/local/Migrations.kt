@@ -386,6 +386,32 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
 }
 
 /**
+ * Adds roleplay_messages, so a conversation survives the process.
+ *
+ * The chat was ViewModel state and nothing else. Leaving the app mid-scene - the
+ * likeliest thing to happen on the one screen where the user stops to compose a
+ * German sentence - lost every turn, including the model's replies, which are the
+ * material.
+ *
+ * Nothing to backfill: the table starts empty on upgrade and on a fresh install
+ * alike, which is the same state the app had before it existed.
+ */
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `roleplay_messages` (" +
+                "`position` INTEGER NOT NULL, " +
+                "`scenario` TEXT NOT NULL, " +
+                "`role` TEXT NOT NULL, " +
+                "`content` TEXT NOT NULL, " +
+                "`translation` TEXT, " +
+                "`timestamp` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`position`))"
+        )
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -403,5 +429,5 @@ val MIGRATIONS =
     arrayOf(
         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-        MIGRATION_12_13
+        MIGRATION_12_13, MIGRATION_13_14
     )

@@ -69,11 +69,12 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
         }
     }
 
-    // Start session if empty
+    // Open a scene only if there is nothing to come back to. The decision belongs
+    // to the ViewModel: the saved conversation is read asynchronously, so this
+    // composes while `messages` is still empty and used to start a new scene over
+    // the one the user left.
     LaunchedEffect(Unit) {
-        if (messages.isEmpty()) {
-            viewModel.startSession(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
-        }
+        viewModel.openScenarioIfEmpty(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {

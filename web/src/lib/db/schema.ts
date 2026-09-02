@@ -1,14 +1,15 @@
 import Dexie, { type Table } from "dexie";
 
 /**
- * DeutschFlow database — the Dexie mirror of the Room schema (Room is at v12;
- * the two version numbers are independent and need not match).
+ * DeutschFlow database — the Dexie mirror of the Room schema. The two version
+ * numbers are independent and need not match; neither is a count of the other.
  *
  * Mirrors app/src/main/java/com/aus/deutschflow/data/local/:
  *   entities/TranscriptEntity.kt    → transcripts
  *   entities/VocabularyEntity.kt    → vocabulary
  *   entities/UserStatsEntity.kt     → userStats
  *   entities/ActivityEntity.kt      → activityLog
+ *   entities/RoleplayMessageEntity.kt → roleplayMessages
  *   PreferenceManager (DataStore)   → settings (key-value rows)
  *
  * Index notes (ported from the Room @Index annotations):
@@ -70,6 +71,25 @@ export interface ActivityEntry {
     timestamp: number;
 }
 
+/**
+ * One turn of the saved roleplay conversation.
+ *
+ * Mirrors RoleplayMessageEntity. Only the current conversation is kept: there is
+ * no history UI to browse past sessions, so retaining them would grow a table
+ * nothing reads and nothing prunes. `position` is the turn's index, assigned by
+ * the hook, so a restored conversation and a live one order the same way.
+ */
+export interface RoleplayMessageEntry {
+  position: number;
+  scenario: string;
+  /** "user" or "assistant" — the same two values the Groq API takes. */
+  role: "user" | "assistant";
+  content: string;
+  /** The English gloss shown under an assistant turn; absent on user turns. */
+  translation?: string;
+  timestamp: number;
+}
+
 export interface SettingEntry {
   key: string;
   value: string;
@@ -112,10 +132,31 @@ export class DeutschFlowDB extends Dexie {
   transcripts!: Table<TranscriptEntry, number>;
   userStats!: Table<UserStatsEntry, number>;
   activityLog!: Table<ActivityEntry, string>;
+  roleplayMessages!: Table<RoleplayMessageEntry, number>;
   settings!: Table<SettingEntry, string>;
 
   constructor(name: string = "deutschflow") {
     super(name);
+
+    /**
+     * Version 6: roleplay conversations are kept.
+     *
+     * The chat lived in React state alone, so a reload lost it - on the one screen
+     * where the user stops to compose a German sentence, and where what is lost is
+     * the model's half of a conversation rather than anything they could retype.
+     *
+     * No `.upgrade()`: the table starts empty, and no existing record gains a
+     * field. The seeding rule above applies to indexed fields added to rows that
+     * already exist, which is not this.
+     */
+    this.version(6).stores({
+      vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+      transcripts: "++id, timestamp",
+      userStats: "id",
+      activityLog: "date",
+      roleplayMessages: "position",
+      settings: "key",
+    });
 
     /**
      * Version 5: the fold key learns German.

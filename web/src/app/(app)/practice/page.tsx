@@ -7,7 +7,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { AudioWaveform } from "@/components/ui/AudioWaveform";
-import { MicIcon, NavigateNextIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
+import { MicIcon, NavigateNextIcon, RefreshIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
 import { PRACTICE_FEEDBACK_KEYS } from "@/lib/scoring";
 
 export default function PracticePage() {
@@ -197,14 +197,19 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const { t } = useI18n();
     const {
         messages, isProcessing, isListening, partialText,
-        startSession, startListening, stopAndSend, speak
+        openScenarioIfEmpty, startSession, startListening, stopAndSend, speak
     } = roleplay;
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Open a scene only if there is nothing to come back to. The decision belongs
+    // to the hook: the saved conversation is read asynchronously, so this mounts
+    // while `messages` is still empty and used to start a new scene over the one
+    // the user left. Keyed on mount rather than on `messages.length`, which also
+    // re-fired the check every time a turn was added.
     useEffect(() => {
-        if (messages.length === 0) void startSession();
-    }, [messages.length, startSession]);
+        void openScenarioIfEmpty();
+    }, [openScenarioIfEmpty]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -214,6 +219,31 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
 
     return (
         <div className="flex h-full flex-col p-4">
+            {/* The scenario, and the way out of it. Android has carried this
+                restart button all along; here a reload used to be the reset,
+                and now that the conversation is saved, a reload brings it
+                back — so without this there is no way out of a scene that has
+                gone wrong short of wiping all progress. */}
+            <div className="mb-3 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                    <p className="text-label-small uppercase tracking-wider text-on-surface-variant">
+                        {t("roleplay.tab")}
+                    </p>
+                    <p className="truncate text-label-large font-bold text-on-surface">
+                        {t("roleplay.scenarioBerlinBakery")}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => void startSession()}
+                    disabled={isProcessing}
+                    aria-label={t("roleplay.restart")}
+                    title={t("roleplay.restart")}
+                    className="glass-button press-scale flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:text-azure-glow disabled:opacity-40"
+                >
+                    <RefreshIcon className="size-5" />
+                </button>
+            </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pb-4">
                 {messages.map((msg, i) => (
                     <div key={i} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>

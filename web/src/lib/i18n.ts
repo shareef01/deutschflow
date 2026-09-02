@@ -159,6 +159,8 @@ export const STRINGS = {
 
     // Roleplay
     "roleplay.tab": "Roleplay",
+    "roleplay.scenarioBerlinBakery": "Ordering at a Berlin Bakery",
+    "roleplay.restart": "Restart conversation",
     "roleplay.thinking": "AI is thinking...",
     "roleplay.stopSend": "Stop & Send",
     "roleplay.speakReply": "Speak to Reply",
@@ -386,6 +388,8 @@ export const STRINGS = {
 
     // Roleplay
     "roleplay.tab": "Rollenspiel",
+    "roleplay.scenarioBerlinBakery": "Bestellen in einer Berliner Bäckerei",
+    "roleplay.restart": "Gespräch neu starten",
     "roleplay.thinking": "Denkt nach...",
     "roleplay.stopSend": "Stopp & senden",
     "roleplay.speakReply": "Tippen, um zu antworten",

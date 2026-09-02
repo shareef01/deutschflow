@@ -5,6 +5,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.data.local.entities.germanKey
 import kotlinx.coroutines.flow.first
@@ -12,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -731,6 +733,73 @@ class AppDatabaseMigrationTest {
                 assertNotNull(database.vocabularyDao().findByGermanText("uebung"))
                 assertNotNull(database.vocabularyDao().findByGermanText("ÜBUNG"))
                 assertNotNull(database.vocabularyDao().findByGermanText("Strasse"))
+            }
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * MIGRATION_13_14: roleplay_messages arrives, and everything already stored
+     * comes through it untouched.
+     *
+     * Nothing is backfilled - the table starts empty either way - so what is worth
+     * asserting is the other half: that adding it does not disturb the vocabulary
+     * and transcripts an existing install already has, and that the new table is
+     * actually usable through the DAO afterwards.
+     */
+    @Test
+    fun theRoleplayTableArrivesEmptyAndDisturbsNothing() {
+        helper.createDatabase(TEST_DB, 13).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary (germanText, germanTextKey, englishTranslation, timestamp) " +
+                    "VALUES ('die Übung', 'die uebung', 'the exercise', 100)"
+            )
+            db.execSQL("INSERT INTO transcripts (fullText, timestamp) VALUES ('Guten Tag', 200)")
+        }
+
+        val database = openAsReleaseWould()
+        try {
+            runBlocking {
+                val words = database.vocabularyDao().getAllVocabulary().first()
+                assertEquals(1, words.size)
+                assertEquals("die Übung", words.first().germanText)
+                assertEquals(1, database.transcriptDao().getAllTranscripts().first().size)
+
+                val dao = database.roleplayDao()
+                assertEquals(emptyList<RoleplayMessageEntity>(), dao.getConversation())
+
+                dao.insert(
+                    RoleplayMessageEntity(
+                        position = 0,
+                        scenario = "Ordering at a Berlin Bakery",
+                        role = "assistant",
+                        content = "Guten Morgen! Was darf es sein?",
+                        translation = "Good morning! What would you like?",
+                        timestamp = 300
+                    )
+                )
+                dao.insert(
+                    RoleplayMessageEntity(
+                        position = 1,
+                        scenario = "Ordering at a Berlin Bakery",
+                        role = "user",
+                        content = "Ein Brötchen, bitte.",
+                        timestamp = 400
+                    )
+                )
+
+                val saved = dao.getConversation()
+                assertEquals(2, saved.size)
+                // Oldest first: the order the chat renders in, and the order a
+                // restored conversation has to come back in.
+                assertEquals("assistant", saved.first().role)
+                assertEquals("Ein Brötchen, bitte.", saved[1].content)
+                // A user turn has no gloss, so the column has to be nullable.
+                assertNull(saved[1].translation)
+
+                dao.deleteAll()
+                assertEquals(emptyList<RoleplayMessageEntity>(), dao.getConversation())
             }
         } finally {
             database.close()
