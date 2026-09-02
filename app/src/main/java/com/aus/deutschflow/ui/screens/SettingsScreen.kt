@@ -118,7 +118,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 )
 
                 Surface(
-                    color = if (hasApiKey) TertiaryGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    color = if (hasApiKey) AppTheme.colors.tertiaryGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHighest,
                     shape = CircleShape
                 ) {
                     Row(
@@ -128,7 +128,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         Icon(
                             imageVector = if (hasApiKey) Icons.Default.Lock else Icons.Default.Key,
                             contentDescription = null,
-                            tint = if (hasApiKey) TertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (hasApiKey) AppTheme.colors.tertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -136,7 +136,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             text = if (hasApiKey) stringResource(R.string.settings_api_key_active) else stringResource(R.string.settings_api_key_not_set),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = if (hasApiKey) TertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (hasApiKey) AppTheme.colors.tertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,7 +13,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.aus.deutschflow.ui.theme.EmptyStateIconSize
 import com.aus.deutschflow.ui.theme.EmptyStateMedallionSize
-import com.aus.deutschflow.ui.theme.OnSurfaceMuted
 import com.aus.deutschflow.ui.theme.Spacing
 
 /**
@@ -58,10 +58,10 @@ fun EmptyState(
                 // makes a screen reader repeat itself.
                 contentDescription = null,
                 modifier = Modifier.size(EmptyStateIconSize),
-                // Flat, not alpha-dimmed, for the same reason OnSurfaceMuted exists:
+                // Flat, not alpha-dimmed, for the same reason AppTheme.colors.onSurfaceMuted exists:
                 // alpha over a dark ground loses contrast faster than it looks like
                 // it should.
-                tint = OnSurfaceMuted
+                tint = AppTheme.colors.onSurfaceMuted
             )
         }
 

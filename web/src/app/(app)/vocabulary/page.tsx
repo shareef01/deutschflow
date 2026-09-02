@@ -345,7 +345,7 @@ function VocabularyItem({
               <div className="glass-surface absolute right-0 top-12 z-50 w-40 p-1">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-on-surface hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-on-surface hover:bg-on-surface/5"
                   onClick={() => {
                     setMenuOpen(false);
                     onEdit();
@@ -356,7 +356,7 @@ function VocabularyItem({
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-error hover:bg-white/5"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-error hover:bg-on-surface/5"
                   onClick={() => {
                     setMenuOpen(false);
                     onDelete();

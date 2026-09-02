@@ -367,7 +367,7 @@ fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_hard),
-                glow = WarningAmber,
+                glow = AppTheme.colors.warningAmber,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
                 onClick = {
@@ -377,7 +377,7 @@ fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_good),
-                glow = AzureDeep,
+                glow = AppTheme.colors.azureDeep,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
                 onClick = {
@@ -387,7 +387,7 @@ fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_easy),
-                glow = TertiaryGreen,
+                glow = AppTheme.colors.tertiaryGreen,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
                 onClick = {

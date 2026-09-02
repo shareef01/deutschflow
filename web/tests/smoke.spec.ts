@@ -8,6 +8,21 @@ import { expect, test, type Page } from "@playwright/test";
 
 const ROUTES = ["/transcript", "/history", "/vocabulary", "/study", "/practice"] as const;
 
+/**
+ * The ground, per scheme. globals.css defines --color-background once in @theme
+ * and again under `@media (prefers-color-scheme: light)`; these are the two
+ * values, in the form getComputedStyle returns.
+ *
+ * These tests used to hardcode the dark one, which passed only because
+ * Playwright's default scheme happened to render it - it does not; the default
+ * is light, and the app was dark whatever the browser asked for. That is exactly
+ * the bug the light theme fixes, so the assertion now follows the scheme.
+ */
+const GROUND = {
+  light: "rgb(245, 247, 250)",
+  dark: "rgb(10, 14, 22)",
+} as const;
+
 for (const route of ROUTES) {
   test(`route ${route} loads`, async ({ page }) => {
     const response = await page.goto(route);
@@ -19,7 +34,7 @@ for (const route of ROUTES) {
     await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
     await expect(page.locator("h1")).toBeVisible();
     // The app shell (the glass surface language) renders behind every screen.
-    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(10, 14, 22)");
+    await expect(page.locator("body")).toHaveCSS("background-color", GROUND.light);
   });
 }
 
@@ -126,4 +141,34 @@ test("saving an API key reports in the current language", async ({ page }) => {
 
   await expect(page.getByText("API-Schlüssel gespeichert.")).toBeVisible();
   await page.getByRole("button", { name: "OK" }).click();
+});
+
+test.describe("the theme follows the system", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`prefers-color-scheme: ${scheme} paints its own ground`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/transcript");
+
+      await expect(page.locator("body")).toHaveCSS("background-color", GROUND[scheme]);
+
+      // The ground alone would pass on a page that never got its text colour, so
+      // check the ink flipped too - and that it is the readable end of the ramp,
+      // not the dark theme's white sitting on the light theme's near-white.
+      const ink = await page
+        .locator("h1")
+        .evaluate((el) => getComputedStyle(el).color);
+      expect(ink).toBe(scheme === "light" ? "rgb(10, 14, 22)" : "rgb(255, 255, 255)");
+    });
+  }
+
+  test("switching scheme at runtime re-themes without a reload", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/transcript");
+    await expect(page.locator("body")).toHaveCSS("background-color", GROUND.dark);
+
+    // No reload: the theme is CSS custom properties under a media query, so the
+    // browser repaints on its own. A JS-driven theme would need one.
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("body")).toHaveCSS("background-color", GROUND.light);
+  });
 });

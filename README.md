@@ -34,7 +34,7 @@ Speak a sentence in German, and the app transcribes it on-device in real time, t
 - **🧠 Spaced Repetition System (SRS):** SM-2-derived scheduling with 4-tier grading (*Again*, *Hard*, *Good*, *Easy*), capped at a one-year interval, plus daily XP goal tracking. *Good* and *Easy* follow SM-2 exactly; *Hard* shortens the interval rather than resetting it, and *Again* returns the card to the current session.
 - **🗣️ Shadowing & AI Roleplay:** Speak a sentence and see, word by word, which words the recogniser heard — umlaut spellings folded, so `Uebung` matches `Übung`. This measures recall and intelligibility, not phoneme-level pronunciation: the platform speech APIs expose no per-phoneme confidence. Paired with interactive situational roleplay scenarios.
 - **🔒 Keystore-Backed Security:** API credentials encrypted via AES-GCM hardware-backed Android Keystore.
-- **🎨 Material 3 UI:** Fluid animations, spring interaction feedback, and dynamic scroll fading edges. Dark theme only — the palette is a single opaque dark ramp, verified against WCAG contrast thresholds in CI (`tools/contrast.py`).
+- **🎨 Material 3 UI:** Fluid animations, spring interaction feedback, and dynamic scroll fading edges. Light and dark, following the system setting on both platforms — there is no in-app override to fall out of sync with it. Both palettes are verified against WCAG contrast thresholds in CI, and checked to agree across the two apps (`tools/contrast.py`, `tools/palette_parity.py`).
 
 ---
 

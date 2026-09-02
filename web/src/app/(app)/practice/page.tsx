@@ -23,7 +23,7 @@ export default function PracticePage() {
   return (
     <div className="flex h-full flex-col">
         {/* Tab Selector */}
-        <div className="flex w-full justify-center gap-8 border-b border-white/5 bg-background/50 backdrop-blur-md">
+        <div className="flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md">
             {(["repetition", "roleplay"] as const).map((tab) => (
                 <button
                     key={tab}

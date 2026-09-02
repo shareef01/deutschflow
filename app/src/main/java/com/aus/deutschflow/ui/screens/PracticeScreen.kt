@@ -171,7 +171,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                         wordResults.forEach { result ->
                             withStyle(
                                 style = SpanStyle(
-                                    color = if (result.isCorrect) TertiaryGreen else MaterialTheme.colorScheme.error,
+                                    color = if (result.isCorrect) AppTheme.colors.tertiaryGreen else MaterialTheme.colorScheme.error,
                                     fontWeight = FontWeight.Bold
                                 )
                             ) {
@@ -224,7 +224,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                 shape = MaterialTheme.shapes.medium,
                 border = BorderStroke(
                     1.dp,
-                    if (isPositive) TertiaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                    if (isPositive) AppTheme.colors.tertiaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
                 )
             ) {
                 Column(
@@ -235,7 +235,7 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                         text = feedbackText ?: "",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (isPositive) TertiaryGreen else MaterialTheme.colorScheme.error,
+                        color = if (isPositive) AppTheme.colors.tertiaryGreen else MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(Spacing.xs))
@@ -317,14 +317,14 @@ fun ShadowingMode(viewModel: PracticeViewModel) {
                     Icon(
                         imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(20.dp)
                     )
                 },
                 gradientColors = if (isListening) {
                     listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
                 } else {
-                    listOf(AzureGlow, primaryColor)
+                    listOf(AppTheme.colors.azureGlow, primaryColor)
                 },
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)

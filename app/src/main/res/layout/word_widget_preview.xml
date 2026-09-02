@@ -10,14 +10,14 @@
     android:orientation="vertical"
     android:gravity="center"
     android:padding="12dp"
-    android:background="@color/background_dark"
+    android:background="@color/widget_background"
     tools:ignore="Overdraw">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/widget_heading"
-        android:textColor="@color/primary_blue"
+        android:textColor="@color/widget_accent"
         android:textSize="11sp"
         android:textStyle="bold" />
 
@@ -26,7 +26,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:text="@string/widget_preview_word"
-        android:textColor="@color/on_background_light"
+        android:textColor="@color/widget_on_background"
         android:textSize="22sp"
         android:textStyle="bold" />
 
@@ -34,7 +34,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/widget_preview_translation"
-        android:textColor="@color/on_surface_variant"
+        android:textColor="@color/widget_on_background_variant"
         android:textSize="14sp" />
 
 </LinearLayout>

@@ -149,7 +149,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
-                            color = AzureGlow
+                            color = AppTheme.colors.azureGlow
                         )
                         Spacer(modifier = Modifier.width(Spacing.sm))
                         Text(
@@ -262,14 +262,14 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                                         listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
                                     )
                                 } else {
-                                    Brush.linearGradient(listOf(AzureGlow, MaterialTheme.colorScheme.primary))
+                                    Brush.linearGradient(listOf(AppTheme.colors.azureGlow, MaterialTheme.colorScheme.primary))
                                 }
                             )
                     ) {
                         Icon(
                             imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                             contentDescription = micLabel,
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(28.dp)
                         )
                     }

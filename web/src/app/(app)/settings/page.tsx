@@ -86,7 +86,7 @@ export default function SettingsPage() {
            need an equivalent. */}
       <SectionHeader title={t("settings.backupHeader")} />
 
-      <div className="glass-surface border border-white/5 p-6">
+      <div className="glass-surface border border-on-surface/5 p-6">
         {/* This already says what the removed "Cloud Sync" card's one true line
             said - the library lives only in this browser - so nothing was lost
             with it. What went was a sign-in that authenticated against a stub,
@@ -161,7 +161,7 @@ export default function SettingsPage() {
       {/* ---- Learning progress (2x2 Grid) ----------------------------------- */}
       <SectionHeader title={t("settings.progressHeader")} />
 
-      <div className="glass-surface p-6 border border-white/5">
+      <div className="glass-surface p-6 border border-on-surface/5">
         <div className="grid grid-cols-2 gap-6">
           <StatGridItem label={t("settings.statVocabulary")} value={String(totalVocabulary)} />
           <StatGridItem label={t("settings.statSessions")} value={String(totalTranscripts)} />
@@ -247,7 +247,7 @@ function RadioGroup<T extends string>({ options, selected, onSelect }: { options
       {options.map((option) => {
         const isSelected = selected === option.code;
         return (
-          <button key={option.code} onClick={() => onSelect(option.code)} className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left hover:bg-white/5 transition-colors">
+          <button key={option.code} onClick={() => onSelect(option.code)} className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left hover:bg-on-surface/5 transition-colors">
             <span className={`flex size-6 items-center justify-center rounded-full border-2 transition-all ${isSelected ? "border-azure-glow scale-110" : "border-on-surface-variant/40"}`}>
               {isSelected && <span className="size-3 rounded-full bg-azure-glow" />}
             </span>

@@ -284,7 +284,7 @@ fun TranscriptContent(
                             Icon(
                                 imageVector = Icons.Default.GraphicEq,
                                 contentDescription = null,
-                                tint = AzureGlow,
+                                tint = AppTheme.colors.azureGlow,
                                 modifier = Modifier.size(36.dp)
                             )
                         }
@@ -397,7 +397,7 @@ fun TranscriptContent(
                     PrimaryActionButton(
                         text = stringResource(R.string.transcript_save),
                         onClick = onSave,
-                        icon = { Icon(Icons.Default.BookmarkAdd, contentDescription = null, tint = Color.White) },
+                        icon = { Icon(Icons.Default.BookmarkAdd, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -460,7 +460,7 @@ fun TranscriptContent(
                                         listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
                                     )
                                 } else {
-                                    Brush.linearGradient(listOf(AzureGlow, primaryColor))
+                                    Brush.linearGradient(listOf(AppTheme.colors.azureGlow, primaryColor))
                                 }
                             )
                             // Inert while a translation is in flight. Without this,
@@ -487,7 +487,7 @@ fun TranscriptContent(
                         if (isBusy) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(24.dp),
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 strokeWidth = 2.5.dp
                             )
                         } else {
@@ -495,7 +495,7 @@ fun TranscriptContent(
                                 imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
                                 contentDescription = null,
                                 modifier = Modifier.size(RecordIconSize),
-                                tint = Color.White
+                                tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
@@ -651,13 +651,13 @@ private fun TranscriptDisplayCard(
                     CircularProgressIndicator(
                         modifier = Modifier.size(12.dp),
                         strokeWidth = 2.dp,
-                        color = AzureGlow
+                        color = AppTheme.colors.azureGlow
                     )
                     Spacer(modifier = Modifier.width(Spacing.xs))
                     Text(
                         text = stringResource(R.string.transcript_processing_status),
                         style = MaterialTheme.typography.labelSmall,
-                        color = AzureGlow,
+                        color = AppTheme.colors.azureGlow,
                         fontWeight = FontWeight.SemiBold
                     )
                 }

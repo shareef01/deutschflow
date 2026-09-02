@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -8,7 +9,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import com.aus.deutschflow.ui.theme.AzureGlow
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -27,7 +27,7 @@ fun AudioWaveform(
     isActive: Boolean,
     modifier: Modifier = Modifier,
     bars: Int = 28,
-    color: Color = AzureGlow
+    color: Color = AppTheme.colors.azureGlow
 ) {
     Canvas(modifier = modifier) {
         // Idle, the meter collapses to a faint static comb so the card reads as

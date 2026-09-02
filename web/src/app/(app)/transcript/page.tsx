@@ -455,7 +455,7 @@ function DialectChip({
                     onSelect(dialect);
                     setOpen(false);
                   }}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-body-medium hover:bg-white/5 ${
+                  className={`w-full rounded-lg px-3 py-2 text-left text-body-medium hover:bg-on-surface/5 ${
                     dialect === selected ? "text-primary" : "text-on-surface"
                   }`}
                 >

@@ -88,6 +88,14 @@ User speaks
 
 ## 3. Design system — Obsidian & Azure tokens (Tailwind v4)
 
+> Both schemes. §3's tokens are the dark palette; `globals.css` redefines the
+> same custom properties under `@media (prefers-color-scheme: light)`, so every
+> utility below re-themes without a class name changing. The light values are
+> not the dark ones inverted — a cyan built to glow on a blue-black ground
+> measures 1.68:1 on white — and both palettes are measured by
+> `tools/contrast.py` and cross-checked against Color.kt by
+> `tools/palette_parity.py`.
+
 Implemented in `src/app/globals.css` as `@theme` tokens + utilities (Phase 2 deliverable, §8). Exact port of `ui/theme/`:
 
 - **Ground:** `#000000` true black (an unlit OLED pixel).

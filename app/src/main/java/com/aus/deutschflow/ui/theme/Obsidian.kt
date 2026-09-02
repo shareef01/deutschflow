@@ -47,17 +47,21 @@ val GlassShape = RoundedCornerShape(16.dp)
  * boundary that identifies a component. It stays cyan: the colour is the brand, the
  * alpha was the bug.
  */
-fun glassBorderBrush(glow: Color = AzureGlow, alpha: Float = 0.5f): Brush =
+// The colour is required rather than defaulted: a default would have to name a
+// palette `val`, and a `val` cannot know which theme is in force - which is the
+// whole reason the app was dark-only. Callers read it from AppTheme.colors.
+fun glassBorderBrush(glow: Color, alpha: Float = 0.5f): Brush =
     SolidColor(glow.copy(alpha = alpha))
 
 /**
  * @param shape must match whatever the caller clips its content to, or the fill and
  * the edge will disagree at the corners.
  */
+@Composable
 fun Modifier.glassSurface(
     shape: Shape = GlassShape,
-    fill: Color = GlassFill,
-    glow: Color = AzureGlow
+    fill: Color = AppTheme.colors.glassFill,
+    glow: Color = AppTheme.colors.azureGlow
 ): Modifier = this
     // Shadow outermost so it is not clipped away by the clip below it.
     .shadow(

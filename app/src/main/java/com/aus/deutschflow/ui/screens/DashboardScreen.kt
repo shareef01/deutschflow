@@ -78,6 +78,8 @@ fun DailyGoalCard(
     val goal = StudyViewModel.DAILY_XP_GOAL.toFloat()
     val progress = (xp.toFloat() / goal).coerceIn(0f, 1f)
     val primaryColor = MaterialTheme.colorScheme.primary
+    // A DrawScope is not a composable, so the token is read here and closed over.
+    val glowColor = AppTheme.colors.azureGlow
 
     GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
@@ -107,7 +109,7 @@ fun DailyGoalCard(
                         style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
                     )
                     drawArc(
-                        brush = Brush.sweepGradient(listOf(AzureGlow, primaryColor)),
+                        brush = Brush.sweepGradient(listOf(glowColor, primaryColor)),
                         startAngle = -90f,
                         sweepAngle = progress * 360f,
                         useCenter = false,
@@ -142,13 +144,13 @@ fun DailyGoalCard(
                     text = stringResource(R.string.dashboard_xp_format, xp, goal.toInt()),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = AzureGlow
+                    color = AppTheme.colors.azureGlow
                 )
                 Text(
                     text = if (progress >= 1f) stringResource(R.string.dashboard_goal_achieved)
                     else stringResource(R.string.dashboard_xp_remaining, (goal - xp).toInt()),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (progress >= 1f) TertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (progress >= 1f) AppTheme.colors.tertiaryGreen else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(Spacing.xs))
                 Surface(
@@ -169,7 +171,7 @@ fun DailyGoalCard(
         Spacer(modifier = Modifier.height(Spacing.md))
         PrimaryActionButton(
             text = stringResource(R.string.dashboard_start_review),
-            icon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White) },
+            icon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary) },
             onClick = onStartReview,
             modifier = Modifier.fillMaxWidth()
         )
@@ -198,13 +200,13 @@ fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
                 modifier = Modifier.weight(1f),
                 label = stringResource(R.string.dashboard_mastered),
                 count = stats.masteredWords,
-                color = TertiaryGreen
+                color = AppTheme.colors.tertiaryGreen
             )
             RetentionTile(
                 modifier = Modifier.weight(1f),
                 label = stringResource(R.string.dashboard_learning),
                 count = stats.learningWords,
-                color = AzureGlow
+                color = AppTheme.colors.azureGlow
             )
             RetentionTile(
                 modifier = Modifier.weight(1f),
@@ -266,6 +268,11 @@ fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.Activ
         Spacer(modifier = Modifier.height(Spacing.md))
 
         val activeDays = remember(activityMap) { activityMap.count { it.value > 0 } }
+        val activeColor = AppTheme.colors.tertiaryGreen
+        // The empty cell used to be white at 6%, which on a light ground is a white
+        // square on a white card. The ink colour at the same alpha is a faint grey
+        // in either theme, which is what it was always meant to be.
+        val emptyColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
         val heatmapDescription = stringResource(
             R.string.dashboard_heatmap_a11y, activeDays, daysToShow
         )
@@ -285,11 +292,11 @@ fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.Activ
                 val col = i / 7
                 val row = i % 7
                 val color = when {
-                    xp >= 100 -> TertiaryGreen
-                    xp >= 50 -> TertiaryGreen.copy(alpha = 0.75f)
-                    xp >= 20 -> TertiaryGreen.copy(alpha = 0.45f)
-                    xp > 0 -> TertiaryGreen.copy(alpha = 0.25f)
-                    else -> Color.White.copy(alpha = 0.06f)
+                    xp >= 100 -> activeColor
+                    xp >= 50 -> activeColor.copy(alpha = 0.75f)
+                    xp >= 20 -> activeColor.copy(alpha = 0.45f)
+                    xp > 0 -> activeColor.copy(alpha = 0.25f)
+                    else -> emptyColor
                 }
                 drawRoundRect(
                     color = color,
@@ -315,11 +322,13 @@ fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.Activ
             )
             Spacer(modifier = Modifier.width(Spacing.xs))
             listOf(
-                Color.White.copy(alpha = 0.06f),
-                TertiaryGreen.copy(alpha = 0.25f),
-                TertiaryGreen.copy(alpha = 0.45f),
-                TertiaryGreen.copy(alpha = 0.75f),
-                TertiaryGreen
+                // The ink colour, not white: a white square at 6% on a light card is
+                // a white square on a white card. Matches the empty cell above.
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                AppTheme.colors.tertiaryGreen.copy(alpha = 0.25f),
+                AppTheme.colors.tertiaryGreen.copy(alpha = 0.45f),
+                AppTheme.colors.tertiaryGreen.copy(alpha = 0.75f),
+                AppTheme.colors.tertiaryGreen
             ).forEach { squareColor ->
                 Box(
                     modifier = Modifier

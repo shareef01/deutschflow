@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {showRail && (
           <nav
             aria-label="Primary"
-            className="sticky top-[var(--header-height)] flex h-[calc(100dvh-var(--header-height))] w-[var(--nav-rail-width)] shrink-0 flex-col gap-[var(--space-1)] overflow-y-auto border-r border-white/[0.06] bg-white/[0.02] px-[var(--space-3)] py-[var(--space-5)] backdrop-blur-xl"
+            className="sticky top-[var(--header-height)] flex h-[calc(100dvh-var(--header-height))] w-[var(--nav-rail-width)] shrink-0 flex-col gap-[var(--space-1)] overflow-y-auto border-r border-on-surface/[0.06] bg-on-surface/[0.02] px-[var(--space-3)] py-[var(--space-5)] backdrop-blur-xl"
           >
             {TABS.map((tab) => {
               const selected = pathname === tab.route;
@@ -125,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className={`group relative flex h-11 w-full items-center gap-[var(--space-3)] rounded-xl px-[var(--space-3)] text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow ${
                     selected
                       ? "bg-azure-glow/10 text-on-surface"
-                      : "text-on-surface-variant hover:bg-white/[0.05] hover:text-on-surface"
+                      : "text-on-surface-variant hover:bg-on-surface/[0.05] hover:text-on-surface"
                   }`}
                 >
                   {/* Not colour alone: the selected row carries a marker. */}

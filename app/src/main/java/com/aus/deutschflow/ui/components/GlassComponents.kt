@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -51,9 +52,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
-import com.aus.deutschflow.ui.theme.AzureDeep
-import com.aus.deutschflow.ui.theme.AzureGlow
-import com.aus.deutschflow.ui.theme.GlassFill
 import com.aus.deutschflow.ui.theme.GlassShape
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassBorderBrush
@@ -68,7 +66,7 @@ import com.aus.deutschflow.ui.theme.rememberPressSource
 fun GlassmorphicCard(
     modifier: Modifier = Modifier,
     shape: Shape = GlassShape,
-    fill: Color = GlassFill,
+    fill: Color = AppTheme.colors.glassFill,
     contentPadding: PaddingValues = PaddingValues(Spacing.md),
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -103,8 +101,8 @@ fun GlassTextField(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val edge = if (isFocused) glassBorderBrush(AzureGlow, alpha = 0.55f)
-    else glassBorderBrush(AzureDeep, alpha = 0.16f)
+    val edge = if (isFocused) glassBorderBrush(AppTheme.colors.azureGlow, alpha = 0.55f)
+    else glassBorderBrush(AppTheme.colors.azureDeep, alpha = 0.16f)
 
     Column(modifier = modifier) {
         if (label != null) {
@@ -120,7 +118,7 @@ fun GlassTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .background(GlassFill, shape)
+                .background(AppTheme.colors.glassFill, shape)
                 .border(BorderStroke(1.dp, edge), shape)
                 .padding(horizontal = Spacing.md),
             contentAlignment = Alignment.CenterStart
@@ -208,7 +206,7 @@ fun GlassButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    glow: Color = AzureDeep,
+    glow: Color = AppTheme.colors.azureDeep,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     content: @Composable RowScope.() -> Unit
 ) {
@@ -226,7 +224,7 @@ fun GlassButton(
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = glow.copy(alpha = 0.12f),
             contentColor = contentColor,
-            disabledContainerColor = GlassFill,
+            disabledContainerColor = AppTheme.colors.glassFill,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     ) {
@@ -245,7 +243,7 @@ fun PrimaryActionButton(
     icon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
     isLoading: Boolean = false,
-    gradientColors: List<Color> = listOf(AzureGlow, AzureDeep)
+    gradientColors: List<Color> = listOf(AppTheme.colors.azureGlow, AppTheme.colors.azureDeep)
 ) {
     val interactionSource = rememberPressSource()
     val disabledBg = MaterialTheme.colorScheme.surfaceVariant
@@ -284,7 +282,7 @@ fun PrimaryActionButton(
                 if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(Spacing.sm))
@@ -296,7 +294,7 @@ fun PrimaryActionButton(
                     text = text,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (enabled) Color.White else onSurfaceVariant
+                    color = if (enabled) MaterialTheme.colorScheme.onPrimary else onSurfaceVariant
                 )
             }
         }
@@ -326,9 +324,9 @@ fun SecondaryActionButton(
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = GlassFill,
+            containerColor = AppTheme.colors.glassFill,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            disabledContainerColor = GlassFill,
+            disabledContainerColor = AppTheme.colors.glassFill,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     ) {
