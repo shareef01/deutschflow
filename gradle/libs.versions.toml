@@ -3,7 +3,7 @@
 # to move alone: Hilt 2.60 will not apply below AGP 9, Room 2.8's compiler needs a
 # kotlinx-serialization newer than the Kotlin 2.1 KSP classpath carried, and KSP has
 # switched to KSP2 versioning, which is no longer tied to the Kotlin version.
-agp = "9.3.2"
+agp = "9.4.0"
 kotlin = "2.4.10"
 # KSP2. The old "<kotlin>-<ksp>" scheme is gone, and so is ksp.useKSP2=false in
 # gradle.properties, which pinned the build to a KSP1 that no longer ships.
@@ -19,7 +19,7 @@ espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.11.0"
 lifecycleViewmodelCompose = "2.11.0"
 activityCompose = "1.13.0"
-navigationCompose = "2.9.8"
+navigationCompose = "2.10.0"
 # One version for coroutines everywhere. androidTest pulls coroutines-test, and AGP
 # resolves that classpath consistently with the app's runtime, so the two must agree.
 kotlinxCoroutines = "1.11.0"
@@ -34,7 +34,7 @@ glance = "1.1.1"
 datastore = "1.2.1"
 work = "2.11.2"
 concurrentFutures = "1.3.0"
-tracing = "2.0.0"
+tracing = "2.0.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
