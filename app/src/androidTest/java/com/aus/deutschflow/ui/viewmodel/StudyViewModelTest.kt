@@ -88,16 +88,35 @@ class StudyViewModelTest {
     }
 
     /**
-     * Answers [times] cards well, waiting for each award to land.
+     * Answers [times] cards well, waiting for each award to land *and* for the
+     * ViewModel to be ready for the next one.
      *
      * Sequential on purpose: `submitReview` reads the card at the current index when
      * it is called and writes the queue back from a coroutine, so firing them without
      * waiting would review one card several times over rather than several cards once.
+     *
+     * Two things this used to get wrong, which together made the test fail on a
+     * loaded CI emulator roughly two runs in five:
+     *
+     * - [awaitCondition] returns false on timeout and the result was dropped, so a
+     *   slow award did not fail here. The loop carried on and the shortfall surfaced
+     *   as a baffling total in whichever assertion ran last.
+     * - Waiting on the XP alone is not enough. `submitReview` clears `isSubmitting`
+     *   in a `finally` that runs *after* the transaction commits, so the award is
+     *   visible for a moment while the re-entry guard is still up - and a review
+     *   fired in that window is refused outright, costing that card its ten points.
+     *   That is the guard working as designed; the test simply has to respect it.
      */
     private suspend fun answerWell(times: Int) {
         repeat(times) { n ->
             viewModel.submitReview(ReviewQuality.GOOD)
-            awaitCondition { xp() == (n + 1) * StudyViewModel.XP_PER_CARD }
+            assertTrue(
+                "card ${n + 1} of $times was never banked: its award did not land, or " +
+                    "the ViewModel was still submitting when the next review came due",
+                awaitCondition {
+                    xp() == (n + 1) * StudyViewModel.XP_PER_CARD && !viewModel.isSubmitting.value
+                }
+            )
         }
     }
 
@@ -108,8 +127,8 @@ class StudyViewModelTest {
         answerWell(CARDS)
 
         assertEquals(
-            "all $CARDS cards should be counted; a lost update means the " +
-                "read-modify-write is no longer atomic",
+            "all $CARDS cards should be counted; a shortfall means a review was " +
+                "refused or an award was lost",
             CARDS * StudyViewModel.XP_PER_CARD,
             xp()
         )

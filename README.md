@@ -17,13 +17,17 @@ Speak a sentence in German, and the app transcribes it on-device in real time, t
 
 ## 📸 Key Interfaces
 
-| 🎙️ Real-Time Speaking & Translation | 📚 Vocabulary Library & Filters |
+| 📚 Vocabulary Library & Filters | 🧠 Spaced Repetition (SM-2) Flashcards |
 | :---: | :---: |
-| <img src="docs/screenshots/01-transcript.png" width="320" alt="Transcript Screen"/> | <img src="docs/screenshots/02-library.png" width="320" alt="Library Screen"/> |
+| <img src="docs/screenshots/02-library.png" width="320" alt="Library Screen"/> | <img src="docs/screenshots/03-study.png" width="320" alt="Study Flashcards"/> |
 
-| 🧠 Spaced Repetition (SM-2) Flashcards | 🗣️ Pronunciation Shadowing & Roleplay |
+| 🗣️ Pronunciation Shadowing & Roleplay | 🕓 Transcript History |
 | :---: | :---: |
-| <img src="docs/screenshots/03-study.png" width="320" alt="Study Flashcards"/> | <img src="docs/screenshots/04-practice.png" width="320" alt="Practice Screen"/> |
+| <img src="docs/screenshots/04-practice.png" width="320" alt="Practice Screen"/> | <img src="docs/screenshots/02-history.png" width="320" alt="History Screen"/> |
+
+<!-- The Transcript screen has no shot here: the file that used to fill that cell
+     was not the app at all, it was a phone's app drawer, and it is gone. A
+     replacement needs capturing on a device seeded with sample data. -->
 
 ---
 
