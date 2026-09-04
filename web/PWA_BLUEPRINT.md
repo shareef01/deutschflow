@@ -195,7 +195,7 @@ on the reasoning below - nothing invoked sharp, so vulnerable bytes were install
 but never executed. That tolerance was sound but temporary by design; the recorded
 revisit triggers (a Next major, or any use of next/image / ImageResponse) have been
 consumed by this upgrade rather than left open. What the move actually required:
-`middleware.ts` became `proxy.ts` with a nodejs-only runtime (the gate's Web Crypto
+`middleware.ts` guards routes at the network boundary (the gate's Web Crypto
 signing carried over unchanged), Turbopack took over as the default bundler, and
 the whole suite - typecheck, unit tests, build, and the browser smoke run including
 offline boot - was executed green before shipping.

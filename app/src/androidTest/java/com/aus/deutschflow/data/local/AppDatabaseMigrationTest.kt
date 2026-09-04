@@ -567,10 +567,10 @@ class AppDatabaseMigrationTest {
     }
 
     /**
-     * The whole run a real install takes, 7 to 12 in one go.
+     * The whole run a real install takes, 7 to 14 in one go.
      *
      * The per-step tests each start from a hand-written fixture; this one is the only
-     * check that the steps compose - that a row written by version 7 survives all four
+     * check that the steps compose - that a row written by version 7 survives all seven
      * and still reads correctly through the release configuration.
      */
     @Test
@@ -586,8 +586,9 @@ class AppDatabaseMigrationTest {
         }
 
         helper.runMigrationsAndValidate(
-            TEST_DB, 12, true,
-            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12
+            TEST_DB, 14, true,
+            MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+            MIGRATION_12_13, MIGRATION_13_14
         )
 
         val database = openAsReleaseWould()
@@ -597,12 +598,16 @@ class AppDatabaseMigrationTest {
 
             val word = saved.first()
             assertEquals("die Übung", word.germanText)
+            assertEquals("die uebung", word.germanTextKey)
             assertEquals("the exercise", word.englishTranslation)
             assertEquals("Ich mache meine Übungen.", word.exampleSentence)
             assertEquals("Übungen", word.plural)
             assertEquals("", word.synonyms)
             assertEquals(2.5f, word.easeFactor, 0.0001f)
             assertEquals(UUID_LENGTH, word.remoteId.length)
+
+            val roleplayDao = database.roleplayDao()
+            assertEquals(emptyList<RoleplayMessageEntity>(), roleplayDao.getConversation())
         } finally {
             database.close()
         }
