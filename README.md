@@ -47,9 +47,9 @@ Speak a sentence in German, and the app transcribes it on-device in real time, t
 ```
 com.aus.deutschflow
 ├── data/local
-│   ├── AppDatabase.kt, Migrations.kt   (Room, v12, no destructive fallback)
-│   ├── dao/                            (Vocabulary, Transcript, UserStats, Activity)
-│   ├── entities/                       (the four tables)
+│   ├── AppDatabase.kt, Migrations.kt   (Room, v14, no destructive fallback)
+│   ├── dao/                            (Vocabulary, Transcript, UserStats, Activity, Roleplay)
+│   ├── entities/                       (the five tables)
 │   ├── PreferenceManager.kt            (DataStore)
 │   └── KeystoreCipher.kt               (AES-GCM under the Android Keystore)
 ├── service
@@ -58,8 +58,7 @@ com.aus.deutschflow
 │   ├── SRSEngine.kt                    (SM-2-derived scheduler)
 │   ├── GroqHelper.kt                   (AI translation, grammar, roleplay)
 │   ├── VocabularyProcessor.kt          (the seam the tests substitute)
-│   ├── DailyWord.kt, DailyWordWorker.kt, DailyWordNotification.kt
-│   └── SyncManager.kt, CloudService.kt (stubs — no backend yet)
+│   └── DailyWord.kt, DailyWordWorker.kt, DailyWordNotification.kt
 ├── ui
 │   ├── components/                     (design system, SegmentedTabs, ErrorBanner)
 │   ├── screens/                        (Transcript, Library, History, Study,

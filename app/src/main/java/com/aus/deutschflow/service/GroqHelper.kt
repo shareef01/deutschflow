@@ -5,7 +5,9 @@ import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -133,7 +135,7 @@ class GroqHelper @Inject constructor(
         }
     }
 
-    private fun post(body: String, apiKey: String): String {
+    private suspend fun post(body: String, apiKey: String): String {
         val connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
@@ -141,6 +143,10 @@ class GroqHelper @Inject constructor(
             readTimeout = TIMEOUT_MS
             setRequestProperty("Authorization", "Bearer $apiKey")
             setRequestProperty("Content-Type", "application/json")
+        }
+
+        val cancelHandle = coroutineContext[Job]?.invokeOnCompletion {
+            connection.disconnect()
         }
 
         return try {
@@ -151,10 +157,11 @@ class GroqHelper @Inject constructor(
             } else {
                 // The body carries the reason - an expired key, a retired model, a
                 // rate limit - and all of them are worth putting in front of the user.
-                val body = connection.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                throw IllegalStateException(errorMessage(connection.responseCode, body))
+                val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                throw IllegalStateException(errorMessage(connection.responseCode, errBody))
             }
         } finally {
+            cancelHandle?.dispose()
             connection.disconnect()
         }
     }
