@@ -27,6 +27,8 @@ export const STRINGS = {
     "action.cancel": "Cancel",
     "action.save": "Save",
     "action.copy": "Copy",
+    "action.close": "Close",
+    "action.copied": "Copied to clipboard",
     "action.ok": "OK",
 
     // Transcript
@@ -46,6 +48,7 @@ export const STRINGS = {
     "transcript.vocabulary": "Vocabulary",
     "transcript.save": "Save to library",
     "transcript.saved": "Saved to your library.",
+    "transcript.grammarSpotlight": "Grammar Spotlight",
     "transcript.placeholder": "Your transcript will appear here.",
     "wordSheet.article": "Article: {0}",
     "wordSheet.plural": "Plural: {0}",
@@ -60,6 +63,8 @@ export const STRINGS = {
     "history.yesterday": "Yesterday",
     "history.deleted": "Transcript deleted.",
     "history.words": "{0} words",
+    "history.detailTitle": "Transcript",
+    "history.emptyAction": "Start speaking",
     "action.undo": "Undo",
 
     // Library
@@ -90,6 +95,9 @@ export const STRINGS = {
     "detail.context": "Context and usage",
     "detail.example": "Example sentence",
     "detail.back": "Back to library",
+    "detail.linguisticConnections": "Linguistic Connections",
+    "detail.synonyms": "Synonyms",
+    "detail.antonyms": "Antonyms",
 
     // Study
     "study.extraPractice": "Nothing is due today — this is extra practice, so your schedule won't change.",
@@ -109,9 +117,15 @@ export const STRINGS = {
     "study.gotItAction": "Got it!",
     "study.skip": "Skip",
     "study.progress": "Progress: {0} / {1}",
+    "study.completedTitle": "Session Complete! 🎉",
+    "study.completedBody": "You've reviewed all cards due today. Keep the momentum going!",
+    "study.completedAction": "Return to Dashboard",
+    "study.completedRestart": "Drill Again",
 
     // Dashboard - the Study tab's first pane. The Android values live in
     // res/values/strings.xml under dashboard_*; keep the two in step.
+    "dashboard.tab": "Dashboard",
+    "dashboard.flashcardsTab": "Flashcards",
     "dashboard.dailyGoal": "Daily goal",
     "dashboard.goalAchieved": "Goal achieved!",
     "dashboard.xpRemaining": "{0} XP remaining",
@@ -213,6 +227,7 @@ export const STRINGS = {
     "speech.errorTimeout": "No speech detected.",
     "speech.errorLanguageUnsupported":
       "This browser can't recognise this dialect. Try another one in Settings.",
+    "speech.errorNotSupported": "This browser doesn't support the Web Speech API. Please use Chrome, Edge, or the Android app.",
     "speech.errorGeneric": "Speech recognition failed. Try again.",
 
     // Text to speech
@@ -258,6 +273,8 @@ export const STRINGS = {
     "action.cancel": "Abbrechen",
     "action.save": "Speichern",
     "action.copy": "Kopieren",
+    "action.close": "Schließen",
+    "action.copied": "In die Zwischenablage kopiert",
     "action.ok": "OK",
 
     "speech.unavailableBody": "Dieser Browser kann keine Sprache erkennen. Chrome, Edge und Safari können es — oder tippe unten einen Satz.",
@@ -276,6 +293,7 @@ export const STRINGS = {
     "transcript.vocabulary": "Wortschatz",
     "transcript.save": "In Bibliothek speichern",
     "transcript.saved": "In deiner Bibliothek gespeichert.",
+    "transcript.grammarSpotlight": "Grammatik-Fokus",
     "transcript.placeholder": "Deine Mitschrift erscheint hier.",
     "wordSheet.article": "Artikel: {0}",
     "wordSheet.plural": "Plural: {0}",
@@ -289,6 +307,8 @@ export const STRINGS = {
     "history.yesterday": "Gestern",
     "history.deleted": "Transkript gelöscht.",
     "history.words": "{0} Wörter",
+    "history.detailTitle": "Mitschrift",
+    "history.emptyAction": "Aufnahme starten",
     "action.undo": "Rückgängig",
 
     "library.deleteFailed": "Das Wort konnte nicht gelöscht werden. Versuche es erneut.",
@@ -317,6 +337,9 @@ export const STRINGS = {
     "detail.context": "Kontext und Verwendung",
     "detail.example": "Beispielsatz",
     "detail.back": "Zurück zur Bibliothek",
+    "detail.linguisticConnections": "Sprachliche Verbindungen",
+    "detail.synonyms": "Synonyme",
+    "detail.antonyms": "Antonyme",
 
     "study.extraPractice": "Heute ist nichts fällig — das ist zusätzliche Übung, dein Plan ändert sich dadurch nicht.",
     "study.reviewNotSaved": "Diese Bewertung konnte nicht gespeichert werden. Beantworte die Karte noch einmal.",
@@ -335,7 +358,13 @@ export const STRINGS = {
     "study.gotItAction": "Verstanden!",
     "study.skip": "Überspringen",
     "study.progress": "Fortschritt: {0} / {1}",
+    "study.completedTitle": "Sitzung geschafft! 🎉",
+    "study.completedBody": "Alle fälligen Karten sind erledigt. Weiter so — dein Deutsch bleibt fit!",
+    "study.completedAction": "Zur Übersicht",
+    "study.completedRestart": "Nochmal üben",
 
+    "dashboard.tab": "Übersicht",
+    "dashboard.flashcardsTab": "Karteikarten",
     "dashboard.dailyGoal": "Tagesziel",
     "dashboard.goalAchieved": "Ziel erreicht!",
     "dashboard.xpRemaining": "{0} XP verbleibend",
@@ -433,6 +462,7 @@ export const STRINGS = {
     "speech.errorTimeout": "Keine Sprache erkannt.",
     "speech.errorLanguageUnsupported":
       "Dieser Browser erkennt diesen Dialekt nicht. Wähle in den Einstellungen einen anderen.",
+    "speech.errorNotSupported": "Dieser Browser unterstützt die Web Speech API nicht. Bitte Chrome, Edge oder die Android-App verwenden.",
     "speech.errorGeneric": "Spracherkennung fehlgeschlagen. Versuche es erneut.",
 
     "tts.noEngine":

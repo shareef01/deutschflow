@@ -120,7 +120,7 @@ export default function VocabularyPage() {
           <div className="min-w-0">
             <VocabularyListContent {...listProps} />
           </div>
-          <div className="self-stretch bg-[rgba(0,229,255,0.15)]" />
+          <div className="self-stretch bg-outline-variant/30" />
           <div className="min-w-0">
             <VocabularyDetail
               item={selectedItem}
@@ -428,12 +428,12 @@ function VocabularyDetail({
       </div>
 
       <div className="mt-8">
-        <h3 className="text-label-small font-bold text-primary uppercase tracking-wider">Linguistic Connections</h3>
+        <h3 className="text-label-small font-bold text-primary uppercase tracking-wider">{t("detail.linguisticConnections")}</h3>
         <div className="mt-2 mb-4 h-px bg-surface-variant" />
 
         <div className="grid grid-cols-2 gap-4">
-            <LinguisticBox title="SYNONYMS" content={item.synonyms} />
-            <LinguisticBox title="ANTONYMS" content={item.antonyms} />
+            <LinguisticBox title={t("detail.synonyms")} content={item.synonyms} />
+            <LinguisticBox title={t("detail.antonyms")} content={item.antonyms} />
         </div>
       </div>
 
@@ -443,7 +443,7 @@ function VocabularyDetail({
 
         <div className="glass-surface p-6">
           <p className="text-label-medium font-bold text-primary">{t("detail.example")}</p>
-          <p className="mt-2 text-body-large text-on-surface">{exampleSentence}</p>
+          <p className="mt-2 text-body-large text-on-surface hyphens-auto break-words">{exampleSentence}</p>
         </div>
       </div>
 
@@ -458,9 +458,9 @@ function VocabularyDetail({
 
 function LinguisticBox({ title, content }: { title: string; content: string }) {
     return (
-        <div className="glass-surface p-4 flex flex-col gap-1">
+        <div className="glass-surface p-4 flex flex-col gap-1 min-w-0">
             <span className="text-[10px] font-bold text-primary tracking-widest">{title}</span>
-            <p className={`text-sm ${content ? 'text-on-surface' : 'text-on-surface-variant opacity-50'}`}>
+            <p className={`text-sm hyphens-auto break-words ${content ? 'text-on-surface' : 'text-on-surface-variant opacity-50'}`}>
                 {content || "—"}
             </p>
         </div>

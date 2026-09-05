@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useHistory } from "@/hooks/useHistory";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GlassButton } from "@/components/ui/GlassButton";
+import { ModalDialog } from "@/components/ui/ModalDialog";
 import { SearchInput } from "@/components/ui/GlassTextField";
 import { Snackbar } from "@/components/ui/Snackbar";
-import { DeleteIcon, HistoryIcon } from "@/components/icons";
+import { ContentCopyIcon, DeleteIcon, HistoryIcon, VolumeUpIcon } from "@/components/icons";
+import { tts } from "@/lib/speech/tts";
 import type { TranscriptEntry } from "@/lib/db/schema";
 import type { Lang } from "@/lib/i18n";
 
@@ -19,9 +23,11 @@ import type { Lang } from "@/lib/i18n";
  * tap.
  */
 export default function HistoryPage() {
+  const router = useRouter();
   const { query, setQuery, transcripts, deleteTranscript, restoreTranscript } = useHistory();
   const { t, lang } = useI18n();
 
+  const [viewingTranscript, setViewingTranscript] = useState<TranscriptEntry | null>(null);
   const [snackbar, setSnackbar] = useState<{ message: string; undo?: () => void } | null>(
     null
   );
@@ -58,6 +64,11 @@ export default function HistoryPage() {
             icon={<HistoryIcon className="size-full" />}
             message={t("history.emptyTitle")}
             description={t("history.emptyBody")}
+            action={
+              <GlassButton onClick={() => router.push("/transcript")}>
+                {t("history.emptyAction")}
+              </GlassButton>
+            }
           />
         ) : (
           <div className="flex flex-col gap-3">
@@ -73,6 +84,7 @@ export default function HistoryPage() {
                     key={transcript.id}
                     transcript={transcript}
                     lang={lang}
+                    onOpen={() => setViewingTranscript(transcript)}
                     onDelete={() => {
                       deleteTranscript(transcript);
                       showSnackbar(t("history.deleted"), () =>
@@ -91,6 +103,59 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {viewingTranscript && (
+        <ModalDialog
+          title={t("history.detailTitle")}
+          onDismiss={() => setViewingTranscript(null)}
+          actions={
+            <GlassButton onClick={() => setViewingTranscript(null)}>
+              {t("action.close")}
+            </GlassButton>
+          }
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-label-medium text-on-surface-variant">
+              {new Intl.DateTimeFormat(lang === "de" ? "de-DE" : "en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              }).format(viewingTranscript.timestamp)}
+              {" · "}
+              {t("history.words", [
+                viewingTranscript.fullText.split(/\s+/).filter((w) => w.length > 0).length,
+              ])}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => tts.speak(viewingTranscript.fullText)}
+                aria-label={t("action.speak")}
+                className="press-scale rounded-lg p-2 text-azure-glow transition-colors hover:bg-azure-glow/10 active:bg-azure-glow/20"
+              >
+                <VolumeUpIcon className="size-5" />
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(viewingTranscript.fullText);
+                  showSnackbar(t("action.copied"));
+                }}
+                aria-label={t("action.copy")}
+                className="press-scale rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-white/10 hover:text-on-surface active:bg-white/20"
+              >
+                <ContentCopyIcon className="size-5" />
+              </button>
+            </div>
+          </div>
+          <div
+            lang="de"
+            className="glass-surface mt-3 max-h-[50vh] overflow-y-auto p-4 text-base leading-relaxed text-on-surface whitespace-pre-wrap hyphens-auto break-words"
+          >
+            {viewingTranscript.fullText}
+          </div>
+        </ModalDialog>
+      )}
 
       <Snackbar
         message={snackbar?.message ?? null}
@@ -140,11 +205,13 @@ function DayLabel({ day, lang }: { day: Date; lang: Lang }) {
 function HistoryRow({
   transcript,
   lang,
+  onOpen,
   onDelete,
   t,
 }: {
   transcript: TranscriptEntry;
   lang: Lang;
+  onOpen: () => void;
   onDelete: () => void;
   t: ReturnType<typeof useI18n>["t"];
 }) {
@@ -156,7 +223,18 @@ function HistoryRow({
   const wordCount = transcript.fullText.split(/\s+/).filter((w) => w.length > 0).length;
 
   return (
-    <div className="glass-surface list-row p-5 shadow-md shadow-azure-glow/10 transition-shadow hover:shadow-lg hover:shadow-azure-glow/15">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="glass-surface list-row cursor-pointer p-5 shadow-md shadow-azure-glow/10 transition-all hover:shadow-lg hover:shadow-azure-glow/15 focus-visible:outline-2 focus-visible:outline-azure-glow"
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p lang="de" className="mt-2 line-clamp-3 hyphens-auto break-words text-base leading-relaxed text-on-surface">
@@ -169,7 +247,10 @@ function HistoryRow({
         </div>
         <button
           type="button"
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
           aria-label={t("action.delete")}
           className="press-scale shrink-0 rounded-lg p-3 text-error/60 transition-all hover:bg-error/10 hover:text-error active:bg-error/20"
         >

@@ -90,4 +90,45 @@ describe("extra practice", () => {
     const persisted = persistedFor(card, ReviewQuality.GOOD, false);
     expect(persisted.interval).toBe(25);
   });
+
+  it("distinguishes an empty library from a completed study session", async () => {
+    // 1. Initial state: 0 words in library
+    const emptyAll = await getAllVocabulary(db);
+    expect(emptyAll.length).toBe(0);
+
+    // 2. Add a word and simulate completion of review
+    await saveVocabulary(db, { germanText: "das Fahrrad", englishTranslation: "the bicycle" });
+    const all = await getAllVocabulary(db);
+    expect(all.length).toBe(1);
+
+    // Queue of due items is 0 when nextReview is in future
+    await db.vocabulary.update(all[0].id!, { nextReview: Date.now() + 10 * 86_400_000 });
+    const due = await getDueVocabulary(db, Date.now());
+    expect(due.length).toBe(0);
+    // The library still contains the word, so it's a completed session, not an empty library
+    expect(all.length).toBeGreaterThan(0);
+  });
+
+  it("restartSession drills the whole library in extra practice mode", async () => {
+    await saveVocabulary(db, { germanText: "eins", englishTranslation: "one" });
+    await saveVocabulary(db, { germanText: "zwei", englishTranslation: "two" });
+
+    // Set both far in the future so due list is empty
+    const all = await getAllVocabulary(db);
+    for (const word of all) {
+      await db.vocabulary.update(word.id!, { nextReview: Date.now() + 30 * 86_400_000 });
+    }
+
+    const due = await getDueVocabulary(db, Date.now());
+    expect(due.length).toBe(0);
+
+    // Restarting session pulls all words into extra practice
+    const restartedList = await getAllVocabulary(db);
+    expect(restartedList.length).toBe(2);
+
+    // In extra practice mode, a GOOD answer keeps schedule unchanged
+    const card = restartedList[0];
+    const persisted = persistedFor(card, ReviewQuality.GOOD, true);
+    expect(persisted.nextReview).toBe(card.nextReview);
+  });
 });

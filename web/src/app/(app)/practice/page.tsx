@@ -6,6 +6,7 @@ import { useRoleplay } from "@/hooks/useRoleplay";
 import { useI18n } from "@/hooks/useI18n";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AudioWaveform } from "@/components/ui/AudioWaveform";
 import { MicIcon, NavigateNextIcon, RefreshIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
 import { PRACTICE_FEEDBACK_KEYS } from "@/lib/scoring";
@@ -19,6 +20,15 @@ export default function PracticePage() {
   // chat and re-greet the user. Its utterance subscription is gated by `active`,
   // so exactly one mode listens at a time.
   const roleplay = useRoleplay({ active: selectedTab === "roleplay" });
+
+  if (!roleplay.speechSupported) {
+    return (
+      <EmptyState
+        icon={<MicIcon className="size-full opacity-50" />}
+        message={t("speech.errorNotSupported")}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -255,7 +265,12 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                                 <p className="mt-2 text-xs text-on-surface-variant opacity-60 italic">{msg.translation}</p>
                             )}
                             {msg.role === 'assistant' && (
-                                <button onClick={() => speak(msg.content)} className="mt-2 text-primary press-scale">
+                                <button
+                                    type="button"
+                                    onClick={() => speak(msg.content)}
+                                    aria-label={t("action.speak")}
+                                    className="mt-2 text-primary press-scale"
+                                >
                                     <VolumeUpIcon className="size-4" />
                                 </button>
                             )}
@@ -281,8 +296,10 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                         <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping scale-150" />
                     )}
                     <button
+                        type="button"
                         onClick={isListening ? stopAndSend : startListening}
                         disabled={isProcessing}
+                        aria-label={isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
                         className={`relative z-10 size-16 rounded-full flex items-center justify-center transition-all ${
                             isListening ? 'bg-error scale-110 shadow-error/20' : 'bg-primary shadow-primary/20'
                         } shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50`}

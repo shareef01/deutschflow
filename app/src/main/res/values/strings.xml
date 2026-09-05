@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- The app is called DeutschFlow in every language. -->
     <string name="app_name" translatable="false">DeutschFlow</string>
 
@@ -139,8 +139,8 @@
     <string name="dashboard_xp">XP</string>
     <string name="dashboard_tab">Dashboard</string>
     <string name="dashboard_flashcards_tab">Flashcards</string>
-    <string name="dashboard_goal_progress_a11y">%1$d of %2$d XP, %3$d percent</string>
-    <string name="dashboard_heatmap_a11y">Activity heatmap, %1$d active days in the last %2$d days</string>
+    <string name="dashboard_goal_progress_a11y" tools:ignore="PluralsCandidate">%1$d of %2$d XP, %3$d percent</string>
+    <string name="dashboard_heatmap_a11y" tools:ignore="PluralsCandidate">Activity heatmap, %1$d active days in the last %2$d days</string>
 
     <!-- Roleplay -->
     <string name="roleplay_tab">Roleplay</string>

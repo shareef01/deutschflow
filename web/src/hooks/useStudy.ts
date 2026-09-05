@@ -9,6 +9,7 @@ import { ReviewQuality, calculateNextReview } from "@/lib/ai/srs";
 
 export function useStudy() {
   const [studyList, setStudyList] = useState<VocabularyEntry[]>([]);
+  const [totalWords, setTotalWords] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -39,17 +40,29 @@ export function useStudy() {
   const ttsError = useSyncExternalStore(tts.subscribe, tts.getSnapshot, tts.getSnapshot)?.error ?? null;
 
   const startSession = useCallback(async () => {
+    const all = await getAllVocabulary(db);
+    setTotalWords(all.length);
     const due = await getDueVocabulary(db, Date.now());
     // Android's StudyViewModel falls back to the whole library when nothing is
     // due, so a user who cleared their queue can still re-drill. The web used
     // to dead-end on an empty state instead.
     const isExtra = due.length === 0;
-    const list = isExtra ? await getAllVocabulary(db) : due;
+    const list = isExtra ? all : due;
     setCurrentIndex(0);
     setIsFlipped(false);
     setIsExtraPractice(isExtra);
     setStudyList(shuffle(list));
     setHasLoaded(true);
+  }, []);
+
+  /** Re-drills the whole library. Always extra practice, by definition. */
+  const restartSession = useCallback(async () => {
+    const all = await getAllVocabulary(db);
+    setTotalWords(all.length);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+    setIsExtraPractice(true);
+    setStudyList(shuffle(all));
   }, []);
 
   useEffect(() => {
@@ -127,6 +140,7 @@ export function useStudy() {
 
   return {
     studyList,
+    totalWords,
     currentIndex,
     isFlipped,
     hasLoaded,
@@ -137,6 +151,7 @@ export function useStudy() {
     flipCard,
     submitReview,
     skipCard,
+    restartSession,
     autoPlay,
     speak,
   };

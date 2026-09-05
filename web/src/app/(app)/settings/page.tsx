@@ -181,7 +181,7 @@ export default function SettingsPage() {
 
       {/* ---- Recognition dialect --------------------------------------------- */}
       <SectionHeader title={t("settings.dialectHeader")} />
-      <RadioGroup options={dialects} selected={selectedDialect} onSelect={saveDialect} />
+      <RadioGroup name={t("settings.dialectHeader")} options={dialects} selected={selectedDialect} onSelect={saveDialect} />
       {/* Said here rather than only in the docs: it is the one privacy property
           where this app differs from the Android one, and the difference is not
           something a user could infer from the screen. */}
@@ -191,7 +191,7 @@ export default function SettingsPage() {
 
       {/* ---- Language (web parity for Android 13+ per-app language) ---------- */}
       <SectionHeader title={t("settings.languageHeader")} />
-      <RadioGroup options={languages} selected={lang} onSelect={changeLang} />
+      <RadioGroup name={t("settings.languageHeader")} options={languages} selected={lang} onSelect={changeLang} />
 
       {/* ---- Data ------------------------------------------------------------- */}
       <SectionHeader title={t("settings.dataHeader")} />
@@ -241,17 +241,44 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function RadioGroup<T extends string>({ options, selected, onSelect }: { options: { label: string; code: T }[]; selected: T; onSelect: (code: T) => void }) {
+function RadioGroup<T extends string>({
+  options,
+  selected,
+  onSelect,
+  name,
+}: {
+  options: { label: string; code: T }[];
+  selected: T;
+  onSelect: (code: T) => void;
+  name?: string;
+}) {
   return (
-    <div className="glass-surface p-2">
+    <div role="group" aria-label={name} className="glass-surface p-2">
       {options.map((option) => {
         const isSelected = selected === option.code;
         return (
-          <button key={option.code} onClick={() => onSelect(option.code)} className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left hover:bg-on-surface/5 transition-colors">
-            <span className={`flex size-6 items-center justify-center rounded-full border-2 transition-all ${isSelected ? "border-azure-glow scale-110" : "border-on-surface-variant/40"}`}>
+          <button
+            key={option.code}
+            type="button"
+            aria-pressed={isSelected}
+            onClick={() => onSelect(option.code)}
+            className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-on-surface/5 focus-visible:outline-2 focus-visible:outline-azure-glow"
+          >
+            <span
+              aria-hidden="true"
+              className={`flex size-6 items-center justify-center rounded-full border-2 transition-all ${
+                isSelected ? "scale-110 border-azure-glow" : "border-on-surface-variant/40"
+              }`}
+            >
               {isSelected && <span className="size-3 rounded-full bg-azure-glow" />}
             </span>
-            <span className={`text-body-large font-bold ${isSelected ? "text-on-surface" : "text-on-surface-variant"}`}>{option.label}</span>
+            <span
+              className={`text-body-large font-bold ${
+                isSelected ? "text-on-surface" : "text-on-surface-variant"
+              }`}
+            >
+              {option.label}
+            </span>
           </button>
         );
       })}

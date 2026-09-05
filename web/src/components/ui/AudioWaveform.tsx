@@ -35,11 +35,19 @@ export function AudioWaveform({
     const context = canvas.getContext("2d");
     if (!context) return;
 
+    let activeColor = "#4ec9e8";
+    const updateColor = () => {
+      const val = window.getComputedStyle(canvas).getPropertyValue("--color-azure-glow").trim();
+      if (val) activeColor = val;
+    };
+    updateColor();
+
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.max(1, canvas.clientWidth * dpr);
       canvas.height = Math.max(1, canvas.clientHeight * dpr);
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      updateColor();
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -54,7 +62,8 @@ export function AudioWaveform({
       if (bars > 1) {
         const slot = width / (bars * 2 - 1);
         const barWidth = slot;
-        context.fillStyle = `rgba(78, 201, 232, ${0.3 + 0.7 * level})`;
+        context.fillStyle = activeColor;
+        context.globalAlpha = 0.3 + 0.7 * level;
         for (let i = 0; i < bars; i++) {
           // Idle, the meter collapses to a faint static comb so the card reads
           // as reserved rather than empty.
@@ -70,6 +79,7 @@ export function AudioWaveform({
           }
           context.fill();
         }
+        context.globalAlpha = 1.0;
       }
 
       frame = requestAnimationFrame(draw);

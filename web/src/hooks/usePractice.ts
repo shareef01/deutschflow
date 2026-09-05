@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { db } from "@/lib/db";
 import { getAllVocabulary } from "@/lib/db/repository";
 import { getDialect } from "@/lib/db/settings";
-import { recognizer } from "@/lib/speech/recognizer";
+import { recognizer, isRecognitionSupported } from "@/lib/speech/recognizer";
 import { tts } from "@/lib/speech/tts";
 import { evaluateMatch, type PracticeFeedback, type WordResult } from "@/lib/scoring";
 
@@ -30,6 +30,12 @@ const SERVER_SNAPSHOT = {
 };
 
 export function usePractice() {
+  const speechSupported = useSyncExternalStore(
+    () => () => {},
+    isRecognitionSupported,
+    () => false
+  );
+
   const recognizerState = useSyncExternalStore(
     recognizer.subscribe,
     recognizer.getSnapshot,
@@ -119,6 +125,7 @@ export function usePractice() {
   }, [loadRandomTarget]);
 
   return {
+    speechSupported,
     targetSentence,
     feedback,
     wordResults,

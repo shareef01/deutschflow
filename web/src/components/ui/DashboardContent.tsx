@@ -36,7 +36,14 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
 
   return (
     <div className="glass-surface p-8 flex flex-col sm:flex-row items-center gap-8 shadow-xl shadow-azure-glow/5">
-      <div className="relative size-32 flex items-center justify-center">
+      <div
+        role="progressbar"
+        aria-valuenow={xp}
+        aria-valuemin={0}
+        aria-valuemax={goal}
+        aria-label={t("dashboard.dailyGoal")}
+        className="relative size-32 flex items-center justify-center"
+      >
         <svg className="size-full -rotate-90">
           <circle
             cx="64"
@@ -144,13 +151,20 @@ function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate 
       return result;
   }, [activityMap, daysToShow]);
 
+  const activeDays = useMemo(() => cells.filter((c) => c.xp > 0).length, [cells]);
+
   return (
     <div className="glass-surface p-8 space-y-6">
       <h3 className="text-sm font-black text-primary tracking-[0.2em] uppercase">
         {t("dashboard.heatmap")}
       </h3>
 
-      <div className="grid grid-flow-col grid-rows-7 gap-1.5 h-32 w-fit">
+      <div className="overflow-x-auto pb-2">
+        <div
+          role="img"
+          aria-label={`${t("dashboard.heatmap")}: ${activeDays} / ${daysToShow} ${t("streak.days", [daysToShow])}`}
+          className="grid grid-flow-col grid-rows-7 gap-1.5 h-32 w-fit"
+        >
           {cells.map((cell, i) => {
               const color = cell.xp >= 100 ? 'bg-tertiary' :
                            cell.xp >= 50 ? 'bg-tertiary/70' :
@@ -160,6 +174,7 @@ function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate 
                   <div key={i} className={`size-3 rounded-[2px] ${color}`} title={`${cell.date}: ${cell.xp} XP`} />
               )
           })}
+        </div>
       </div>
 
       <p className="text-[10px] font-medium text-on-surface-variant uppercase tracking-widest opacity-50">

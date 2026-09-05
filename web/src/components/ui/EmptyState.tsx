@@ -8,10 +8,12 @@ export function EmptyState({
   icon,
   message,
   description,
+  action,
 }: {
   icon: ReactNode;
   message: string;
   description?: string;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex size-full flex-col items-center justify-center px-12 py-12 text-center">
@@ -22,6 +24,11 @@ export function EmptyState({
       <h2 className="mt-8 text-xl font-bold tracking-wide text-on-surface">{message}</h2>
       {description != null && (
         <p className="mt-4 max-w-sm text-base leading-relaxed text-on-surface-variant">{description}</p>
+      )}
+      {action != null && (
+        <div className="mt-6 flex items-center justify-center">
+          {action}
+        </div>
       )}
     </div>
   );

@@ -36,7 +36,6 @@ export function GlassButton({
         glow === "amber" ? "edge-amber" : "",
         "press-scale",
         "h-12",
-        "rounded-full",
         "select-none",
         "font-bold",
         "text-on-surface",
