@@ -167,6 +167,10 @@ export default function TranscriptPage() {
           : "max-w-[var(--container-workspace)]"
       }`}
     >
+      <div className="flex justify-center">
+        <DialectChip selected={selectedDialect} onSelect={saveDialect} t={t} />
+      </div>
+
       <div
         className={`grid min-h-0 items-start gap-[var(--space-6)] ${
           hasResult ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" : "grid-cols-1"
@@ -258,7 +262,7 @@ export default function TranscriptPage() {
       {hasResult && state.grammarNotes.length > 0 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
               <h2 className="text-[10px] font-black tracking-[0.25em] text-primary uppercase pl-1">
-                  Grammar Spotlight
+                  {t("transcript.grammarSpotlight")}
               </h2>
               <div className="flex flex-col gap-3">
                   {state.grammarNotes.map((note, i) => (

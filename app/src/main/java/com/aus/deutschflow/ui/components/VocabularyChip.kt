@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,6 +43,7 @@ fun VocabularyChip(
 
     Row(
         modifier = modifier
+            .defaultMinSize(minHeight = 44.dp)
             .clip(MaterialTheme.shapes.small)
             .background(AppTheme.colors.glassFillRaised, MaterialTheme.shapes.small)
             .border(
@@ -49,6 +51,7 @@ fun VocabularyChip(
                 MaterialTheme.shapes.small
             )
             .clickable(
+                enabled = !isLoading,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick

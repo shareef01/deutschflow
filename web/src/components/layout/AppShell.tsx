@@ -178,7 +178,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   key={tab.route}
                   type="button"
                   onClick={() => navigate(tab.route)}
-                  className="flex flex-col items-center gap-0.5 py-2"
+                  aria-current={selected ? "page" : undefined}
+                  className="flex flex-col items-center gap-0.5 py-2 transition-colors focus-visible:outline-2 focus-visible:outline-azure-glow focus-visible:rounded-lg"
                 >
                   <tab.icon
                     className={selected ? "size-6 text-azure-glow" : "size-6 text-on-surface-variant"}

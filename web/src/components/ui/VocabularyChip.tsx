@@ -19,7 +19,9 @@ export function VocabularyChip({
     <button
       type="button"
       onClick={onClick}
-      className="glass-pill press-scale inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-on-surface transition-all hover:shadow-md hover:shadow-azure-glow/15 active:shadow-sm focus-visible:outline-2 focus-visible:outline-azure-glow"
+      disabled={isLoading}
+      aria-busy={isLoading}
+      className="glass-pill press-scale inline-flex min-h-[44px] items-center gap-2 px-5 py-2.5 text-sm font-medium text-on-surface transition-all hover:shadow-md hover:shadow-azure-glow/15 active:shadow-sm focus-visible:outline-2 focus-visible:outline-azure-glow disabled:opacity-75 disabled:pointer-events-none"
     >
       {word}
       {isLoading && (

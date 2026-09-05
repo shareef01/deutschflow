@@ -6,7 +6,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
-import { SchoolIcon, VolumeUpIcon } from "@/components/icons";
+import { CheckIcon, RefreshIcon, SchoolIcon, VolumeUpIcon } from "@/components/icons";
 import { ReviewQuality } from "@/lib/ai/srs";
 import { DashboardContent } from "@/components/ui/DashboardContent";
 
@@ -28,22 +28,27 @@ export default function StudyPage() {
                         : "text-on-surface-variant hover:text-on-surface"
                     }`}
                 >
-                    {tab === "dashboard" ? "Dashboard" : "Flashcards"}
+                    {tab === "dashboard" ? t("dashboard.tab") : t("dashboard.flashcardsTab")}
                 </button>
             ))}
         </div>
 
         <div className="flex-1 min-h-0">
-            {selectedTab === "dashboard" ? <DashboardContent /> : <FlashcardMode />}
+            {selectedTab === "dashboard" ? (
+              <DashboardContent />
+            ) : (
+              <FlashcardMode onNavigateToDashboard={() => setSelectedTab("dashboard")} />
+            )}
         </div>
     </div>
   );
 }
 
-function FlashcardMode() {
+function FlashcardMode({ onNavigateToDashboard }: { onNavigateToDashboard: () => void }) {
   const { t } = useI18n();
   const {
     studyList,
+    totalWords,
     currentIndex,
     isFlipped,
     hasLoaded,
@@ -53,6 +58,7 @@ function FlashcardMode() {
     flipCard,
     submitReview,
     skipCard,
+    restartSession,
     autoPlay,
     speak,
   } = useStudy();
@@ -66,13 +72,46 @@ function FlashcardMode() {
 
   if (!hasLoaded) return null;
 
-  if (studyList.length === 0) {
+  if (totalWords === 0) {
     return (
       <EmptyState
         icon={<SchoolIcon className="size-full" />}
         message={t("study.emptyTitle")}
         description={t("study.emptyBody")}
       />
+    );
+  }
+
+  if (studyList.length === 0) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center p-6">
+        <div className="glass-surface flex w-full max-w-md flex-col items-center p-8 text-center shadow-xl shadow-azure-glow/10">
+          <div className="flex size-16 items-center justify-center rounded-full bg-primary/20 text-primary">
+            <CheckIcon className="size-8" />
+          </div>
+          <h2 className="mt-6 text-2xl font-bold text-on-surface">
+            {t("study.completedTitle")}
+          </h2>
+          <p className="mt-2 text-body-medium text-on-surface-variant">
+            {t("study.completedBody")}
+          </p>
+          <GlassButton
+            type="button"
+            onClick={onNavigateToDashboard}
+            className="mt-8 h-12 w-full"
+          >
+            <span className="font-bold">{t("study.completedAction")}</span>
+          </GlassButton>
+          <button
+            type="button"
+            onClick={() => void restartSession()}
+            className="mt-4 flex items-center justify-center gap-2 text-sm font-semibold text-primary hover:underline"
+          >
+            <RefreshIcon className="size-4" />
+            <span>{t("study.completedRestart")}</span>
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -97,11 +136,18 @@ function FlashcardMode() {
       </div>
 
       <div className="flex w-full flex-1 items-center justify-center">
-        <button
-          type="button"
+        <div
+          role="region"
+          tabIndex={0}
           onClick={flipCard}
+          onKeyDown={(event) => {
+            if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              flipCard();
+            }
+          }}
           aria-label={isFlipped ? t("study.showGerman") : t("study.showTranslation")}
-          className="glass-surface block w-full min-h-[260px] max-h-[440px] max-w-2xl [perspective:1200px] focus-visible:outline-2 focus-visible:outline-azure-glow shadow-xl shadow-azure-glow/10 hover:shadow-2xl hover:shadow-azure-glow/20 transition-shadow"
+          className="glass-surface block w-full min-h-[260px] max-h-[440px] max-w-2xl [perspective:1200px] cursor-pointer focus-visible:outline-2 focus-visible:outline-azure-glow shadow-xl shadow-azure-glow/10 hover:shadow-2xl hover:shadow-azure-glow/20 transition-shadow select-none"
         >
           <div
             className={`relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] ${
@@ -115,24 +161,17 @@ function FlashcardMode() {
                   {t("library.fieldGerman")}
                 </span>
                 <h2 className="mt-3 text-3xl font-bold text-azure-glow">{currentItem.germanText}</h2>
-                <span
-                  role="button"
-                  tabIndex={0}
+                <button
+                  type="button"
                   onClick={(event) => {
                     event.stopPropagation();
                     speak(currentItem.germanText);
                   }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.stopPropagation();
-                      speak(currentItem.germanText);
-                    }
-                  }}
                   aria-label={t("action.speak")}
-                  className="press-scale mt-5 rounded-full p-3 text-azure-glow hover:opacity-80 transition-opacity"
+                  className="press-scale mt-5 rounded-full p-3 text-azure-glow hover:opacity-80 transition-opacity focus-visible:outline-2 focus-visible:outline-azure-glow"
                 >
                   <VolumeUpIcon className="size-7" />
-                </span>
+                </button>
                 <span className="mt-5 text-xs font-medium text-on-surface-muted uppercase tracking-wider">{t("study.tapToFlip")}</span>
               </div>
             </div>
@@ -157,7 +196,7 @@ function FlashcardMode() {
               </div>
             </div>
           </div>
-        </button>
+        </div>
       </div>
 
       <div className="mt-6 grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
@@ -180,7 +219,7 @@ function FlashcardMode() {
         onClick={skipCard}
         className="mt-6 text-sm font-medium text-on-surface-muted hover:text-on-surface transition-colors"
       >
-        Skip for now
+        {t("study.skip")}
       </button>
     </div>
   );

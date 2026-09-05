@@ -3,7 +3,7 @@ import { clearConversation, db, loadConversation, saveConversationTurn } from "@
 import { getApiKey, getDialect } from "@/lib/db/settings";
 import { processRoleplay } from "@/lib/ai/groq";
 import { t } from "@/lib/i18n";
-import { recognizer, type RecognizerState } from "@/lib/speech/recognizer";
+import { recognizer, isRecognitionSupported, type RecognizerState } from "@/lib/speech/recognizer";
 import { tts } from "@/lib/speech/tts";
 
 export interface ChatMessage {
@@ -37,8 +37,13 @@ const SERVER_RECOGNIZER_STATE: RecognizerState = {
  * with both subscribed, one spoken sentence would be scored *and* sent as a
  * roleplay turn. Only the active mode may listen.
  */
-export function useRoleplay(options?: { active?: boolean }) {
-    const active = options?.active ?? true;
+export function useRoleplay({ active = true }: { active?: boolean } = {}) {
+    const speechSupported = useSyncExternalStore(
+        () => () => {},
+        isRecognitionSupported,
+        () => false
+    );
+
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -250,6 +255,7 @@ export function useRoleplay(options?: { active?: boolean }) {
     }, [runTurn]);
 
     return {
+        speechSupported,
         messages,
         isProcessing,
         error,

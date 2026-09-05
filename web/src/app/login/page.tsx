@@ -26,6 +26,7 @@ function LoginForm() {
             required
             disabled={isPending}
             placeholder="Master Key"
+            aria-label="Master Key"
             className="w-full px-5 py-4 bg-glass-fill border border-on-surface/5 rounded-2xl focus:outline-none focus:border-azure-glow/50 focus:ring-1 focus:ring-azure-glow/50 transition-all placeholder:text-on-surface-muted text-lg font-medium tracking-widest disabled:opacity-50"
           />
         </div>
