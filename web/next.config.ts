@@ -59,6 +59,7 @@ const CONTENT_SECURITY_POLICY = [
   "connect-src 'self' https://api.groq.com",
   "worker-src 'self'",
   "frame-ancestors 'none'",
+  "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
 ].join("; ");

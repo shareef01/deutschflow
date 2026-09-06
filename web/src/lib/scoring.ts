@@ -30,6 +30,7 @@ const NON_LETTERS = /[^a-zA-ZäöüÄÖÜß]/g;
 /** Folds a word to the form both spellings of it share. */
 export function foldGerman(word: string): string {
   return word
+    .normalize("NFC")
     .toLowerCase()
     .replaceAll("ä", "ae")
     .replaceAll("ö", "oe")
@@ -39,6 +40,7 @@ export function foldGerman(word: string): string {
 
 function tokenize(text: string): string[] {
   return text
+    .normalize("NFC")
     .split(WORD_SPLIT)
     .map((w) => w.replace(NON_LETTERS, ""))
     .filter((w) => w.length > 0);

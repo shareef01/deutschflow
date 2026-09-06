@@ -9,6 +9,11 @@ describe("foldGerman", () => {
     expect(foldGerman("Straße")).toBe("strasse");
   });
 
+  it("handles decomposed Unicode (NFD)", () => {
+    expect(foldGerman("U\u0308bung")).toBe("uebung");
+    expect(foldGerman("a\u0308pfel")).toBe("aepfel");
+  });
+
   it("is case-insensitive and locale-invariant", () => {
     expect(foldGerman("HALLO")).toBe("hallo");
     expect(foldGerman("Ich")).toBe("ich");
@@ -18,6 +23,11 @@ describe("foldGerman", () => {
 describe("evaluateMatch", () => {
   it("accepts umlaut spelling variants (Uebung == Übung)", () => {
     const { results } = evaluateMatch("Übung macht den Meister", "Uebung macht den meister");
+    expect(results.every((r) => r.isCorrect)).toBe(true);
+  });
+
+  it("accepts decomposed Unicode (NFD)", () => {
+    const { results } = evaluateMatch("Übung macht den Meister", "U\u0308bung macht den meister");
     expect(results.every((r) => r.isCorrect)).toBe(true);
   });
 

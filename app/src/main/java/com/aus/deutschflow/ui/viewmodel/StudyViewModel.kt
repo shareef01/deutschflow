@@ -136,6 +136,9 @@ class StudyViewModel @Inject constructor(
             try {
                 val rescheduled = srsEngine.calculateNextReview(card, quality)
                 val persisted = scheduleFor(card, rescheduled, quality, extraPractice)
+                val updatedPersisted = persisted.copy(
+                    lastModifiedAt = maxOf(persisted.lastModifiedAt, System.currentTimeMillis())
+                )
 
                 // One transaction, so the card's schedule and the XP it earned commit
                 // together or not at all. They used to be two - the second launched in
@@ -143,7 +146,7 @@ class StudyViewModel @Inject constructor(
                 // advanced and the XP had not, and put the write on a path where a
                 // database error escaped viewModelScope and killed the process.
                 database.withTransaction {
-                    vocabularyDao.updateVocabulary(persisted)
+                    vocabularyDao.updateVocabulary(updatedPersisted)
                     if (quality.value >= ReviewQuality.GOOD.value) {
                         awardXp(XP_PER_CARD)
                     }
@@ -155,7 +158,7 @@ class StudyViewModel @Inject constructor(
 
                     if (quality == ReviewQuality.AGAIN) {
                         removeAt(index)
-                        add(persisted)
+                        add(updatedPersisted)
                     } else {
                         removeAt(index)
                     }

@@ -15,8 +15,9 @@
  * next.config.ts. It was the literal "deutschflow-v1" forever, so the activate
  * sweep below never matched anything and every deploy's assets piled up.
  */
+const CACHE_PREFIX = "deutschflow-";
 const BUILD = new URL(self.location.href).searchParams.get("v") || "dev";
-const CACHE_NAME = `deutschflow-${BUILD}`;
+const CACHE_NAME = `${CACHE_PREFIX}${BUILD}`;
 
 const APP_SHELL = [
   "/",
@@ -59,7 +60,11 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
       )
       .then(() => self.clients.claim())
   );

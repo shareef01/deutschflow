@@ -83,13 +83,48 @@ function num(value: unknown, fallback: number): number {
  * existing row keeps its own, because the schedule on this device reflects reviews
  * this device actually saw.
  */
+export const MAX_BACKUP_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+export const MAX_VOCABULARY_ROWS = 10_000;
+export const MAX_TRANSCRIPT_ROWS = 5_000;
+export const MAX_ACTIVITY_ROWS = 1_000;
+export const MAX_USER_STATS_ROWS = 10;
+
+export const MAX_FIELD_LENGTH = 2_000;
+export const MAX_SHORT_FIELD_LENGTH = 200;
+export const MAX_TRANSCRIPT_LENGTH = 10_000;
+export const MAX_REMOTE_ID_LENGTH = 100;
+
+const MAX_FUTURE_TIMESTAMP = 4_102_444_800_000; // 2100-01-01T00:00:00Z
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidCalendarDate(dateStr: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [yStr, mStr, dStr] = dateStr.split("-");
+  const year = Number.parseInt(yStr, 10);
+  const month = Number.parseInt(mStr, 10);
+  const day = Number.parseInt(dStr, 10);
+  if (year < 2000 || year > 2100) return false;
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return (
+    d.getUTCFullYear() === year &&
+    d.getUTCMonth() === month - 1 &&
+    d.getUTCDate() === day
+  );
+}
+
+export function sanitizeRemoteId(value: unknown): string {
+  const s = str(value).trim();
+  if (UUID_REGEX.test(s)) {
+    return s.toLowerCase();
+  }
+  return crypto.randomUUID();
+}
+
 /**
  * Why a restore failed, in a form the caller can translate.
- *
- * Every failure used to reach the user as "That file isn't a DeutschFlow library
- * export" - including a backup from a newer version, which is a different problem
- * with a different answer, and a mid-import storage failure, which is not the
- * file's fault at all.
  */
 export type ImportFailure = "invalid" | "newer" | "storage";
 
@@ -107,8 +142,114 @@ export async function importLibrary(
   if (!isRecord(backup) || backup.format !== "deutschflow-library") {
     throw new ImportError("invalid", "That file is not a DeutschFlow library export.");
   }
-  if (num(backup.version, 0) > BACKUP_VERSION) {
+  if (typeof backup.version !== "number" || !Number.isInteger(backup.version) || backup.version <= 0) {
+    throw new ImportError("invalid", "Invalid backup version.");
+  }
+  if (backup.version > BACKUP_VERSION) {
     throw new ImportError("newer", "That backup was made by a newer version of DeutschFlow.");
+  }
+
+  // Validate structural shape
+  if (
+    !Array.isArray(backup.vocabulary) ||
+    !Array.isArray(backup.transcripts) ||
+    !Array.isArray(backup.userStats) ||
+    !Array.isArray(backup.activityLog)
+  ) {
+    throw new ImportError("invalid", "Malformed backup structure: collections must be arrays.");
+  }
+
+  // Resource limits
+  if (backup.vocabulary.length > MAX_VOCABULARY_ROWS) {
+    throw new ImportError("invalid", `Vocabulary count exceeds limit (${MAX_VOCABULARY_ROWS}).`);
+  }
+  if (backup.transcripts.length > MAX_TRANSCRIPT_ROWS) {
+    throw new ImportError("invalid", `Transcripts count exceeds limit (${MAX_TRANSCRIPT_ROWS}).`);
+  }
+  if (backup.activityLog.length > MAX_ACTIVITY_ROWS) {
+    throw new ImportError("invalid", `Activity log count exceeds limit (${MAX_ACTIVITY_ROWS}).`);
+  }
+  if (backup.userStats.length > MAX_USER_STATS_ROWS) {
+    throw new ImportError("invalid", `User stats count exceeds limit (${MAX_USER_STATS_ROWS}).`);
+  }
+
+  // Pre-validate all records before touching storage
+  for (const row of backup.vocabulary) {
+    if (!isRecord(row)) {
+      throw new ImportError("invalid", "Vocabulary entry must be an object.");
+    }
+    const germanText = str(row.germanText).trim();
+    const englishTranslation = str(row.englishTranslation).trim();
+    if (germanText.length > MAX_SHORT_FIELD_LENGTH || englishTranslation.length > MAX_FIELD_LENGTH) {
+      throw new ImportError("invalid", "Vocabulary field exceeds maximum allowed length.");
+    }
+    if (
+      str(row.exampleSentence).length > MAX_FIELD_LENGTH ||
+      str(row.article).length > MAX_SHORT_FIELD_LENGTH ||
+      str(row.plural).length > MAX_SHORT_FIELD_LENGTH ||
+      str(row.conjugation).length > MAX_SHORT_FIELD_LENGTH ||
+      str(row.synonyms).length > MAX_FIELD_LENGTH ||
+      str(row.antonyms).length > MAX_FIELD_LENGTH
+    ) {
+      throw new ImportError("invalid", "Vocabulary metadata field exceeds maximum allowed length.");
+    }
+    if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
+      throw new ImportError("invalid", "Invalid vocabulary timestamp.");
+    }
+    if (row.nextReview !== undefined && (!Number.isSafeInteger(row.nextReview) || (row.nextReview as number) < 0 || (row.nextReview as number) > MAX_FUTURE_TIMESTAMP)) {
+      throw new ImportError("invalid", "Invalid vocabulary nextReview schedule.");
+    }
+    if (row.interval !== undefined && (!Number.isSafeInteger(row.interval) || (row.interval as number) < 0 || (row.interval as number) > 365)) {
+      throw new ImportError("invalid", "Invalid vocabulary SRS interval (must be 0-365).");
+    }
+    if (row.easeFactor !== undefined && (typeof row.easeFactor !== "number" || !Number.isFinite(row.easeFactor) || (row.easeFactor as number) < 1.3 || (row.easeFactor as number) > 3.0)) {
+      throw new ImportError("invalid", "Invalid vocabulary easeFactor (must be 1.3-3.0).");
+    }
+    if (row.reviewCount !== undefined && (!Number.isSafeInteger(row.reviewCount) || (row.reviewCount as number) < 0 || (row.reviewCount as number) > 100_000)) {
+      throw new ImportError("invalid", "Invalid vocabulary reviewCount.");
+    }
+  }
+
+  for (const row of backup.transcripts) {
+    if (!isRecord(row)) {
+      throw new ImportError("invalid", "Transcript entry must be an object.");
+    }
+    const fullText = str(row.fullText);
+    if (fullText.length > MAX_TRANSCRIPT_LENGTH) {
+      throw new ImportError("invalid", "Transcript text exceeds maximum allowed length.");
+    }
+    if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
+      throw new ImportError("invalid", "Invalid transcript timestamp.");
+    }
+  }
+
+  for (const row of backup.userStats) {
+    if (!isRecord(row)) continue;
+    if (row.xp !== undefined && (!Number.isSafeInteger(row.xp) || (row.xp as number) < 0 || (row.xp as number) > 10_000_000)) {
+      throw new ImportError("invalid", "Invalid user stats XP.");
+    }
+    if (row.streak !== undefined && (!Number.isSafeInteger(row.streak) || (row.streak as number) < 0 || (row.streak as number) > 10_000)) {
+      throw new ImportError("invalid", "Invalid user stats streak.");
+    }
+    if (row.lastActivityTimestamp !== undefined && (!Number.isSafeInteger(row.lastActivityTimestamp) || (row.lastActivityTimestamp as number) < 0 || (row.lastActivityTimestamp as number) > MAX_FUTURE_TIMESTAMP)) {
+      throw new ImportError("invalid", "Invalid user stats timestamp.");
+    }
+  }
+
+  for (const row of backup.activityLog) {
+    if (!isRecord(row)) {
+      throw new ImportError("invalid", "Activity log entry must be an object.");
+    }
+    const date = str(row.date);
+    if (!isValidCalendarDate(date)) {
+      throw new ImportError("invalid", `Invalid calendar date in activity log: "${date}".`);
+    }
+    if (row.xpGained !== undefined && (!Number.isSafeInteger(row.xpGained) || (row.xpGained as number) < 0 || (row.xpGained as number) > 100_000)) {
+      throw new ImportError("invalid", "Invalid activity log xpGained.");
+    }
+    if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
+      throw new ImportError("invalid", "Invalid activity log timestamp.");
+    }
   }
 
   const result: ImportResult = {
@@ -117,17 +258,16 @@ export async function importLibrary(
     transcriptsAdded: 0,
   };
 
-  // One transaction for the whole import. Without it, a write that failed
-  // half-way - quota, an eviction, a blocked upgrade - left some of the backup
-  // applied while telling the user the *file* was invalid. saveVocabulary opens
-  // its own rw transaction on a subset of these tables, which Dexie nests
-  // happily, and the persistence request it fires is deliberately not awaited,
-  // so it cannot commit this one early.
-  await db.transaction(
-    "rw",
-    db.vocabulary, db.transcripts, db.userStats, db.activityLog,
-    () => applyImport(db, backup, result)
-  );
+  try {
+    await db.transaction(
+      "rw",
+      db.vocabulary, db.transcripts, db.userStats, db.activityLog,
+      () => applyImport(db, backup as Record<string, unknown>, result)
+    );
+  } catch (err) {
+    if (err instanceof ImportError) throw err;
+    throw new ImportError("storage", err instanceof Error ? err.message : "Storage error during import.");
+  }
 
   return result;
 }
@@ -166,8 +306,6 @@ async function applyImport(
       result.vocabularyMerged++;
     } else {
       result.vocabularyAdded++;
-      // A word this device has never seen keeps the schedule it arrived with, so a
-      // restore does not reset months of reviews back to new.
       const added = await db.vocabulary
         .where("germanTextKey")
         .equals(foldGermanKey(germanText))
@@ -185,14 +323,12 @@ async function applyImport(
 
   const transcripts = Array.isArray(backup.transcripts) ? backup.transcripts : [];
   if (transcripts.length > 0) {
-    // Deduplicated on remoteId, which is stable across devices — re-importing the
-    // same backup twice must not double the history.
     const known = new Set((await db.transcripts.toArray()).map((t) => t.remoteId));
     for (const row of transcripts) {
       if (!isRecord(row)) continue;
       const fullText = str(row.fullText);
       if (!fullText) continue;
-      const remoteId = str(row.remoteId) || crypto.randomUUID();
+      const remoteId = sanitizeRemoteId(row.remoteId);
       if (known.has(remoteId)) continue;
       known.add(remoteId);
       await db.transcripts.add({
@@ -205,8 +341,6 @@ async function applyImport(
     }
   }
 
-  // Stats are a high-water mark rather than a replacement: importing an older
-  // backup must not reduce the XP or streak this device has since earned.
   const stats = Array.isArray(backup.userStats) ? backup.userStats : [];
   const incoming = stats.find(isRecord);
   if (incoming) {
@@ -226,9 +360,8 @@ async function applyImport(
   for (const row of activity) {
     if (!isRecord(row)) continue;
     const date = str(row.date);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (!isValidCalendarDate(date)) continue;
     const existing = await db.activityLog.get(date);
-    // Same high-water rule, per day.
     await db.activityLog.put({
       date,
       xpGained: Math.max(existing?.xpGained ?? 0, num(row.xpGained, 0)),

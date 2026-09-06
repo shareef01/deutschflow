@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DeutschFlowDB } from "@/lib/db/schema";
 import {
   findByGermanText,
+  mergedWith,
   rewardXp,
   saveVocabulary,
+  updateVocabulary,
 } from "@/lib/db/repository";
 
 let db: DeutschFlowDB;
@@ -95,6 +97,68 @@ describe("saveVocabulary — VocabularyDao.save() port", () => {
     expect(row.germanText).toBe("Hund");
     expect(row.englishTranslation).toBe("cat");
     expect(row.article).toBe("der");
+  });
+
+  it("advances lastModifiedAt on save and merge", async () => {
+    const before = Date.now();
+    await saveVocabulary(db, {
+      germanText: "Buch",
+      englishTranslation: "book",
+      lastModifiedAt: 1000,
+    });
+    const first = (await findByGermanText(db, "Buch"))!;
+    expect(first.lastModifiedAt).toBeGreaterThanOrEqual(before);
+
+    await saveVocabulary(db, {
+      germanText: "Buch",
+      englishTranslation: "tome",
+      lastModifiedAt: 2000,
+    });
+    const merged = (await findByGermanText(db, "Buch"))!;
+    expect(merged.lastModifiedAt).toBeGreaterThanOrEqual(first.lastModifiedAt);
+  });
+
+  it("updateVocabulary advances lastModifiedAt", async () => {
+    await saveVocabulary(db, { germanText: "Tisch", englishTranslation: "table" });
+    const row = (await findByGermanText(db, "Tisch"))!;
+    const oldMod = row.lastModifiedAt;
+
+    await new Promise((r) => setTimeout(r, 5));
+    await updateVocabulary(db, { ...row, englishTranslation: "desk" });
+    const updated = (await findByGermanText(db, "Tisch"))!;
+    expect(updated.lastModifiedAt).toBeGreaterThan(oldMod);
+    expect(updated.englishTranslation).toBe("desk");
+  });
+});
+
+describe("mergedWith pure function", () => {
+  it("advances lastModifiedAt to max of existing, incoming, and now", () => {
+    const existing = {
+      id: 1,
+      germanText: "Hund",
+      germanTextKey: "hund",
+      englishTranslation: "dog",
+      timestamp: 1000,
+      exampleSentence: "",
+      article: "",
+      plural: "",
+      conjugation: "",
+      synonyms: "",
+      antonyms: "",
+      nextReview: 0,
+      interval: 0,
+      easeFactor: 2.5,
+      reviewCount: 0,
+      remoteId: "uuid-1",
+      lastModifiedAt: 1000,
+    };
+
+    const merged = mergedWith(existing, { germanText: "Hund", englishTranslation: "hound", lastModifiedAt: 2000 }, 3000);
+    expect(merged.lastModifiedAt).toBe(3000);
+    expect(merged.englishTranslation).toBe("hound");
+
+    const futureMerged = mergedWith(existing, { germanText: "Hund", englishTranslation: "hound", lastModifiedAt: 5000 }, 3000);
+    expect(futureMerged.lastModifiedAt).toBe(5000);
   });
 });
 

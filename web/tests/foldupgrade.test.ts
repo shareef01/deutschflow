@@ -133,3 +133,78 @@ describe("v4 → v5, the German fold", () => {
     db.close();
   });
 });
+
+async function seedV6(rows: Record<string, unknown>[]): Promise<string> {
+  const name = `fold-v6-v7-${n++}`;
+  const old = new Dexie(name);
+  old.version(6).stores({
+    vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+    transcripts: "++id, timestamp",
+    userStats: "id",
+    activityLog: "date",
+    roleplayMessages: "position",
+    settings: "key",
+  });
+  await old.open();
+  await old.table("vocabulary").bulkAdd(rows);
+  old.close();
+  return name;
+}
+
+describe("v6 → v7, Canonical NFC Unicode normalization", () => {
+  it("merges precomposed and decomposed Unicode collisions without losing fields or SRS", async () => {
+    const decomposedUebung = "U\u0308bung"; // NFD
+    const precomposedUebung = "Übung"; // NFC
+
+    const name = await seedV6([
+      row({
+        germanText: precomposedUebung,
+        // In v6, fold was: trim().toLowerCase().replaceAll("ü", "ue")
+        germanTextKey: "uebung",
+        englishTranslation: "exercise",
+        timestamp: 1000,
+        article: "die",
+        plural: "Übungen",
+        nextReview: 9000,
+        interval: 14,
+        easeFactor: 2.6,
+        reviewCount: 5,
+        lastModifiedAt: 1000,
+      }),
+      row({
+        germanText: decomposedUebung,
+        // In v6, decomposed 'u\u0308' didn't match 'ü', so key was stored as "u\u0308bung"
+        germanTextKey: "u\u0308bung",
+        englishTranslation: "practice",
+        timestamp: 2000,
+        exampleSentence: "Eine gute Übung.",
+        nextReview: 100,
+        interval: 1,
+        easeFactor: 2.5,
+        reviewCount: 1,
+        lastModifiedAt: 2000,
+      }),
+    ]);
+
+    const db = new DeutschFlowDB(name);
+    await db.open();
+
+    expect(await db.vocabulary.count()).toBe(1);
+    const merged = (await db.vocabulary.toArray())[0];
+    expect(merged.germanTextKey).toBe("uebung");
+    expect(merged.article).toBe("die");
+    expect(merged.plural).toBe("Übungen");
+    expect(merged.exampleSentence).toBe("Eine gute Übung.");
+    // Latest translation wins
+    expect(merged.englishTranslation).toBe("practice");
+    expect(merged.timestamp).toBe(2000);
+    expect(merged.lastModifiedAt).toBe(2000);
+    // Furthest SRS progress preserved
+    expect(merged.reviewCount).toBe(5);
+    expect(merged.interval).toBe(14);
+    expect(merged.nextReview).toBe(9000);
+    expect(merged.easeFactor).toBe(2.6);
+    db.close();
+  });
+});
+

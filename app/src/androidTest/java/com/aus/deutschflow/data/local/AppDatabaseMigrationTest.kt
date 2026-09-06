@@ -827,6 +827,85 @@ class AppDatabaseMigrationTest {
     }
 
     /**
+     * MIGRATION_14_15: Canonical NFC Unicode normalization.
+     *
+     * Precomposed and decomposed German characters (e.g. "Übung" vs "U\u0308bung")
+     * produce identical canonical keys. Conflicting rows are merged into the richest/latest
+     * survivor preserving SRS progress, without violating uniqueness constraints.
+     */
+    @Test
+    fun theMigration14To15MergesUnicodeCollisionsAndPreservesSrs() {
+        val decomposedUebung = "U\u0308bung" // NFD
+        val precomposedUebung = "Übung" // NFC
+
+        helper.createDatabase(TEST_DB, 14).use { db ->
+            // In v14, decomposed and precomposed had different keys ("u\u0308bung" vs "uebung")
+            db.execSQL(
+                "INSERT INTO vocabulary (germanText, germanTextKey, englishTranslation, timestamp, " +
+                    "article, plural, nextReview, interval, easeFactor, reviewCount, remoteId, lastModifiedAt) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>(
+                    precomposedUebung,
+                    "uebung",
+                    "exercise",
+                    1000L,
+                    "die",
+                    "Übungen",
+                    9000L,
+                    14,
+                    2.6f,
+                    5,
+                    "rem-1",
+                    1000L
+                )
+            )
+            db.execSQL(
+                "INSERT INTO vocabulary (germanText, germanTextKey, englishTranslation, timestamp, " +
+                    "exampleSentence, nextReview, interval, easeFactor, reviewCount, remoteId, lastModifiedAt) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>(
+                    decomposedUebung,
+                    "u\u0308bung",
+                    "practice",
+                    2000L,
+                    "Eine gute Übung.",
+                    100L,
+                    1,
+                    2.5f,
+                    1,
+                    "rem-2",
+                    2000L
+                )
+            )
+        }
+
+        val database = openAsReleaseWould()
+        try {
+            runBlocking {
+                val words = database.vocabularyDao().getAllVocabulary().first()
+                assertEquals(1, words.size)
+                val merged = words.first()
+                assertEquals("uebung", merged.germanTextKey)
+                assertEquals("die", merged.article)
+                assertEquals("Übungen", merged.plural)
+                assertEquals("Eine gute Übung.", merged.exampleSentence)
+                assertEquals("practice", merged.englishTranslation)
+                assertEquals(2000L, merged.timestamp)
+                assertEquals(5, merged.reviewCount)
+                assertEquals(14, merged.interval)
+                assertEquals(9000L, merged.nextReview)
+                assertEquals(2.6f, merged.easeFactor, 0.001f)
+
+                // Can find by folded key, uppercase, or transliterated
+                assertNotNull(database.vocabularyDao().findByGermanText("uebung"))
+                assertNotNull(database.vocabularyDao().findByGermanText("ÜBUNG"))
+            }
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
      * Mirrors DatabaseModule's release path exactly: the same migrations, and no
      * destructive fallback, so a missing migration surfaces as the same exception a
      * user would hit.

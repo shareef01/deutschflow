@@ -237,11 +237,12 @@
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Speech recognition isn\'t available on this device.</string>
+    <string name="speech_on_device_unavailable">On-device speech recognition isn\'t available on this device.</string>
     <string name="speech_start_failed">Couldn\'t start recording. Try again.</string>
     <string name="speech_error_audio">Microphone unavailable. Close anything else using it and try again.</string>
     <string name="speech_error_client">Recording couldn\'t start. Try again.</string>
     <string name="speech_error_permission">Microphone access is off. Turn it on for DeutschFlow in Android settings.</string>
-    <string name="speech_error_network">No connection. Speech recognition requires network access.</string>
+    <string name="speech_error_network">On-device speech recognition error. Please try again.</string>
     <string name="speech_error_network_timeout">The network timed out. Try again.</string>
     <string name="speech_error_no_match">Didn\'t catch that. Try speaking again, a little slower.</string>
     <string name="speech_error_busy">Still finishing the last recording. Try again in a moment.</string>

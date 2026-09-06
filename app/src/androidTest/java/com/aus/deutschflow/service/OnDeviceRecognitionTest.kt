@@ -127,13 +127,14 @@ class OnDeviceRecognitionTest {
         val languageUnavailable = context.getString(R.string.speech_error_language_unavailable)
         val languageUnsupported = context.getString(R.string.speech_error_language_unsupported)
         val clientError = context.getString(R.string.speech_error_client)
-        val startFailed = context.getString(R.string.speech_start_failed)
         val unavailable = context.getString(R.string.speech_unavailable)
+        val onDeviceUnavailable = context.getString(R.string.speech_on_device_unavailable)
 
         assertNotEquals("the German on-device model is missing", languageUnavailable, error)
         assertNotEquals("de-DE is not supported by the on-device engine", languageUnsupported, error)
         assertNotEquals("the on-device recognizer could not be built", clientError, error)
         assertNotEquals("the session never started", startFailed, error)
         assertNotEquals("no recognition service was found", unavailable, error)
+        assertNotEquals("on-device recognition was reported unavailable", onDeviceUnavailable, error)
     }
 }

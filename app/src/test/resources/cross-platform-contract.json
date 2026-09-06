@@ -1,0 +1,92 @@
+{
+  "_comment": [
+    "Cross-platform behavioral contract shared between Android (Kotlin) and Web (TypeScript).",
+    "Consumed by:",
+    "  app/src/test/java/com/aus/deutschflow/contract/CrossPlatformContractTest.kt",
+    "  web/tests/contract.test.ts"
+  ],
+  "germanKeyCases": [
+    { "input": "Übung", "expected": "uebung" },
+    { "input": "U\u0308bung", "expected": "uebung" },
+    { "input": "Uebung", "expected": "uebung" },
+    { "input": "Straße", "expected": "strasse" },
+    { "input": "Strasse", "expected": "strasse" },
+    { "input": "STRASSE", "expected": "strasse" },
+    { "input": "Äpfel", "expected": "aepfel" },
+    { "input": "A\u0308pfel", "expected": "aepfel" },
+    { "input": "Öl", "expected": "oel" },
+    { "input": "O\u0308l", "expected": "oel" },
+    { "input": "Fuß", "expected": "fuss" },
+    { "input": "Fuss", "expected": "fuss" },
+    { "input": "grün", "expected": "gruen" },
+    { "input": "gruen", "expected": "gruen" }
+  ],
+  "srsConstants": {
+    "MIN_EASE_FACTOR": 1.3,
+    "MAX_EASE_FACTOR": 3.0,
+    "MAX_INTERVAL_DAYS": 365,
+    "XP_PER_CARD": 10,
+    "DAILY_XP_GOAL": 50
+  },
+  "aiConstants": {
+    "MODEL_NAME": "openai/gpt-oss-120b",
+    "MAX_AI_INPUT_CHARS": 4000,
+    "MAX_ROLEPLAY_USER_CHARS": 1000,
+    "MAX_ROLEPLAY_SCENARIO_CHARS": 500,
+    "MAX_ROLEPLAY_MESSAGE_CHARS": 1000,
+    "MAX_ROLEPLAY_HISTORY_TURNS": 12,
+    "MAX_ROLEPLAY_HISTORY_CHARS": 4000,
+    "MAX_ROLEPLAY_REPLY_CHARS": 1000,
+    "MAX_ROLEPLAY_CONTEXT_CHARS": 1000
+  },
+  "practiceScoringCases": [
+    {
+      "name": "correct sentence",
+      "target": "Ich habe einen Hund",
+      "spoken": "Ich habe einen Hund",
+      "expectedFeedback": "PERFECT",
+      "expectedCorrectCount": 4,
+      "expectedTotalCount": 4
+    },
+    {
+      "name": "wrong word order",
+      "target": "Der Hund schläft",
+      "spoken": "Schläft Hund der",
+      "expectedFeedback": "KEEP_GOING",
+      "expectedCorrectCount": 1,
+      "expectedTotalCount": 3
+    },
+    {
+      "name": "duplicated words",
+      "target": "Ja ja",
+      "spoken": "Ja",
+      "expectedFeedback": "KEEP_GOING",
+      "expectedCorrectCount": 1,
+      "expectedTotalCount": 2
+    },
+    {
+      "name": "umlaut transliteration",
+      "target": "Ich mache eine Übung",
+      "spoken": "Ich mache eine Uebung",
+      "expectedFeedback": "PERFECT",
+      "expectedCorrectCount": 4,
+      "expectedTotalCount": 4
+    },
+    {
+      "name": "decomposed Unicode",
+      "target": "Ich mache eine Übung",
+      "spoken": "Ich mache eine U\u0308bung",
+      "expectedFeedback": "PERFECT",
+      "expectedCorrectCount": 4,
+      "expectedTotalCount": 4
+    },
+    {
+      "name": "eszett transliteration",
+      "target": "In der Straße",
+      "spoken": "In der Strasse",
+      "expectedFeedback": "PERFECT",
+      "expectedCorrectCount": 3,
+      "expectedTotalCount": 3
+    }
+  ]
+}
