@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
-import { getApiKey, getDialect } from "@/lib/db/settings";
+import { DEFAULT_DIALECT, getApiKey, getDialect, isDialect } from "@/lib/db/settings";
 import { insertTranscript, saveVocabulary } from "@/lib/db/repository";
 import { isRecognitionSupported, recognizer, type RecognizerState } from "@/lib/speech/recognizer";
 import { vocabularyProcessor } from "@/lib/ai/processor";
 import { t } from "@/lib/i18n";
 import type { WordDetails, GrammarNote } from "@/lib/ai/groq";
+
+async function resolveSafeDialect(): Promise<string> {
+  try {
+    const dialect = await getDialect(db);
+    return isDialect(dialect) ? dialect : DEFAULT_DIALECT;
+  } catch {
+    return DEFAULT_DIALECT;
+  }
+}
 
 export interface TranscriptState {
   partialText: string;
@@ -155,19 +164,35 @@ export function useTranscript() {
     });
   }, [handleUtterance]);
 
+  const isStarting = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      recognizer.cancel();
+    };
+  }, []);
+
   const startListening = useCallback(async () => {
+    if (isStarting.current || recognizer.getSnapshot().isListening) return;
+    isStarting.current = true;
     // A new session clears the screen; an older utterance still in flight would
     // otherwise repopulate it with a result for text that is no longer shown.
     utteranceToken.current++;
     setState((prev) => ({ ...prev, translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
 
-    const granted = await recognizer.requestMicrophonePermission();
-    if (!granted) {
+    try {
+      const granted = await recognizer.requestMicrophonePermission();
+      if (!granted) {
+        recognizer.reportPermissionDenied();
+        return;
+      }
+      const dialect = await resolveSafeDialect();
+      recognizer.startListening(dialect);
+    } catch {
       recognizer.reportPermissionDenied();
-      return;
+    } finally {
+      isStarting.current = false;
     }
-    const dialect = await getDialect(db);
-    recognizer.startListening(dialect);
   }, []);
 
   /**

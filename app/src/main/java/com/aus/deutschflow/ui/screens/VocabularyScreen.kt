@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,12 +54,12 @@ fun VocabularyScreen(
     windowSizeClass: WindowSizeClass,
     viewModel: VocabularyViewModel = hiltViewModel()
 ) {
-    val vocabularyList by viewModel.vocabularyList.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val sortMode by viewModel.sortMode.collectAsState()
-    val allVocabulary by viewModel.allVocabulary.collectAsState()
-    val ttsError by viewModel.ttsError.collectAsState()
-    val writeError by viewModel.error.collectAsState()
+    val vocabularyList by viewModel.vocabularyList.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val sortMode by viewModel.sortMode.collectAsStateWithLifecycle()
+    val allVocabulary by viewModel.allVocabulary.collectAsStateWithLifecycle()
+    val ttsError by viewModel.ttsError.collectAsStateWithLifecycle()
+    val writeError by viewModel.error.collectAsStateWithLifecycle()
 
     // Ids rather than entities, and saveable rather than remembered: VocabularyEntity
     // is not Parcelable, and rotating used to drop whichever word was open and

@@ -118,7 +118,7 @@ test("offline boot after one online visit", async ({ page, context }) => {
 test("language switch flips the UI to German", async ({ page }) => {
   await page.goto("/settings");
 
-  await page.getByRole("button", { name: "Deutsch" }).click();
+  await page.getByRole("radio", { name: "Deutsch" }).or(page.getByRole("button", { name: "Deutsch" })).click();
 
   // The shell title and the settings section header react immediately.
   await expect(page.locator("h1")).toHaveText("Einstellungen");
@@ -132,7 +132,7 @@ test("saving an API key reports in the current language", async ({ page }) => {
 
   // German UI first: the save confirmation must be German too, not the
   // hardcoded English the hook used to return.
-  await page.getByRole("button", { name: "Deutsch" }).click();
+  await page.getByRole("radio", { name: "Deutsch" }).or(page.getByRole("button", { name: "Deutsch" })).click();
   await expect(page.locator("h1")).toHaveText("Einstellungen");
 
   const input = page.getByPlaceholder("Füge hier deinen Groq-Schlüssel ein");

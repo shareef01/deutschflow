@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -42,12 +43,12 @@ import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
 
 @Composable
 fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
-    val messages by viewModel.messages.collectAsState()
-    val isListening by viewModel.isListening.collectAsState()
-    val isProcessing by viewModel.isProcessing.collectAsState()
-    val partialText by viewModel.partialText.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val recognitionError by viewModel.errorState.collectAsState()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val isListening by viewModel.isListening.collectAsStateWithLifecycle()
+    val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
+    val partialText by viewModel.partialText.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val recognitionError by viewModel.errorState.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
 
     val listState = rememberLazyListState()

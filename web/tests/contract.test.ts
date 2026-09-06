@@ -1,14 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { foldGermanKey } from "@/lib/db/schema";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DeutschFlowDB, foldGermanKey } from "@/lib/db/schema";
 import { foldGerman, evaluateMatch } from "@/lib/scoring";
 import {
   MIN_EASE_FACTOR,
   MAX_EASE_FACTOR,
   MAX_INTERVAL_DAYS,
+  ReviewQuality,
+  calculateNextReview,
 } from "@/lib/ai/srs";
 import { XP_PER_CARD, DAILY_XP_GOAL } from "@/lib/db/repository";
+import { importLibrary } from "@/lib/db/backup";
 import {
   GROQ_MODEL,
   MAX_AI_INPUT_CHARS,
@@ -49,6 +52,23 @@ interface ContractFixture {
     expectedCorrectCount: number;
     expectedTotalCount: number;
   }[];
+  srsSchedulingCases: {
+    name: string;
+    interval: number;
+    easeFactor: number;
+    reviewCount: number;
+    quality: number;
+    expectedInterval: number;
+    expectedEaseFactor: number;
+    expectedReviewCount: number;
+  }[];
+  backupSchemaFixtures: {
+    validV1: Record<string, unknown>;
+    corruptMissingFormat: Record<string, unknown>;
+    corruptNewerVersion: Record<string, unknown>;
+    corruptNonArrayCollections: Record<string, unknown>;
+    corruptInvalidDate: Record<string, unknown>;
+  };
 }
 
 const contract: ContractFixture = JSON.parse(
@@ -104,5 +124,83 @@ describe("Cross-Platform Behavioral Contract", () => {
         expect(result.results.length).toBe(testCase.expectedTotalCount);
       });
     }
+  });
+
+  describe("SRS scheduling progression contract", () => {
+    for (const testCase of contract.srsSchedulingCases) {
+      it(`schedules correctly for ${testCase.name}`, () => {
+        const vocab = {
+          id: 1,
+          germanText: "das Haus",
+          germanTextKey: "das haus",
+          englishTranslation: "the house",
+          timestamp: 1000,
+          exampleSentence: "",
+          article: "das",
+          plural: "Häuser",
+          conjugation: "",
+          synonyms: "",
+          antonyms: "",
+          nextReview: 0,
+          interval: testCase.interval,
+          easeFactor: testCase.easeFactor,
+          reviewCount: testCase.reviewCount,
+          remoteId: "fixture-id",
+          lastModifiedAt: 1000,
+        };
+
+        const result = calculateNextReview(vocab, testCase.quality as ReviewQuality);
+        expect(result.interval).toBe(testCase.expectedInterval);
+        expect(result.easeFactor).toBeCloseTo(testCase.expectedEaseFactor, 4);
+        expect(result.reviewCount).toBe(testCase.expectedReviewCount);
+      });
+    }
+  });
+
+  describe("Backup serialization schema contract", () => {
+    let db: DeutschFlowDB;
+    let counter = 0;
+
+    beforeEach(() => {
+      db = new DeutschFlowDB(`contract-backup-test-${counter++}`);
+    });
+
+    afterEach(async () => {
+      await db.delete();
+    });
+
+    it("successfully imports validV1 contract fixture", async () => {
+      const result = await importLibrary(db, contract.backupSchemaFixtures.validV1);
+      expect(result.vocabularyAdded).toBe(1);
+      expect(result.transcriptsAdded).toBe(1);
+
+      const vocab = await db.vocabulary.where("germanTextKey").equals("das haus").first();
+      expect(vocab).toBeDefined();
+      expect(vocab?.englishTranslation).toBe("the house");
+    });
+
+    it("rejects backup missing format header", async () => {
+      await expect(
+        importLibrary(db, contract.backupSchemaFixtures.corruptMissingFormat)
+      ).rejects.toThrow(/not a DeutschFlow library export/i);
+    });
+
+    it("rejects backup from newer schema version", async () => {
+      await expect(
+        importLibrary(db, contract.backupSchemaFixtures.corruptNewerVersion)
+      ).rejects.toThrow(/newer/i);
+    });
+
+    it("rejects backup with non-array collection structures", async () => {
+      await expect(
+        importLibrary(db, contract.backupSchemaFixtures.corruptNonArrayCollections)
+      ).rejects.toThrow(/array/i);
+    });
+
+    it("rejects backup with invalid calendar date in activity log", async () => {
+      await expect(
+        importLibrary(db, contract.backupSchemaFixtures.corruptInvalidDate)
+      ).rejects.toThrow(/calendar date/i);
+    });
   });
 });

@@ -31,6 +31,10 @@ export default function SettingsPage() {
     clearAllProgress,
     downloadBackup,
     restoreBackup,
+    isPersisted,
+    isPersistenceSupported,
+    requestPersistence,
+    lastBackupTime,
   } = useSettings();
 
   const { t, lang, changeLang } = useI18n();
@@ -43,7 +47,6 @@ export default function SettingsPage() {
 
   const onRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    // Cleared either way, so choosing the same file twice fires change again.
     event.target.value = "";
     if (file) void restoreBackup(file).then((result) => setMessage(t(result)));
   };
@@ -76,22 +79,30 @@ export default function SettingsPage() {
 
   const streakLabel = streak === 1 ? t("streak.day", [streak]) : t("streak.days", [streak]);
 
+  // Remind user to back up if they have 5+ vocabulary items and no backup in the last 7 days
+  const needsBackupReminder =
+    totalVocabulary >= 5 &&
+    (!lastBackupTime || Date.now() - lastBackupTime > 7 * 86_400_000);
+
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[var(--container-reading)] flex-col overflow-y-auto px-[var(--gutter)] pb-12">
 
-      {/* ---- Backup ---------------------------------------------------------
-           The library lives only in this browser and the browser may reclaim it,
-           so this is the one control standing between the user and losing
-           everything. The Android app has Room on the filesystem and does not
-           need an equivalent. */}
+      {/* Backup Freshness Reminder Banner */}
+      {needsBackupReminder && (
+        <div className="glass-surface mt-6 flex items-start gap-3.5 border-l-4 border-amber-400 p-4">
+          <WarningIcon className="mt-0.5 size-5 shrink-0 text-amber-400" />
+          <div className="flex-1">
+            <p className="text-body-small text-on-surface">
+              {t("settings.backupReminder", [totalVocabulary])}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Backup --------------------------------------------------------- */}
       <SectionHeader title={t("settings.backupHeader")} />
 
       <div className="glass-surface border border-on-surface/5 p-6">
-        {/* This already says what the removed "Cloud Sync" card's one true line
-            said - the library lives only in this browser - so nothing was lost
-            with it. What went was a sign-in that authenticated against a stub,
-            two fields that discarded whatever was typed into them, and a sync
-            button that uploaded nothing. */}
         <p className="text-body-medium text-on-surface-variant">{t("settings.backupBody")}</p>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <GlassButton
@@ -104,6 +115,11 @@ export default function SettingsPage() {
             <span className="font-bold">{t("settings.backupRestore")}</span>
           </GlassButton>
         </div>
+        <p className="mt-3 text-label-small text-on-surface-variant">
+          {lastBackupTime
+            ? t("settings.backupLast", [new Date(lastBackupTime).toLocaleDateString()])
+            : t("settings.backupNever")}
+        </p>
         <input
           ref={restoreInput}
           type="file"
@@ -182,9 +198,6 @@ export default function SettingsPage() {
       {/* ---- Recognition dialect --------------------------------------------- */}
       <SectionHeader title={t("settings.dialectHeader")} />
       <RadioGroup name={t("settings.dialectHeader")} options={dialects} selected={selectedDialect} onSelect={saveDialect} />
-      {/* Said here rather than only in the docs: it is the one privacy property
-          where this app differs from the Android one, and the difference is not
-          something a user could infer from the screen. */}
       <p className="mt-3 px-1 text-label-medium text-on-surface-variant">
         {t("settings.speechPrivacy")}
       </p>
@@ -192,6 +205,32 @@ export default function SettingsPage() {
       {/* ---- Language (web parity for Android 13+ per-app language) ---------- */}
       <SectionHeader title={t("settings.languageHeader")} />
       <RadioGroup name={t("settings.languageHeader")} options={languages} selected={lang} onSelect={changeLang} />
+
+      {/* ---- Storage Durability ----------------------------------------------- */}
+      <SectionHeader title={t("settings.storageHeader")} />
+      <div className="glass-surface border border-on-surface/5 p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className={`text-body-medium font-semibold ${isPersisted ? "text-emerald-400" : "text-on-surface"}`}>
+              {isPersisted ? t("settings.storagePersisted") : t("settings.storageBestEffort")}
+            </p>
+            {!isPersistenceSupported && (
+              <p className="mt-1 text-label-small text-on-surface-variant">
+                {t("settings.storageUnsupported")}
+              </p>
+            )}
+          </div>
+          {isPersistenceSupported && !isPersisted && (
+            <GlassButton
+              type="button"
+              onClick={() => void requestPersistence()}
+              className="shrink-0"
+            >
+              <span className="text-label-medium font-bold">{t("settings.storageRequest")}</span>
+            </GlassButton>
+          )}
+        </div>
+      </div>
 
       {/* ---- Data ------------------------------------------------------------- */}
       <SectionHeader title={t("settings.dataHeader")} />
@@ -205,7 +244,7 @@ export default function SettingsPage() {
       </button>
 
       <div className="mt-12 text-center">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/30">
+        <p className="text-xs font-medium uppercase tracking-[0.15em] text-on-surface-variant/60">
           DeutschFlow v1.3.0 Obsidian
         </p>
       </div>
@@ -237,7 +276,7 @@ export default function SettingsPage() {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h2 className="mt-12 mb-3 w-full pl-1 text-[10px] font-black uppercase tracking-[0.2em] text-primary">{title}</h2>
+    <h2 className="mt-12 mb-3 w-full pl-1 text-xs font-bold uppercase tracking-[0.15em] text-primary">{title}</h2>
   );
 }
 
@@ -252,16 +291,38 @@ function RadioGroup<T extends string>({
   onSelect: (code: T) => void;
   name?: string;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = (event: React.KeyboardEvent, currentIndex: number) => {
+    let nextIndex = -1;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      nextIndex = (currentIndex + 1) % options.length;
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      nextIndex = (currentIndex - 1 + options.length) % options.length;
+    }
+
+    if (nextIndex >= 0) {
+      onSelect(options[nextIndex].code);
+      const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+      buttons?.[nextIndex]?.focus();
+    }
+  };
+
   return (
-    <div role="group" aria-label={name} className="glass-surface p-2">
-      {options.map((option) => {
+    <div ref={containerRef} role="radiogroup" aria-label={name} className="glass-surface p-2">
+      {options.map((option, index) => {
         const isSelected = selected === option.code;
         return (
           <button
             key={option.code}
             type="button"
-            aria-pressed={isSelected}
+            role="radio"
+            aria-checked={isSelected}
+            tabIndex={isSelected ? 0 : -1}
             onClick={() => onSelect(option.code)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
             className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-on-surface/5 focus-visible:outline-2 focus-visible:outline-azure-glow"
           >
             <span
@@ -292,7 +353,7 @@ function StatGridItem({ label, value }: { label: string; value: string }) {
       <p className="text-3xl font-black text-on-surface tracking-tight">
         {value}
       </p>
-      <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest opacity-60">
+      <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
         {label}
       </p>
     </div>

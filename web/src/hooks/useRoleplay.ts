@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { clearConversation, db, loadConversation, saveConversationTurn } from "@/lib/db";
-import { getApiKey, getDialect } from "@/lib/db/settings";
+import { DEFAULT_DIALECT, getApiKey, getDialect, isDialect } from "@/lib/db/settings";
 import { processRoleplay } from "@/lib/ai/groq";
 import { t } from "@/lib/i18n";
 import { recognizer, isRecognitionSupported, type RecognizerState } from "@/lib/speech/recognizer";
 import { tts } from "@/lib/speech/tts";
+
+async function resolveSafeDialect(): Promise<string> {
+    try {
+        const dialect = await getDialect(db);
+        return isDialect(dialect) ? dialect : DEFAULT_DIALECT;
+    } catch {
+        return DEFAULT_DIALECT;
+    }
+}
 
 export interface ChatMessage {
     role: "user" | "assistant";
@@ -226,15 +235,25 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         [restore, startSession]
     );
 
+    const isStarting = useRef(false);
+
     const startListening = useCallback(async () => {
+        if (isStarting.current || recognizer.getSnapshot().isListening) return;
+        isStarting.current = true;
         setError(null);
-        const granted = await recognizer.requestMicrophonePermission();
-        if (!granted) {
+        try {
+            const granted = await recognizer.requestMicrophonePermission();
+            if (!granted) {
+                recognizer.reportPermissionDenied();
+                return;
+            }
+            const dialect = await resolveSafeDialect();
+            recognizer.startListening(dialect);
+        } catch {
             recognizer.reportPermissionDenied();
-            return;
+        } finally {
+            isStarting.current = false;
         }
-        const dialect = await getDialect(db);
-        recognizer.startListening(dialect);
     }, []);
 
     /** Ends the utterance; `onUtterance` above delivers it and sends the turn. */

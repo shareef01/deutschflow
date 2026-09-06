@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { db } from "@/lib/db";
 import {
   clearAllProgress as clearAllProgressRows,
@@ -48,6 +48,36 @@ export function useSettings() {
   const selectedDialect = useDialect();
   const autoPlayRow = useLive(() => observeAutoPlay(db), []);
 
+  const [isPersisted, setIsPersisted] = useState<boolean | null>(null);
+  const [isPersistenceSupported, setIsPersistenceSupported] = useState(false);
+  const [lastBackupTime, setLastBackupTime] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const stored = localStorage.getItem("deutschflow_last_backup");
+    return stored ? Number(stored) : null;
+  });
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.storage?.persisted) {
+      setIsPersistenceSupported(true);
+      navigator.storage.persisted().then(setIsPersisted).catch(() => setIsPersisted(false));
+    } else {
+      setIsPersistenceSupported(false);
+      setIsPersisted(false);
+    }
+  }, []);
+
+  const requestPersistence = useCallback(async (): Promise<boolean> => {
+    if (typeof navigator !== "undefined" && navigator.storage?.persist) {
+      try {
+        const persisted = await navigator.storage.persist();
+        setIsPersisted(persisted);
+        return persisted;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }, []);
 
   /**
    * Writes the whole library out as a JSON file.
@@ -70,6 +100,11 @@ export function useSettings() {
       // Revoked on the next frame: revoking synchronously races the download in
       // Safari, which has not read the blob by the time click() returns.
       requestAnimationFrame(() => URL.revokeObjectURL(url));
+      const now = Date.now();
+      if (typeof window !== "undefined") {
+        localStorage.setItem("deutschflow_last_backup", String(now));
+      }
+      setLastBackupTime(now);
       return "settings.backupDownloaded";
     } catch {
       return "settings.backupFailed";
@@ -141,6 +176,10 @@ export function useSettings() {
     setAutoPlayEnabled,
     clearAllProgress,
     downloadBackup,
-    restoreBackup
+    restoreBackup,
+    isPersisted,
+    isPersistenceSupported,
+    requestPersistence,
+    lastBackupTime,
   };
 }
