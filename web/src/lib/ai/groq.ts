@@ -34,10 +34,52 @@ export const GROQ_MODEL = "openai/gpt-oss-120b";
 const TIMEOUT_MS = 30_000;
 
 /**
- * How much of a roleplay the model is shown. Matches
- * RoleplayViewModel.MAX_HISTORY_TURNS.
+ * Matching cross-platform constants for AI request & response boundaries.
  */
-export const MAX_HISTORY_TURNS = 12;
+export const MAX_AI_INPUT_CHARS = 4_000;
+export const MAX_ROLEPLAY_USER_CHARS = 1_000;
+export const MAX_ROLEPLAY_SCENARIO_CHARS = 500;
+export const MAX_ROLEPLAY_MESSAGE_CHARS = 1_000;
+export const MAX_ROLEPLAY_HISTORY_TURNS = 12;
+export const MAX_HISTORY_TURNS = MAX_ROLEPLAY_HISTORY_TURNS;
+export const MAX_ROLEPLAY_HISTORY_CHARS = 4_000;
+export const MAX_ROLEPLAY_REPLY_CHARS = 1_000;
+export const MAX_ROLEPLAY_CONTEXT_CHARS = 1_000;
+
+export function safeSlice(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  let end = maxChars;
+  const code = text.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) {
+    end--;
+  }
+  return text.slice(0, end);
+}
+
+export function filterAndTrimHistory(
+  history: { role: string; content: string }[]
+): { role: "user" | "assistant"; content: string }[] {
+  const valid = history.filter(
+    (m): m is { role: "user" | "assistant"; content: string } =>
+      m.role === "user" || m.role === "assistant"
+  );
+  const recent = valid.slice(-MAX_ROLEPLAY_HISTORY_TURNS);
+  const bounded = recent.map((m) => ({
+    role: m.role,
+    content: safeSlice(m.content.trim(), MAX_ROLEPLAY_MESSAGE_CHARS),
+  }));
+  const result: { role: "user" | "assistant"; content: string }[] = [];
+  let totalChars = 0;
+  for (let i = bounded.length - 1; i >= 0; i--) {
+    const msg = bounded[i];
+    if (totalChars + msg.content.length > MAX_ROLEPLAY_HISTORY_CHARS) {
+      break;
+    }
+    totalChars += msg.content.length;
+    result.unshift(msg);
+  }
+  return result;
+}
 
 export const SYSTEM_PROMPT = `You are a German language expert. The user message is a transcript of German
 speech.
@@ -94,9 +136,17 @@ export const AI_MESSAGES: Record<
   rateLimited: "ai.rateLimited",
 };
 
-async function post(body: string, apiKey: string): Promise<string> {
+async function post(body: string, apiKey: string, externalSignal?: AbortSignal): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener("abort", onAbort, { once: true });
+    }
+  }
   try {
     const response = await fetch(GROQ_ENDPOINT, {
       method: "POST",
@@ -121,6 +171,7 @@ async function post(body: string, apiKey: string): Promise<string> {
     );
   } finally {
     clearTimeout(timeout);
+    if (externalSignal) externalSignal.removeEventListener("abort", onAbort);
   }
 }
 
@@ -128,6 +179,7 @@ function translationRequestBody(text: string): string {
   return JSON.stringify({
     model: GROQ_MODEL,
     temperature: 0.2,
+    max_completion_tokens: 1024,
     // The enforcement the prompt alone cannot give. The prefixed-line format this
     // replaced split keywords on "," and grammar notes on ";", so a keyword phrase
     // containing a comma shattered and an explanation containing a semicolon was cut
@@ -144,6 +196,7 @@ function interrogationRequestBody(word: string): string {
   return JSON.stringify({
     model: GROQ_MODEL,
     temperature: 0.1,
+    max_completion_tokens: 1024,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: WORD_SYSTEM_PROMPT },
@@ -152,36 +205,42 @@ function interrogationRequestBody(word: string): string {
   });
 }
 
-/**
- * `history` is trimmed by the caller: every turn resends the whole conversation, so
- * a long roleplay would otherwise grow the request until the context window
- * rejected it, surfacing as a generic failure.
- */
-function roleplayRequestBody(userInput: string, history: { role: string; content: string }[], scenario: string): string {
-    return JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0.7,
-      messages: [
-        { role: "system", content: ROLEPLAY_SYSTEM_PROMPT.replace("<scenario>", scenario) },
-        ...history.slice(-MAX_HISTORY_TURNS),
-        { role: "user", content: userInput || "Hallo!" }
-      ],
-    });
+function roleplayRequestBody(
+  userInput: string,
+  history: { role: "user" | "assistant"; content: string }[],
+  scenario: string
+): string {
+  return JSON.stringify({
+    model: GROQ_MODEL,
+    temperature: 0.7,
+    max_completion_tokens: 512,
+    messages: [
+      { role: "system", content: ROLEPLAY_SYSTEM_PROMPT.replace("<scenario>", scenario) },
+      ...history,
+      { role: "user", content: userInput },
+    ],
+  });
 }
 
 export async function translateAndExtract(
   text: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<AIResult> {
   if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
+  const trimmed = text.trim();
+  if (!trimmed) return { kind: "failure", message: t(AI_MESSAGES.unreadable) };
+  if (trimmed.length > MAX_AI_INPUT_CHARS) {
+    return { kind: "failure", message: `Input is too long (maximum ${MAX_AI_INPUT_CHARS} characters)` };
+  }
 
   try {
-    const content = contentOf(await post(translationRequestBody(text), apiKey));
+    const content = contentOf(await post(translationRequestBody(trimmed), apiKey, signal));
     const parsed = parseResponse(content);
     return parsed ?? { kind: "failure", message: t(AI_MESSAGES.unreadable) };
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      return { kind: "failure", message: t("ai.failed", [t(AI_MESSAGES.noResponse)]) };
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
+      return { kind: "failure", message: "Request cancelled" };
     }
     const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
     return { kind: "failure", message: t("ai.failed", [detail]) };
@@ -190,19 +249,25 @@ export async function translateAndExtract(
 
 export async function interrogateWord(
   word: string,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<WordDetailsResult> {
   if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
+  const trimmed = word.trim();
+  if (!trimmed) return { kind: "failure", message: t(AI_MESSAGES.unreadable) };
+  if (trimmed.length > MAX_AI_INPUT_CHARS) {
+    return { kind: "failure", message: `Input is too long (maximum ${MAX_AI_INPUT_CHARS} characters)` };
+  }
 
   try {
-    const content = contentOf(await post(interrogationRequestBody(word), apiKey));
+    const content = contentOf(await post(interrogationRequestBody(trimmed), apiKey, signal));
     const details = parseWordDetails(content);
     return details
       ? { kind: "success", details }
       : { kind: "failure", message: t(AI_MESSAGES.unreadable) };
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      return { kind: "failure", message: t("ai.failed", [t(AI_MESSAGES.noResponse)]) };
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
+      return { kind: "failure", message: "Request cancelled" };
     }
     const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
     return { kind: "failure", message: t("ai.failed", [detail]) };
@@ -210,20 +275,33 @@ export async function interrogateWord(
 }
 
 export async function processRoleplay(
-    userInput: string,
-    history: { role: string; content: string }[],
-    scenario: string,
-    apiKey: string
+  userInput: string,
+  history: { role: string; content: string }[],
+  scenario: string,
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<RoleplayResult> {
-    if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
+  if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
+  const trimmedInput = userInput.trim();
+  if (!trimmedInput) return { kind: "failure", message: "Input cannot be blank" };
+  if (trimmedInput.length > MAX_ROLEPLAY_USER_CHARS) {
+    return { kind: "failure", message: `Message is too long (maximum ${MAX_ROLEPLAY_USER_CHARS} characters)` };
+  }
+  const safeScenario = safeSlice(scenario.trim(), MAX_ROLEPLAY_SCENARIO_CHARS);
+  const safeHistory = filterAndTrimHistory(history);
 
-    try {
-        const content = contentOf(await post(roleplayRequestBody(userInput, history, scenario), apiKey));
-        return parseRoleplayResponse(content);
-    } catch (error) {
-        const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
-        return { kind: "failure", message: t("ai.failed", [detail]) };
+  try {
+    const content = contentOf(
+      await post(roleplayRequestBody(trimmedInput, safeHistory, safeScenario), apiKey, signal)
+    );
+    return parseRoleplayResponse(content);
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
+      return { kind: "failure", message: "Request cancelled" };
     }
+    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
+    return { kind: "failure", message: t("ai.failed", [detail]) };
+  }
 }
 
 /**
@@ -240,38 +318,40 @@ export async function processRoleplay(
  * Ported from GroqHelper.parseRoleplayTurn, which is the reference.
  */
 function parseRoleplayResponse(text: string): RoleplayResult {
-    const response: string[] = [];
-    const gloss: string[] = [];
-    let current: string[] | null = null;
+  const response: string[] = [];
+  const gloss: string[] = [];
+  let current: string[] | null = null;
 
-    for (const rawLine of text.split("\n")) {
-        const line = rawLine
-            .trim()
-            .replaceAll("**", "")
-            .replaceAll("__", "")
-            .replace(/^-/, "")
-            .replace(/^\*/, "")
-            .trim();
-        if (!line) continue;
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine
+      .trim()
+      .replaceAll("**", "")
+      .replaceAll("__", "")
+      .replace(/^-/, "")
+      .replace(/^\*/, "")
+      .trim();
+    if (!line) continue;
 
-        const lower = line.toLowerCase();
-        if (lower.startsWith("response:")) {
-            current = response;
-            response.push(cleanValue(line.slice("response:".length)));
-        } else if (lower.startsWith("context:")) {
-            current = gloss;
-            gloss.push(cleanValue(line.slice("context:".length)));
-        } else {
-            // Unprefixed text belongs to whichever section is open, and to the reply
-            // when the model never opened one at all.
-            (current ?? response).push(line);
-        }
+    const lower = line.toLowerCase();
+    if (lower.startsWith("response:")) {
+      current = response;
+      response.push(cleanValue(line.slice("response:".length)));
+    } else if (lower.startsWith("context:")) {
+      current = gloss;
+      gloss.push(cleanValue(line.slice("context:".length)));
+    } else {
+      (current ?? response).push(line);
     }
+  }
 
-    const aiResponse = response.join("\n").trim();
-    return aiResponse
-        ? { kind: "success", aiResponse, englishContext: gloss.join("\n").trim() }
-        : { kind: "failure", message: t("ai.failed", [t(AI_MESSAGES.noResponse)]) };
+  const rawAiResponse = response.join("\n").trim();
+  const rawContext = gloss.join("\n").trim();
+  const aiResponse = safeSlice(rawAiResponse, MAX_ROLEPLAY_REPLY_CHARS);
+  const englishContext = safeSlice(rawContext, MAX_ROLEPLAY_CONTEXT_CHARS);
+
+  return aiResponse
+    ? { kind: "success", aiResponse, englishContext }
+    : { kind: "failure", message: t("ai.failed", [t(AI_MESSAGES.noResponse)]) };
 }
 
 export function contentOf(json: string): string {

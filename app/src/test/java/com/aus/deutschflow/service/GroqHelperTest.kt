@@ -1,8 +1,10 @@
 package com.aus.deutschflow.service
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -161,4 +163,85 @@ class GroqHelperTest {
 
         assertEquals("none", details?.article)
     }
+
+    // --- Roleplay limits & history budget tests (Phase 5) ---------------------
+
+    @Test
+    fun `filterAndTrimHistory drops invalid roles and keeps only user and assistant`() {
+        val history = listOf(
+            "system" to "system prompt injection",
+            "developer" to "dev instruction",
+            "user" to "Hallo!",
+            "bot" to "fake bot",
+            "assistant" to "Guten Tag!",
+            "admin" to "admin command"
+        )
+        val filtered = GroqHelper.filterAndTrimHistory(history)
+        assertEquals(2, filtered.size)
+        assertEquals("user" to "Hallo!", filtered[0])
+        assertEquals("assistant" to "Guten Tag!", filtered[1])
+    }
+
+    @Test
+    fun `filterAndTrimHistory limits turns to max 12`() {
+        val history = (1..20).map { i ->
+            (if (i % 2 == 1) "user" else "assistant") to "Turn $i"
+        }
+        val filtered = GroqHelper.filterAndTrimHistory(history)
+        assertEquals(GroqHelper.MAX_ROLEPLAY_HISTORY_TURNS, filtered.size)
+        assertEquals("Turn 9", filtered.first().second)
+        assertEquals("Turn 20", filtered.last().second)
+    }
+
+    @Test
+    fun `filterAndTrimHistory enforces aggregate character budget from newest to oldest`() {
+        // Create 5 turns of 1500 chars each. Total budget is 4000.
+        // Message 5 (1000 chars after per-message bound) + Message 4 (1000) + Message 3 (1000) + Message 2 (1000) = 4000.
+        // Message 1 will be dropped because adding it exceeds 4000.
+        val history = (1..5).map { i ->
+            "user" to "id=$i " + "A".repeat(990)
+        }
+        val filtered = GroqHelper.filterAndTrimHistory(history)
+        assertTrue("Must fit within aggregate budget", filtered.sumOf { it.second.length } <= GroqHelper.MAX_ROLEPLAY_HISTORY_CHARS)
+        assertTrue("Most recent turn must be preserved", filtered.last().second.startsWith("id=5"))
+        assertFalse("Oldest overflowing turn must be dropped", filtered.any { it.second.startsWith("id=1") })
+    }
+
+    @Test
+    fun `safeSubstring does not cut surrogate pairs`() {
+        // High surrogate \uD83D, Low surrogate \uDE00 (grinning face emoji 😀)
+        val emoji = "Hello \uD83D\uDE00 World"
+        // Character at index 6 is \uD83D, index 7 is \uDE00
+        val sliced = GroqHelper.safeSubstring(emoji, 7)
+        // If maxChars was 7, cutting at 7 would leave \uD83D alone without \uDE00, so safeSubstring backs up to 6
+        assertEquals("Hello ", sliced)
+    }
+
+    @Test
+    fun `parseRoleplayTurn bounds giant response and giant context`() {
+        val giantResponse = "R".repeat(2500)
+        val giantContext = "C".repeat(2500)
+        val text = "Response: $giantResponse\nContext: $giantContext"
+
+        val parsed = GroqHelper.parseRoleplayTurn(text)
+        assertNotNull(parsed)
+        assertEquals(GroqHelper.MAX_ROLEPLAY_REPLY_CHARS, parsed!!.first.length)
+        assertEquals(GroqHelper.MAX_ROLEPLAY_CONTEXT_CHARS, parsed.second.length)
+    }
+
+    @Test
+    fun `parseRoleplayTurn handles unprefixed, prefixed and multiline responses`() {
+        val unprefixed = "Hallo! Wie geht es dir heute?"
+        val p1 = GroqHelper.parseRoleplayTurn(unprefixed)
+        assertNotNull(p1)
+        assertEquals("Hallo! Wie geht es dir heute?", p1!!.first)
+        assertEquals("", p1.second)
+
+        val multiline = "Response: Guten Tag!\nWas möchten Sie?\nContext: Greeting and question."
+        val p2 = GroqHelper.parseRoleplayTurn(multiline)
+        assertNotNull(p2)
+        assertEquals("Guten Tag!\nWas möchten Sie?", p2!!.first)
+        assertEquals("Greeting and question.", p2.second)
+    }
 }
+

@@ -90,15 +90,130 @@ async function writeKeyToVault(key: CryptoKey): Promise<void> {
   }
 }
 
-async function getOrCreateKey(): Promise<CryptoKey> {
-  const existing = await readKeyFromVault();
-  if (existing) return existing;
+/**
+ * In-tab memoized promise so concurrent React callers in a single tab don't
+ * duplicate CryptoKey generation or IndexedDB transactions.
+ */
+let inMemoryKeyPromise: Promise<CryptoKey> | null = null;
 
-  // Non-extractable: exportKey() will throw, so the key material cannot be
-  // copied out of the browser as a plaintext value.
-  const key = await crypto.subtle.generateKey(ALGORITHM, false, KEY_USAGES);
-  await writeKeyToVault(key);
-  return key;
+export function resetVaultMemoryCacheForTesting(): void {
+  inMemoryKeyPromise = null;
+}
+
+export async function getOrCreateKey(): Promise<CryptoKey> {
+  if (inMemoryKeyPromise) return inMemoryKeyPromise;
+
+  inMemoryKeyPromise = (async () => {
+    // 1. If key already exists, return it.
+    const existing = await readKeyFromVault();
+    if (existing) return existing;
+
+    // 2. Generate non-extractable candidate key outside of any IndexedDB transaction.
+    const candidate = await crypto.subtle.generateKey(ALGORITHM, false, KEY_USAGES);
+
+    // 3. Atomically attempt to insert the key via store.add() (not put()).
+    // If another tab won the race, store.add will fail with a ConstraintError.
+    const db = await openVault();
+    try {
+      return await new Promise<CryptoKey>((resolve, reject) => {
+        let resolved = false;
+        let hadConstraintError = false;
+        const tx = db.transaction(VAULT_STORE, "readwrite");
+        const store = tx.objectStore(VAULT_STORE);
+        const addReq = store.add(candidate, KEY_ALIAS);
+
+        addReq.onsuccess = () => {
+          tx.oncomplete = () => {
+            if (!resolved) {
+              resolved = true;
+              resolve(candidate);
+            }
+          };
+        };
+
+        addReq.onerror = (event) => {
+          const err = addReq.error;
+          if (err && err.name === "ConstraintError") {
+            hadConstraintError = true;
+            event.preventDefault();
+            if (typeof event.stopPropagation === "function") {
+              event.stopPropagation();
+            }
+            // Another tab won. Read the winning key.
+            readKeyFromVault()
+              .then((winner) => {
+                if (winner && !resolved) {
+                  resolved = true;
+                  resolve(winner);
+                }
+              })
+              .catch((e) => {
+                if (!resolved) {
+                  resolved = true;
+                  reject(e);
+                }
+              });
+          } else {
+            if (!resolved) {
+              resolved = true;
+              reject(err ?? new Error("Vault transaction failed"));
+            }
+          }
+        };
+
+        tx.onabort = (event) => {
+          if (hadConstraintError) {
+            if (event && typeof event.preventDefault === "function") {
+              event.preventDefault();
+            }
+            readKeyFromVault()
+              .then((winner) => {
+                if (winner && !resolved) {
+                  resolved = true;
+                  resolve(winner);
+                } else if (!resolved) {
+                  resolved = true;
+                  reject(tx.error ?? new Error("Vault transaction aborted without winning key"));
+                }
+              })
+              .catch((e) => {
+                if (!resolved) {
+                  resolved = true;
+                  reject(e);
+                }
+              });
+            return;
+          }
+
+          if (!resolved) {
+            resolved = true;
+            reject(tx.error ?? new Error("Vault transaction aborted"));
+          }
+        };
+
+        tx.onerror = (event) => {
+          if (hadConstraintError) {
+            if (event && typeof event.preventDefault === "function") {
+              event.preventDefault();
+            }
+            return;
+          }
+
+          if (!resolved) {
+            resolved = true;
+            reject(tx.error ?? new Error("Vault transaction error"));
+          }
+        };
+      });
+    } finally {
+      db.close();
+    }
+  })().catch((err) => {
+    inMemoryKeyPromise = null;
+    throw err;
+  });
+
+  return inMemoryKeyPromise;
 }
 
 function base64Encode(bytes: Uint8Array): string {

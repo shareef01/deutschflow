@@ -119,6 +119,7 @@ export interface SettingEntry {
  */
 export function foldGermanKey(text: string): string {
   return text
+    .normalize("NFC")
     .trim()
     .toLowerCase()
     .replaceAll("ä", "ae")
@@ -137,6 +138,85 @@ export class DeutschFlowDB extends Dexie {
 
   constructor(name: string = "deutschflow") {
     super(name);
+
+    /**
+     * Version 7: Canonical NFC Unicode normalization.
+     *
+     * Precomposed and decomposed German characters (e.g. "Übung" vs "U\u0308bung")
+     * produce identical canonical keys. To avoid unique index collisions when re-keying,
+     * duplicate groups are merged preserving the richest/latest linguistic values and
+     * furthest SRS progress, matching the Room 14->15 migration.
+     */
+    this.version(7)
+      .stores({
+        vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+        transcripts: "++id, timestamp",
+        userStats: "id",
+        activityLog: "date",
+        roleplayMessages: "position",
+        settings: "key",
+      })
+      .upgrade(async (tx) => {
+        const table = tx.table("vocabulary");
+        const rows: VocabularyEntry[] = await table.toArray();
+
+        const groups = new Map<string, VocabularyEntry[]>();
+        for (const row of rows) {
+          const key = foldGermanKey(row.germanText);
+          const group = groups.get(key);
+          if (group) group.push(row);
+          else groups.set(key, [row]);
+        }
+
+        for (const [key, group] of groups) {
+          if (group.length === 1) {
+            const only = group[0];
+            if (only.germanTextKey !== key && only.id !== undefined) {
+              await table.update(only.id, { germanTextKey: key });
+            }
+            continue;
+          }
+
+          const richness = (v: VocabularyEntry) =>
+            [v.article, v.plural, v.conjugation, v.exampleSentence, v.synonyms, v.antonyms]
+              .filter(Boolean).length;
+          const ranked = [...group].sort(
+            (a, b) => richness(b) - richness(a) || b.timestamp - a.timestamp || (b.id ?? 0) - (a.id ?? 0)
+          );
+          const winner = ranked[0];
+          const latest = [...group].sort((a, b) => b.timestamp - a.timestamp || (b.id ?? 0) - (a.id ?? 0));
+          const pick = (field: keyof VocabularyEntry) =>
+            (latest.find((v) => v[field])?.[field] ?? winner[field]) as string;
+          // Taken as a set, so the four SRS fields stay consistent with each other.
+          const furthest = [...group].sort(
+            (a, b) => b.reviewCount - a.reviewCount || b.interval - a.interval || (a.id ?? 0) - (b.id ?? 0)
+          )[0];
+
+          const merged: VocabularyEntry = {
+            ...winner,
+            germanTextKey: key,
+            englishTranslation: pick("englishTranslation"),
+            exampleSentence: pick("exampleSentence"),
+            article: pick("article"),
+            plural: pick("plural"),
+            conjugation: pick("conjugation"),
+            synonyms: pick("synonyms"),
+            antonyms: pick("antonyms"),
+            timestamp: Math.max(...group.map((v) => v.timestamp)),
+            lastModifiedAt: Math.max(...group.map((v) => v.lastModifiedAt || v.timestamp)),
+            nextReview: furthest.nextReview,
+            interval: furthest.interval,
+            easeFactor: furthest.easeFactor,
+            reviewCount: Math.max(...group.map((v) => v.reviewCount)),
+          };
+
+          // Losers first, so re-keying the winner cannot collide with one of them.
+          await table.bulkDelete(
+            group.filter((v) => v.id !== winner.id).map((v) => v.id!).filter((id) => id !== undefined)
+          );
+          await table.put(merged);
+        }
+      });
 
     /**
      * Version 6: roleplay conversations are kept.

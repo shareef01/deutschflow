@@ -25,6 +25,16 @@ describe("foldGermanKey", () => {
     expect(foldGermanKey("schön")).toBe(foldGermanKey("schoen"));
   });
 
+  it("normalizes decomposed Unicode (NFD) to canonical NFC", () => {
+    // Decomposed U + COMBINING DIAERESIS (\u0308)
+    const decomposedUebung = "U\u0308bung";
+    expect(foldGermanKey(decomposedUebung)).toBe(foldGermanKey("Übung"));
+    expect(foldGermanKey(decomposedUebung)).toBe("uebung");
+    expect(foldGermanKey("a\u0308")).toBe("ae");
+    expect(foldGermanKey("o\u0308")).toBe("oe");
+    expect(foldGermanKey("u\u0308")).toBe("ue");
+  });
+
   it("keeps genuinely different words apart", () => {
     expect(foldGermanKey("Hund")).not.toBe(foldGermanKey("Hand"));
     expect(foldGermanKey("schon")).not.toBe(foldGermanKey("schön"));

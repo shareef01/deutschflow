@@ -20,9 +20,10 @@ export type VocabularyInput = {
   conjugation?: string;
   synonyms?: string;
   antonyms?: string;
+  lastModifiedAt?: number;
 };
 
-function mergedWith(existing: VocabularyEntry, incoming: VocabularyInput): VocabularyEntry {
+export function mergedWith(existing: VocabularyEntry, incoming: VocabularyInput, now = Date.now()): VocabularyEntry {
   return {
     ...existing,
     englishTranslation: incoming.englishTranslation || existing.englishTranslation,
@@ -33,7 +34,7 @@ function mergedWith(existing: VocabularyEntry, incoming: VocabularyInput): Vocab
     synonyms: incoming.synonyms || existing.synonyms,
     antonyms: incoming.antonyms || existing.antonyms,
     timestamp: Math.max(existing.timestamp, incoming.timestamp ?? 0),
-    lastModifiedAt: Date.now()
+    lastModifiedAt: Math.max(existing.lastModifiedAt || 0, incoming.lastModifiedAt || 0, now)
   };
 }
 
@@ -96,7 +97,7 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
       // `||`, not `??`: rows migrated from before the sync columns carry an
       // empty string, which needs a real id just as much as a missing one.
       remoteId: editing?.remoteId || crypto.randomUUID(),
-      lastModifiedAt: now,
+      lastModifiedAt: Math.max(editing?.lastModifiedAt ?? 0, input.lastModifiedAt ?? 0, now),
     };
 
     const existing = await db.vocabulary.where("germanTextKey").equals(entry.germanTextKey).first();
@@ -120,7 +121,7 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
     if (entry.id !== undefined) {
       await db.vocabulary.delete(entry.id);
     }
-    await db.vocabulary.put(mergedWith(existing, entry));
+    await db.vocabulary.put(mergedWith(existing, entry, now));
   });
 }
 
@@ -219,8 +220,19 @@ export function observeUserStats(db: DeutschFlowDB) {
  */
 export const HEATMAP_DAYS = 84;
 
-export async function observeActivityLog(db: DeutschFlowDB) {
-    const since = todayKey(new Date(Date.now() - HEATMAP_DAYS * 86_400_000));
+/**
+ * Returns the calendar date HEATMAP_DAYS prior to referenceDate.
+ * Decrements local calendar date rather than subtracting 84 * 86_400_000 ms,
+ * so DST transitions (23h or 25h days) never skew the 84-day window.
+ */
+export function getHeatmapCutoffDate(referenceDate: Date = new Date()): Date {
+  const cutoff = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  cutoff.setDate(cutoff.getDate() - HEATMAP_DAYS);
+  return cutoff;
+}
+
+export async function observeActivityLog(db: DeutschFlowDB, now: Date = new Date()) {
+    const since = todayKey(getHeatmapCutoffDate(now));
     // Sorted after the read, not by reversing the collection: sortBy re-sorts in
     // JS, so a reverse() before it is simply discarded.
     const days = await db.activityLog.where("date").aboveOrEqual(since).toArray();
@@ -263,12 +275,18 @@ export function nextStreak(currentStreak: number, lastActivity: number, now: num
   return 1;
 }
 
-function daysBetween(from: number, to: number): number {
+/**
+ * Local civil date ordinal: converts local year/month/date to integer UTC day number.
+ * Ensures differences represent civil calendar days regardless of 23h / 25h DST changes.
+ */
+export function toCivilDateOrdinal(d: Date): number {
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
+}
+
+export function daysBetween(from: number, to: number): number {
   const a = new Date(from);
   const b = new Date(to);
-  const startOfDayA = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
-  const startOfDayB = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
-  return Math.round((startOfDayB - startOfDayA) / 86_400_000);
+  return toCivilDateOrdinal(b) - toCivilDateOrdinal(a);
 }
 
 export async function rewardXp(db: DeutschFlowDB, points: number = XP_PER_CARD): Promise<UserStatsEntry> {

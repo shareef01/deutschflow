@@ -21,7 +21,8 @@ class VocabularyMergeTest {
         example: String = "",
         article: String = "",
         plural: String = "",
-        conjugation: String = ""
+        conjugation: String = "",
+        lastModifiedAt: Long = 1_000
     ) = VocabularyEntity(
         id = id,
         germanText = german,
@@ -30,7 +31,8 @@ class VocabularyMergeTest {
         exampleSentence = example,
         article = article,
         plural = plural,
-        conjugation = conjugation
+        conjugation = conjugation,
+        lastModifiedAt = lastModifiedAt
     )
 
     @Test
@@ -93,5 +95,25 @@ class VocabularyMergeTest {
         val merged = word(english = "dog").mergedWith(word(id = 0, english = "hound"))
 
         assertEquals("hound", merged.englishTranslation)
+    }
+
+    @Test
+    fun `mergedWith advances lastModifiedAt to max of existing, incoming, and now`() {
+        val existing = word(lastModifiedAt = 1_000)
+        val incoming = word(id = 0, lastModifiedAt = 2_000)
+        val now = 3_000L
+
+        val merged = existing.mergedWith(incoming, now = now)
+        assertEquals(3_000L, merged.lastModifiedAt)
+
+        // If incoming has a higher lastModifiedAt than now
+        val futureIncoming = word(id = 0, lastModifiedAt = 5_000)
+        val mergedFuture = existing.mergedWith(futureIncoming, now = now)
+        assertEquals(5_000L, mergedFuture.lastModifiedAt)
+
+        // If existing has higher lastModifiedAt
+        val pastIncoming = word(id = 0, lastModifiedAt = 500)
+        val mergedPast = word(lastModifiedAt = 4_000).mergedWith(pastIncoming, now = 2_000)
+        assertEquals(4_000L, mergedPast.lastModifiedAt)
     }
 }

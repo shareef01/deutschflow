@@ -10,6 +10,7 @@ import com.aus.deutschflow.service.TTSHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.Normalizer
 import javax.inject.Inject
 
 @Immutable
@@ -170,7 +171,8 @@ class PracticeViewModel @Inject constructor(
          * lowercase() is locale-invariant in Kotlin, which matters here: under a Turkish
          * locale a default-locale lowercase would map I to a dotless ı and stop matching.
          */
-        private fun String.foldGerman(): String = lowercase()
+        private fun String.foldGerman(): String = Normalizer.normalize(this, Normalizer.Form.NFC)
+            .lowercase()
             .replace("ä", "ae")
             .replace("ö", "oe")
             .replace("ü", "ue")
@@ -202,11 +204,13 @@ class PracticeViewModel @Inject constructor(
             targetSentence: String,
             spokenText: String
         ): Pair<List<WordResult>, PracticeFeedback> {
-            val targetWords = targetSentence.split(WORD_SPLIT)
+            val targetWords = Normalizer.normalize(targetSentence, Normalizer.Form.NFC)
+                .split(WORD_SPLIT)
                 .map { it.replace(NON_LETTERS, "") }
                 .filter { it.isNotBlank() }
 
-            val spokenWords = spokenText.split(WORD_SPLIT)
+            val spokenWords = Normalizer.normalize(spokenText, Normalizer.Form.NFC)
+                .split(WORD_SPLIT)
                 .map { it.replace(NON_LETTERS, "") }
                 .filter { it.isNotBlank() }
                 .map { it.foldGerman() }

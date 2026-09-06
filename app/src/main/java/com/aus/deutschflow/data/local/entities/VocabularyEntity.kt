@@ -5,6 +5,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.text.Normalizer
 import java.util.UUID
 
 /**
@@ -19,7 +20,9 @@ import java.util.UUID
  * a default-locale one would map I to a dotless ı under a Turkish locale and stop
  * matching. Mirrors foldGermanKey in web/src/lib/db/schema.ts.
  */
-fun germanKey(text: String): String = text.trim().lowercase()
+fun germanKey(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFC)
+    .trim()
+    .lowercase()
     .replace("ä", "ae")
     .replace("ö", "oe")
     .replace("ü", "ue")
@@ -102,7 +105,7 @@ data class VocabularyEntity(
     val lastModifiedAt: Long = System.currentTimeMillis()
 ) {
 
-    fun mergedWith(incoming: VocabularyEntity): VocabularyEntity = copy(
+    fun mergedWith(incoming: VocabularyEntity, now: Long = System.currentTimeMillis()): VocabularyEntity = copy(
         englishTranslation = incoming.englishTranslation.ifBlank { englishTranslation },
         exampleSentence = incoming.exampleSentence.ifBlank { exampleSentence },
         article = incoming.article.ifBlank { article },
@@ -116,6 +119,7 @@ data class VocabularyEntity(
         nextReview = nextReview,
         interval = interval,
         easeFactor = easeFactor,
-        reviewCount = reviewCount
+        reviewCount = reviewCount,
+        lastModifiedAt = maxOf(lastModifiedAt, incoming.lastModifiedAt, now)
     )
 }

@@ -18,7 +18,12 @@ import {
 } from "@/lib/db/settings";
 import { useLive } from "./useLive";
 import type { TKey } from "@/lib/i18n";
-import { ImportError, exportLibrary, importLibrary } from "@/lib/db/backup";
+import {
+  ImportError,
+  MAX_BACKUP_FILE_BYTES,
+  exportLibrary,
+  importLibrary,
+} from "@/lib/db/backup";
 
 /**
  * The recognition dialect alone, validated against the known set.
@@ -81,6 +86,9 @@ export function useSettings() {
    */
   const restoreBackup = useCallback(async (file: File): Promise<TKey> => {
     try {
+      if (file.size > MAX_BACKUP_FILE_BYTES) {
+        throw new ImportError("invalid", "Backup file exceeds maximum allowed size.");
+      }
       await importLibrary(db, JSON.parse(await file.text()));
       return "settings.backupRestored";
     } catch (error) {

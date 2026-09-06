@@ -37,7 +37,7 @@ Speak a sentence in German, and the app transcribes it on-device in real time, t
 - **⚡ AI Grammar Spotlight & Translation:** Integrated with Groq AI (`gpt-oss-120b`) to provide instantaneous English translations, grammatical gender/case breakdowns (`der/die/das`, `Akkusativ`, `Dativ`), and contextual example sentences.
 - **🧠 Spaced Repetition System (SRS):** SM-2-derived scheduling with 4-tier grading (*Again*, *Hard*, *Good*, *Easy*), capped at a one-year interval, plus daily XP goal tracking. *Good* and *Easy* follow SM-2 exactly; *Hard* shortens the interval rather than resetting it, and *Again* returns the card to the current session.
 - **🗣️ Shadowing & AI Roleplay:** Speak a sentence and see, word by word, which words the recogniser heard — umlaut spellings folded, so `Uebung` matches `Übung`. This measures recall and intelligibility, not phoneme-level pronunciation: the platform speech APIs expose no per-phoneme confidence. Paired with interactive situational roleplay scenarios.
-- **🔒 Keystore-Backed Security:** API credentials encrypted via AES-GCM hardware-backed Android Keystore.
+- **🔒 Keystore-Backed Security:** API credentials are encrypted with AES-GCM using an Android Keystore key; the key is hardware-backed on devices whose Keystore provides TEE/StrongBox-backed storage.
 - **🎨 Material 3 UI:** Fluid animations, spring interaction feedback, and dynamic scroll fading edges. Light and dark, following the system setting on both platforms — there is no in-app override to fall out of sync with it. Both palettes are verified against WCAG contrast thresholds in CI, and checked to agree across the two apps (`tools/contrast.py`, `tools/palette_parity.py`).
 
 ---
@@ -47,7 +47,7 @@ Speak a sentence in German, and the app transcribes it on-device in real time, t
 ```
 com.aus.deutschflow
 ├── data/local
-│   ├── AppDatabase.kt, Migrations.kt   (Room, v14, no destructive fallback)
+│   ├── AppDatabase.kt, Migrations.kt   (Room, v15, no destructive fallback)
 │   ├── dao/                            (Vocabulary, Transcript, UserStats, Activity, Roleplay)
 │   ├── entities/                       (the five tables)
 │   ├── PreferenceManager.kt            (DataStore)
@@ -110,8 +110,10 @@ colour tokens drift.
 cd web
 npm ci
 
-# Every route is behind a password gate, so this must be set or the app will
-# redirect to /login with nothing that can get past it.
+# Network access gate: SITE_PASSWORD prevents unauthenticated network access
+# to the deployed app. It is not a local device/profile lock. A browser profile
+# that has previously loaded DeutschFlow may retain the offline application shell
+# and its local IndexedDB library.
 export SITE_PASSWORD='choose-a-long-random-string'
 
 npm run dev        # http://localhost:3000
@@ -139,13 +141,16 @@ npx playwright test  # browser smoke suite (needs `npx playwright install chromi
   on Android and in IndexedDB on the web. There is no telemetry, no analytics SDK,
   no crash reporter and no third-party script in either client. Cloud sync is a
   stub: nothing is uploaded.
-- **Your API key** is encrypted with AES-GCM — under the hardware-backed Android
-  Keystore on the phone, and under a non-extractable WebCrypto key in the browser.
-  Note the browser case is weaker by nature: the page must decrypt the key to send
-  it, so any script on the origin could read it. See the header of
-  `web/src/lib/db/vault.ts`.
+- **Your API key** is encrypted with AES-GCM using an Android Keystore key on Android
+  (hardware-backed on devices whose Keystore provides TEE/StrongBox-backed storage),
+  and under a non-extractable WebCrypto key in the browser. Note the browser case
+  is weaker by nature: the page must decrypt the key to send it, so any script on
+  the origin could read it. See the header of `web/src/lib/db/vault.ts`.
 - **Back up the web library.** IndexedDB is the only copy, and browsers may evict
-  it. Settings → Backup writes the whole library to a JSON file.
+  it. Settings → Backup exports persistent learning data: vocabulary items,
+  transcript history, user XP/streak stats, and daily activity logs to a JSON file.
+  It intentionally excludes API credentials, client preferences, and ephemeral
+  roleplay sessions.
 
 ---
 

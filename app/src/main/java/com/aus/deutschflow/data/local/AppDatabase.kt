@@ -27,7 +27,7 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
  * destructive fallback, so a version without a migration is a crash on launch;
  * AppDatabaseMigrationTest is what turns that into a failing test instead.
  */
-const val DATABASE_VERSION = 14
+const val DATABASE_VERSION = 15
 
 @Database(
     entities = [

@@ -33,6 +33,16 @@ class GermanKeyTest {
     }
 
     @Test
+    fun decomposedUnicodeIsNormalizedToCanonicalNfc() {
+        val decomposedUebung = "U\u0308bung"
+        assertEquals(germanKey("Übung"), germanKey(decomposedUebung))
+        assertEquals("uebung", germanKey(decomposedUebung))
+        assertEquals("ae", germanKey("a\u0308"))
+        assertEquals("oe", germanKey("o\u0308"))
+        assertEquals("ue", germanKey("u\u0308"))
+    }
+
+    @Test
     fun genuinelyDifferentWordsStayApart() {
         assertNotEquals(germanKey("Hund"), germanKey("Hand"))
         assertNotEquals(germanKey("schon"), germanKey("schön"))

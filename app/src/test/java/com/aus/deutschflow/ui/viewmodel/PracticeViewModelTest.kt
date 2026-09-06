@@ -132,6 +132,18 @@ class PracticeViewModelTest {
     }
 
     @Test
+    fun `decomposed Unicode NFD spoken matches precomposed target`() {
+        val (results, feedback) = PracticeViewModel.evaluateMatch(
+            targetSentence = "Übung macht den Meister",
+            spokenText = "U\u0308bung macht den meister"
+        )
+
+        assertEquals(4, results.size)
+        assertTrue(results.all { it.isCorrect })
+        assertEquals(PracticeFeedback.PERFECT, feedback)
+    }
+
+    @Test
     fun `word order matters`() {
         val (results, feedback) = PracticeViewModel.evaluateMatch(
             targetSentence = "Ich lerne Deutsch",

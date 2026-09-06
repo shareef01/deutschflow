@@ -430,6 +430,76 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
 }
 
 /**
+ * Normalizes all germanTextKey values using Unicode NFC normalization.
+ *
+ * Precomposed and decomposed Unicode forms (such as "Übung" vs "U\u0308bung")
+ * previously produced divergent keys. This migration re-folds all keys using
+ * the NFC-aware [germanKey] function and merges any resulting collisions.
+ *
+ * To avoid UNIQUE constraint violations while re-keying, the unique index is
+ * dropped, keys are backfilled, colliding groups are merged into their richest/
+ * latest survivor, losing rows are deleted, and the unique index is restored.
+ */
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP INDEX IF EXISTS `index_vocabulary_germanTextKey`")
+        backfillGermanKeys(db)
+
+        val winner =
+            "SELECT w.`id` FROM `vocabulary` w WHERE w.`germanTextKey` = v.`germanTextKey` " +
+                "ORDER BY (CASE WHEN w.`article` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`plural` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`conjugation` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`exampleSentence` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`synonyms` <> '' THEN 1 ELSE 0 END) " +
+                "+ (CASE WHEN w.`antonyms` <> '' THEN 1 ELSE 0 END) DESC, " +
+                "w.`timestamp` DESC, w.`id` DESC LIMIT 1"
+
+        db.execSQL(
+            "UPDATE `vocabulary` SET " +
+                latest("englishTranslation") + ", " +
+                latest("exampleSentence") + ", " +
+                latest("article") + ", " +
+                latest("plural") + ", " +
+                latest("conjugation") + ", " +
+                latest("synonyms") + ", " +
+                latest("antonyms") + ", " +
+                "`timestamp` = (SELECT MAX(w.`timestamp`) FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey`), " +
+                "`lastModifiedAt` = (SELECT MAX(w.`lastModifiedAt`) FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey`), " +
+                "`nextReview` = (SELECT w.`nextReview` FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` " +
+                "ORDER BY w.`reviewCount` DESC, w.`interval` DESC, w.`id` ASC LIMIT 1), " +
+                "`interval` = (SELECT w.`interval` FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` " +
+                "ORDER BY w.`reviewCount` DESC, w.`interval` DESC, w.`id` ASC LIMIT 1), " +
+                "`easeFactor` = (SELECT w.`easeFactor` FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` " +
+                "ORDER BY w.`reviewCount` DESC, w.`interval` DESC, w.`id` ASC LIMIT 1), " +
+                "`reviewCount` = (SELECT MAX(w.`reviewCount`) FROM `vocabulary` w " +
+                "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey`) " +
+                "WHERE `id` IN (SELECT v.`id` FROM `vocabulary` v WHERE v.`id` = ($winner))"
+        )
+
+        db.execSQL(
+            "DELETE FROM `vocabulary` WHERE `id` NOT IN " +
+                "(SELECT v.`id` FROM `vocabulary` v WHERE v.`id` = ($winner))"
+        )
+
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_vocabulary_germanTextKey` " +
+                "ON `vocabulary` (`germanTextKey`)"
+        )
+    }
+
+    private fun latest(column: String): String =
+        "`$column` = COALESCE((SELECT w.`$column` FROM `vocabulary` w " +
+            "WHERE w.`germanTextKey` = `vocabulary`.`germanTextKey` AND w.`$column` <> '' " +
+            "ORDER BY w.`timestamp` DESC, w.`id` DESC LIMIT 1), `$column`)"
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -447,5 +517,5 @@ val MIGRATIONS =
     arrayOf(
         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-        MIGRATION_12_13, MIGRATION_13_14
+        MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
     )

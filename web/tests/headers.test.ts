@@ -64,6 +64,7 @@ describe("the policy itself", () => {
     expect(csp).toContain("connect-src 'self' https://api.groq.com");
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
   });
 
   it("still applies to every route", async () => {

@@ -92,4 +92,189 @@ describe("exportLibrary / importLibrary", () => {
     await expect(importLibrary(db, { format: "something-else" })).rejects.toThrow();
     await expect(importLibrary(db, "not an object")).rejects.toThrow();
   });
+
+  it("rejects missing, non-number, 0, or fractional versions", async () => {
+    const base = {
+      format: "deutschflow-library",
+      vocabulary: [],
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    };
+    await expect(importLibrary(db, { ...base })).rejects.toThrow();
+    await expect(importLibrary(db, { ...base, version: 0 })).rejects.toThrow();
+    await expect(importLibrary(db, { ...base, version: -1 })).rejects.toThrow();
+    await expect(importLibrary(db, { ...base, version: 1.5 })).rejects.toThrow();
+    await expect(importLibrary(db, { ...base, version: "1" })).rejects.toThrow();
+  });
+
+  it("rejects backups made by a newer version with reason 'newer'", async () => {
+    const backup = {
+      format: "deutschflow-library",
+      version: 99,
+      vocabulary: [],
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    };
+    await expect(importLibrary(db, backup)).rejects.toThrow(/newer/i);
+  });
+
+  it("rejects non-array collections", async () => {
+    const backup = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: "not an array",
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    };
+    await expect(importLibrary(db, backup)).rejects.toThrow(/array/i);
+  });
+
+  it("rejects collections exceeding maximum row counts", async () => {
+    const oversizedVocab = new Array(10_001).fill({
+      germanText: "Wort",
+      englishTranslation: "word",
+    });
+    const backup = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: oversizedVocab,
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    };
+    await expect(importLibrary(db, backup)).rejects.toThrow(/limit/i);
+  });
+
+  it("rejects giant text fields in vocabulary and transcripts", async () => {
+    const giantText = "A".repeat(5_000);
+    const backupVocab = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [{ germanText: "Wort", englishTranslation: giantText }],
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    };
+    await expect(importLibrary(db, backupVocab)).rejects.toThrow(/length/i);
+
+    const giantTranscript = "T".repeat(20_000);
+    const backupTranscript = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [],
+      transcripts: [{ fullText: giantTranscript }],
+      userStats: [],
+      activityLog: [],
+    };
+    await expect(importLibrary(db, backupTranscript)).rejects.toThrow(/length/i);
+  });
+
+  it("rejects invalid numeric values (negative interval, interval > 365, invalid ease factor, negative XP)", async () => {
+    const base = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [],
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    };
+
+    // Negative interval
+    await expect(
+      importLibrary(db, {
+        ...base,
+        vocabulary: [{ germanText: "Test", englishTranslation: "Test", interval: -1 }],
+      })
+    ).rejects.toThrow(/interval/i);
+
+    // Interval > 365
+    await expect(
+      importLibrary(db, {
+        ...base,
+        vocabulary: [{ germanText: "Test", englishTranslation: "Test", interval: 366 }],
+      })
+    ).rejects.toThrow(/interval/i);
+
+    // Ease factor out of range (< 1.3 or > 3.0)
+    await expect(
+      importLibrary(db, {
+        ...base,
+        vocabulary: [{ germanText: "Test", englishTranslation: "Test", easeFactor: 1.1 }],
+      })
+    ).rejects.toThrow(/easeFactor/i);
+    await expect(
+      importLibrary(db, {
+        ...base,
+        vocabulary: [{ germanText: "Test", englishTranslation: "Test", easeFactor: 3.5 }],
+      })
+    ).rejects.toThrow(/easeFactor/i);
+
+    // Negative XP
+    await expect(
+      importLibrary(db, {
+        ...base,
+        userStats: [{ xp: -50, streak: 1 }],
+      })
+    ).rejects.toThrow(/XP/i);
+
+    // Unsafe integer timestamp
+    await expect(
+      importLibrary(db, {
+        ...base,
+        vocabulary: [{ germanText: "Test", englishTranslation: "Test", timestamp: NaN }],
+      })
+    ).rejects.toThrow(/timestamp/i);
+  });
+
+  it("rejects invalid calendar dates in activity log", async () => {
+    const base = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [],
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    };
+
+    // Non-existent dates that a naive regex might accept
+    for (const badDate of ["2026-02-31", "2026-13-01", "9999-99-99", "not-a-date"]) {
+      await expect(
+        importLibrary(db, {
+          ...base,
+          activityLog: [{ date: badDate, xpGained: 10, timestamp: 1000 }],
+        })
+      ).rejects.toThrow(/calendar date/i);
+    }
+  });
+
+  it("sanitizes invalid or missing remoteIds with a fresh UUID", async () => {
+    const backup = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [],
+      transcripts: [
+        { fullText: "Transcript 1", remoteId: "invalid-arbitrary-string" },
+        { fullText: "Transcript 2", remoteId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" },
+      ],
+      userStats: [],
+      activityLog: [],
+    };
+
+    const fresh = new DeutschFlowDB(`backup-test-${n++}`);
+    await fresh.open();
+    await importLibrary(fresh, backup);
+
+    const saved = await fresh.transcripts.toArray();
+    expect(saved.length).toBe(2);
+    // Invalid remoteId got replaced with a valid UUID
+    expect(saved[0].remoteId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
+    expect(saved[0].remoteId).not.toBe("invalid-arbitrary-string");
+    // Valid remoteId was preserved
+    expect(saved[1].remoteId).toBe("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d");
+  });
 });

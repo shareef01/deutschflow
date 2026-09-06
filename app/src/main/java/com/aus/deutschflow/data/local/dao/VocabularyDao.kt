@@ -73,7 +73,11 @@ interface VocabularyDao {
         // Recomputed here rather than trusted from the caller: the key is derived
         // from germanText, and `copy(germanText = ...)` on the edit path would
         // otherwise carry the old word's key into the new one.
-        val vocabulary = entry.copy(germanTextKey = germanKey(entry.germanText))
+        val now = System.currentTimeMillis()
+        val vocabulary = entry.copy(
+            germanTextKey = germanKey(entry.germanText),
+            lastModifiedAt = maxOf(entry.lastModifiedAt, now)
+        )
         val existing = findByKey(vocabulary.germanTextKey)
 
         when {
@@ -91,7 +95,7 @@ interface VocabularyDao {
             // renamed onto its new twin.
             else -> {
                 if (vocabulary.id != 0) deleteById(vocabulary.id)
-                updateVocabulary(existing.mergedWith(vocabulary))
+                updateVocabulary(existing.mergedWith(vocabulary, now))
             }
         }
     }

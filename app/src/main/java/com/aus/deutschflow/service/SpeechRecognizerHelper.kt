@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
+import android.speech.RecognitionSupport
+import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
@@ -19,9 +21,137 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.Executor
 import javax.inject.Inject
 
 private const val TAG = "SpeechRecognizerHelper"
+
+/**
+ * Pure decision logic for evaluating on-device speech capabilities and language support.
+ * Can be tested on JVM without Android runtime or static mocks.
+ */
+enum class SpeechCapabilityDecision {
+    NO_ON_DEVICE_SERVICE,
+    START_LISTENING,
+    DOWNLOAD_MODEL,
+    UNSUPPORTED_LANGUAGE
+}
+
+object SpeechCapabilityDecider {
+    fun decide(
+        isOnDeviceAvailable: Boolean,
+        languageTag: String,
+        installedLanguages: List<String>?,
+        supportedLanguages: List<String>?
+    ): SpeechCapabilityDecision {
+        if (!isOnDeviceAvailable) {
+            return SpeechCapabilityDecision.NO_ON_DEVICE_SERVICE
+        }
+        if (installedLanguages == null && supportedLanguages == null) {
+            return SpeechCapabilityDecision.START_LISTENING
+        }
+        fun matches(list: List<String>?) = list?.any {
+            it.equals(languageTag, ignoreCase = true) ||
+                it.replace('_', '-').equals(languageTag.replace('_', '-'), ignoreCase = true)
+        } == true
+
+        return when {
+            matches(installedLanguages) -> SpeechCapabilityDecision.START_LISTENING
+            matches(supportedLanguages) -> SpeechCapabilityDecision.DOWNLOAD_MODEL
+            else -> SpeechCapabilityDecision.UNSUPPORTED_LANGUAGE
+        }
+    }
+}
+
+/**
+ * Result of querying on-device language support on Android 13+ (API 33+).
+ */
+sealed interface SupportResult {
+    data class Supported(val isInstalled: Boolean) : SupportResult
+    data object Unsupported : SupportResult
+    data object Error : SupportResult
+}
+
+/**
+ * Seam isolating platform SpeechRecognizer capabilities so tests can assert capability
+ * decisions on JVM without requiring real device hardware or static mocking.
+ */
+interface SpeechRecognitionPlatformSeam {
+    fun isOnDeviceRecognitionAvailable(context: Context): Boolean
+    fun createOnDeviceRecognizer(context: Context): SpeechRecognizer
+    fun checkRecognitionSupport(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        callback: (SupportResult) -> Unit
+    )
+    fun triggerModelDownload(recognizer: SpeechRecognizer, intent: Intent)
+}
+
+internal object DefaultSpeechRecognitionPlatformSeam : SpeechRecognitionPlatformSeam {
+    override fun isOnDeviceRecognitionAvailable(context: Context): Boolean =
+        SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+
+    override fun createOnDeviceRecognizer(context: Context): SpeechRecognizer =
+        SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+
+    override fun checkRecognitionSupport(
+        recognizer: SpeechRecognizer,
+        intent: Intent,
+        executor: Executor,
+        callback: (SupportResult) -> Unit
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val language = intent.getStringExtra(RecognizerIntent.EXTRA_LANGUAGE) ?: "de-DE"
+            recognizer.checkRecognitionSupport(
+                intent,
+                executor,
+                object : RecognitionSupportCallback {
+                    override fun onSupportResult(recognitionSupport: RecognitionSupport) {
+                        val decision = SpeechCapabilityDecider.decide(
+                            isOnDeviceAvailable = true,
+                            languageTag = language,
+                            installedLanguages = recognitionSupport.installedOnDeviceLanguages,
+                            supportedLanguages = recognitionSupport.supportedOnDeviceLanguages
+                        )
+                        when (decision) {
+                            SpeechCapabilityDecision.START_LISTENING ->
+                                callback(SupportResult.Supported(isInstalled = true))
+                            SpeechCapabilityDecision.DOWNLOAD_MODEL ->
+                                callback(SupportResult.Supported(isInstalled = false))
+                            SpeechCapabilityDecision.UNSUPPORTED_LANGUAGE ->
+                                callback(SupportResult.Unsupported)
+                            SpeechCapabilityDecision.NO_ON_DEVICE_SERVICE ->
+                                callback(SupportResult.Unsupported)
+                        }
+                    }
+
+                    override fun onError(error: Int) {
+                        callback(SupportResult.Error)
+                    }
+                }
+            )
+        } else {
+            callback(SupportResult.Supported(isInstalled = true))
+        }
+    }
+
+    override fun triggerModelDownload(recognizer: SpeechRecognizer, intent: Intent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                recognizer.triggerModelDownload(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not request the language download", e)
+            }
+        }
+    }
+}
+
+private class HandlerExecutor(private val handler: Handler) : Executor {
+    override fun execute(command: Runnable) {
+        handler.post(command)
+    }
+}
 
 /**
  * Wraps [SpeechRecognizer], which must be driven from the main thread and answers
@@ -36,8 +166,14 @@ class SpeechRecognizerHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
+    @VisibleForTesting
+    internal var platformSeam: SpeechRecognitionPlatformSeam = DefaultSpeechRecognitionPlatformSeam
+
     private var speechRecognizer: SpeechRecognizer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Guard counter incremented on every session or cancellation to avoid async races. */
+    private var sessionGeneration: Long = 0L
 
     /** The tag of the session in flight, so a failure can name the language it wanted. */
     private var currentLanguage = DEFAULT_LANGUAGE
@@ -83,34 +219,72 @@ class SpeechRecognizerHelper @Inject constructor(
         mainHandler.post {
             currentLanguage = languageTag
             try {
+                sessionGeneration++
+                val currentSession = sessionGeneration
+
                 speechRecognizer?.cancel()
                 speechRecognizer?.destroy()
                 speechRecognizer = null
 
                 // Cleared before the availability check, not after it.
-                //
-                // RoleplayViewModel.stopListeningAndSend awaits the first non-blank
-                // finalText, so if this returned early with the previous utterance
-                // still in the field, that await resolved instantly and re-sent the
-                // last turn - the exact failure its own comment says it was written
-                // to prevent.
                 _partialText.value = ""
                 _finalText.value = ""
                 _errorState.value = null
                 _isProcessing.value = false
 
-                if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                    _errorState.value = context.getString(R.string.speech_unavailable)
+                // Explicit on-device check: NEVER fall back to generic/cloud recognizer.
+                if (!platformSeam.isOnDeviceRecognitionAvailable(context)) {
+                    _errorState.value = context.getString(R.string.speech_on_device_unavailable)
                     _isListening.value = false
                     return@post
                 }
 
                 _isListening.value = true
 
-                val recognizer = createRecognizer()
-                recognizer.setRecognitionListener(recognitionListener)
-                recognizer.startListening(buildIntent(languageTag))
-                speechRecognizer = recognizer
+                val recognizer = platformSeam.createOnDeviceRecognizer(context)
+                val intent = buildIntent(languageTag)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    platformSeam.checkRecognitionSupport(recognizer, intent, HandlerExecutor(mainHandler)) { supportResult ->
+                        // Reject stale async response if cancelled or superseded
+                        if (sessionGeneration != currentSession || !_isListening.value) {
+                            recognizer.destroy()
+                            return@checkRecognitionSupport
+                        }
+
+                        when (supportResult) {
+                            is SupportResult.Supported -> {
+                                if (supportResult.isInstalled) {
+                                    recognizer.setRecognitionListener(recognitionListener)
+                                    recognizer.startListening(intent)
+                                    speechRecognizer = recognizer
+                                } else {
+                                    // Language model downloadable: trigger fetch, do not record prematurely
+                                    _isListening.value = false
+                                    _errorState.value = context.getString(R.string.speech_error_language_unavailable)
+                                    platformSeam.triggerModelDownload(recognizer, intent)
+                                    recognizer.destroy()
+                                }
+                            }
+                            is SupportResult.Unsupported -> {
+                                // Language permanently unsupported on this device
+                                _isListening.value = false
+                                _errorState.value = context.getString(R.string.speech_error_language_unsupported)
+                                recognizer.destroy()
+                            }
+                            is SupportResult.Error -> {
+                                // On support query error, attempt direct start with error listener
+                                recognizer.setRecognitionListener(recognitionListener)
+                                recognizer.startListening(intent)
+                                speechRecognizer = recognizer
+                            }
+                        }
+                    }
+                } else {
+                    recognizer.setRecognitionListener(recognitionListener)
+                    recognizer.startListening(intent)
+                    speechRecognizer = recognizer
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Could not start recognition", e)
                 _errorState.value = context.getString(R.string.speech_start_failed)
@@ -139,6 +313,7 @@ class SpeechRecognizerHelper @Inject constructor(
      */
     fun cancel() {
         mainHandler.post {
+            sessionGeneration++
             speechRecognizer?.cancel()
             _isListening.value = false
             _isProcessing.value = false
@@ -193,6 +368,7 @@ class SpeechRecognizerHelper @Inject constructor(
 
     fun destroy() {
         mainHandler.post {
+            sessionGeneration++
             teardownRecognizer()
             _isListening.value = false
             _isProcessing.value = false
@@ -223,27 +399,6 @@ class SpeechRecognizerHelper @Inject constructor(
         }, ERROR_RESET_DELAY_MS)
     }
 
-    /**
-     * Builds a recogniser that keeps the audio on the device.
-     *
-     * [SpeechRecognizer.createSpeechRecognizer] binds whatever service the device has
-     * set as its default, which on most phones is Google's and streams the audio to a
-     * server. The app's privacy promise is that the microphone never leaves the
-     * device - only the resulting *text* is sent, to Groq, and the README says so in
-     * as many words - so the guarantee has to be made here rather than hoped for.
-     * The evidence that it was only hoped for is in [messageFor]: it maps
-     * ERROR_NETWORK, ERROR_NETWORK_TIMEOUT and ERROR_SERVER, none of which an
-     * on-device engine can produce.
-     *
-     * createOnDeviceSpeechRecognizer is API 31, which is this app's minSdk, so there
-     * is no version to fall back for. A device without the German pack answers with
-     * ERROR_LANGUAGE_UNAVAILABLE, which [requestLanguageDownload] already turns into
-     * the system's own fetch - the same path that handled an English phone in Germany
-     * before this change.
-     */
-    private fun createRecognizer(): SpeechRecognizer =
-        SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-
     private fun buildIntent(languageTag: String) =
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -251,9 +406,6 @@ class SpeechRecognizerHelper @Inject constructor(
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-            // Belt and braces with createOnDeviceSpeechRecognizer: the extra is a
-            // request the engine may honour, the factory is the guarantee. Both say
-            // the same thing, so a future edit that loses one still keeps the promise.
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
 
@@ -269,25 +421,18 @@ class SpeechRecognizerHelper @Inject constructor(
         }
 
         override fun onRmsChanged(rmsdB: Float) {
-            // Most engines report roughly 0..10, louder to quietest. Normalise rather
-            // than passing raw dB through, so the waveform's amplitude means the same
-            // thing on every device.
             _rmsLevel.value = (rmsdB / 10f).coerceIn(0f, 1f)
         }
 
         override fun onBufferReceived(buffer: ByteArray?) {}
 
         override fun onEndOfSpeech() {
-            // Capture is over but the result is still in flight. Holding a distinct
-            // processing state stops the UI offering "record" again mid-answer.
             _isListening.value = false
             _isProcessing.value = true
             _rmsLevel.value = 0f
         }
 
         override fun onError(error: Int) {
-            // The code, never the audio or the transcript: which failure occurred is
-            // diagnostic, what the user said is not.
             Log.w(TAG, "Recognition failed with error code $error")
 
             _isListening.value = false
@@ -295,17 +440,11 @@ class SpeechRecognizerHelper @Inject constructor(
             _rmsLevel.value = 0f
 
             when (error) {
-                // The one error the app can actually do something about, rather than
-                // ask the user to try again at.
                 SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> {
                     requestLanguageDownload()
                     _errorState.value = messageFor(error)
                 }
 
-                // Recoverable by simply trying again. Surface the hint, then clear it
-                // on a timer so the control is ready without the user having to
-                // dismiss anything - a busy recogniser or a silent utterance is not a
-                // state worth leaving a red banner up for.
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
                     val message = messageFor(error)
@@ -313,9 +452,6 @@ class SpeechRecognizerHelper @Inject constructor(
                     scheduleErrorReset(message)
                 }
 
-                // A client-side failure usually means the recognizer object itself is
-                // in a bad state, so the next attempt rebuilds it instead of reusing a
-                // poisoned instance.
                 SpeechRecognizer.ERROR_CLIENT -> {
                     _errorState.value = messageFor(error)
                     teardownRecognizer()
@@ -346,12 +482,6 @@ class SpeechRecognizerHelper @Inject constructor(
 
     /**
      * Publishes a completed utterance and closes the session it belonged to.
-     *
-     * Internal rather than private so a test can drive one through without starting
-     * real speech recognition, which no test can do - the same reason
-     * [com.aus.deutschflow.ui.viewmodel.TranscriptViewModel.handleUtterance] is
-     * reachable. [RecognitionListener.onResults] is its only production caller, so a
-     * test that goes through here cannot drift from what the engine actually does.
      */
     @VisibleForTesting
     internal fun deliverUtterance(text: String) {
@@ -367,22 +497,10 @@ class SpeechRecognizerHelper @Inject constructor(
 
     /**
      * Asks the system to fetch the missing voice model.
-     *
-     * On a device whose system language is not German - an English phone in Germany,
-     * say - the on-device recogniser has no German pack, and answers every attempt
-     * with ERROR_LANGUAGE_UNAVAILABLE. There is nothing the user can do about that
-     * from inside this app, and "try again" is advice that can never come true.
-     * triggerModelDownload is the framework's own remedy for it.
      */
     private fun requestLanguageDownload() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-
-        try {
-            speechRecognizer?.triggerModelDownload(buildIntent(currentLanguage))
-        } catch (e: Exception) {
-            // A download that cannot be started is not worth a second error on top of
-            // the one already on screen.
-            Log.w(TAG, "Could not request the language download", e)
+        speechRecognizer?.let { recognizer ->
+            platformSeam.triggerModelDownload(recognizer, buildIntent(currentLanguage))
         }
     }
 
@@ -392,11 +510,6 @@ class SpeechRecognizerHelper @Inject constructor(
      */
     private fun messageFor(error: Int): String = context.getString(
         when (error) {
-            // API 33+. Both were falling through to the generic "try again", which is
-            // wrong in opposite directions: one is fixable and one is permanent, and
-            // neither is fixed by trying again. Android 16 answers triggerModelDownload
-            // with a system consent dialog rather than a silent fetch - the pack is
-            // ~118MB - so the message points at that prompt.
             SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> R.string.speech_error_language_unavailable
             SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> R.string.speech_error_language_unsupported
             SpeechRecognizer.ERROR_AUDIO -> R.string.speech_error_audio

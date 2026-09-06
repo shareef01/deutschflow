@@ -162,7 +162,7 @@ describe("the version 6 upgrade", () => {
 
     const db = new DeutschFlowDB(name);
     await db.open();
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     // Nothing is backfilled — the table starts empty either way. What matters is
     // that adding it leaves the library alone.
     expect(await loadConversation(db)).toEqual([]);

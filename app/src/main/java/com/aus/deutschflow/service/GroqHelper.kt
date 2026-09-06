@@ -90,10 +90,17 @@ class GroqHelper @Inject constructor(
         if (apiKey.isBlank()) {
             return AIResult.Failure(context.getString(R.string.ai_no_key))
         }
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) {
+            return AIResult.Failure(context.getString(R.string.ai_unreadable))
+        }
+        if (trimmed.length > MAX_AI_INPUT_CHARS) {
+            return AIResult.Failure("Input is too long (maximum $MAX_AI_INPUT_CHARS characters)")
+        }
 
         return withContext(Dispatchers.IO) {
             try {
-                val content = contentOf(post(requestBody(text), apiKey))
+                val content = contentOf(post(requestBody(trimmed), apiKey))
                 parseResponse(content)
                     ?: AIResult.Failure(context.getString(R.string.ai_unreadable))
             } catch (e: CancellationException) {
@@ -119,10 +126,17 @@ class GroqHelper @Inject constructor(
         if (apiKey.isBlank()) {
             return WordDetailsResult.Failure(context.getString(R.string.ai_no_key))
         }
+        val trimmed = word.trim()
+        if (trimmed.isEmpty()) {
+            return WordDetailsResult.Failure(context.getString(R.string.ai_unreadable))
+        }
+        if (trimmed.length > MAX_AI_INPUT_CHARS) {
+            return WordDetailsResult.Failure("Input is too long (maximum $MAX_AI_INPUT_CHARS characters)")
+        }
 
         return withContext(Dispatchers.IO) {
             try {
-                val content = contentOf(post(wordRequestBody(word), apiKey))
+                val content = contentOf(post(wordRequestBody(trimmed), apiKey))
                 parseWordDetails(content)
                     ?.let { WordDetailsResult.Success(it) }
                     ?: WordDetailsResult.Failure(context.getString(R.string.ai_unreadable))
@@ -180,17 +194,8 @@ class GroqHelper @Inject constructor(
      */
     private fun requestBody(text: String): String = JSONObject().apply {
         put("model", MODEL_NAME)
-        // Low, not zero: this is a translation, not a creative writing task, but the
-        // example sentence still wants some room.
         put("temperature", 0.2)
-        // The enforcement the prompt alone cannot give, and the reason [parseResponse]
-        // no longer has to survive the model's punctuation. The prefixed-line format
-        // this replaced split keywords on "," and grammar notes on ";" - so a keyword
-        // phrase containing a comma shattered into fragments, an explanation
-        // containing a semicolon was cut short, and a translation running to two lines
-        // lost everything after the first. None of those are exotic outputs; they were
-        // just invisible, because the parser produced a plausible-looking result each
-        // time. Interrogation has been pinned this way since it was written.
+        put("max_completion_tokens", 1024)
         put("response_format", JSONObject().put("type", "json_object"))
         put(
             "messages",
@@ -219,8 +224,8 @@ class GroqHelper @Inject constructor(
      */
     private fun wordRequestBody(word: String): String = JSONObject().apply {
         put("model", MODEL_NAME)
-        // Lower than the translation: this is extraction, not composition.
         put("temperature", 0.1)
+        put("max_completion_tokens", 1024)
         put("response_format", JSONObject().put("type", "json_object"))
         put(
             "messages",
@@ -273,10 +278,19 @@ class GroqHelper @Inject constructor(
         if (apiKey.isBlank()) {
             return RoleplayResult.Failure(context.getString(R.string.ai_no_key))
         }
+        val trimmedInput = userInput.trim()
+        if (trimmedInput.isEmpty()) {
+            return RoleplayResult.Failure("Input cannot be blank")
+        }
+        if (trimmedInput.length > MAX_ROLEPLAY_USER_CHARS) {
+            return RoleplayResult.Failure("Message is too long (maximum $MAX_ROLEPLAY_USER_CHARS characters)")
+        }
+        val safeScenario = safeSubstring(scenario.trim(), MAX_ROLEPLAY_SCENARIO_CHARS)
+        val safeHistory = filterAndTrimHistory(history)
 
         return withContext(Dispatchers.IO) {
             try {
-                val body = roleplayRequestBody(userInput, history, scenario)
+                val body = roleplayRequestBody(trimmedInput, safeHistory, safeScenario)
                 val content = contentOf(post(body, apiKey))
                 parseRoleplayTurn(content)
                     ?.let { (reply, gloss) -> RoleplayResult.Success(reply, gloss) }
@@ -297,6 +311,7 @@ class GroqHelper @Inject constructor(
     ): String = JSONObject().apply {
         put("model", MODEL_NAME)
         put("temperature", 0.7) // Higher for more natural conversation
+        put("max_completion_tokens", 512)
         
         val messages = JSONArray()
         // 1. System Prompt
@@ -305,7 +320,7 @@ class GroqHelper @Inject constructor(
             put("content", ROLEPLAY_SYSTEM_PROMPT.replace("<scenario>", scenario))
         })
         
-        // 2. Chat History
+        // 2. Chat History (already filtered and budgeted)
         history.forEach { (role, content) ->
             messages.put(JSONObject().apply {
                 put("role", role)
@@ -406,6 +421,49 @@ class GroqHelper @Inject constructor(
 
         private const val TIMEOUT_MS = 30_000
 
+        const val MAX_AI_INPUT_CHARS = 4_000
+        const val MAX_ROLEPLAY_USER_CHARS = 1_000
+        const val MAX_ROLEPLAY_SCENARIO_CHARS = 500
+        const val MAX_ROLEPLAY_MESSAGE_CHARS = 1_000
+        const val MAX_ROLEPLAY_HISTORY_TURNS = 12
+        const val MAX_ROLEPLAY_HISTORY_CHARS = 4_000
+        const val MAX_ROLEPLAY_REPLY_CHARS = 1_000
+        const val MAX_ROLEPLAY_CONTEXT_CHARS = 1_000
+
+        fun safeSubstring(text: String, maxChars: Int): String {
+            if (text.length <= maxChars) return text
+            var end = maxChars
+            if (end > 0 && Character.isHighSurrogate(text[end - 1])) {
+                end--
+            }
+            return text.substring(0, end)
+        }
+
+        fun filterAndTrimHistory(
+            history: List<Pair<String, String>>
+        ): List<Pair<String, String>> {
+            val valid = history.filter { (role, _) -> role == "user" || role == "assistant" }
+            val recent = if (valid.size > MAX_ROLEPLAY_HISTORY_TURNS) {
+                valid.takeLast(MAX_ROLEPLAY_HISTORY_TURNS)
+            } else {
+                valid
+            }
+            val bounded = recent.map { (role, content) ->
+                role to safeSubstring(content.trim(), MAX_ROLEPLAY_MESSAGE_CHARS)
+            }
+            val result = mutableListOf<Pair<String, String>>()
+            var totalChars = 0
+            for (i in bounded.indices.reversed()) {
+                val msg = bounded[i]
+                if (totalChars + msg.second.length > MAX_ROLEPLAY_HISTORY_CHARS) {
+                    break
+                }
+                totalChars += msg.second.length
+                result.add(0, msg)
+            }
+            return result
+        }
+
         /**
          * Bounds on what a single model answer may write into the library.
          *
@@ -470,8 +528,11 @@ class GroqHelper @Inject constructor(
                 }
             }
 
-            val reply = response.toString().trim()
-            return if (reply.isBlank()) null else reply to gloss.toString().trim()
+            val rawReply = response.toString().trim()
+            val rawGloss = gloss.toString().trim()
+            val reply = safeSubstring(rawReply, MAX_ROLEPLAY_REPLY_CHARS)
+            val finalGloss = safeSubstring(rawGloss, MAX_ROLEPLAY_CONTEXT_CHARS)
+            return if (reply.isBlank()) null else reply to finalGloss
         }
 
         private const val TRANSLATION_PREFIX = "Translation:"
