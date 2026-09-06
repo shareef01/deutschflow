@@ -607,7 +607,7 @@ class AppDatabaseMigrationTest {
             assertEquals(UUID_LENGTH, word.remoteId.length)
 
             val roleplayDao = database.roleplayDao()
-            assertEquals(emptyList<RoleplayMessageEntity>(), roleplayDao.getConversation())
+            assertEquals(emptyList<RoleplayMessageEntity>(), runBlocking { roleplayDao.getConversation() })
         } finally {
             database.close()
         }

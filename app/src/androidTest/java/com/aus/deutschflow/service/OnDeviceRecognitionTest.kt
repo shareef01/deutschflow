@@ -127,6 +127,7 @@ class OnDeviceRecognitionTest {
         val languageUnavailable = context.getString(R.string.speech_error_language_unavailable)
         val languageUnsupported = context.getString(R.string.speech_error_language_unsupported)
         val clientError = context.getString(R.string.speech_error_client)
+        val startFailed = context.getString(R.string.speech_start_failed)
         val unavailable = context.getString(R.string.speech_unavailable)
         val onDeviceUnavailable = context.getString(R.string.speech_on_device_unavailable)
 
