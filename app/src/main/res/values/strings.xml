@@ -16,7 +16,6 @@
     <string name="action_delete">Delete</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
-    <string name="action_copy">Copy</string>
     <string name="action_copied">Copied to clipboard</string>
     <string name="action_open_settings">Open settings</string>
     <string name="action_close">Close</string>
@@ -156,7 +155,6 @@
     <string name="roleplay_restart_session">Restart conversation</string>
     <string name="practice_tab">Repetition</string>
     <string name="study_skip">Skip card</string>
-    <string name="study_word_grammar">%1$s %2$s (pl. %3$s)</string>
     <string name="transcript_grammar_spotlight">Grammar Spotlight</string>
     <string name="transcript_listening_for">German · %1$s</string>
     <string name="detail_linguistic_connections">Linguistic Connections</string>
@@ -193,11 +191,8 @@
     <string name="settings_section_learning">Learning &amp; Notifications</string>
     <string name="settings_storage_local">Your learning library is stored on this device.</string>
     <string name="settings_section_data">Data Management</string>
-    <string name="settings_section_about">About DeutschFlow</string>
 
     <string name="settings_api_key_label">Groq API Key</string>
-    <string name="settings_api_key_helper">Used for real-time translation, grammar explanations, and roleplay.</string>
-    <string name="settings_api_key_saved_hint">Key saved securely in Android Keystore</string>
     <string name="settings_api_key_active">Key Configured</string>
     <string name="settings_api_key_not_set">Not Configured</string>
     <string name="settings_api_key_placeholder">Paste your API key here</string>

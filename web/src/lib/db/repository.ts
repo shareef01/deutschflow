@@ -1,5 +1,5 @@
 import type {
-  DeutschFlowDB, TranscriptEntry, UserStatsEntry, VocabularyEntry, ActivityEntry,
+  DeutschFlowDB, TranscriptEntry, UserStatsEntry, VocabularyEntry,
   RoleplayMessageEntry,
 } from "./schema";
 import { foldGermanKey } from "./schema";

@@ -21,7 +21,6 @@
     <string name="action_delete">Löschen</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_save">Speichern</string>
-    <string name="action_copy">Kopieren</string>
     <string name="action_copied">In die Zwischenablage kopiert</string>
     <string name="action_open_settings">Einstellungen öffnen</string>
     <string name="action_close">Schließen</string>
@@ -162,7 +161,6 @@
     <string name="roleplay_restart_session">Gespräch neu starten</string>
     <string name="practice_tab">Wiederholung</string>
     <string name="study_skip">Vorerst überspringen</string>
-    <string name="study_word_grammar">%1$s %2$s (Pl. %3$s)</string>
     <string name="transcript_grammar_spotlight">Grammatik im Fokus</string>
     <string name="transcript_listening_for">Erkennt: %1$s</string>
     <string name="detail_linguistic_connections">Sprachliche Verbindungen</string>
@@ -191,10 +189,7 @@
     <string name="settings_section_learning">Lernen &amp; Benachrichtigungen</string>
     <string name="settings_storage_local">Deine Lernbibliothek wird auf diesem Gerät gespeichert.</string>
     <string name="settings_section_data">Datenverwaltung</string>
-    <string name="settings_section_about">Über DeutschFlow</string>
     <string name="settings_api_key_label">Groq-API-Schlüssel</string>
-    <string name="settings_api_key_helper">Für Echtzeit-Übersetzung, Grammatikerklärungen und Rollenspiel.</string>
-    <string name="settings_api_key_saved_hint">Schlüssel sicher im Android Keystore gespeichert</string>
     <string name="settings_api_key_active">Schlüssel eingerichtet</string>
     <string name="settings_api_key_not_set">Nicht eingerichtet</string>
     <string name="settings_api_key_placeholder">Füge hier deinen API-Schlüssel ein</string>

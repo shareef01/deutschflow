@@ -38,6 +38,16 @@ export function Snackbar({
             {action.label}
           </button>
         )}
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss"
+            className="pointer-events-auto shrink-0 text-on-surface-variant hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow rounded px-1"
+          >
+            ✕
+          </button>
+        )}
       </div>
     </div>
   );

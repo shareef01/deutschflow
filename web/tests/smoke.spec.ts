@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 /**
  * Smoke suite: the five tab routes load, the bottom bar becomes a rail at the

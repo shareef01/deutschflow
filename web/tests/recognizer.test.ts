@@ -77,12 +77,6 @@ class FakeRecognition {
   }
 }
 
-function collectUtterances(): string[] {
-  const seen: string[] = [];
-  recognizer.onUtterance((text) => seen.push(text));
-  return seen;
-}
-
 const unsubscribers: Array<() => void> = [];
 
 beforeEach(() => {

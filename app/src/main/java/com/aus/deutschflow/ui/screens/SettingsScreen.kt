@@ -400,7 +400,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun SettingsSectionHeader(title: String) {
+private fun SettingsSectionHeader(title: String) {
     Text(
         text = title.uppercase(),
         style = MaterialTheme.typography.labelMedium,
@@ -412,7 +412,7 @@ fun SettingsSectionHeader(title: String) {
 }
 
 @Composable
-fun StatGridItem(modifier: Modifier, label: String, value: String) {
+private fun StatGridItem(modifier: Modifier, label: String, value: String) {
     Column(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)

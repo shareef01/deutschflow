@@ -245,7 +245,7 @@ export default function SettingsPage() {
 
       <div className="mt-12 text-center">
         <p className="text-xs font-medium uppercase tracking-[0.15em] text-on-surface-variant/60">
-          DeutschFlow v1.3.0 Obsidian
+          {t("settings.version", ["1.3.0 Obsidian"])}
         </p>
       </div>
 
@@ -266,7 +266,7 @@ export default function SettingsPage() {
       )}
 
       {message != null && (
-        <ModalDialog onDismiss={() => setMessage(null)} actions={<GlassButton onClick={() => setMessage(null)}>OK</GlassButton>}>
+        <ModalDialog onDismiss={() => setMessage(null)} actions={<GlassButton onClick={() => setMessage(null)}>{t("action.ok")}</GlassButton>}>
           <p className="text-body-medium text-on-surface pt-2">{message}</p>
         </ModalDialog>
       )}

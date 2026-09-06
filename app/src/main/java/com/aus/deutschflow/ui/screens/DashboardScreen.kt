@@ -68,7 +68,7 @@ fun DashboardScreen(
 }
 
 @Composable
-fun DailyGoalCard(
+private fun DailyGoalCard(
     xp: Int,
     streak: Int,
     onStartReview: () -> Unit
@@ -179,7 +179,7 @@ fun DailyGoalCard(
 }
 
 @Composable
-fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
+private fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
     GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(Spacing.lg)
@@ -219,7 +219,7 @@ fun MasteryBreakdownCard(stats: com.aus.deutschflow.ui.viewmodel.MasteryStats) {
 }
 
 @Composable
-fun RetentionTile(modifier: Modifier, label: String, count: Int, color: Color) {
+private fun RetentionTile(modifier: Modifier, label: String, count: Int, color: Color) {
     Column(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
@@ -243,7 +243,7 @@ fun RetentionTile(modifier: Modifier, label: String, count: Int, color: Color) {
 }
 
 @Composable
-fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.ActivityEntity>) {
+private fun ActivityHeatmapCard(logs: List<com.aus.deutschflow.data.local.entities.ActivityEntity>) {
     val today = LocalDate.now()
     val weeksToShow = 12
     val daysToShow = weeksToShow * 7

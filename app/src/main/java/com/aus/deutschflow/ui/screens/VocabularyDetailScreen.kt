@@ -169,7 +169,7 @@ fun VocabularyDetailScreen(
 }
 
 @Composable
-fun LinguisticBox(modifier: Modifier, title: String, content: String) {
+private fun LinguisticBox(modifier: Modifier, title: String, content: String) {
     Box(
         modifier = modifier
             .glassSurface(shape = MaterialTheme.shapes.medium)
