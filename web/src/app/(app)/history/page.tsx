@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHistory } from "@/hooks/useHistory";
 import { useI18n } from "@/hooks/useI18n";
+import { useClipboard } from "@/hooks/useClipboard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { ModalDialog } from "@/components/ui/ModalDialog";
@@ -32,6 +33,14 @@ export default function HistoryPage() {
     null
   );
   const snackbarTimer = useRef<number | null>(null);
+
+  const { copy: copyText, feedback: copyFeedback } = useClipboard();
+
+  useEffect(() => {
+    if (copyFeedback) {
+      showSnackbar(copyFeedback.message);
+    }
+  }, [copyFeedback]);
 
   useEffect(
     () => () => {
@@ -137,9 +146,8 @@ export default function HistoryPage() {
               </button>
               <button
                 type="button"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(viewingTranscript.fullText);
-                  showSnackbar(t("action.copied"));
+                onClick={() => {
+                  void copyText(viewingTranscript.fullText);
                 }}
                 aria-label={t("action.copy")}
                 className="press-scale rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-white/10 hover:text-on-surface active:bg-white/20"

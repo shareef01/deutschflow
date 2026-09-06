@@ -7,12 +7,29 @@ import type { VocabularyEntry } from "@/lib/db/schema";
 import type { TKey } from "@/lib/i18n";
 import { ReviewQuality, calculateNextReview } from "@/lib/ai/srs";
 
+export type StudyStatus = "loading" | "ready" | "error";
+
+export async function loadStudySession(database = db, now = Date.now()) {
+  const all = await getAllVocabulary(database);
+  const due = await getDueVocabulary(database, now);
+  const isExtra = due.length === 0;
+  const list = isExtra ? all : due;
+  return {
+    totalWords: all.length,
+    dueCount: due.length,
+    isExtraPractice: isExtra,
+    studyList: shuffle(list),
+  };
+}
+
 export function useStudy() {
   const [studyList, setStudyList] = useState<VocabularyEntry[]>([]);
   const [totalWords, setTotalWords] = useState(0);
+  const [dueCount, setDueCount] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [status, setStatus] = useState<StudyStatus>("loading");
+  const [loadError, setLoadError] = useState<TKey | null>(null);
 
   /**
    * True when this sitting is extra practice rather than the scheduler's queue.
@@ -40,19 +57,21 @@ export function useStudy() {
   const ttsError = useSyncExternalStore(tts.subscribe, tts.getSnapshot, tts.getSnapshot)?.error ?? null;
 
   const startSession = useCallback(async () => {
-    const all = await getAllVocabulary(db);
-    setTotalWords(all.length);
-    const due = await getDueVocabulary(db, Date.now());
-    // Android's StudyViewModel falls back to the whole library when nothing is
-    // due, so a user who cleared their queue can still re-drill. The web used
-    // to dead-end on an empty state instead.
-    const isExtra = due.length === 0;
-    const list = isExtra ? all : due;
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setIsExtraPractice(isExtra);
-    setStudyList(shuffle(list));
-    setHasLoaded(true);
+    setStatus("loading");
+    setLoadError(null);
+    try {
+      const session = await loadStudySession(db);
+      setTotalWords(session.totalWords);
+      setDueCount(session.dueCount);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+      setIsExtraPractice(session.isExtraPractice);
+      setStudyList(session.studyList);
+      setStatus("ready");
+    } catch {
+      setStatus("error");
+      setLoadError("study.loadError");
+    }
   }, []);
 
   /** Re-drills the whole library. Always extra practice, by definition. */
@@ -141,9 +160,13 @@ export function useStudy() {
   return {
     studyList,
     totalWords,
+    dueCount,
     currentIndex,
     isFlipped,
-    hasLoaded,
+    status,
+    loadError,
+    retry: startSession,
+    hasLoaded: status === "ready",
     isExtraPractice,
     reviewError,
     dismissReviewError: () => setReviewError(null),

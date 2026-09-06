@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,10 +56,10 @@ fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel(),
     onStartTranscript: () -> Unit = {}
 ) {
-    val history by viewModel.transcripts.collectAsState()
-    val historyQuery by viewModel.query.collectAsState()
-    val hasAnyHistory by viewModel.hasAnyHistory.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val history by viewModel.transcripts.collectAsStateWithLifecycle()
+    val historyQuery by viewModel.query.collectAsStateWithLifecycle()
+    val hasAnyHistory by viewModel.hasAnyHistory.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
     var viewingTranscript by remember { mutableStateOf<TranscriptEntity?>(null) }
 

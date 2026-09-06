@@ -307,7 +307,7 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                         {isListening ? <StopIcon className="size-8 text-white" /> : <MicIcon className="size-8 text-white" />}
                     </button>
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/50">
+                <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/80">
                     {isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
                 </span>
             </div>

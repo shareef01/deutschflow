@@ -21,6 +21,8 @@ export function ModalDialog({
 }) {
   const dialogRef = useDialogFocus<HTMLDivElement>(onDismiss);
 
+  const titleId = title ? "modal-dialog-title" : undefined;
+
   return (
     <div
       ref={dialogRef}
@@ -28,17 +30,17 @@ export function ModalDialog({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none"
       role="dialog"
       aria-modal="true"
-      aria-label={title ?? "Dialog"}
+      aria-labelledby={titleId}
+      aria-label={titleId ? undefined : "Dialog"}
     >
-      <button
-        type="button"
-        aria-label="Dismiss"
+      <div
+        aria-hidden="true"
         onClick={onDismiss}
         className="absolute inset-0 animate-backdrop-in cursor-default bg-black/60 backdrop-blur-sm"
       />
       <div className="relative w-full max-w-md animate-sheet-up rounded-xl bg-surface-container-high p-5 shadow-2xl">
         {title != null && (
-          <h2 className="text-title-medium font-bold text-on-surface">{title}</h2>
+          <h2 id={titleId} className="text-title-medium font-bold text-on-surface">{title}</h2>
         )}
         <div className={title != null ? "mt-4 space-y-2" : ""}>{children}</div>
         <div className="mt-6 flex justify-end gap-2">{actions}</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStudy } from "@/hooks/useStudy";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -10,48 +10,121 @@ import { CheckIcon, RefreshIcon, SchoolIcon, VolumeUpIcon } from "@/components/i
 import { ReviewQuality } from "@/lib/ai/srs";
 import { DashboardContent } from "@/components/ui/DashboardContent";
 
+const TABS = ["dashboard", "flashcards"] as const;
+type TabType = (typeof TABS)[number];
+
 export default function StudyPage() {
-  const [selectedTab, setSelectedTab] = useState<"dashboard" | "flashcards">("dashboard");
+  const study = useStudy();
+  const [selectedTab, setSelectedTab] = useState<TabType>("dashboard");
+  const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const { t } = useI18n();
+  const tabListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hasUserSelectedTab && study.status === "ready") {
+      if (study.dueCount > 0) {
+        setSelectedTab("flashcards");
+      } else {
+        setSelectedTab("dashboard");
+      }
+    }
+  }, [hasUserSelectedTab, study.status, study.dueCount]);
+
+  const handleTabSelect = (tab: TabType) => {
+    setHasUserSelectedTab(true);
+    setSelectedTab(tab);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      const nextTab = selectedTab === "dashboard" ? "flashcards" : "dashboard";
+      handleTabSelect(nextTab);
+      const nextBtn = tabListRef.current?.querySelector<HTMLButtonElement>(`#tab-${nextTab}`);
+      nextBtn?.focus();
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
-        {/* Tab Selector */}
-        <div className="flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md">
-            {(["dashboard", "flashcards"] as const).map((tab) => (
-                <button
-                    key={tab}
-                    onClick={() => setSelectedTab(tab)}
-                    className={`px-6 py-4 text-sm font-bold uppercase tracking-widest transition-all ${
-                        selectedTab === tab
-                        ? "text-primary border-b-2 border-primary"
-                        : "text-on-surface-variant hover:text-on-surface"
-                    }`}
-                >
-                    {tab === "dashboard" ? t("dashboard.tab") : t("dashboard.flashcardsTab")}
-                </button>
-            ))}
+      {/* Accessible Tablist */}
+      <div
+        ref={tabListRef}
+        role="tablist"
+        aria-label={t("nav.study")}
+        onKeyDown={handleKeyDown}
+        className="flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md"
+      >
+        {TABS.map((tab) => {
+          const isSelected = selectedTab === tab;
+          return (
+            <button
+              key={tab}
+              id={`tab-${tab}`}
+              role="tab"
+              type="button"
+              aria-selected={isSelected}
+              aria-controls={`panel-${tab}`}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => handleTabSelect(tab)}
+              className={`px-6 py-4 text-sm font-bold uppercase tracking-widest transition-all focus-visible:outline-2 focus-visible:outline-azure-glow focus-visible:outline-offset-2 ${
+                isSelected
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              {tab === "dashboard" ? t("dashboard.tab") : t("dashboard.flashcardsTab")}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex-1 min-h-0">
+        <div
+          id="panel-dashboard"
+          role="tabpanel"
+          aria-labelledby="tab-dashboard"
+          hidden={selectedTab !== "dashboard"}
+          className="h-full"
+        >
+          {selectedTab === "dashboard" && <DashboardContent />}
         </div>
 
-        <div className="flex-1 min-h-0">
-            {selectedTab === "dashboard" ? (
-              <DashboardContent />
-            ) : (
-              <FlashcardMode onNavigateToDashboard={() => setSelectedTab("dashboard")} />
-            )}
+        <div
+          id="panel-flashcards"
+          role="tabpanel"
+          aria-labelledby="tab-flashcards"
+          hidden={selectedTab !== "flashcards"}
+          className="h-full"
+        >
+          {selectedTab === "flashcards" && (
+            <FlashcardMode
+              study={study}
+              onNavigateToDashboard={() => handleTabSelect("dashboard")}
+            />
+          )}
         </div>
+      </div>
     </div>
   );
 }
 
-function FlashcardMode({ onNavigateToDashboard }: { onNavigateToDashboard: () => void }) {
+function FlashcardMode({
+  study,
+  onNavigateToDashboard,
+}: {
+  study: ReturnType<typeof useStudy>;
+  onNavigateToDashboard: () => void;
+}) {
   const { t } = useI18n();
   const {
     studyList,
     totalWords,
     currentIndex,
     isFlipped,
-    hasLoaded,
+    status,
+    loadError,
+    retry,
     isExtraPractice,
     reviewError,
     ttsError,
@@ -61,7 +134,7 @@ function FlashcardMode({ onNavigateToDashboard }: { onNavigateToDashboard: () =>
     restartSession,
     autoPlay,
     speak,
-  } = useStudy();
+  } = study;
 
   const safeIndex = Math.min(Math.max(currentIndex, 0), Math.max(studyList.length - 1, 0));
   const currentItem = studyList[safeIndex];
@@ -70,7 +143,28 @@ function FlashcardMode({ onNavigateToDashboard }: { onNavigateToDashboard: () =>
     if (currentItem) autoPlay(currentItem.germanText);
   }, [currentIndex, currentItem?.id, autoPlay, currentItem]);
 
-  if (!hasLoaded) return null;
+  if (status === "loading") {
+    return (
+      <div className="flex h-full min-h-[300px] items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-2 border-azure-glow border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <div className="flex h-full min-h-[300px] flex-col items-center justify-center p-6 text-center">
+        <p className="text-body-large text-error">{loadError ? t(loadError) : t("study.loadError")}</p>
+        <button
+          type="button"
+          onClick={() => void retry()}
+          className="glass-button mt-4 px-5 py-2 text-label-large font-semibold text-azure-glow hover:underline"
+        >
+          {t("action.retry")}
+        </button>
+      </div>
+    );
+  }
 
   if (totalWords === 0) {
     return (
@@ -135,67 +229,70 @@ function FlashcardMode({ onNavigateToDashboard }: { onNavigateToDashboard: () =>
         </span>
       </div>
 
-      <div className="flex w-full flex-1 items-center justify-center">
-        <div
-          role="region"
-          tabIndex={0}
-          onClick={flipCard}
-          onKeyDown={(event) => {
-            if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
-              event.preventDefault();
-              flipCard();
-            }
-          }}
-          aria-label={isFlipped ? t("study.showGerman") : t("study.showTranslation")}
-          className="glass-surface block w-full min-h-[260px] max-h-[440px] max-w-2xl [perspective:1200px] cursor-pointer focus-visible:outline-2 focus-visible:outline-azure-glow shadow-xl shadow-azure-glow/10 hover:shadow-2xl hover:shadow-azure-glow/20 transition-shadow select-none"
-        >
-          <div
-            className={`relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] ${
-              isFlipped ? "[transform:rotateY(180deg)]" : ""
-            }`}
+      <div className="flex w-full flex-1 items-center justify-center py-4">
+        <div className="relative w-full max-w-2xl min-h-[260px]">
+          {/* Main accessible flip card button */}
+          <button
+            type="button"
+            onClick={flipCard}
+            aria-expanded={isFlipped}
+            aria-label={isFlipped ? t("study.showGerman") : t("study.showTranslation")}
+            className="glass-surface relative block w-full min-h-[260px] max-h-[440px] [perspective:1200px] cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-azure-glow shadow-xl shadow-azure-glow/10 hover:shadow-2xl hover:shadow-azure-glow/20 transition-shadow select-none rounded-2xl motion-reduce:transition-none"
           >
-            {/* Front: German */}
-            <div className="absolute inset-0 flex items-center justify-center [backface-visibility:hidden]">
-              <div className="flex flex-col items-center px-7 py-8 text-center">
-                <span className="text-label-small font-medium text-on-surface-muted">
-                  {t("library.fieldGerman")}
-                </span>
-                <h2 className="mt-3 text-3xl font-bold text-azure-glow">{currentItem.germanText}</h2>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    speak(currentItem.germanText);
-                  }}
-                  aria-label={t("action.speak")}
-                  className="press-scale mt-5 rounded-full p-3 text-azure-glow hover:opacity-80 transition-opacity focus-visible:outline-2 focus-visible:outline-azure-glow"
-                >
-                  <VolumeUpIcon className="size-7" />
-                </button>
-                <span className="mt-5 text-xs font-medium text-on-surface-muted uppercase tracking-wider">{t("study.tapToFlip")}</span>
+            <div
+              className={`relative h-full w-full min-h-[260px] transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none ${
+                isFlipped ? "[transform:rotateY(180deg)]" : ""
+              }`}
+            >
+              {/* Front: German */}
+              <div className="absolute inset-0 flex items-center justify-center [backface-visibility:hidden]">
+                <div className="flex flex-col items-center px-7 py-8 text-center">
+                  <span className="text-label-small font-medium text-on-surface-muted">
+                    {t("library.fieldGerman")}
+                  </span>
+                  <h2 className="mt-3 text-3xl font-bold text-azure-glow">{currentItem.germanText}</h2>
+                  <span className="mt-8 text-xs font-medium text-on-surface-muted uppercase tracking-wider">
+                    {t("study.tapToFlip")}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            {/* Back: Translation */}
-            <div className="absolute inset-0 flex items-center justify-center [transform:rotateY(180deg)] [backface-visibility:hidden]">
-              <div className="flex flex-col items-center px-7 py-8 text-center">
-                <span className="text-label-small font-medium text-on-surface-muted">
-                  {t("library.fieldTranslation")}
-                </span>
-                <h2 className="mt-3 text-3xl font-bold text-on-surface">
-                  {currentItem.englishTranslation}
-                </h2>
-                <div className="mt-4 flex flex-col gap-1">
-                    {currentItem.article !== "none" && (
-                         <span className="text-sm font-semibold text-secondary">{currentItem.article} {currentItem.germanText}</span>
+              {/* Back: Translation */}
+              <div className="absolute inset-0 flex items-center justify-center [transform:rotateY(180deg)] [backface-visibility:hidden]">
+                <div className="flex flex-col items-center px-7 py-8 text-center">
+                  <span className="text-label-small font-medium text-on-surface-muted">
+                    {t("library.fieldTranslation")}
+                  </span>
+                  <h2 className="mt-3 text-3xl font-bold text-on-surface">
+                    {currentItem.englishTranslation}
+                  </h2>
+                  <div className="mt-4 flex flex-col gap-1">
+                    {currentItem.article && currentItem.article !== "none" && (
+                      <span className="text-sm font-semibold text-secondary">
+                        {currentItem.article} {currentItem.germanText}
+                      </span>
                     )}
                     {currentItem.plural && (
-                         <span className="text-xs text-on-surface-muted">pl. {currentItem.plural}</span>
+                      <span className="text-xs text-on-surface-muted">pl. {currentItem.plural}</span>
                     )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </button>
+
+          {/* Standalone Speak button - NOT nested inside the flip button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              speak(currentItem.germanText);
+            }}
+            aria-label={t("action.speak")}
+            className="press-scale absolute top-4 right-4 z-10 rounded-full p-2.5 text-azure-glow hover:bg-azure-glow/10 transition-colors focus-visible:outline-2 focus-visible:outline-azure-glow"
+          >
+            <VolumeUpIcon className="size-6" />
+          </button>
         </div>
       </div>
 

@@ -234,6 +234,7 @@
 
     <!-- Speech recognition -->
     <string name="speech_unavailable">Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>
+    <string name="speech_on_device_unavailable">Geräteinterne Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>
     <string name="speech_start_failed">Aufnahme konnte nicht gestartet werden. Versuche es erneut.</string>
     <string name="speech_error_audio">Mikrofon nicht verfügbar. Schließe andere Apps, die es benutzen, und versuche es erneut.</string>
     <string name="speech_error_client">Aufnahme konnte nicht gestartet werden. Versuche es erneut.</string>

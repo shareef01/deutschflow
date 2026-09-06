@@ -76,7 +76,7 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-3xl font-black text-on-surface leading-none">{xp}</span>
-          <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">XP</span>
+          <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mt-1">XP</span>
         </div>
       </div>
 
@@ -121,7 +121,7 @@ function RetentionTile({ label, count, color }: { label: string; count: number; 
   return (
     <div className="bg-surface-variant/20 rounded-2xl p-5 border border-on-surface/5">
       <span className={`text-3xl font-black ${color}`}>{count}</span>
-      <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">{label}</p>
+      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mt-1">{label}</p>
     </div>
   );
 }
@@ -130,25 +130,22 @@ function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate 
   const weeksToShow = 12;
   const daysToShow = weeksToShow * 7;
   const activityMap = useMemo(() => {
-      const map = new Map<string, number>();
-      logs.forEach(log => map.set(log.date, log.xpGained));
-      return map;
+    const map = new Map<string, number>();
+    logs.forEach((log) => map.set(log.date, log.xpGained));
+    return map;
   }, [logs]);
 
   const cells = useMemo(() => {
-      const result = [];
-      const today = new Date();
-      for (let i = 0; i < daysToShow; i++) {
-          const d = new Date(today);
-          d.setDate(today.getDate() - (daysToShow - 1 - i));
-          // todayKey, not toISOString: the map is keyed by local calendar dates —
-          // the same key addActivityXp writes. A UTC key rolled evening XP onto
-          // the wrong cell for every user outside UTC.
-          const dateStr = todayKey(d);
-          const xp = activityMap.get(dateStr) || 0;
-          result.push({ date: dateStr, xp });
-      }
-      return result;
+    const result = [];
+    const today = new Date();
+    for (let i = 0; i < daysToShow; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (daysToShow - 1 - i));
+      const dateStr = todayKey(d);
+      const xp = activityMap.get(dateStr) || 0;
+      result.push({ date: dateStr, xp });
+    }
+    return result;
   }, [activityMap, daysToShow]);
 
   const activeDays = useMemo(() => cells.filter((c) => c.xp > 0).length, [cells]);
@@ -166,18 +163,28 @@ function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate 
           className="grid grid-flow-col grid-rows-7 gap-1.5 h-32 w-fit"
         >
           {cells.map((cell, i) => {
-              const color = cell.xp >= 100 ? 'bg-tertiary' :
-                           cell.xp >= 50 ? 'bg-tertiary/70' :
-                           cell.xp >= 20 ? 'bg-tertiary/40' :
-                           cell.xp > 0 ? 'bg-tertiary/20' : 'bg-on-surface/5';
-              return (
-                  <div key={i} className={`size-3 rounded-[2px] ${color}`} title={`${cell.date}: ${cell.xp} XP`} />
-              )
+            const color =
+              cell.xp >= 100
+                ? "bg-tertiary"
+                : cell.xp >= 50
+                  ? "bg-tertiary/70"
+                  : cell.xp >= 20
+                    ? "bg-tertiary/40"
+                    : cell.xp > 0
+                      ? "bg-tertiary/20"
+                      : "bg-on-surface/5";
+            return (
+              <div
+                key={i}
+                className={`size-3 rounded-[2px] ${color}`}
+                title={`${cell.date}: ${cell.xp} XP`}
+              />
+            );
           })}
         </div>
       </div>
 
-      <p className="text-[10px] font-medium text-on-surface-variant uppercase tracking-widest opacity-50">
+      <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider opacity-75">
         {t("dashboard.heatmapSub")}
       </p>
     </div>

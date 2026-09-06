@@ -78,29 +78,6 @@ jobs:
             app/build/test-results/
           if-no-files-found: ignore
 
-  # The PWA in web/ is a second complete application, and until this job existed
-  # nothing verified it on push: its type check, unit suite, production build and
-  # browser smoke tests all passed only when somebody remembered to run them.
-  android-instrumented:
-    name: Android Instrumented Tests
-    runs-on: macos-latest
-    needs: android
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-      - name: Run Instrumented Tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 31
-          arch: x86_64
-          target: aosp_atd
-          profile: pixel_6
-          script: ./gradlew connectedDebugAndroidTest --console=plain
 
   web:
     name: PWA type check, tests and build

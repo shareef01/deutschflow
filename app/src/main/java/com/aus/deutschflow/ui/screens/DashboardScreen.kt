@@ -11,7 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -44,10 +44,10 @@ fun DashboardScreen(
     onStartReview: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
-    val userStats by viewModel.userStats.collectAsState()
-    val activityLog by viewModel.activityLog.collectAsState()
-    val masteryStats by viewModel.masteryStats.collectAsState()
-    val todayXp by viewModel.todayXp.collectAsState()
+    val userStats by viewModel.userStats.collectAsStateWithLifecycle()
+    val activityLog by viewModel.activityLog.collectAsStateWithLifecycle()
+    val masteryStats by viewModel.masteryStats.collectAsStateWithLifecycle()
+    val todayXp by viewModel.todayXp.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier

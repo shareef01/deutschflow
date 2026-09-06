@@ -230,26 +230,42 @@ function VocabularyListContent({
         <StatCell value={String(withExample)} label={t("library.statExamples")} />
       </div>
 
-      <div className="mt-3 flex gap-2">
+      <div
+        role="radiogroup"
+        aria-label={t("library.sortBy")}
+        className="mt-3 flex gap-2"
+      >
         {(
           [
             ["newest", t("library.sortNewest")],
             ["alpha", t("library.sortAlphabetical")],
           ] as const
-        ).map(([mode, label]) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => onSortChange(mode)}
-            className={`press-scale flex min-h-11 items-center rounded-full border px-4 text-label-medium ${
-              sortMode === mode
-                ? "border-azure-glow/60 bg-secondary-container/60 text-on-secondary-container"
-                : "border-outline-variant bg-glass-fill text-on-surface-variant"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        ).map(([mode, label]) => {
+          const isSelected = sortMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => onSortChange(mode)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  onSortChange(mode === "newest" ? "alpha" : "newest");
+                }
+              }}
+              className={`press-scale flex min-h-11 items-center rounded-full border px-4 text-label-medium focus-visible:outline-2 focus-visible:outline-azure-glow ${
+                isSelected
+                  ? "border-azure-glow/60 bg-secondary-container/60 text-on-secondary-container font-semibold"
+                  : "border-outline-variant bg-glass-fill text-on-surface-variant"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="mt-3 min-h-0 flex-1">
@@ -459,8 +475,8 @@ function VocabularyDetail({
 function LinguisticBox({ title, content }: { title: string; content: string }) {
     return (
         <div className="glass-surface p-4 flex flex-col gap-1 min-w-0">
-            <span className="text-[10px] font-bold text-primary tracking-widest">{title}</span>
-            <p className={`text-sm hyphens-auto break-words ${content ? 'text-on-surface' : 'text-on-surface-variant opacity-50'}`}>
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">{title}</span>
+            <p className={`text-sm hyphens-auto break-words ${content ? 'text-on-surface' : 'text-on-surface-variant opacity-70'}`}>
                 {content || "—"}
             </p>
         </div>

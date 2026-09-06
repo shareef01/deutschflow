@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -61,23 +62,23 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
-    val partialText by viewModel.partialText.collectAsState()
-    val finalText by viewModel.finalText.collectAsState()
-    val translation by viewModel.translation.collectAsState()
-    val isListening by viewModel.isListening.collectAsState()
-    val isBusy by viewModel.isBusy.collectAsState()
-    val suggestedWords by viewModel.suggestedWords.collectAsState()
-    val grammarNotes by viewModel.grammarNotes.collectAsState()
-    val errorState by viewModel.errorState.collectAsState()
-    val ttsError by viewModel.ttsError.collectAsState()
-    val aiError by viewModel.aiError.collectAsState()
-    val wordDetails by viewModel.wordDetails.collectAsState()
-    val wordDetailError by viewModel.wordDetailError.collectAsState()
-    val interrogatingWord by viewModel.interrogatingWord.collectAsState()
-    val selectedDialect by viewModel.selectedDialect.collectAsState()
-    val isFirstRun by viewModel.isFirstRun.collectAsState()
-    val listeningSeconds by viewModel.listeningSeconds.collectAsState()
-    val permissionDenied by viewModel.permissionDenied.collectAsState()
+    val partialText by viewModel.partialText.collectAsStateWithLifecycle()
+    val finalText by viewModel.finalText.collectAsStateWithLifecycle()
+    val translation by viewModel.translation.collectAsStateWithLifecycle()
+    val isListening by viewModel.isListening.collectAsStateWithLifecycle()
+    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
+    val suggestedWords by viewModel.suggestedWords.collectAsStateWithLifecycle()
+    val grammarNotes by viewModel.grammarNotes.collectAsStateWithLifecycle()
+    val errorState by viewModel.errorState.collectAsStateWithLifecycle()
+    val ttsError by viewModel.ttsError.collectAsStateWithLifecycle()
+    val aiError by viewModel.aiError.collectAsStateWithLifecycle()
+    val wordDetails by viewModel.wordDetails.collectAsStateWithLifecycle()
+    val wordDetailError by viewModel.wordDetailError.collectAsStateWithLifecycle()
+    val interrogatingWord by viewModel.interrogatingWord.collectAsStateWithLifecycle()
+    val selectedDialect by viewModel.selectedDialect.collectAsStateWithLifecycle()
+    val isFirstRun by viewModel.isFirstRun.collectAsStateWithLifecycle()
+    val listeningSeconds by viewModel.listeningSeconds.collectAsStateWithLifecycle()
+    val permissionDenied by viewModel.permissionDenied.collectAsStateWithLifecycle()
 
     val amplitude = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(viewModel) {

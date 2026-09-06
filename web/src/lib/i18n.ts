@@ -11,6 +11,7 @@ export type Lang = "en" | "de";
 export const STRINGS = {
   en: {
     // Navigation
+    "nav.primary": "Primary navigation",
     "nav.transcript": "Transcript",
     "nav.history": "History",
     "nav.library": "Library",
@@ -29,6 +30,8 @@ export const STRINGS = {
     "action.copy": "Copy",
     "action.close": "Close",
     "action.copied": "Copied to clipboard",
+    "action.copyFailed": "Couldn't copy to clipboard",
+    "action.retry": "Retry",
     "action.ok": "OK",
 
     // Transcript
@@ -79,6 +82,7 @@ export const STRINGS = {
     "library.statWords": "Words",
     "library.statPhrases": "Phrases",
     "library.statExamples": "With example",
+    "library.sortBy": "Sort vocabulary by",
     "library.sortNewest": "Newest",
     "library.sortAlphabetical": "A–Z",
     "library.dialogAddTitle": "Add a word",
@@ -100,6 +104,7 @@ export const STRINGS = {
     "detail.antonyms": "Antonyms",
 
     // Study
+    "study.loadError": "Couldn't load study cards. Try again.",
     "study.extraPractice": "Nothing is due today — this is extra practice, so your schedule won't change.",
     "study.reviewNotSaved": "Couldn't save that review. Try answering the card again.",
     "study.emptyTitle": "Ready to study?",
@@ -200,6 +205,14 @@ export const STRINGS = {
     "settings.dialectHeader": "Speech recognition",
     "settings.notificationsHeader": "Notifications",
     "settings.dataHeader": "Data",
+    "settings.storageHeader": "Storage durability",
+    "settings.storagePersisted": "Persistent storage is active",
+    "settings.storageBestEffort": "Standard storage (may be cleared if device runs low on space)",
+    "settings.storageRequest": "Request persistent storage",
+    "settings.storageUnsupported": "Persistent storage is not supported in this browser",
+    "settings.backupLast": "Last backup: {0}",
+    "settings.backupNever": "Never backed up",
+    "settings.backupReminder": "You have {0} saved words without a recent backup. Download a copy to protect your data.",
     "settings.dialectDe": "Germany (de-DE)",
     "settings.dialectAt": "Austria (de-AT)",
     "settings.dialectCh": "Switzerland (de-CH)",
@@ -258,6 +271,7 @@ export const STRINGS = {
   },
   de: {
     // Navigation — "du" throughout, like the Android German resources.
+    "nav.primary": "Hauptnavigation",
     "nav.transcript": "Transkript",
     "nav.history": "Verlauf",
     "nav.library": "Bibliothek",
@@ -275,6 +289,8 @@ export const STRINGS = {
     "action.copy": "Kopieren",
     "action.close": "Schließen",
     "action.copied": "In die Zwischenablage kopiert",
+    "action.copyFailed": "Kopieren fehlgeschlagen",
+    "action.retry": "Wiederholen",
     "action.ok": "OK",
 
     "speech.unavailableBody": "Dieser Browser kann keine Sprache erkennen. Chrome, Edge und Safari können es — oder tippe unten einen Satz.",
@@ -322,6 +338,7 @@ export const STRINGS = {
     "library.statWords": "Wörter",
     "library.statPhrases": "Sätze",
     "library.statExamples": "Mit Beispielsatz",
+    "library.sortBy": "Wortschatz sortieren nach",
     "library.sortNewest": "Neueste",
     "library.sortAlphabetical": "A–Z",
     "library.dialogAddTitle": "Wort hinzufügen",
@@ -341,6 +358,7 @@ export const STRINGS = {
     "detail.synonyms": "Synonyme",
     "detail.antonyms": "Antonyme",
 
+    "study.loadError": "Lernkarten konnten nicht geladen werden. Bitte erneut versuchen.",
     "study.extraPractice": "Heute ist nichts fällig — das ist zusätzliche Übung, dein Plan ändert sich dadurch nicht.",
     "study.reviewNotSaved": "Diese Bewertung konnte nicht gespeichert werden. Beantworte die Karte noch einmal.",
     "study.emptyTitle": "Bereit zum Lernen?",
@@ -435,6 +453,14 @@ export const STRINGS = {
     "settings.dialectHeader": "Spracherkennung",
     "settings.notificationsHeader": "Benachrichtigungen",
     "settings.dataHeader": "Daten",
+    "settings.storageHeader": "Speicherdauerhaftigkeit",
+    "settings.storagePersisted": "Dauerhafter Speicher ist aktiv",
+    "settings.storageBestEffort": "Standard-Speicher (kann bei Platzmangel gelöscht werden)",
+    "settings.storageRequest": "Dauerhaften Speicher anfordern",
+    "settings.storageUnsupported": "Dauerhafter Speicher wird in diesem Browser nicht unterstützt",
+    "settings.backupLast": "Letzte Sicherung: {0}",
+    "settings.backupNever": "Noch nie gesichert",
+    "settings.backupReminder": "Du hast {0} Wörter ohne aktuelle Sicherung. Lade eine Kopie herunter, um Datenverlust zu vermeiden.",
     "settings.dialectDe": "Deutschland (de-DE)",
     "settings.dialectAt": "Österreich (de-AT)",
     "settings.dialectCh": "Schweiz (de-CH)",

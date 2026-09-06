@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,12 +82,12 @@ fun PracticeScreen(
 
 @Composable
 fun ShadowingMode(viewModel: PracticeViewModel) {
-    val targetSentence by viewModel.targetSentence.collectAsState()
-    val feedback by viewModel.feedback.collectAsState()
-    val isListening by viewModel.isListening.collectAsState()
-    val spokenText by viewModel.finalText.collectAsState()
-    val wordResults by viewModel.wordResults.collectAsState()
-    val errorState by viewModel.errorState.collectAsState()
+    val targetSentence by viewModel.targetSentence.collectAsStateWithLifecycle()
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    val isListening by viewModel.isListening.collectAsStateWithLifecycle()
+    val spokenText by viewModel.finalText.collectAsStateWithLifecycle()
+    val wordResults by viewModel.wordResults.collectAsStateWithLifecycle()
+    val errorState by viewModel.errorState.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current

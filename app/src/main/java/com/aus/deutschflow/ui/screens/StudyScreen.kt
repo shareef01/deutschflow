@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +34,20 @@ import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 
 @Composable
 fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(1) } // Default to Flashcards
+    val hasLoaded by viewModel.hasLoaded.collectAsStateWithLifecycle()
+    val isExtraPractice by viewModel.isExtraPractice.collectAsStateWithLifecycle()
+    val studyList by viewModel.studyList.collectAsStateWithLifecycle()
+
+    var userSelectedTab by rememberSaveable { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(1) } // 0 = Dashboard, 1 = Flashcards
+
+    LaunchedEffect(hasLoaded, isExtraPractice, studyList.size) {
+        if (!userSelectedTab && hasLoaded) {
+            val hasDueCards = !isExtraPractice && studyList.isNotEmpty()
+            selectedTab = if (hasDueCards) 1 else 0
+        }
+    }
+
     val tabLabels = listOf(
         stringResource(R.string.dashboard_tab),
         stringResource(R.string.dashboard_flashcards_tab)
@@ -44,17 +58,26 @@ fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
         SegmentedTabs(
             selectedIndex = selectedTab,
             tabs = tabLabels,
-            onTabSelected = { selectedTab = it }
+            onTabSelected = {
+                userSelectedTab = true
+                selectedTab = it
+            }
         )
         Spacer(modifier = Modifier.height(Spacing.xs))
 
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == 0) {
-                DashboardScreen(onStartReview = { selectedTab = 1 })
+                DashboardScreen(onStartReview = {
+                    userSelectedTab = true
+                    selectedTab = 1
+                })
             } else {
                 StudySessionContent(
                     viewModel = viewModel,
-                    onNavigateToDashboard = { selectedTab = 0 }
+                    onNavigateToDashboard = {
+                        userSelectedTab = true
+                        selectedTab = 0
+                    }
                 )
             }
         }
@@ -66,20 +89,20 @@ fun StudySessionContent(
     viewModel: StudyViewModel,
     onNavigateToDashboard: () -> Unit
 ) {
-    val studyList by viewModel.studyList.collectAsState()
-    val currentIndex by viewModel.currentIndex.collectAsState()
-    val isFlipped by viewModel.isFlipped.collectAsState()
-    val hasLoaded by viewModel.hasLoaded.collectAsState()
-    val allWordsCount by viewModel.allWordsCount.collectAsState()
-    val sessionReviewedCount by viewModel.sessionReviewedCount.collectAsState()
-    val isSubmitting by viewModel.isSubmitting.collectAsState()
-    val ttsError by viewModel.ttsError.collectAsState()
+    val studyList by viewModel.studyList.collectAsStateWithLifecycle()
+    val currentIndex by viewModel.currentIndex.collectAsStateWithLifecycle()
+    val isFlipped by viewModel.isFlipped.collectAsStateWithLifecycle()
+    val hasLoaded by viewModel.hasLoaded.collectAsStateWithLifecycle()
+    val allWordsCount by viewModel.allWordsCount.collectAsStateWithLifecycle()
+    val sessionReviewedCount by viewModel.sessionReviewedCount.collectAsStateWithLifecycle()
+    val isSubmitting by viewModel.isSubmitting.collectAsStateWithLifecycle()
+    val ttsError by viewModel.ttsError.collectAsStateWithLifecycle()
     // Both of these existed on the ViewModel and were rendered by nothing, so a
     // review that failed to save looked exactly like one that succeeded, and an
     // extra-practice sitting looked exactly like a scheduled one. The web port
     // has shown both since they were added.
-    val reviewError by viewModel.reviewError.collectAsState()
-    val isExtraPractice by viewModel.isExtraPractice.collectAsState()
+    val reviewError by viewModel.reviewError.collectAsStateWithLifecycle()
+    val isExtraPractice by viewModel.isExtraPractice.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(Unit) {

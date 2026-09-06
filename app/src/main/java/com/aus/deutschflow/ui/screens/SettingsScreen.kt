@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,13 +41,13 @@ import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
-    val totalVocab by viewModel.totalVocabulary.collectAsState()
-    val totalTranscripts by viewModel.totalTranscripts.collectAsState()
-    val userStats by viewModel.userStats.collectAsState()
-    val hasApiKey by viewModel.hasApiKey.collectAsState()
-    val selectedDialect by viewModel.selectedDialect.collectAsState()
-    val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsState()
-    val message by viewModel.message.collectAsState()
+    val totalVocab by viewModel.totalVocabulary.collectAsStateWithLifecycle()
+    val totalTranscripts by viewModel.totalTranscripts.collectAsStateWithLifecycle()
+    val userStats by viewModel.userStats.collectAsStateWithLifecycle()
+    val hasApiKey by viewModel.hasApiKey.collectAsStateWithLifecycle()
+    val selectedDialect by viewModel.selectedDialect.collectAsStateWithLifecycle()
+    val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
 
     var apiKeyInput by remember(hasApiKey) { mutableStateOf("") }
     var isApiKeyVisible by remember { mutableStateOf(false) }

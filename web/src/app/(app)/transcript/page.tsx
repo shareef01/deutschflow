@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranscript } from "@/hooks/useTranscript";
 import { useDialect } from "@/hooks/useSettings";
+import { useClipboard } from "@/hooks/useClipboard";
 import { db } from "@/lib/db";
 import { setDialect, DIALECTS, type Dialect } from "@/lib/db/settings";
 import { useI18n } from "@/hooks/useI18n";
@@ -42,7 +43,16 @@ export default function TranscriptPage() {
   const saveDialect = (dialect: Dialect) => void setDialect(db, dialect);
 
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [snackbarVariant, setSnackbarVariant] = useState<"default" | "error">("default");
   const snackbarTimer = useRef<number | null>(null);
+
+  const { copy: copyText, feedback: copyFeedback } = useClipboard();
+
+  useEffect(() => {
+    if (copyFeedback) {
+      showSnackbar(copyFeedback.message, copyFeedback.variant);
+    }
+  }, [copyFeedback]);
 
   // The timer outlives the component that set it; a state-set after unmount is
   // a no-op in React 19, but the timeout itself would still fire.
@@ -67,15 +77,16 @@ export default function TranscriptPage() {
     recordingSeconds % 60
   ).padStart(2, "0")}`;
 
-  const showSnackbar = (message: string) => {
+  const showSnackbar = (message: string, variant: "default" | "error" = "default") => {
     setSnackbar(message);
+    setSnackbarVariant(variant);
     if (snackbarTimer.current !== null) window.clearTimeout(snackbarTimer.current);
     snackbarTimer.current = window.setTimeout(() => setSnackbar(null), 3_000);
   };
 
   useEffect(() => {
     if (state.wordDetailError) {
-      showSnackbar(state.wordDetailError);
+      showSnackbar(state.wordDetailError, "error");
       dismissWordDetailError(state.wordDetailError);
     }
   }, [state.wordDetailError, dismissWordDetailError]);
@@ -83,10 +94,10 @@ export default function TranscriptPage() {
   useEffect(() => () => cancelListening(), [cancelListening]);
 
   const hasTranscript = state.partialText.length > 0 || state.finalText.length > 0;
-  const isEmpty = !hasTranscript && !state.isListening && !isBusy;
+  const isEmpty = !hasTranscript && !state.isListening && !state.isTranslating && !state.errorState;
   const hasResult = state.translation.length > 0;
 
-  const statusLabel = isBusy
+  const statusLabel = state.isTranslating
     ? t("transcript.transcribing")
     : state.isListening
       ? t("transcript.listening")
@@ -100,7 +111,7 @@ export default function TranscriptPage() {
   };
 
   const onCopy = () => {
-    void navigator.clipboard?.writeText(state.translation);
+    void copyText(state.translation);
   };
 
   if (isEmpty) {
@@ -143,7 +154,7 @@ export default function TranscriptPage() {
           <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
         )}
 
-        <Snackbar message={snackbar} />
+        <Snackbar message={snackbar} variant={snackbarVariant} onDismiss={() => setSnackbar(null)} />
         <WordDetailsSheet
           details={state.wordDetails}
           onDismiss={dismissWordDetails}
@@ -205,9 +216,9 @@ export default function TranscriptPage() {
           {state.finalText.length > 0 && !state.isListening && (
             <button
               type="button"
-              onClick={() => void navigator.clipboard?.writeText(state.finalText)}
+              onClick={() => void copyText(state.finalText)}
               aria-label={t("action.copy")}
-              className="press-scale rounded-full p-2 text-on-surface-variant transition-opacity hover:opacity-70"
+              className="press-scale rounded-full p-2 text-on-surface-variant transition-opacity hover:opacity-70 focus-visible:outline-2 focus-visible:outline-azure-glow"
             >
               <ContentCopyIcon className="size-5" />
             </button>
@@ -261,14 +272,14 @@ export default function TranscriptPage() {
       {/* Grammar Spotlight Section */}
       {hasResult && state.grammarNotes.length > 0 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
-              <h2 className="text-[10px] font-black tracking-[0.25em] text-primary uppercase pl-1">
+              <h2 className="text-xs font-bold tracking-[0.15em] text-primary uppercase pl-1">
                   {t("transcript.grammarSpotlight")}
               </h2>
               <div className="flex flex-col gap-3">
                   {state.grammarNotes.map((note, i) => (
                       <div key={i} className="glass-surface p-4 border-l-4 border-primary/40">
                           <div className="flex items-center gap-3">
-                              <span className="bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                              <span className="bg-primary/20 text-primary text-xs font-semibold px-2 py-0.5 rounded uppercase">
                                   {note.case}
                               </span>
                               <span className="text-sm font-bold text-on-surface">{note.phrase}</span>
@@ -333,7 +344,7 @@ export default function TranscriptPage() {
         )}
       </div>
 
-      <Snackbar message={snackbar} />
+      <Snackbar message={snackbar} variant={snackbarVariant} onDismiss={() => setSnackbar(null)} />
 
       <WordDetailsSheet
         details={state.wordDetails}
@@ -421,6 +432,15 @@ function DialectChip({
 }) {
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
   return (
     <div className="relative">
       <button
@@ -428,6 +448,7 @@ function DialectChip({
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={t("settings.dialectHeader")}
         className="press-scale flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow"
       >
         <span className="size-2 rounded-full bg-secondary" />
@@ -439,18 +460,18 @@ function DialectChip({
 
       {open && (
         <>
-          <button
-            type="button"
-            aria-label={t("action.cancel")}
+          <div
+            aria-hidden="true"
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setOpen(false)}
           />
           <ul
             role="listbox"
+            aria-label={t("settings.dialectHeader")}
             className="glass-surface absolute left-1/2 top-11 z-50 w-48 -translate-x-1/2 p-1"
           >
             {DIALECTS.map((dialect) => (
-              <li key={dialect}>
+              <li key={dialect} role="presentation">
                 <button
                   type="button"
                   role="option"
@@ -459,8 +480,8 @@ function DialectChip({
                     onSelect(dialect);
                     setOpen(false);
                   }}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-body-medium hover:bg-on-surface/5 ${
-                    dialect === selected ? "text-primary" : "text-on-surface"
+                  className={`w-full rounded-lg px-3 py-2 text-left text-body-medium hover:bg-on-surface/5 focus-visible:outline-2 focus-visible:outline-azure-glow ${
+                    dialect === selected ? "text-primary font-bold" : "text-on-surface"
                   }`}
                 >
                   {t(DIALECT_LABELS[dialect])}

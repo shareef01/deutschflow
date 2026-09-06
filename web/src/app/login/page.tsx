@@ -112,7 +112,7 @@ export default function LoginPage() {
         </Suspense>
 
         <div className="text-center pt-8">
-          <p className="text-on-surface-muted text-[10px] uppercase tracking-widest">
+          <p className="text-xs font-medium uppercase tracking-wider text-on-surface-variant/70">
             DeutschFlow Obsidian Edition
           </p>
         </div>

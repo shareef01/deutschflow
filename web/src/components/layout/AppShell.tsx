@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { isUpgradeBlocked, subscribeUpgradeBlocked } from "@/lib/db";
 import type { ReactNode } from "react";
@@ -82,14 +83,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span>{title}</span>
             </h1>
             {!isOnSettings && (
-              <button
-                type="button"
-                onClick={() => navigate(SETTINGS_ROUTE)}
+              <Link
+                href={SETTINGS_ROUTE}
                 aria-label={t("nav.settings")}
                 className="glass-button flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-all duration-200 hover:text-azure-glow hover:shadow-lg hover:shadow-azure-glow/20 active:scale-95"
               >
                 <SettingsIcon className="size-5" />
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             NavigationRail; the content column is centred in what remains. */}
         {showRail && (
           <nav
-            aria-label="Primary"
+            aria-label={t("nav.primary")}
             className="sticky top-[var(--header-height)] flex h-[calc(100dvh-var(--header-height))] w-[var(--nav-rail-width)] shrink-0 flex-col gap-[var(--space-1)] overflow-y-auto border-r border-on-surface/[0.06] bg-on-surface/[0.02] px-[var(--space-3)] py-[var(--space-5)] backdrop-blur-xl"
           >
             {TABS.map((tab) => {
@@ -117,10 +117,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 // five of them down the whole screen. The active state is a
                 // filled row plus an edge marker rather than a heavy pill, so
                 // it reads at a glance without shouting.
-                <button
+                <Link
                   key={tab.route}
-                  type="button"
-                  onClick={() => navigate(tab.route)}
+                  href={tab.route}
                   aria-current={selected ? "page" : undefined}
                   className={`group relative flex h-11 w-full items-center gap-[var(--space-3)] rounded-xl px-[var(--space-3)] text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow ${
                     selected
@@ -141,7 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     }`}
                   />
                   <span className="min-w-0 truncate text-label-large">{label}</span>
-                </button>
+                </Link>
               );
             })}
           </nav>
@@ -165,7 +164,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile bottom bar — a solid container with a hairline above it. */}
       {!isDesktop && !isOnSettings && (
         <nav
-          aria-label="Primary"
+          aria-label={t("nav.primary")}
           className="fixed inset-x-0 bottom-0 z-30 bg-background pb-[env(safe-area-inset-bottom)]"
         >
           <div className="hairline-azure" />
@@ -174,10 +173,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               const selected = pathname === tab.route;
               const label = t(tab.title);
               return (
-                <button
+                <Link
                   key={tab.route}
-                  type="button"
-                  onClick={() => navigate(tab.route)}
+                  href={tab.route}
                   aria-current={selected ? "page" : undefined}
                   className="flex flex-col items-center gap-0.5 py-2 transition-colors focus-visible:outline-2 focus-visible:outline-azure-glow focus-visible:rounded-lg"
                 >
@@ -191,7 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   >
                     {label}
                   </span>
-                </button>
+                </Link>
               );
             })}
           </div>
