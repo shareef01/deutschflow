@@ -99,7 +99,6 @@ class Recognizer {
   private readonly utteranceListeners = new Set<UtteranceListener>();
   private errorResetTimer: number | null = null;
   private rmsTimer: number | null = null;
-  private currentLanguage = DEFAULT_LANGUAGE;
 
   /**
    * The final segments of the session in flight, joined and delivered once when it
@@ -155,7 +154,6 @@ class Recognizer {
 
   /** Aborts the in-flight request that a newer one supersedes. */
   startListening(languageTag: string = DEFAULT_LANGUAGE): void {
-    this.currentLanguage = languageTag;
     this.detach(this.recognition);
     this.recognition = null;
 

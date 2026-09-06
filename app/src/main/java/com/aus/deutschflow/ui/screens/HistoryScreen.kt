@@ -222,7 +222,7 @@ private fun HistoryDayLabel(day: LocalDate, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun HistoryItem(
+private fun HistoryItem(
     transcript: TranscriptEntity,
     onOpen: () -> Unit,
     onDelete: () -> Unit
@@ -283,7 +283,7 @@ fun HistoryItem(
 }
 
 @Composable
-fun TranscriptDetailDialog(
+private fun TranscriptDetailDialog(
     transcript: TranscriptEntity,
     onDismiss: () -> Unit,
     onSpeak: () -> Unit,

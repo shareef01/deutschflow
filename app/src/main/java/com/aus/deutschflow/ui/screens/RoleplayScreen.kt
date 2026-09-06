@@ -296,7 +296,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage, onSpeak: (String) -> Unit) {
+private fun ChatBubble(message: ChatMessage, onSpeak: (String) -> Unit) {
     val isAI = message.role == "assistant"
     val haptic = LocalHapticFeedback.current
     var showTranslation by remember { mutableStateOf(false) }

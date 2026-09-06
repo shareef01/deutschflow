@@ -76,20 +76,6 @@ async function readKeyFromVault(): Promise<CryptoKey | undefined> {
   }
 }
 
-async function writeKeyToVault(key: CryptoKey): Promise<void> {
-  const db = await openVault();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(VAULT_STORE, "readwrite");
-      tx.objectStore(VAULT_STORE).put(key, KEY_ALIAS);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } finally {
-    db.close();
-  }
-}
-
 /**
  * In-tab memoized promise so concurrent React callers in a single tab don't
  * duplicate CryptoKey generation or IndexedDB transactions.

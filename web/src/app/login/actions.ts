@@ -34,7 +34,7 @@ async function callerKey(): Promise<string> {
  * Checks the submitted key against SITE_PASSWORD and, on a match, issues a
  * signed session cookie (see lib/auth/session.ts for why it is signed).
  */
-export async function login(prevState: { error: string } | null, formData: FormData) {
+export async function login(_prevState: { error: string } | null, formData: FormData) {
   const password = (formData.get("password") as string)?.trim();
   const target = safeRedirectTarget(formData.get("from"));
 

@@ -185,7 +185,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TranscriptContent(
+private fun TranscriptContent(
     partialText: String,
     finalText: String,
     translation: String,
@@ -758,7 +758,7 @@ private fun TranscriptDisplayCard(
 }
 
 @Composable
-fun GrammarSpotlightCard(note: GrammarNote) {
+private fun GrammarSpotlightCard(note: GrammarNote) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,

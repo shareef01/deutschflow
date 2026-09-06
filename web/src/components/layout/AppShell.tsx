@@ -41,10 +41,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     else router.push("/transcript");
   };
 
-  const navigate = (route: string) => {
-    if (pathname !== route) router.push(route);
-  };
-
   return (
     <div className="flex min-h-dvh flex-col bg-background text-on-surface">
       {/* First thing in the tab order, visible only on focus. With a sticky header

@@ -81,7 +81,7 @@ fun PracticeScreen(
 }
 
 @Composable
-fun ShadowingMode(viewModel: PracticeViewModel) {
+private fun ShadowingMode(viewModel: PracticeViewModel) {
     val targetSentence by viewModel.targetSentence.collectAsStateWithLifecycle()
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     val isListening by viewModel.isListening.collectAsStateWithLifecycle()

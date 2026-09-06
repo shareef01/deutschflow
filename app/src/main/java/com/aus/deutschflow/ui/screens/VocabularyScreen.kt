@@ -238,7 +238,7 @@ fun VocabularyScreen(
 }
 
 @Composable
-fun VocabularyListContent(
+private fun VocabularyListContent(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     vocabularyList: List<VocabularyEntity>,
@@ -443,7 +443,7 @@ private fun StatCell(modifier: Modifier, value: String, label: String) {
 }
 
 @Composable
-fun VocabularyItem(
+private fun VocabularyItem(
     item: VocabularyEntity,
     onOpen: () -> Unit,
     onEdit: () -> Unit,
@@ -557,7 +557,7 @@ fun VocabularyItem(
 }
 
 @Composable
-fun EditVocabularyDialog(
+private fun EditVocabularyDialog(
     item: VocabularyEntity,
     onDismiss: () -> Unit,
     onSave: (VocabularyEntity) -> Unit
@@ -576,7 +576,7 @@ fun EditVocabularyDialog(
 }
 
 @Composable
-fun AddVocabularyDialog(
+private fun AddVocabularyDialog(
     onDismiss: () -> Unit,
     onSave: (german: String, english: String) -> Unit
 ) {

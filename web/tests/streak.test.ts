@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   nextStreak,
   daysBetween,
-  toCivilDateOrdinal,
   getHeatmapCutoffDate,
-  todayKey,
   HEATMAP_DAYS,
 } from "@/lib/db/repository";
 

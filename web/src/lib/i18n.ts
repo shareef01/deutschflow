@@ -46,7 +46,6 @@ export const STRINGS = {
     "transcript.stopRecording": "Stop recording",
     "transcript.emptyTitle": "Speak German naturally.",
     "transcript.emptyBody": "DeutschFlow transcribes what you say, translates it, and finds the words worth keeping.",
-    "transcript.language": "German · {0}",
     "transcript.translation": "Translation",
     "transcript.vocabulary": "Vocabulary",
     "transcript.save": "Save to library",
@@ -118,10 +117,7 @@ export const STRINGS = {
     "study.tapToFlip": "Tap to flip",
     "study.showGerman": "Show the German word",
     "study.showTranslation": "Show the translation",
-    "study.gotIt": "Got it",
-    "study.gotItAction": "Got it!",
     "study.skip": "Skip",
-    "study.progress": "Progress: {0} / {1}",
     "study.completedTitle": "Session Complete! 🎉",
     "study.completedBody": "You've reviewed all cards due today. Keep the momentum going!",
     "study.completedAction": "Return to Dashboard",
@@ -152,8 +148,6 @@ export const STRINGS = {
     "practice.speak": "Speak",
     "practice.evaluate": "Evaluate",
     "practice.next": "Next",
-    "practice.wordCorrect": "Correct",
-    "practice.wordTryAgain": "Try again",
     // These say what was measured, not how well you speak. The screen used to
     // report "Perfect pronunciation" on a result it has no way to judge: it
     // compares the recogniser's transcript against the sentence, and the Web
@@ -191,8 +185,6 @@ export const STRINGS = {
     "settings.apiKeyReplace": "Enter a new key to replace the saved one",
     "settings.apiKeySavedState": "A key is saved on this device.",
     "settings.apiKeyNone": "No key saved — translation is unavailable.",
-    "settings.apiKeyHelp":
-      "Required for automatic vocabulary extraction and translations. A key is free at console.groq.com.",
     "settings.showKey": "Show API key",
     "settings.hideKey": "Hide API key",
     "settings.progressHeader": "Learning progress",
@@ -203,7 +195,6 @@ export const STRINGS = {
     "settings.audioHeader": "Audio",
     "settings.autoplay": "Auto-play German audio",
     "settings.dialectHeader": "Speech recognition",
-    "settings.notificationsHeader": "Notifications",
     "settings.dataHeader": "Data",
     "settings.storageHeader": "Storage durability",
     "settings.storagePersisted": "Persistent storage is active",
@@ -221,7 +212,6 @@ export const STRINGS = {
     "settings.wipeBody":
       "This will permanently delete your library, history, and earnings. This action is final.",
     "settings.wipeConfirm": "Delete everything",
-    "settings.wipeCancel": "Keep progress",
     "settings.version": "DeutschFlow v{0}",
 
     // Settings outcomes
@@ -244,8 +234,6 @@ export const STRINGS = {
     "speech.errorGeneric": "Speech recognition failed. Try again.",
 
     // Text to speech
-    "tts.noEngine":
-      "No speech engine is set up. Choose one under Text-to-speech output in your browser's or system's settings.",
     "tts.noGerman":
       "German speech isn't installed. Add a German voice under Text-to-speech output in your system's settings.",
 
@@ -304,7 +292,6 @@ export const STRINGS = {
     "transcript.stopRecording": "Aufnahme beenden",
     "transcript.emptyTitle": "Sprich einfach Deutsch.",
     "transcript.emptyBody": "DeutschFlow transkribiert, übersetzt und findet die Wörter, die du behalten willst.",
-    "transcript.language": "Deutsch · {0}",
     "transcript.translation": "Übersetzung",
     "transcript.vocabulary": "Wortschatz",
     "transcript.save": "In Bibliothek speichern",
@@ -372,10 +359,7 @@ export const STRINGS = {
     "study.tapToFlip": "Zum Umdrehen tippen",
     "study.showGerman": "Das deutsche Wort zeigen",
     "study.showTranslation": "Die Übersetzung zeigen",
-    "study.gotIt": "Verstanden",
-    "study.gotItAction": "Verstanden!",
     "study.skip": "Überspringen",
-    "study.progress": "Fortschritt: {0} / {1}",
     "study.completedTitle": "Sitzung geschafft! 🎉",
     "study.completedBody": "Alle fälligen Karten sind erledigt. Weiter so — dein Deutsch bleibt fit!",
     "study.completedAction": "Zur Übersicht",
@@ -405,8 +389,6 @@ export const STRINGS = {
     "practice.speak": "Sprechen",
     "practice.evaluate": "Auswerten",
     "practice.next": "Weiter",
-    "practice.wordCorrect": "Richtig",
-    "practice.wordTryAgain": "Noch einmal versuchen",
     "practice.feedbackPerfect": "Alle Wörter erkannt, in der richtigen Reihenfolge.",
     "practice.feedbackGood": "Erkannte Wörter: {0} von {1}.",
     "practice.feedbackKeepGoing":
@@ -439,8 +421,6 @@ export const STRINGS = {
     "settings.apiKeyReplace": "Neuen Schlüssel eingeben, um den gespeicherten zu ersetzen",
     "settings.apiKeySavedState": "Ein Schlüssel ist auf diesem Gerät gespeichert.",
     "settings.apiKeyNone": "Kein Schlüssel gespeichert — Übersetzung nicht verfügbar.",
-    "settings.apiKeyHelp":
-      "Erforderlich für automatische Übersetzungen und Wortschatz-Extraktion. Ein Schlüssel ist auf console.groq.com kostenlos.",
     "settings.showKey": "API-Schlüssel anzeigen",
     "settings.hideKey": "API-Schlüssel verbergen",
     "settings.progressHeader": "Lernfortschritt",
@@ -451,7 +431,6 @@ export const STRINGS = {
     "settings.audioHeader": "Audio",
     "settings.autoplay": "Deutsche Aussprache automatisch abspielen",
     "settings.dialectHeader": "Spracherkennung",
-    "settings.notificationsHeader": "Benachrichtigungen",
     "settings.dataHeader": "Daten",
     "settings.storageHeader": "Speicherdauerhaftigkeit",
     "settings.storagePersisted": "Dauerhafter Speicher ist aktiv",
@@ -469,7 +448,6 @@ export const STRINGS = {
     "settings.wipeBody":
       "Damit werden Bibliothek, Verlauf und Punkte endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
     "settings.wipeConfirm": "Alles löschen",
-    "settings.wipeCancel": "Behalten",
     "settings.version": "DeutschFlow v{0}",
 
     "message.apiKeySaved": "API-Schlüssel gespeichert.",
@@ -491,8 +469,7 @@ export const STRINGS = {
     "speech.errorNotSupported": "Dieser Browser unterstützt die Web Speech API nicht. Bitte Chrome, Edge oder die Android-App verwenden.",
     "speech.errorGeneric": "Spracherkennung fehlgeschlagen. Versuche es erneut.",
 
-    "tts.noEngine":
-      "Es ist keine Sprachausgabe eingerichtet. Wähle eine unter „Text-in-Sprache-Ausgabe“ in den Browser- oder Systemeinstellungen.",
+    // Text to speech (in German section)
     "tts.noGerman":
       "Deutsche Sprachausgabe ist nicht installiert. Füge eine deutsche Stimme unter „Text-in-Sprache-Ausgabe“ in den Systemeinstellungen hinzu.",
 

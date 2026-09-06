@@ -85,7 +85,7 @@ fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun StudySessionContent(
+private fun StudySessionContent(
     viewModel: StudyViewModel,
     onNavigateToDashboard: () -> Unit
 ) {
