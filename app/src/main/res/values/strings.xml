@@ -264,6 +264,16 @@
     <string name="ai_key_rejected">The API key was rejected. Please check it in Settings.</string>
     <string name="ai_rate_limited">Too many requests right now. Try again in a minute.</string>
     <string name="ai_status">The service answered with code %1$d.</string>
+    <string name="ai_input_blank">Input cannot be blank</string>
+    <string name="ai_input_too_long">Input is too long (maximum %1$d characters)</string>
+    <string name="ai_message_too_long">Message is too long (maximum %1$d characters)</string>
+    <string name="ai_cancelled">Request cancelled</string>
+    <string name="settings_cefr_level">CEFR Level</string>
+    <string name="settings_cefr_level_desc">Adjust AI conversation and analysis complexity</string>
+    <string name="settings_cefr_none">None (Standard)</string>
+    <string name="settings_tts_privacy">Speech Synthesis Privacy</string>
+    <string name="settings_tts_privacy_desc">Prefers on-device voices to keep speech synthesis private.</string>
+    <string name="action_translate">Translate</string>
 
     <!-- Daily word notification -->
     <string name="notification_channel_name">Daily German Word</string>

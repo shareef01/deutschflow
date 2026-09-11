@@ -46,6 +46,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val userStats by viewModel.userStats.collectAsStateWithLifecycle()
     val hasApiKey by viewModel.hasApiKey.collectAsStateWithLifecycle()
     val selectedDialect by viewModel.selectedDialect.collectAsStateWithLifecycle()
+    val selectedCefrLevel by viewModel.selectedCefrLevel.collectAsStateWithLifecycle()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
 
@@ -59,6 +60,15 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         stringResource(R.string.settings_dialect_de) to "de-DE",
         stringResource(R.string.settings_dialect_at) to "de-AT",
         stringResource(R.string.settings_dialect_ch) to "de-CH"
+    )
+
+    val cefrLevels = listOf(
+        stringResource(R.string.settings_cefr_none) to "",
+        "A1 (Beginner)" to "A1",
+        "A2 (Elementary)" to "A2",
+        "B1 (Intermediate)" to "B1",
+        "B2 (Upper Intermediate)" to "B2",
+        "C1+ (Advanced)" to "C1+"
     )
 
     Column(
@@ -192,6 +202,54 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     }
                 })
             )
+
+            Spacer(modifier = Modifier.height(Spacing.md))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(Spacing.md))
+
+            Text(
+                text = stringResource(R.string.settings_cefr_level),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(Spacing.xs))
+            Text(
+                text = stringResource(R.string.settings_cefr_level_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(Spacing.xs))
+
+            cefrLevels.forEach { (label, code) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.small)
+                        .selectable(
+                            selected = (selectedCefrLevel == code),
+                            role = Role.RadioButton,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.saveCefrLevel(code)
+                            }
+                        )
+                        .padding(vertical = Spacing.xs, horizontal = Spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = (selectedCefrLevel == code),
+                        onClick = null
+                    )
+                    Spacer(modifier = Modifier.width(Spacing.sm))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (selectedCefrLevel == code) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selectedCefrLevel == code) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
         }
 
         // Section 3: Speech & Audio Settings
@@ -227,6 +285,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     }
                 )
             }
+
+            Spacer(modifier = Modifier.height(Spacing.xs))
+            Text(
+                text = stringResource(R.string.settings_tts_privacy_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Spacer(modifier = Modifier.height(Spacing.md))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

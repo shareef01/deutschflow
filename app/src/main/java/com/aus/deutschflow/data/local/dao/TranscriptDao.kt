@@ -25,7 +25,10 @@ interface TranscriptDao {
     fun hasAnyTranscript(): Flow<Boolean>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTranscript(transcript: TranscriptEntity)
+    suspend fun insertTranscript(transcript: TranscriptEntity): Long
+
+    @Query("UPDATE transcripts SET translation = :translation, analysisJson = :analysisJson WHERE id = :id")
+    suspend fun updateAnalysis(id: Int, translation: String, analysisJson: String)
 
     @Delete
     suspend fun deleteTranscript(transcript: TranscriptEntity)

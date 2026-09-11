@@ -162,6 +162,14 @@ export default function HistoryPage() {
           >
             {viewingTranscript.fullText}
           </div>
+          {viewingTranscript.translation && (
+            <div className="mt-3 p-3 rounded-lg bg-surface-variant/30 border border-outline-variant/20">
+              <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                {t("action.translate")}
+              </p>
+              <p className="text-sm text-on-surface italic">{viewingTranscript.translation}</p>
+            </div>
+          )}
         </ModalDialog>
       )}
 

@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.RoleplayDao
 import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
+import com.aus.deutschflow.data.model.RoleplayScenario
+import com.aus.deutschflow.data.model.RoleplayScenarioCatalog
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
@@ -49,6 +51,12 @@ class RoleplayViewModel @Inject constructor(
 
     private var currentScenario = SCENARIO_BERLIN_BAKERY
 
+    private val _selectedScenario = MutableStateFlow(
+        RoleplayScenarioCatalog.SCENARIOS.find { it.title == SCENARIO_BERLIN_BAKERY }
+            ?: RoleplayScenarioCatalog.DEFAULT_SCENARIO
+    )
+    val selectedScenario: StateFlow<RoleplayScenario> = _selectedScenario
+
     /**
      * Reads the saved conversation back.
      *
@@ -67,6 +75,9 @@ class RoleplayViewModel @Inject constructor(
         }
         if (saved.isNotEmpty() && _messages.value.isEmpty()) {
             currentScenario = saved.first().scenario
+            RoleplayScenarioCatalog.SCENARIOS.find { it.title == currentScenario }?.let {
+                _selectedScenario.value = it
+            }
             _messages.value = saved.map { ChatMessage(it.role, it.content, it.translation) }
         }
     }
@@ -87,8 +98,16 @@ class RoleplayViewModel @Inject constructor(
         }
     }
 
+    fun selectScenario(scenario: RoleplayScenario) {
+        _selectedScenario.value = scenario
+        startSession(scenario.title)
+    }
+
     fun startSession(scenario: String) {
         currentScenario = scenario
+        RoleplayScenarioCatalog.SCENARIOS.find { it.title == scenario }?.let {
+            _selectedScenario.value = it
+        }
         _messages.value = emptyList()
         _error.value = null
         viewModelScope.launch {
@@ -96,8 +115,7 @@ class RoleplayViewModel @Inject constructor(
             // both touch this table, and a delete that landed second would take the
             // new scene's opening line with it.
             write { roleplayDao.deleteAll() }
-            // The model opens: an empty user turn is the cue for its greeting.
-            sendInput("")
+            startOpeningTurn()
         }
     }
 
@@ -179,39 +197,26 @@ class RoleplayViewModel @Inject constructor(
             _messages.value = _messages.value.dropLast(1)
             sendInput(last.content)
         } else {
-            sendInput("")
+            startOpeningTurn()
         }
     }
 
-    private fun sendInput(userInput: String) {
-        // Set before the launch, not inside it: two taps in the same frame both
-        // read the old value and both got through.
+    fun startOpeningTurn() {
         if (_isProcessing.value) return
         _isProcessing.value = true
         _error.value = null
 
-        // Trimmed, because every turn resends the whole conversation: a long
-        // roleplay eventually exceeded the model's context window and surfaced as a
-        // generic "Translation failed" with no way to tell what had gone wrong.
         val history = _messages.value
             .takeLast(MAX_HISTORY_TURNS)
             .map { it.role to it.content }
 
-        if (userInput.isNotBlank()) {
-            _messages.value += ChatMessage("user", userInput)
-        }
-
         viewModelScope.launch {
-            // The optimistic append, made durable. Saved before the request rather
-            // than after it, so a turn that never gets an answer is still there to
-            // retry when the user comes back.
-            _messages.value.lastOrNull()
-                ?.takeIf { userInput.isNotBlank() }
-                ?.let { persist(it, _messages.value.size - 1) }
             try {
                 val apiKey = preferenceManager.apiKey.first()
+                val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
+                    ?: _selectedScenario.value.cefrLevel
                 when (val result =
-                    vocabularyProcessor.processRoleplay(userInput, history, currentScenario, apiKey)) {
+                    vocabularyProcessor.startRoleplay(currentScenario, history, apiKey, cefr)) {
                     is GroqHelper.RoleplayResult.Success -> {
                         val reply = ChatMessage(
                             "assistant",
@@ -224,8 +229,47 @@ class RoleplayViewModel @Inject constructor(
                             ttsHelper.speak(result.aiResponse)
                         }
                     }
-                    // Shown, not swallowed. A failed greeting used to leave the screen
-                    // blank with no error and nothing that would ever try again.
+                    is GroqHelper.RoleplayResult.Failure -> _error.value = result.message
+                }
+            } finally {
+                _isProcessing.value = false
+            }
+        }
+    }
+
+    fun sendInput(userInput: String) {
+        val trimmed = userInput.trim()
+        if (trimmed.isEmpty()) return
+        if (_isProcessing.value) return
+        _isProcessing.value = true
+        _error.value = null
+
+        val history = _messages.value
+            .takeLast(MAX_HISTORY_TURNS)
+            .map { it.role to it.content }
+
+        _messages.value += ChatMessage("user", trimmed)
+
+        viewModelScope.launch {
+            _messages.value.lastOrNull()?.let { persist(it, _messages.value.size - 1) }
+            try {
+                val apiKey = preferenceManager.apiKey.first()
+                val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
+                    ?: _selectedScenario.value.cefrLevel
+                when (val result =
+                    vocabularyProcessor.continueRoleplay(trimmed, history, currentScenario, apiKey, cefr)) {
+                    is GroqHelper.RoleplayResult.Success -> {
+                        val reply = ChatMessage(
+                            "assistant",
+                            result.aiResponse,
+                            result.englishContext
+                        )
+                        _messages.value += reply
+                        persist(reply, _messages.value.size - 1)
+                        if (preferenceManager.isAutoPlayEnabled.first()) {
+                            ttsHelper.speak(result.aiResponse)
+                        }
+                    }
                     is GroqHelper.RoleplayResult.Failure -> _error.value = result.message
                 }
             } finally {

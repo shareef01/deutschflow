@@ -24,8 +24,7 @@ export const PRACTICE_FEEDBACK_KEYS = {
   KEEP_GOING: "practice.feedbackKeepGoing",
 } as const;
 
-const WORD_SPLIT = /\s+/;
-const NON_LETTERS = /[^a-zA-ZäöüÄÖÜß]/g;
+const TOKEN_REGEX = /[\p{L}\p{M}\p{N}]+(?:[-'’][\p{L}\p{M}\p{N}]+)*/gu;
 
 /** Folds a word to the form both spellings of it share. */
 export function foldGerman(word: string): string {
@@ -35,15 +34,13 @@ export function foldGerman(word: string): string {
     .replaceAll("ä", "ae")
     .replaceAll("ö", "oe")
     .replaceAll("ü", "ue")
-    .replaceAll("ß", "ss");
+    .replaceAll("ß", "ss")
+    .replaceAll(/['’]/g, "");
 }
 
-function tokenize(text: string): string[] {
-  return text
-    .normalize("NFC")
-    .split(WORD_SPLIT)
-    .map((w) => w.replace(NON_LETTERS, ""))
-    .filter((w) => w.length > 0);
+export function tokenize(text: string): string[] {
+  const matches = text.normalize("NFC").match(TOKEN_REGEX);
+  return matches ? Array.from(matches) : [];
 }
 
 /**

@@ -54,13 +54,15 @@ export const NEW_CARD_SCHEDULE = {
  */
 let persistenceRequested = false;
 
-export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput): Promise<void> {
+export function ensurePersistentStorageRequested(): void {
   if (!persistenceRequested) {
     persistenceRequested = true;
-    // Deliberately not awaited: whether the browser grants it changes nothing
-    // about this write, and Safari never resolves it usefully.
     void requestPersistentStorage();
   }
+}
+
+export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput): Promise<void> {
+  ensurePersistentStorageRequested();
 
   const now = Date.now();
 
@@ -166,13 +168,28 @@ export async function insertTranscript(
   db: DeutschFlowDB,
   fullText: string,
   timestamp?: number
-): Promise<void> {
+): Promise<number> {
+  ensurePersistentStorageRequested();
   const now = Date.now();
-  await db.transcripts.add({
+  const id = await db.transcripts.add({
     fullText,
     timestamp: timestamp ?? now,
     remoteId: crypto.randomUUID(),
-    lastModifiedAt: now
+    lastModifiedAt: now,
+  });
+  return id as number;
+}
+
+export async function updateTranscriptAnalysis(
+  db: DeutschFlowDB,
+  id: number,
+  translation: string,
+  analysisJson: string
+): Promise<void> {
+  await db.transcripts.update(id, {
+    translation,
+    analysisJson,
+    lastModifiedAt: Date.now(),
   });
 }
 

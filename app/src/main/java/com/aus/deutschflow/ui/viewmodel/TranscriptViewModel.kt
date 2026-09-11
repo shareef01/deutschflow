@@ -22,6 +22,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
@@ -245,11 +247,13 @@ class TranscriptViewModel @Inject constructor(
     @VisibleForTesting
     internal suspend fun handleUtterance(text: String) {
         val token = ++utteranceToken
-        transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
+        val transcriptId = transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
 
         _isTranslating.value = true
         try {
-            val result = vocabularyProcessor.processText(text, preferenceManager.apiKey.first())
+            val apiKey = preferenceManager.apiKey.first()
+            val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
+            val result = vocabularyProcessor.processText(text, apiKey, cefr)
 
             // Superseded while the request was out: this answer belongs to a
             // transcript the screen has already replaced, so it writes nothing.
@@ -261,6 +265,22 @@ class TranscriptViewModel @Inject constructor(
                     _suggestedWords.value = result.keywords
                     _example.value = result.example
                     _grammarNotes.value = result.grammarNotes
+
+                    val analysisJson = JSONObject().apply {
+                        put("keywords", JSONArray(result.keywords))
+                        put("example", result.example)
+                        put("grammar", JSONArray().apply {
+                            result.grammarNotes.forEach { note ->
+                                put(JSONObject().apply {
+                                    put("phrase", note.phrase)
+                                    put("case", note.case)
+                                    put("why", note.explanation)
+                                })
+                            }
+                        })
+                    }.toString()
+
+                    transcriptDao.updateAnalysis(transcriptId.toInt(), result.translation, analysisJson)
                 }
                 is AIResult.Failure -> {
                     // Never let a failure reach the translation field: the Save button
@@ -329,8 +349,10 @@ class TranscriptViewModel @Inject constructor(
             _wordDetailError.value = null
             _interrogatingWord.value = trimmed
             try {
+                val apiKey = preferenceManager.apiKey.first()
+                val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
                 when (val result =
-                    vocabularyProcessor.interrogateWord(trimmed, preferenceManager.apiKey.first())) {
+                    vocabularyProcessor.interrogateWord(trimmed, apiKey, cefr)) {
                     is WordDetailsResult.Success -> _wordDetails.value = result.details
                     is WordDetailsResult.Failure -> _wordDetailError.value = result.message
                 }

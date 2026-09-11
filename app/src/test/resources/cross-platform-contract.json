@@ -87,6 +87,22 @@
       "expectedFeedback": "PERFECT",
       "expectedCorrectCount": 3,
       "expectedTotalCount": 3
+    },
+    {
+      "name": "apostrophe contractions folding",
+      "target": "Wie geht's dir?",
+      "spoken": "Wie gehts dir?",
+      "expectedFeedback": "PERFECT",
+      "expectedCorrectCount": 3,
+      "expectedTotalCount": 3
+    },
+    {
+      "name": "curly apostrophe contractions folding",
+      "target": "Wie geht’s dir?",
+      "spoken": "Wie gehts dir?",
+      "expectedFeedback": "PERFECT",
+      "expectedCorrectCount": 3,
+      "expectedTotalCount": 3
     }
   ],
   "srsSchedulingCases": [

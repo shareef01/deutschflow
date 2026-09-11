@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
 import { getApiKey } from "@/lib/db/settings";
-import { insertTranscript, saveVocabulary } from "@/lib/db/repository";
+import { insertTranscript, saveVocabulary, updateTranscriptAnalysis } from "@/lib/db/repository";
 import { isRecognitionSupported, recognizer, type RecognizerState } from "@/lib/speech/recognizer";
 import { resolveRecognitionDialect } from "@/lib/speech/dialect";
 import { vocabularyProcessor } from "@/lib/ai/processor";
@@ -98,8 +98,9 @@ export function useTranscript() {
 
   const handleUtterance = useCallback(async (text: string) => {
     const token = ++utteranceToken.current;
+    let transcriptId: number | null = null;
     try {
-      await insertTranscript(db, text);
+      transcriptId = await insertTranscript(db, text);
     } catch {
       // Quota, private-mode eviction, a blocked database: the rejection used to
       // escape as an unhandled promise rejection and the screen showed nothing.
@@ -117,6 +118,18 @@ export function useTranscript() {
       if (token !== utteranceToken.current) return;
       setState((prev) => {
         if (result.kind === "success") {
+          if (transcriptId !== null) {
+            void updateTranscriptAnalysis(
+              db,
+              transcriptId,
+              result.translation,
+              JSON.stringify({
+                keywords: result.keywords,
+                example: result.example,
+                grammarNotes: result.grammarNotes,
+              })
+            );
+          }
           return {
             ...prev,
             translation: result.translation,

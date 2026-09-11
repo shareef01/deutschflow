@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { clearConversation, db, loadConversation, saveConversationTurn } from "@/lib/db";
-import { getApiKey } from "@/lib/db/settings";
-import { processRoleplay } from "@/lib/ai/groq";
+import { getApiKey, getCefrLevel } from "@/lib/db/settings";
+import { startRoleplay, continueRoleplay } from "@/lib/ai/groq";
+import { DEFAULT_SCENARIO_TITLE } from "@/lib/ai/scenarios";
 import { t } from "@/lib/i18n";
 import { recognizer, isRecognitionSupported, type RecognizerState } from "@/lib/speech/recognizer";
 import { resolveRecognitionDialect } from "@/lib/speech/dialect";
@@ -13,7 +14,7 @@ export interface ChatMessage {
     translation?: string;
 }
 
-const DEFAULT_SCENARIO = "Ordering at a Berlin Bakery";
+const DEFAULT_SCENARIO = DEFAULT_SCENARIO_TITLE;
 
 const SERVER_RECOGNIZER_STATE: RecognizerState = {
     partialText: "",
@@ -94,8 +95,44 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         });
     }, []);
 
+    const runOpening = useCallback(async () => {
+        if (inFlight.current) return;
+        inFlight.current = true;
+        setIsProcessing(true);
+        setError(null);
+
+        try {
+            const apiKey = (await getApiKey(db)) ?? "";
+            const cefr = await getCefrLevel(db);
+            const result = await startRoleplay(scenarioRef.current, [], apiKey, cefr);
+
+            if (result.kind === "success") {
+                const reply: ChatMessage = {
+                    role: "assistant",
+                    content: result.aiResponse,
+                    translation: result.englishContext,
+                };
+                historyRef.current = [reply];
+                setMessages(historyRef.current);
+                persist(reply, 0);
+                tts.speak(result.aiResponse);
+            } else {
+                setError(result.message);
+            }
+        } catch {
+            setError(t("ai.noKey"));
+        } finally {
+            inFlight.current = false;
+            setIsProcessing(false);
+        }
+    }, [persist]);
+
     const runTurn = useCallback(async (userInput: string, appendUser = true) => {
         if (inFlight.current) return;
+        const trimmed = userInput.trim();
+        if (!trimmed && appendUser) {
+            return;
+        }
         inFlight.current = true;
         setIsProcessing(true);
         setError(null);
@@ -106,18 +143,20 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         const sent = appendUser ? historyRef.current : historyRef.current.slice(0, -1);
         const history = sent.map((m) => ({ role: m.role, content: m.content }));
 
-        if (appendUser && userInput.trim()) {
-            const userMessage: ChatMessage = { role: "user", content: userInput };
+        if (appendUser) {
+            const userMessage: ChatMessage = { role: "user", content: trimmed };
             historyRef.current = [...historyRef.current, userMessage];
             setMessages(historyRef.current);
-            // Saved before the request rather than after it, so a turn that never
-            // gets an answer is still there to retry when the user comes back.
             persist(userMessage, historyRef.current.length - 1);
         }
 
         try {
             const apiKey = (await getApiKey(db)) ?? "";
-            const result = await processRoleplay(userInput, history, scenarioRef.current, apiKey);
+            const cefr = await getCefrLevel(db);
+            const inputToSend = appendUser
+                ? trimmed
+                : (historyRef.current[historyRef.current.length - 1]?.content ?? trimmed);
+            const result = await continueRoleplay(inputToSend, history, scenarioRef.current, apiKey, cefr);
 
             if (result.kind === "success") {
                 const reply: ChatMessage = {
@@ -130,15 +169,9 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
                 persist(reply, historyRef.current.length - 1);
                 tts.speak(result.aiResponse);
             } else {
-                // Shown in the chat rather than swallowed: a failed opening turn
-                // used to leave the screen blank forever, with nothing to retry.
                 setError(result.message);
             }
         } catch {
-            // The AI layer converts its own fetch failures into results, but a
-            // throw from the vault reading the key — or from the TTS engine —
-            // used to escape as an unhandled rejection and reset the spinner
-            // with no word of explanation.
             setError(t("ai.noKey"));
         } finally {
             inFlight.current = false;
@@ -172,14 +205,10 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
             scenarioRef.current = activeScenario;
             historyRef.current = [];
             setMessages([]);
-            // Awaited, not fired alongside: the clear and the opening turn's write
-            // both touch this table, and a clear that landed second would take the
-            // new scene's first line with it.
             await clearConversation(db);
-            // An empty input is the trigger for the model's opening line.
-            await runTurn("");
+            await runOpening();
         },
-        [runTurn]
+        [runOpening]
     );
 
     /**
@@ -261,9 +290,9 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         if (last?.role === "user") {
             void runTurn(last.content, false);
         } else {
-            void runTurn("");
+            void runOpening();
         }
-    }, [runTurn]);
+    }, [runTurn, runOpening]);
 
     return {
         speechSupported,

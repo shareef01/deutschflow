@@ -193,6 +193,17 @@ export function useSettings() {
     }
   }, []);
 
+  const cefrRow = useLive(() => db.settings.get("cefr_level"), []);
+  const cefrLevel = cefrRow?.value ?? "";
+  const saveCefrLevel = useCallback(async (level: string): Promise<boolean> => {
+    try {
+      await db.settings.put({ key: "cefr_level", value: level.trim() });
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   return {
     totalVocabulary,
     totalTranscripts,
@@ -201,6 +212,8 @@ export function useSettings() {
     hasApiKey,
     selectedDialect,
     isAutoPlayEnabled,
+    cefrLevel,
+    saveCefrLevel,
     saveApiKey,
     saveDialect,
     setAutoPlayEnabled,

@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
@@ -21,6 +22,8 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aus.deutschflow.data.model.RoleplayScenario
+import com.aus.deutschflow.data.model.RoleplayScenarioCatalog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -49,7 +52,10 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     val partialText by viewModel.partialText.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val recognitionError by viewModel.errorState.collectAsStateWithLifecycle()
+    val selectedScenario by viewModel.selectedScenario.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
+
+    var showScenarioMenu by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
 
@@ -75,7 +81,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     // composes while `messages` is still empty and used to start a new scene over
     // the one the user left.
     LaunchedEffect(Unit) {
-        viewModel.openScenarioIfEmpty(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
+        viewModel.openScenarioIfEmpty(selectedScenario.title)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -92,26 +98,68 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.roleplay_tab).uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = UppercaseLabelTracking
-                    )
-                    Text(
-                        text = stringResource(R.string.roleplay_scenario_berlin_bakery),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .clickable(enabled = !isProcessing) { showScenarioMenu = true }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${stringResource(R.string.roleplay_tab).uppercase()} • ${selectedScenario.cefrLevel}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                letterSpacing = UppercaseLabelTracking
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            text = selectedScenario.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showScenarioMenu,
+                        onDismissRequest = { showScenarioMenu = false }
+                    ) {
+                        RoleplayScenarioCatalog.SCENARIOS.forEach { scenario ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = "${scenario.title} (${scenario.cefrLevel})",
+                                            fontWeight = if (scenario.id == selectedScenario.id) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (scenario.id == selectedScenario.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = scenario.context,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    showScenarioMenu = false
+                                    viewModel.selectScenario(scenario)
+                                }
+                            )
+                        }
+                    }
                 }
 
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.startSession(RoleplayViewModel.SCENARIO_BERLIN_BAKERY)
+                        viewModel.startSession(selectedScenario.title)
                     },
                     // Restarting mid-turn cleared the table and the list, then had
                     // its own opening line swallowed by the in-flight guard - so the
