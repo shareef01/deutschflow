@@ -27,6 +27,7 @@ export const STRINGS = {
     "action.delete": "Delete",
     "action.cancel": "Cancel",
     "action.save": "Save",
+    "action.saving": "Saving…",
     "action.copy": "Copy",
     "action.close": "Close",
     "action.copied": "Copied to clipboard",
@@ -148,6 +149,7 @@ export const STRINGS = {
     "practice.speak": "Speak",
     "practice.evaluate": "Evaluate",
     "practice.next": "Next",
+    "practice.speechUnavailable": "Microphone practice is unavailable in this browser. You can still listen to the sentences.",
     // These say what was measured, not how well you speak. The screen used to
     // report "Perfect pronunciation" on a result it has no way to judge: it
     // compares the recogniser's transcript against the sentence, and the Web
@@ -166,6 +168,9 @@ export const STRINGS = {
     "roleplay.thinking": "AI is thinking...",
     "roleplay.stopSend": "Stop & Send",
     "roleplay.speakReply": "Speak to Reply",
+    "roleplay.typePlaceholder": "Type your message in German…",
+    "roleplay.send": "Send",
+    "roleplay.voiceUnavailable": "Voice input is unavailable in this browser. You can type your responses below.",
 
     // Settings
     "settings.backupHeader": "Backup",
@@ -201,6 +206,8 @@ export const STRINGS = {
     "settings.storageBestEffort": "Standard storage (may be cleared if device runs low on space)",
     "settings.storageRequest": "Request persistent storage",
     "settings.storageUnsupported": "Persistent storage is not supported in this browser",
+    "settings.storageDescription": "Helps reduce the chance that the browser automatically clears your local data.",
+    "settings.storageUsage": "Storage used: {0} MB",
     "settings.backupLast": "Last backup: {0}",
     "settings.backupNever": "Never backed up",
     "settings.backupReminder": "You have {0} saved words without a recent backup. Download a copy to protect your data.",
@@ -218,6 +225,7 @@ export const STRINGS = {
     "message.apiKeySaved": "API key saved.",
     "message.apiKeyNotSaved": "The key couldn't be stored. Try again, or restart the device.",
     "message.progressCleared": "Library, history and stats cleared.",
+    "message.progressClearFailed": "Couldn't clear data. Try again.",
 
     // Speech recognition
     "speech.unavailable": "Speech recognition isn't available in this browser.",
@@ -274,6 +282,7 @@ export const STRINGS = {
     "action.delete": "Löschen",
     "action.cancel": "Abbrechen",
     "action.save": "Speichern",
+    "action.saving": "Wird gespeichert…",
     "action.copy": "Kopieren",
     "action.close": "Schließen",
     "action.copied": "In die Zwischenablage kopiert",
@@ -389,6 +398,7 @@ export const STRINGS = {
     "practice.speak": "Sprechen",
     "practice.evaluate": "Auswerten",
     "practice.next": "Weiter",
+    "practice.speechUnavailable": "Mikrofon-Übungen sind in diesem Browser nicht verfügbar. Du kannst dir die Sätze weiterhin anhören.",
     "practice.feedbackPerfect": "Alle Wörter erkannt, in der richtigen Reihenfolge.",
     "practice.feedbackGood": "Erkannte Wörter: {0} von {1}.",
     "practice.feedbackKeepGoing":
@@ -403,6 +413,9 @@ export const STRINGS = {
     "roleplay.thinking": "Denkt nach...",
     "roleplay.stopSend": "Stopp & senden",
     "roleplay.speakReply": "Tippen, um zu antworten",
+    "roleplay.typePlaceholder": "Schreibe deine Nachricht auf Deutsch…",
+    "roleplay.send": "Senden",
+    "roleplay.voiceUnavailable": "Spracheingabe ist in diesem Browser nicht verfügbar. Du kannst deine Antworten unten eintippen.",
 
     "settings.backupHeader": "Sicherung",
     "settings.backupBody": "Deine Bibliothek liegt nur in diesem Browser. Wenn du die Websitedaten löschst, den Browser wechselst oder der Browser Speicher freigibt, ist sie weg. Bewahre eine Kopie auf.",
@@ -437,6 +450,8 @@ export const STRINGS = {
     "settings.storageBestEffort": "Standard-Speicher (kann bei Platzmangel gelöscht werden)",
     "settings.storageRequest": "Dauerhaften Speicher anfordern",
     "settings.storageUnsupported": "Dauerhafter Speicher wird in diesem Browser nicht unterstützt",
+    "settings.storageDescription": "Hilft zu verhindern, dass der Browser deine lokalen Daten automatisch löscht.",
+    "settings.storageUsage": "Belegter Speicher: {0} MB",
     "settings.backupLast": "Letzte Sicherung: {0}",
     "settings.backupNever": "Noch nie gesichert",
     "settings.backupReminder": "Du hast {0} Wörter ohne aktuelle Sicherung. Lade eine Kopie herunter, um Datenverlust zu vermeiden.",
@@ -454,6 +469,7 @@ export const STRINGS = {
     "message.apiKeyNotSaved":
       "Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.",
     "message.progressCleared": "Bibliothek, Verlauf und Statistiken gelöscht.",
+    "message.progressClearFailed": "Daten konnten nicht gelöscht werden. Versuche es erneut.",
 
     "speech.unavailable": "Spracherkennung ist in diesem Browser nicht verfügbar.",
     "speech.startFailed": "Aufnahme konnte nicht gestartet werden. Versuche es erneut.",

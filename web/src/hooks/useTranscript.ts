@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
-import { DEFAULT_DIALECT, getApiKey, getDialect, isDialect } from "@/lib/db/settings";
+import { getApiKey } from "@/lib/db/settings";
 import { insertTranscript, saveVocabulary } from "@/lib/db/repository";
 import { isRecognitionSupported, recognizer, type RecognizerState } from "@/lib/speech/recognizer";
+import { resolveRecognitionDialect } from "@/lib/speech/dialect";
 import { vocabularyProcessor } from "@/lib/ai/processor";
 import { t } from "@/lib/i18n";
 import type { WordDetails, GrammarNote } from "@/lib/ai/groq";
-
-async function resolveSafeDialect(): Promise<string> {
-  try {
-    const dialect = await getDialect(db);
-    return isDialect(dialect) ? dialect : DEFAULT_DIALECT;
-  } catch {
-    return DEFAULT_DIALECT;
-  }
-}
 
 export interface TranscriptState {
   partialText: string;
@@ -186,7 +178,7 @@ export function useTranscript() {
         recognizer.reportPermissionDenied();
         return;
       }
-      const dialect = await resolveSafeDialect();
+      const dialect = await resolveRecognitionDialect();
       recognizer.startListening(dialect);
     } catch {
       recognizer.reportPermissionDenied();

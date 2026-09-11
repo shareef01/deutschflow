@@ -1,24 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useStudy } from "@/hooks/useStudy";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { CheckIcon, RefreshIcon, SchoolIcon, VolumeUpIcon } from "@/components/icons";
 import { ReviewQuality } from "@/lib/ai/srs";
 import { DashboardContent } from "@/components/ui/DashboardContent";
 
-const TABS = ["dashboard", "flashcards"] as const;
-type TabType = (typeof TABS)[number];
+type TabType = "dashboard" | "flashcards";
 
 export default function StudyPage() {
   const study = useStudy();
   const [selectedTab, setSelectedTab] = useState<TabType>("dashboard");
   const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const { t } = useI18n();
-  const tabListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!hasUserSelectedTab && study.status === "ready") {
@@ -35,53 +34,21 @@ export default function StudyPage() {
     setSelectedTab(tab);
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-      event.preventDefault();
-      const nextTab = selectedTab === "dashboard" ? "flashcards" : "dashboard";
-      handleTabSelect(nextTab);
-      const nextBtn = tabListRef.current?.querySelector<HTMLButtonElement>(`#tab-${nextTab}`);
-      nextBtn?.focus();
-    }
-  };
-
   return (
     <div className="flex h-full flex-col">
-      {/* Accessible Tablist */}
-      <div
-        ref={tabListRef}
-        role="tablist"
-        aria-label={t("nav.study")}
-        onKeyDown={handleKeyDown}
-        className="flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md"
-      >
-        {TABS.map((tab) => {
-          const isSelected = selectedTab === tab;
-          return (
-            <button
-              key={tab}
-              id={`tab-${tab}`}
-              role="tab"
-              type="button"
-              aria-selected={isSelected}
-              aria-controls={`panel-${tab}`}
-              tabIndex={isSelected ? 0 : -1}
-              onClick={() => handleTabSelect(tab)}
-              className={`px-6 py-4 text-sm font-bold uppercase tracking-widest transition-all focus-visible:outline-2 focus-visible:outline-azure-glow focus-visible:outline-offset-2 ${
-                isSelected
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-            >
-              {tab === "dashboard" ? t("dashboard.tab") : t("dashboard.flashcardsTab")}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedTabs
+        value={selectedTab}
+        onValueChange={handleTabSelect}
+        tabs={[
+          { id: "dashboard", label: t("dashboard.tab") },
+          { id: "flashcards", label: t("dashboard.flashcardsTab") },
+        ]}
+        ariaLabel={t("nav.study")}
+      />
 
       <div className="flex-1 min-h-0">
         <div
-          id="panel-dashboard"
+          id="tabpanel-dashboard"
           role="tabpanel"
           aria-labelledby="tab-dashboard"
           hidden={selectedTab !== "dashboard"}
@@ -91,7 +58,7 @@ export default function StudyPage() {
         </div>
 
         <div
-          id="panel-flashcards"
+          id="tabpanel-flashcards"
           role="tabpanel"
           aria-labelledby="tab-flashcards"
           hidden={selectedTab !== "flashcards"}
@@ -250,7 +217,7 @@ function FlashcardMode({
                   <span className="text-label-small font-medium text-on-surface-muted">
                     {t("library.fieldGerman")}
                   </span>
-                  <h2 className="mt-3 text-3xl font-bold text-azure-glow">{currentItem.germanText}</h2>
+                  <span className="mt-3 block text-3xl font-bold text-azure-glow">{currentItem.germanText}</span>
                   <span className="mt-8 text-xs font-medium text-on-surface-muted uppercase tracking-wider">
                     {t("study.tapToFlip")}
                   </span>
@@ -263,9 +230,9 @@ function FlashcardMode({
                   <span className="text-label-small font-medium text-on-surface-muted">
                     {t("library.fieldTranslation")}
                   </span>
-                  <h2 className="mt-3 text-3xl font-bold text-on-surface">
+                  <span className="mt-3 block text-3xl font-bold text-on-surface">
                     {currentItem.englishTranslation}
-                  </h2>
+                  </span>
                   <div className="mt-4 flex flex-col gap-1">
                     {currentItem.article && currentItem.article !== "none" && (
                       <span className="text-sm font-semibold text-secondary">

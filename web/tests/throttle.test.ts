@@ -23,12 +23,22 @@ describe("login throttle", () => {
   });
 
   it("doubles the wait with each further failure", () => {
-    for (let i = 0; i < 4; i++) recordFailure("1.2.3.4");
-    const first = delayForNextAttempt("1.2.3.4");
-    recordFailure("1.2.3.4");
-    const second = delayForNextAttempt("1.2.3.4");
+    const now = 1_000_000;
+    for (let i = 0; i < 4; i++) recordFailure("1.2.3.4", now);
+    const first = delayForNextAttempt("1.2.3.4", now);
+    recordFailure("1.2.3.4", now);
+    const second = delayForNextAttempt("1.2.3.4", now);
 
     expect(second).toBe(first * 2);
+  });
+
+  it("counts a cooldown down instead of holding the caller for the whole window", () => {
+    const start = 1_000_000;
+    for (let i = 0; i < 3; i++) recordFailure("1.2.3.4", start);
+
+    expect(delayForNextAttempt("1.2.3.4", start)).toBe(1_000);
+    expect(delayForNextAttempt("1.2.3.4", start + 400)).toBe(600);
+    expect(delayForNextAttempt("1.2.3.4", start + 1_000)).toBe(0);
   });
 
   it("caps the wait so a legitimate user is not locked out forever", () => {

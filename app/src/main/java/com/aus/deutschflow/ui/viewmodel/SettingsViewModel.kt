@@ -53,8 +53,15 @@ class SettingsViewModel @Inject constructor(
      * exactly what those look for. Nothing needs the key here; the only screen that
      * sends it reads it from PreferenceManager directly.
      */
-    val hasApiKey: StateFlow<Boolean> = preferenceManager.apiKey
-        .map { it.isNotBlank() }
+    val hasApiKey: StateFlow<Boolean> = preferenceManager.apiKeyState
+        .map { state ->
+            when (state) {
+                is PreferenceManager.ApiKeyState.Available -> state.value.isNotBlank()
+                is PreferenceManager.ApiKeyState.LegacyPlaintext -> state.value.isNotBlank()
+                PreferenceManager.ApiKeyState.Missing,
+                PreferenceManager.ApiKeyState.Unreadable -> false
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val selectedDialect: StateFlow<String> = preferenceManager.selectedDialect
@@ -75,7 +82,21 @@ class SettingsViewModel @Inject constructor(
         // Settings is the only screen that reads the key, so it is the one place
         // worth paying a Keystore round trip to re-encrypt one left in the clear by
         // an older build.
-        launchGuarded(TAG) { preferenceManager.migrateLegacyApiKey() }
+        launchGuarded(TAG) {
+            when (preferenceManager.migrateLegacyApiKey()) {
+                PreferenceManager.ApiKeyMigrationResult.FAILED ->
+                    _message.value = R.string.message_api_key_migration_failed
+                PreferenceManager.ApiKeyMigrationResult.NOT_NEEDED,
+                PreferenceManager.ApiKeyMigrationResult.MIGRATED -> Unit
+            }
+        }
+        viewModelScope.launch {
+            preferenceManager.apiKeyState.collect { state ->
+                if (state == PreferenceManager.ApiKeyState.Unreadable) {
+                    _message.value = R.string.message_api_key_unreadable
+                }
+            }
+        }
     }
 
     fun dismissMessage() {

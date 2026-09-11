@@ -14,10 +14,10 @@
  * dependency decision, not a code one.
  */
 
-/** Failures allowed before the delay starts biting. */
+/** Failures allowed before attempts receive an immediate retry response. */
 const FREE_ATTEMPTS = 3;
 
-/** Doubling from here: 4th failure waits 1s, 5th 2s, 6th 4s… */
+/** Doubling cooldown: 4th failure retries after 1s, 5th after 2s, 6th after 4s… */
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
 
@@ -27,6 +27,7 @@ const WINDOW_MS = 15 * 60 * 1_000;
 interface Attempts {
   count: number;
   last: number;
+  nextAllowed: number;
 }
 
 const attempts = new Map<string, Attempts>();
@@ -44,26 +45,23 @@ function prune(now: number): void {
 /**
  * How long this caller must wait before their next guess is worth making.
  *
- * @returns milliseconds to sleep, 0 when they are still within the free allowance.
+ * @returns milliseconds until another attempt is accepted, or 0 within the allowance.
  */
 export function delayForNextAttempt(key: string, now: number = Date.now()): number {
   prune(now);
   const entry = attempts.get(key);
   if (!entry || now - entry.last > WINDOW_MS) return 0;
-  if (entry.count < FREE_ATTEMPTS) return 0;
-  const exponent = entry.count - FREE_ATTEMPTS;
-  return Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** exponent);
+  return Math.max(0, entry.nextAllowed - now);
 }
 
 export function recordFailure(key: string, now: number = Date.now()): void {
   prune(now);
   const entry = attempts.get(key);
-  attempts.set(
-    key,
-    entry && now - entry.last <= WINDOW_MS
-      ? { count: entry.count + 1, last: now }
-      : { count: 1, last: now }
-  );
+  const count = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
+  const cooldown = count >= FREE_ATTEMPTS
+    ? Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** (count - FREE_ATTEMPTS))
+    : 0;
+  attempts.set(key, { count, last: now, nextAllowed: now + cooldown });
 }
 
 /** A correct password clears the record: the caller has proved who they are. */

@@ -1,6 +1,4 @@
-"use client";
-
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 /**
@@ -10,18 +8,20 @@ import { useDialogFocus } from "@/hooks/useDialogFocus";
  */
 export function ModalDialog({
   title,
+  ariaLabel,
   onDismiss,
   children,
   actions,
 }: {
   title?: string;
+  ariaLabel?: string;
   onDismiss: () => void;
   children: ReactNode;
   actions: ReactNode;
 }) {
   const dialogRef = useDialogFocus<HTMLDivElement>(onDismiss);
-
-  const titleId = title ? "modal-dialog-title" : undefined;
+  const baseId = useId();
+  const titleId = title ? `modal-dialog-title-${baseId}` : undefined;
 
   return (
     <div
@@ -31,7 +31,7 @@ export function ModalDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      aria-label={titleId ? undefined : "Dialog"}
+      aria-label={titleId ? undefined : ariaLabel}
     >
       <div
         aria-hidden="true"

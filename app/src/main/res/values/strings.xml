@@ -16,6 +16,7 @@
     <string name="action_delete">Delete</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
+    <string name="action_saving">Saving…</string>
     <string name="action_copied">Copied to clipboard</string>
     <string name="action_open_settings">Open settings</string>
     <string name="action_close">Close</string>
@@ -153,13 +154,15 @@
     <string name="roleplay_retry">Try again</string>
     <string name="roleplay_scenario_berlin_bakery">Ordering at a Berlin Bakery</string>
     <string name="roleplay_restart_session">Restart conversation</string>
+    <string name="roleplay_type_placeholder">Type your message in German…</string>
+    <string name="roleplay_send">Send</string>
+    <string name="roleplay_voice_unavailable">Voice input is unavailable in this browser. You can type your responses below.</string>
     <string name="practice_tab">Repetition</string>
+    <string name="practice_speech_unavailable">Microphone practice is unavailable in this browser. You can still listen to the sentences.</string>
     <string name="study_skip">Skip card</string>
     <string name="transcript_grammar_spotlight">Grammar Spotlight</string>
     <string name="transcript_listening_for">German · %1$s</string>
     <string name="detail_linguistic_connections">Linguistic Connections</string>
-
-    <!-- Cloud sync -->
 
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyms</string>
@@ -224,6 +227,8 @@
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API key saved securely.</string>
     <string name="message_api_key_not_saved">The key couldn\'t be stored. Try again, or restart the device.</string>
+    <string name="message_api_key_migration_failed">Your existing API key could not be moved to encrypted storage. It was not deleted; unlock your device and reopen Settings to retry.</string>
+    <string name="message_api_key_unreadable">The stored API key can no longer be decrypted. Enter and save the key again.</string>
     <string name="message_clear_failed">Couldn\'t clear your progress. Please try again.</string>
     <string name="message_progress_cleared">All vocabulary, history, and stats have been reset.</string>
     <string name="message_notification_sent">Daily reminder notification sent.</string>

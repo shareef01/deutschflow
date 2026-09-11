@@ -29,13 +29,13 @@ private const val TAG = "KeystoreCipher"
  * is not going anywhere.
  */
 @Singleton
-class KeystoreCipher @Inject constructor() {
+open class KeystoreCipher @Inject constructor() {
 
     /**
      * @return the ciphertext, or null if it could not be produced - in which case
      * the caller must not fall back to storing the plaintext.
      */
-    fun encrypt(plainText: String): String? = try {
+    open fun encrypt(plainText: String): String? = try {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
@@ -56,7 +56,7 @@ class KeystoreCipher @Inject constructor() {
      * carry ciphertext whose key never came with it. Both mean the same thing to the
      * user - the key is gone and needs entering again - and neither is a crash.
      */
-    fun decrypt(stored: String): String? = try {
+    open fun decrypt(stored: String): String? = try {
         val bytes = Base64.decode(stored, Base64.NO_WRAP)
         if (bytes.size <= IV_LENGTH) {
             // Too short to carry even the IV: a truncated or tampered value. The

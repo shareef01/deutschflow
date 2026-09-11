@@ -10,8 +10,8 @@ import type { NextConfig } from "next";
  *
  * It is not local-first for *speech*. Recognition is the browser's own engine, and
  * Chrome, Edge and Safari all send the captured audio to their vendor. That is
- * stated in PWA_BLUEPRINT.md §7 and surfaced to the user in Settings, because it
- * is the one privacy property where this app differs from the Android one.
+ * stated in the README and surfaced to the user in Settings, because it is the
+ * one privacy property where this app differs from the Android one.
  */
 /**
  * Security headers travel with the build, not with the host.
@@ -72,6 +72,7 @@ const CONTENT_SECURITY_POLICY = [
 const PERMISSIONS_POLICY = "microphone=(self), camera=(), geolocation=()";
 
 const SECURITY_HEADERS = [
+  { key: "Strict-Transport-Security", value: "max-age=31536000" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Permissions-Policy", value: PERMISSIONS_POLICY },
   { key: "X-Frame-Options", value: "DENY" },

@@ -34,6 +34,7 @@ export default function SettingsPage() {
     isPersisted,
     isPersistenceSupported,
     requestPersistence,
+    storageUsage,
     lastBackupTime,
   } = useSettings();
 
@@ -124,6 +125,7 @@ export default function SettingsPage() {
           ref={restoreInput}
           type="file"
           accept="application/json,.json"
+          aria-label={t("settings.backupRestore")}
           className="hidden"
           onChange={onRestore}
         />
@@ -214,6 +216,14 @@ export default function SettingsPage() {
             <p className={`text-body-medium font-semibold ${isPersisted ? "text-emerald-400" : "text-on-surface"}`}>
               {isPersisted ? t("settings.storagePersisted") : t("settings.storageBestEffort")}
             </p>
+            <p className="mt-1 text-label-small text-on-surface-variant">
+              {t("settings.storageDescription")}
+            </p>
+            {storageUsage && (
+              <p className="mt-1 text-label-small text-on-surface-variant">
+                {t("settings.storageUsage", [(storageUsage.usage / (1024 * 1024)).toFixed(1)])}
+              </p>
+            )}
             {!isPersistenceSupported && (
               <p className="mt-1 text-label-small text-on-surface-variant">
                 {t("settings.storageUnsupported")}
@@ -244,7 +254,7 @@ export default function SettingsPage() {
       </button>
 
       <div className="mt-12 text-center">
-        <p className="text-xs font-medium uppercase tracking-[0.15em] text-on-surface-variant/60">
+        <p className="text-xs font-medium uppercase tracking-[0.15em] text-on-surface-variant">
           {t("settings.version", ["1.3.0 Obsidian"])}
         </p>
       </div>
@@ -291,59 +301,39 @@ function RadioGroup<T extends string>({
   onSelect: (code: T) => void;
   name?: string;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const handleKeyDown = (event: React.KeyboardEvent, currentIndex: number) => {
-    let nextIndex = -1;
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-      event.preventDefault();
-      nextIndex = (currentIndex + 1) % options.length;
-    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-      event.preventDefault();
-      nextIndex = (currentIndex - 1 + options.length) % options.length;
-    }
-
-    if (nextIndex >= 0) {
-      onSelect(options[nextIndex].code);
-      const buttons = containerRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
-      buttons?.[nextIndex]?.focus();
-    }
-  };
+  const groupName = name ? name.toLowerCase().replace(/[^a-z0-9]/g, "-") : "radio-group";
 
   return (
-    <div ref={containerRef} role="radiogroup" aria-label={name} className="glass-surface p-2">
-      {options.map((option, index) => {
-        const isSelected = selected === option.code;
-        return (
-          <button
-            key={option.code}
-            type="button"
-            role="radio"
-            aria-checked={isSelected}
-            tabIndex={isSelected ? 0 : -1}
-            onClick={() => onSelect(option.code)}
-            onKeyDown={(e) => handleKeyDown(e, index)}
-            className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-on-surface/5 focus-visible:outline-2 focus-visible:outline-azure-glow"
-          >
-            <span
-              aria-hidden="true"
-              className={`flex size-6 items-center justify-center rounded-full border-2 transition-all ${
-                isSelected ? "scale-110 border-azure-glow" : "border-on-surface-variant/40"
-              }`}
+    <fieldset className="glass-surface border-none p-2 m-0">
+      {name && <legend className="sr-only">{name}</legend>}
+      <div className="flex flex-col gap-1">
+        {options.map((option) => {
+          const isSelected = selected === option.code;
+          return (
+            <label
+              key={option.code}
+              className="flex w-full cursor-pointer items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-on-surface/5 focus-within:outline-2 focus-within:outline-azure-glow"
             >
-              {isSelected && <span className="size-3 rounded-full bg-azure-glow" />}
-            </span>
-            <span
-              className={`text-body-large font-bold ${
-                isSelected ? "text-on-surface" : "text-on-surface-variant"
-              }`}
-            >
-              {option.label}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+              <input
+                type="radio"
+                name={groupName}
+                value={option.code}
+                checked={isSelected}
+                onChange={() => onSelect(option.code)}
+                className="size-5 accent-[#00f0ff] cursor-pointer"
+              />
+              <span
+                className={`text-body-large font-bold ${
+                  isSelected ? "text-on-surface" : "text-on-surface-variant"
+                }`}
+              >
+                {option.label}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

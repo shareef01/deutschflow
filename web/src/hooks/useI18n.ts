@@ -24,6 +24,11 @@ import {
 export function useI18n() {
   const lang = useSyncExternalStore(subscribeLang, getLangSnapshot, getLangSnapshot);
 
+  const applyLang = useCallback((next: Lang) => {
+    setCurrentLang(next);
+    if (typeof document !== "undefined") document.documentElement.lang = next;
+  }, []);
+
   // Load the persisted choice (or detect from the browser) once.
   useEffect(() => {
     let cancelled = false;
@@ -37,13 +42,7 @@ export function useI18n() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const applyLang = useCallback((next: Lang) => {
-    setCurrentLang(next);
-    if (typeof document !== "undefined") document.documentElement.lang = next;
-  }, []);
+  }, [applyLang]);
 
   /** Persist a user choice from the Settings language section. */
   const changeLang = useCallback(

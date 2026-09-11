@@ -6,10 +6,11 @@ import { useRoleplay } from "@/hooks/useRoleplay";
 import { useI18n } from "@/hooks/useI18n";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { AudioWaveform } from "@/components/ui/AudioWaveform";
 import { MicIcon, NavigateNextIcon, RefreshIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
 import { PRACTICE_FEEDBACK_KEYS } from "@/lib/scoring";
+
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 
 export default function PracticePage() {
   const [selectedTab, setSelectedTab] = useState<"repetition" | "roleplay">("repetition");
@@ -21,37 +22,41 @@ export default function PracticePage() {
   // so exactly one mode listens at a time.
   const roleplay = useRoleplay({ active: selectedTab === "roleplay" });
 
-  if (!roleplay.speechSupported) {
-    return (
-      <EmptyState
-        icon={<MicIcon className="size-full opacity-50" />}
-        message={t("speech.errorNotSupported")}
-      />
-    );
-  }
-
   return (
     <div className="flex h-full flex-col">
-        {/* Tab Selector */}
-        <div className="flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md">
-            {(["repetition", "roleplay"] as const).map((tab) => (
-                <button
-                    key={tab}
-                    onClick={() => setSelectedTab(tab)}
-                    className={`px-6 py-4 text-sm font-bold uppercase tracking-widest transition-all ${
-                        selectedTab === tab
-                        ? "text-primary border-b-2 border-primary"
-                        : "text-on-surface-variant hover:text-on-surface"
-                    }`}
-                >
-                    {tab === "repetition" ? t("practice.tab") : t("roleplay.tab")}
-                </button>
-            ))}
-        </div>
+      {/* Tab Selector */}
+      <div className="flex w-full justify-center p-4 border-b border-on-surface/5 bg-background/50 backdrop-blur-md">
+        <SegmentedTabs
+          value={selectedTab}
+          onValueChange={(val) => setSelectedTab(val as "repetition" | "roleplay")}
+          ariaLabel={t("nav.practice")}
+          tabs={[
+            { id: "repetition", label: t("practice.tab"), panelId: "practice-panel-repetition" },
+            { id: "roleplay", label: t("roleplay.tab"), panelId: "practice-panel-roleplay" },
+          ]}
+        />
+      </div>
 
-        <div className="flex-1 min-h-0">
-            {selectedTab === "repetition" ? <RepetitionMode /> : <RoleplayMode roleplay={roleplay} />}
+      <div className="flex-1 min-h-0">
+        <div
+          id="practice-panel-repetition"
+          role="tabpanel"
+          aria-labelledby="tab-repetition"
+          hidden={selectedTab !== "repetition"}
+          className={`h-full ${selectedTab === "repetition" ? "" : "hidden"}`}
+        >
+          <RepetitionMode />
         </div>
+        <div
+          id="practice-panel-roleplay"
+          role="tabpanel"
+          aria-labelledby="tab-roleplay"
+          hidden={selectedTab !== "roleplay"}
+          className={`h-full ${selectedTab === "roleplay" ? "" : "hidden"}`}
+        >
+          <RoleplayMode roleplay={roleplay} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -59,6 +64,7 @@ export default function PracticePage() {
 function RepetitionMode() {
   const { t } = useI18n();
   const {
+    speechSupported,
     targetSentence,
     feedback,
     wordResults,
@@ -115,12 +121,19 @@ function RepetitionMode() {
           <button
             type="button"
             onClick={() => speak(targetSentence)}
+            aria-label={t("action.speak")}
             className="glass-button press-scale flex size-14 shrink-0 items-center justify-center text-azure-glow"
           >
             <VolumeUpIcon className="size-7" />
           </button>
         </div>
       </div>
+
+      {!speechSupported && (
+        <div role="status" className="mt-4 rounded-lg bg-surface-variant/40 p-4 text-center text-body-medium text-on-surface-variant">
+          {t("practice.speechUnavailable")}
+        </div>
+      )}
 
       <ErrorBanner message={errorState} />
 
@@ -178,7 +191,7 @@ function RepetitionMode() {
       <div className="mt-6 flex w-full flex-col gap-3 pb-5 xs:flex-row xs:gap-4">
         <GlassButton
           type="button"
-          disabled={isProcessing}
+          disabled={isProcessing || !speechSupported}
           glow={isListening ? "error" : "azure"}
           onClick={isListening ? stopPractice : () => void startPractice()}
           className="w-full xs:flex-1 h-14"
@@ -206,10 +219,12 @@ type Roleplay = ReturnType<typeof useRoleplay>;
 function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const { t } = useI18n();
     const {
-        messages, isProcessing, isListening, partialText,
-        openScenarioIfEmpty, startSession, startListening, stopAndSend, speak
+        messages, isProcessing, isListening, partialText, speechSupported,
+        openScenarioIfEmpty, startSession, startListening, stopAndSend, speak, sendMessage
     } = roleplay;
 
+    const [typedText, setTypedText] = useState("");
+    const [isSending, setIsSending] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // Open a scene only if there is nothing to come back to. The decision belongs
@@ -226,6 +241,19 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [messages.length, isProcessing, partialText]);
+
+    const handleSendTyped = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = typedText.trim();
+        if (!trimmed || isProcessing || isSending) return;
+        setTypedText("");
+        setIsSending(true);
+        try {
+            await sendMessage(trimmed);
+        } finally {
+            setIsSending(false);
+        }
+    };
 
     return (
         <div className="flex h-full flex-col p-4">
@@ -246,7 +274,7 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                 <button
                     type="button"
                     onClick={() => void startSession()}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isSending}
                     aria-label={t("roleplay.restart")}
                     title={t("roleplay.restart")}
                     className="glass-button press-scale flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:text-azure-glow disabled:opacity-40"
@@ -277,40 +305,69 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                         </div>
                     </div>
                 ))}
-                {isProcessing && (
+                {(isProcessing || isSending) && (
                     <div className="flex justify-start">
                         <div className="glass-surface p-4 opacity-50 animate-pulse">{t("roleplay.thinking")}</div>
                     </div>
                 )}
             </div>
 
-            <div className="glass-surface p-6 flex flex-col items-center gap-4 shadow-xl">
-                {isListening && partialText && (
+            <div className="glass-surface p-4 sm:p-6 flex flex-col items-center gap-3 shadow-xl">
+                {!speechSupported && (
+                    <div role="status" className="w-full rounded-lg bg-surface-variant/40 p-2 text-center text-xs text-on-surface-variant">
+                        {t("roleplay.voiceUnavailable")}
+                    </div>
+                )}
+
+                {speechSupported && isListening && partialText && (
                     <p className="text-sm text-on-surface text-center animate-in fade-in slide-in-from-bottom-2">
                         {partialText}
                     </p>
                 )}
 
-                <div className="relative group">
-                    {isListening && (
-                        <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping scale-150" />
-                    )}
-                    <button
-                        type="button"
-                        onClick={isListening ? stopAndSend : startListening}
-                        disabled={isProcessing}
-                        aria-label={isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
-                        className={`relative z-10 size-16 rounded-full flex items-center justify-center transition-all ${
-                            isListening ? 'bg-error scale-110 shadow-error/20' : 'bg-primary shadow-primary/20'
-                        } shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50`}
+                {speechSupported && (
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="relative group">
+                            {isListening && (
+                                <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping scale-150" />
+                            )}
+                            <button
+                                type="button"
+                                onClick={isListening ? stopAndSend : startListening}
+                                disabled={isProcessing || isSending}
+                                aria-label={isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
+                                className={`relative z-10 size-16 rounded-full flex items-center justify-center transition-all ${
+                                    isListening ? 'bg-error scale-110 shadow-error/20' : 'bg-primary shadow-primary/20'
+                                } shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50`}
+                            >
+                                {isListening ? <StopIcon className="size-8 text-white" /> : <MicIcon className="size-8 text-white" />}
+                            </button>
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/80">
+                            {isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
+                        </span>
+                    </div>
+                )}
+
+                {/* Typed interaction fallback & complement */}
+                <form onSubmit={handleSendTyped} className="flex w-full max-w-lg items-center gap-2 mt-1">
+                    <input
+                        type="text"
+                        value={typedText}
+                        onChange={(e) => setTypedText(e.target.value)}
+                        placeholder={t("roleplay.typePlaceholder")}
+                        disabled={isProcessing || isSending}
+                        className="flex-1 rounded-full border border-outline-variant bg-glass-fill px-4 py-2.5 text-body-medium text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-azure-glow"
+                    />
+                    <GlassButton
+                        type="submit"
+                        disabled={!typedText.trim() || isProcessing || isSending}
+                        className="px-5 py-2 text-label-large font-bold shrink-0"
                     >
-                        {isListening ? <StopIcon className="size-8 text-white" /> : <MicIcon className="size-8 text-white" />}
-                    </button>
-                </div>
-                <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/80">
-                    {isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
-                </span>
+                        {t("roleplay.send")}
+                    </GlassButton>
+                </form>
             </div>
         </div>
-    )
+    );
 }

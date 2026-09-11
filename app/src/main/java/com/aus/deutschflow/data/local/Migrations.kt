@@ -219,7 +219,7 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
 }
 
 /**
- * Adds cloud sync fields: remoteId and lastModifiedAt.
+ * Adds stable record identity and modification metadata.
  */
 val MIGRATION_10_11 = object : Migration(10, 11) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -231,8 +231,8 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         
         // Existing rows need both, not just the timestamp. Leaving remoteId at
         // its SQL default of '' would have given every record that predates this
-        // migration - which is all of them, and the ones most worth syncing - no
-        // cross-device identity at all, while the entity's Kotlin default mints a
+        // migration - which is all of them - no durable identity at all, while
+        // the entity's Kotlin default mints a
         // fresh UUID for everything saved afterwards.
         val now = System.currentTimeMillis()
         db.execSQL("UPDATE vocabulary SET lastModifiedAt = $now, remoteId = $UUID_V4")

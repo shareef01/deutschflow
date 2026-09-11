@@ -96,11 +96,11 @@ data class VocabularyEntity(
     @ColumnInfo(defaultValue = "0")
     val reviewCount: Int = 0,
 
-    // Cloud Sync fields — The Bridge
-    /** UUID for cross-device identity. */
+    // Stable identity and modification metadata used by backup merging.
+    /** UUID that survives export/import without exposing the local Room id. */
     @ColumnInfo(defaultValue = "''")
     val remoteId: String = UUID.randomUUID().toString(),
-    /** When this record was last touched, to decide which copy wins a sync. */
+    /** When this record was last touched, used by deterministic merge rules. */
     @ColumnInfo(defaultValue = "0")
     val lastModifiedAt: Long = System.currentTimeMillis()
 ) {

@@ -36,6 +36,15 @@ class PreferenceManager @Inject constructor(
     private val cipher: KeystoreCipher
 ) {
 
+    sealed interface ApiKeyState {
+        data object Missing : ApiKeyState
+        data class Available(val value: String) : ApiKeyState
+        data class LegacyPlaintext(val value: String) : ApiKeyState
+        data object Unreadable : ApiKeyState
+    }
+
+    enum class ApiKeyMigrationResult { NOT_NEEDED, MIGRATED, FAILED }
+
     // Encrypted, under a name of its own. A Gemini key is no use to Groq, and a
     // plaintext key is no use to the decrypting reader, so each change of meaning
     // gets a new name rather than a silent reinterpretation of the old bytes.
@@ -63,15 +72,30 @@ class PreferenceManager @Inject constructor(
      * holds a subscription for as long as it is on screen, is also the screen where
      * the dialect and the auto-play toggle are written.
      */
-    val apiKey: Flow<String> = dataStore.data
+    val apiKeyState: Flow<ApiKeyState> = dataStore.data
         .map { preferences ->
             preferences[KEY_API_KEY_ENCRYPTED] to preferences[KEY_API_KEY_LEGACY]
         }
         .distinctUntilChanged()
         .map { (encrypted, legacy) ->
-            encrypted?.let { cipher.decrypt(it) } ?: legacy ?: ""
+            when {
+                encrypted != null -> cipher.decrypt(encrypted)
+                    ?.let { ApiKeyState.Available(it) }
+                    ?: ApiKeyState.Unreadable
+                legacy != null -> ApiKeyState.LegacyPlaintext(legacy)
+                else -> ApiKeyState.Missing
+            }
         }
         .flowOn(Dispatchers.IO)
+
+    /** Value-only compatibility view for the AI call sites. */
+    val apiKey: Flow<String> = apiKeyState.map { state ->
+        when (state) {
+            is ApiKeyState.Available -> state.value
+            is ApiKeyState.LegacyPlaintext -> state.value
+            ApiKeyState.Missing, ApiKeyState.Unreadable -> ""
+        }
+    }
 
     /** Int.MIN_VALUE means "never recorded", which no real offset can be. */
     val dailyWordZoneOffset: Flow<Int> = dataStore.data.map { preferences ->
@@ -118,9 +142,16 @@ class PreferenceManager @Inject constructor(
      * Called when Settings opens, which is the only screen that cares about the key
      * and so the one place where paying for a Keystore round trip is warranted.
      */
-    suspend fun migrateLegacyApiKey() {
-        val legacy = dataStore.data.first()[KEY_API_KEY_LEGACY] ?: return
-        saveApiKey(legacy)
+    suspend fun migrateLegacyApiKey(): ApiKeyMigrationResult {
+        val legacy = dataStore.data.first()[KEY_API_KEY_LEGACY]
+            ?: return ApiKeyMigrationResult.NOT_NEEDED
+        return if (saveApiKey(legacy)) {
+            ApiKeyMigrationResult.MIGRATED
+        } else {
+            // saveApiKey writes nothing on failure, so this recoverable legacy
+            // value remains available for a later retry.
+            ApiKeyMigrationResult.FAILED
+        }
     }
 
     suspend fun saveDialect(dialect: String) {

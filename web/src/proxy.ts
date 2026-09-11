@@ -1,38 +1,41 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { SESSION_COOKIE, sitePassword, verifySessionToken } from "@/lib/auth/session";
+import { SESSION_COOKIE, sessionSecret, sitePassword, verifySessionToken } from "@/lib/auth/session";
 
 /**
- * The access gate, run by the network-boundary proxy (the convention that
- * replaced Next 15's middleware; its runtime is nodejs).
+ * The access gate, run by the network-boundary proxy (Next.js 16 convention; its runtime is nodejs).
  *
  * Everything is private unless it appears in [PUBLIC_PREFIXES]. API routes are
  * deliberately *not* exempt: the matcher used to exclude them wholesale, which
  * meant the first route anyone added would have been public by default, with
  * nothing in the code to say so.
  */
-const PUBLIC_PREFIXES = [
+const PUBLIC_PATHS = new Set([
   "/login",
-  "/_next", // build output; the CDN serves it regardless of this gate
-  "/icons",
+  "/api/login",
   "/manifest.json",
   "/sw.js",
   "/favicon.ico",
+]);
+const PUBLIC_PREFIXES = [
+  "/_next", // build output; the CDN serves it regardless of this gate
+  "/icons",
 ];
 
 function isPublic(pathname: string): boolean {
-  return PUBLIC_PREFIXES.some(
+  return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublic(pathname)) return NextResponse.next();
 
-  const secret = sitePassword();
-  if (!secret) {
+  const password = sitePassword();
+  const secret = sessionSecret();
+  if (!password || !secret) {
     // No key configured is a closed door, not an open one — an unconfigured
     // deployment must not be a public one.
     return NextResponse.redirect(new URL("/login", request.url));

@@ -36,6 +36,7 @@ function valueOf(headers: HeaderEntry[], key: string): string | undefined {
 }
 
 const SECURITY_HEADERS = [
+  "Strict-Transport-Security",
   "Content-Security-Policy",
   "X-Frame-Options",
   "X-Content-Type-Options",

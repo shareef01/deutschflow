@@ -36,7 +36,7 @@ CLUTTER_PATTERNS = [
 
 def audit_android_strings():
     """Verify 1:1 parity of string keys between EN and DE in Android resources."""
-    print("== 1. Android String Resource Parity ==")
+    print("== 1. Android Internal Locale Parity (values/strings.xml <-> values-de/strings.xml) ==")
     if not STRINGS_EN.exists() or not STRINGS_DE.exists():
         print(f"FAIL: Missing string resource files: {STRINGS_EN} or {STRINGS_DE}")
         return False
@@ -68,14 +68,14 @@ def audit_android_strings():
         passed = False
 
     if passed:
-        print(f"  PASS: All {len(keys_en)} Android string resources match 1:1 across EN and DE.")
+        print(f"  PASS: All {len(keys_en)} Android string resources match 1:1 between English and German.")
 
     return passed
 
 
 def audit_web_i18n():
     """Verify 1:1 parity of string keys between EN and DE in web/src/lib/i18n.ts."""
-    print("\n== 2. Web i18n Dictionary Parity ==")
+    print("\n== 2. Web Internal Locale Parity (i18n.ts en <-> de) ==")
     if not I18N_TS.exists():
         print(f"FAIL: Missing i18n file: {I18N_TS}")
         return False
@@ -111,7 +111,7 @@ def audit_web_i18n():
         passed = False
 
     if passed:
-        print(f"  PASS: All {len(keys_en)} Web translation keys match 1:1 across EN and DE.")
+        print(f"  PASS: All {len(keys_en)} Web translation keys match 1:1 between English and German.")
 
     return passed
 
@@ -186,7 +186,7 @@ def main():
 
     print("\n========================================")
     if all(results):
-        print("ALL AUDITS PASSED: Repository is clean and in full parity.")
+        print("ALL AUDITS PASSED: Repository static parity checks passed: translations, palette tokens, contrast pairs, and known clutter patterns.")
         return 0
     else:
         print("AUDIT FAILED: Discrepancies detected.")

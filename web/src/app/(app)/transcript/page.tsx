@@ -285,7 +285,7 @@ export default function TranscriptPage() {
                               <span className="text-sm font-bold text-on-surface">{note.phrase}</span>
                           </div>
                           {note.explanation && (
-                              <p className="mt-2 text-xs text-on-surface-variant leading-relaxed">
+                              <p className="mt-2 text-sm text-on-surface-variant leading-relaxed">
                                   {note.explanation}
                               </p>
                           )}
@@ -430,67 +430,31 @@ function DialectChip({
   onSelect: (dialect: Dialect) => void;
   t: (key: TKey, params?: (string | number)[]) => string;
 }) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
-
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((wasOpen) => !wasOpen)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={t("settings.dialectHeader")}
-        className="press-scale flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow"
-      >
+    <div className="relative inline-flex items-center">
+      <label htmlFor="transcript-dialect-select" className="sr-only">
+        {t("settings.dialectHeader")}
+      </label>
+      <div className="press-scale pointer-events-none flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container">
         <span className="size-2 rounded-full bg-secondary" />
-        {t("transcript.listeningFor", [t(DIALECT_LABELS[selected])])}
+        <span>{t("transcript.listeningFor", [t(DIALECT_LABELS[selected])])}</span>
         <svg className="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M7 10l5 5 5-5z" />
         </svg>
-      </button>
-
-      {open && (
-        <>
-          <div
-            aria-hidden="true"
-            className="fixed inset-0 z-40 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <ul
-            role="listbox"
-            aria-label={t("settings.dialectHeader")}
-            className="glass-surface absolute left-1/2 top-11 z-50 w-48 -translate-x-1/2 p-1"
-          >
-            {DIALECTS.map((dialect) => (
-              <li key={dialect} role="presentation">
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={dialect === selected}
-                  onClick={() => {
-                    onSelect(dialect);
-                    setOpen(false);
-                  }}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-body-medium hover:bg-on-surface/5 focus-visible:outline-2 focus-visible:outline-azure-glow ${
-                    dialect === selected ? "text-primary font-bold" : "text-on-surface"
-                  }`}
-                >
-                  {t(DIALECT_LABELS[dialect])}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      </div>
+      <select
+        id="transcript-dialect-select"
+        value={selected}
+        onChange={(e) => onSelect(e.target.value as Dialect)}
+        aria-label={t("settings.dialectHeader")}
+        className="absolute inset-0 cursor-pointer opacity-0 focus-visible:opacity-100 focus-visible:relative focus-visible:rounded-xl focus-visible:outline-2 focus-visible:outline-azure-glow"
+      >
+        {DIALECTS.map((dialect) => (
+          <option key={dialect} value={dialect} className="bg-surface text-on-surface">
+            {t(DIALECT_LABELS[dialect])}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

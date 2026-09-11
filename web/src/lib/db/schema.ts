@@ -43,7 +43,7 @@ export interface VocabularyEntry {
   synonyms: string;
   antonyms: string;
 
-  // Cloud Sync fields (Phase VIII)
+  // Stable identity and modification metadata used by backup merging.
   remoteId: string;
   lastModifiedAt: number;
 }
@@ -53,7 +53,7 @@ export interface TranscriptEntry {
   fullText: string;
   timestamp: number;
 
-  // Cloud Sync fields (Phase VIII)
+  // Stable identity and modification metadata used by backup merging.
   remoteId: string;
   lastModifiedAt: number;
 }
@@ -322,7 +322,7 @@ export class DeutschFlowDB extends Dexie {
         }
       });
 
-    // Version 4: Added activityLog and Cloud Sync fields.
+    // Version 4: Added activityLog plus stable record identity metadata.
     this.version(4).stores({
       vocabulary: "++id, timestamp, &germanTextKey, nextReview",
       transcripts: "++id, timestamp",

@@ -55,4 +55,21 @@ describe("loadStudySession state initialization logic", () => {
     await db.close();
     await expect(loadStudySession(db)).rejects.toThrow();
   });
+
+  it("recovers successfully on retry after DB is restored", async () => {
+    await saveVocabulary(db, {
+      germanText: "das Haus",
+      englishTranslation: "the house",
+    });
+    // First simulate failure
+    await db.close();
+    await expect(loadStudySession(db)).rejects.toThrow();
+
+    // Reopen DB (simulating retry)
+    await db.open();
+    const session = await loadStudySession(db);
+    expect(session.totalWords).toBe(1);
+    expect(session.dueCount).toBe(1);
+    expect(session.studyList[0].germanText).toBe("das Haus");
+  });
 });
