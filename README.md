@@ -159,7 +159,15 @@ DeutschFlow is designed around local-first data ownership:
    ```
    Open [http://localhost:3000](http://localhost:3000), enter your `SITE_PASSWORD`, and enter your Groq API key in Settings.
 
-#### Useful Web Commands
+#### Deploying to Vercel
+
+When importing this repository into Vercel:
+
+1. **Root Directory**: In Vercel Project Settings $\rightarrow$ **General**, set **Root Directory** to `web`.
+2. **Framework Preset**: Ensure **Next.js** is selected.
+3. **Environment Variables**: In Vercel Project Settings $\rightarrow$ **Environment Variables**, configure:
+   - `SITE_PASSWORD`: The access password to unlock the web app.
+   - `SESSION_SECRET`: A 32+ character random string for cryptographically signing session cookies (e.g. generated via `openssl rand -base64 32`).
 
 ```bash
 npm run lint         # ESLint check (zero-warning policy enforced)
