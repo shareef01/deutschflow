@@ -217,7 +217,7 @@ class TranscriptViewModelTest {
 
         private val gates = ConcurrentHashMap<String, CompletableDeferred<WordDetailsResult>>()
 
-        override suspend fun interrogateWord(word: String, apiKey: String): WordDetailsResult =
+        override suspend fun interrogateWord(word: String, apiKey: String, learnerLevel: String?): WordDetailsResult =
             gates.getOrPut(word) { CompletableDeferred() }.await()
 
         fun isWaitingOn(word: String): Boolean = gates[word]?.isCompleted == false

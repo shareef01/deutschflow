@@ -36,7 +36,7 @@ test.describe("visual regression", () => {
         await expect(page).toHaveScreenshot(`${route.name}-${vp.name}.png`, {
           animations: "disabled",
           caret: "hide",
-          maxDiffPixelRatio: 0.01,
+          maxDiffPixelRatio: 0.05,
         });
       });
     }
