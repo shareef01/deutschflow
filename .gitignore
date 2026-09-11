@@ -30,7 +30,7 @@ coverage/
 # Environment files & secrets
 .env
 .env.*
-!.env.example
+!**/.env.example
 *.local
 
 # Keystores & release signing
