@@ -1,33 +1,61 @@
+# Android / Kotlin / Gradle artifacts
 *.iml
-.gradle
+.gradle/
+build/
+*/build/
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-# Per-developer IDE state: which device was last deployed to, and per-session
-# assistant bookkeeping. Neither describes the project.
-/.idea/deploymentTargetSelector.xml
-/.idea/planningMode.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
 local.properties
 .kotlin/
+.externalNativeBuild/
+.cxx/
+/captures
 
-# Release signing material. keystore.properties holds the store and key passwords
-# in plaintext; neither it nor the keystore itself belongs in the repository.
+# IDEs: Android Studio / IntelliJ / VS Code
+.idea/
+*.iws
+*.ipr
+out/
+.vscode/
+
+# Node / Next.js / PWA
+node_modules/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+test-results/
+playwright-report/
+blob-report/
+coverage/
+
+# Environment files & secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Keystores & release signing
 keystore.properties
 *.jks
 *.keystore
 
-# Session tooling metadata, not part of the project.
-.reasonix/
-
-# Vercel CLI link state (project/org ids, machine-local). web/.gitignore
-# already ignores this; the root needs it too now that deploys run from here.
+# Vercel CLI link state
 .vercel/
+
+# OS artifacts
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tooling metadata
+.reasonix/
