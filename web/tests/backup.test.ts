@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "fake-indexeddb/auto";
 import { DeutschFlowDB } from "@/lib/db/schema";
-import { exportLibrary, importLibrary } from "@/lib/db/backup";
+import { deterministicTranscriptId, exportLibrary, importLibrary } from "@/lib/db/backup";
 import { saveVocabulary, insertTranscript, rewardXp } from "@/lib/db/repository";
 
 /**
@@ -146,6 +146,12 @@ describe("exportLibrary / importLibrary", () => {
       activityLog: [],
     };
     await expect(importLibrary(db, backup)).rejects.toThrow(/limit/i);
+
+    await expect(importLibrary(db, {
+      ...backup,
+      vocabulary: [],
+      userStats: [{ xp: 1 }, { xp: 2 }],
+    })).rejects.toThrow(/stats count exceeds limit/i);
   });
 
   it("rejects giant text fields in vocabulary and transcripts", async () => {
@@ -227,6 +233,21 @@ describe("exportLibrary / importLibrary", () => {
         vocabulary: [{ germanText: "Test", englishTranslation: "Test", timestamp: NaN }],
       })
     ).rejects.toThrow(/timestamp/i);
+
+    // A partial learned-state tuple would otherwise import a card that can never
+    // be selected as due by the SRS engine.
+    await expect(
+      importLibrary(db, {
+        ...base,
+        vocabulary: [{
+          germanText: "Test",
+          englishTranslation: "Test",
+          reviewCount: 1,
+          interval: 0,
+          nextReview: 0,
+        }],
+      })
+    ).rejects.toThrow(/SRS schedule/i);
   });
 
   it("rejects invalid calendar dates in activity log", async () => {
@@ -276,5 +297,195 @@ describe("exportLibrary / importLibrary", () => {
     expect(saved[0].remoteId).not.toBe("invalid-arbitrary-string");
     // Valid remoteId was preserved
     expect(saved[1].remoteId).toBe("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d");
+  });
+
+  it("is fully idempotent when importing legacy transcripts without remoteId twice", async () => {
+    const backup = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [],
+      transcripts: [
+        { fullText: "Legacy 1", timestamp: 1000000 },
+        { fullText: "Legacy 2", timestamp: 2000000 },
+      ],
+      userStats: [],
+      activityLog: [],
+    };
+
+    const fresh = new DeutschFlowDB(`backup-test-${n++}`);
+    await fresh.open();
+    const firstRes = await importLibrary(fresh, backup);
+    expect(firstRes.transcriptsAdded).toBe(2);
+
+    const secondRes = await importLibrary(fresh, backup);
+    expect(secondRes.transcriptsAdded).toBe(0);
+    expect(await fresh.transcripts.count()).toBe(2);
+  });
+
+  it("treats streak coherently and recomputes streak from merged activity history", async () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    const todayStr = `${y}-${m}-${d}`;
+
+    const backup = {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [],
+      transcripts: [],
+      userStats: [{ xp: 100, streak: 30, lastActivityTimestamp: 5000 }],
+      activityLog: [
+        { date: todayStr, xpGained: 50, timestamp: Date.now() }
+      ],
+    };
+
+    const fresh = new DeutschFlowDB(`backup-test-${n++}`);
+    await fresh.open();
+    await importLibrary(fresh, backup);
+
+    const stats = await fresh.userStats.get(1);
+    expect(stats?.xp).toBe(100);
+    // Because activity history only has today active, streak is 1, not impossible 30
+    expect(stats?.streak).toBe(1);
+  });
+
+  it("keeps newer local vocabulary fields and its SRS schedule when importing an older copy", async () => {
+    await saveVocabulary(db, {
+      germanText: "das Haus",
+      englishTranslation: "the home",
+      article: "das",
+      exampleSentence: "Das Haus ist neu.",
+      timestamp: 2_000,
+    });
+    const local = (await db.vocabulary.toArray())[0];
+    await db.vocabulary.update(local.id!, {
+      interval: 21,
+      easeFactor: 2.4,
+      reviewCount: 6,
+      nextReview: 9_000,
+    });
+
+    await importLibrary(db, {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [{
+        germanText: "das Haus",
+        englishTranslation: "house (old)",
+        article: "",
+        exampleSentence: "Old example.",
+        timestamp: 1_000,
+        interval: 2,
+        easeFactor: 1.5,
+        reviewCount: 1,
+        nextReview: 3_000,
+      }],
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    });
+
+    const merged = (await db.vocabulary.toArray())[0];
+    expect(merged.englishTranslation).toBe("the home");
+    expect(merged.article).toBe("das");
+    expect(merged.exampleSentence).toBe("Das Haus ist neu.");
+    expect({
+      interval: merged.interval,
+      easeFactor: merged.easeFactor,
+      reviewCount: merged.reviewCount,
+      nextReview: merged.nextReview,
+    }).toEqual({ interval: 21, easeFactor: 2.4, reviewCount: 6, nextReview: 9_000 });
+  });
+
+  it("keeps activity XP and timestamp from one coherent winner", async () => {
+    await db.activityLog.put({ date: "2026-09-08", xpGained: 100, timestamp: 2_000 });
+
+    await importLibrary(db, {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [],
+      transcripts: [],
+      userStats: [],
+      activityLog: [{ date: "2026-09-08", xpGained: 50, timestamp: 9_000 }],
+    });
+
+    expect(await db.activityLog.get("2026-09-08")).toEqual({
+      date: "2026-09-08",
+      xpGained: 100,
+      timestamp: 2_000,
+    });
+  });
+
+  it("rejects missing required content before writing any valid-looking rows", async () => {
+    await expect(importLibrary(db, {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [{ germanText: "der Hund", englishTranslation: "the dog" }],
+      transcripts: [{ fullText: "" }],
+      userStats: [],
+      activityLog: [],
+    })).rejects.toThrow(/Transcript text is required/);
+
+    expect(await db.vocabulary.count()).toBe(0);
+  });
+
+  it("preserves a new vocabulary row's stable backup identity", async () => {
+    const remoteId = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d";
+    await importLibrary(db, {
+      format: "deutschflow-library",
+      version: 1,
+      vocabulary: [{
+        germanText: "der Hund",
+        englishTranslation: "the dog",
+        timestamp: 1_000,
+        remoteId,
+        lastModifiedAt: 1_500,
+      }],
+      transcripts: [],
+      userStats: [],
+      activityLog: [],
+    });
+
+    const saved = (await db.vocabulary.toArray())[0];
+    expect(saved.remoteId).toBe(remoteId);
+    expect(saved.lastModifiedAt).toBe(1_500);
+  });
+
+  describe("deterministicTranscriptId", () => {
+    it("produces identical IDs for identical inputs (idempotence)", () => {
+      const id1 = deterministicTranscriptId("Guten Morgen", 1600000000);
+      const id2 = deterministicTranscriptId("Guten Morgen", 1600000000);
+      expect(id1).toBe(id2);
+      expect(id1).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    });
+
+    it("produces different IDs when timestamp changes", () => {
+      const id1 = deterministicTranscriptId("Guten Morgen", 1600000000);
+      const id2 = deterministicTranscriptId("Guten Morgen", 1600000001);
+      expect(id1).not.toBe(id2);
+    });
+
+    it("produces different IDs when text changes", () => {
+      const id1 = deterministicTranscriptId("Guten Morgen", 1600000000);
+      const id2 = deterministicTranscriptId("Guten Abend", 1600000000);
+      expect(id1).not.toBe(id2);
+    });
+
+    it("does not collapse distinct legacy records", () => {
+      const records = [
+        { text: "Hallo Welt", time: 1000 },
+        { text: "Hallo Welt 2", time: 1000 },
+        { text: "Wie geht es dir?", time: 2000 },
+        { text: "Ich lerne Deutsch", time: 3000 },
+      ];
+      const ids = new Set(records.map((r) => deterministicTranscriptId(r.text, r.time)));
+      expect(ids.size).toBe(records.length);
+    });
+
+    it("normalizes trailing whitespace and CRLF newlines canonically", () => {
+      const id1 = deterministicTranscriptId("  Guten Tag\nWie gehts?  ", 1000);
+      const id2 = deterministicTranscriptId("Guten Tag\r\nWie gehts?", 1000);
+      expect(id1).toBe(id2);
+    });
   });
 });

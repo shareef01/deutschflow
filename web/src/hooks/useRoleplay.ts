@@ -1,19 +1,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { clearConversation, db, loadConversation, saveConversationTurn } from "@/lib/db";
-import { DEFAULT_DIALECT, getApiKey, getDialect, isDialect } from "@/lib/db/settings";
+import { getApiKey } from "@/lib/db/settings";
 import { processRoleplay } from "@/lib/ai/groq";
 import { t } from "@/lib/i18n";
 import { recognizer, isRecognitionSupported, type RecognizerState } from "@/lib/speech/recognizer";
+import { resolveRecognitionDialect } from "@/lib/speech/dialect";
 import { tts } from "@/lib/speech/tts";
-
-async function resolveSafeDialect(): Promise<string> {
-    try {
-        const dialect = await getDialect(db);
-        return isDialect(dialect) ? dialect : DEFAULT_DIALECT;
-    } catch {
-        return DEFAULT_DIALECT;
-    }
-}
 
 export interface ChatMessage {
     role: "user" | "assistant";
@@ -247,7 +239,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
                 recognizer.reportPermissionDenied();
                 return;
             }
-            const dialect = await resolveSafeDialect();
+            const dialect = await resolveRecognitionDialect();
             recognizer.startListening(dialect);
         } catch {
             recognizer.reportPermissionDenied();
@@ -287,6 +279,10 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         startListening,
         stopAndSend,
         retry,
+        sendMessage: async (text: string) => {
+            const trimmed = text.trim();
+            if (trimmed) await runTurn(trimmed);
+        },
         speak: (text: string) => tts.speak(text),
     };
 }

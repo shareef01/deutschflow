@@ -23,10 +23,13 @@ export interface MasteryStats {
  * is a static on Dexie, not a method on the instance, and a hand-rolled
  * useSyncExternalStore has to cache its snapshot or React re-renders forever.
  */
+const EMPTY_ACTIVITY_LOG: ActivityEntry[] = [];
+const EMPTY_VOCABULARY: VocabularyEntry[] = [];
+
 export function useDashboard() {
   const userStats = useLive(() => observeUserStats(db), []) ?? null;
-  const activityLog = useLive(() => observeActivityLog(db), []) ?? ([] as ActivityEntry[]);
-  const vocabulary = useLive(() => observeVocabulary(db), []) ?? ([] as VocabularyEntry[]);
+  const activityLog = useLive(() => observeActivityLog(db), []) ?? EMPTY_ACTIVITY_LOG;
+  const vocabulary = useLive(() => observeVocabulary(db), []) ?? EMPTY_VOCABULARY;
 
   /**
    * One axis, so the three figures always sum to the total: a word that has

@@ -1,8 +1,7 @@
 "use client";
 
-import { useActionState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { login } from "./actions";
+import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 /**
  * The login form component that needs Suspense because it uses useSearchParams.
@@ -10,11 +9,35 @@ import { login } from "./actions";
 function LoginForm() {
   const searchParams = useSearchParams();
   const from = searchParams.get("from") || "/";
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [isPending, setIsPending] = useState(false);
 
-  const [state, formAction, isPending] = useActionState(login, null);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setIsPending(true);
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        body: new FormData(event.currentTarget),
+      });
+      const result = await response.json() as { error?: string; redirect?: string };
+      if (!response.ok || !result.redirect) {
+        setError(result.error || "Sign-in failed. Try again.");
+        return;
+      }
+      router.replace(result.redirect);
+      router.refresh();
+    } catch {
+      setError("Sign-in failed. Check your connection and try again.");
+    } finally {
+      setIsPending(false);
+    }
+  };
 
   return (
-    <form action={formAction} className="mt-8 space-y-6">
+    <form onSubmit={submit} className="mt-8 space-y-6">
       <input type="hidden" name="from" value={from} />
 
       <div className="space-y-4">
@@ -34,12 +57,12 @@ function LoginForm() {
         {/* role="alert" so a screen reader hears the rejection: this was a styled
             paragraph, silent to anyone not looking at it. The pulse is dropped under
             prefers-reduced-motion, which the rest of the app already respects. */}
-        {state?.error && (
+        {error && (
           <p
             role="alert"
             className="text-error text-sm text-center font-bold motion-safe:animate-pulse"
           >
-            {state.error}
+            {error}
           </p>
         )}
       </div>

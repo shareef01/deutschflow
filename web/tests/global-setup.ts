@@ -16,10 +16,11 @@ import { createSessionToken, SESSION_COOKIE } from "../src/lib/auth/session";
  */
 
 export const TEST_PASSWORD = "smoke-suite-key";
+export const TEST_SESSION_SECRET = "smoke-suite-independent-session-secret";
 export const STORAGE_STATE = "tests/.auth/state.json";
 
 export default async function globalSetup() {
-  const token = await createSessionToken(TEST_PASSWORD);
+  const token = await createSessionToken(TEST_SESSION_SECRET);
 
   const state = {
     cookies: [

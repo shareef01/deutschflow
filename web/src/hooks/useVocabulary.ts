@@ -26,8 +26,10 @@ import type { TKey } from "@/lib/i18n";
  * delete, hand-typed additions, and TTS playback all work offline once the
  * rows exist.
  */
+const EMPTY_VOCABULARY: VocabularyEntry[] = [];
+
 export function useVocabulary() {
-  const vocabulary = useLive(() => observeVocabulary(db), []) ?? [];
+  const vocabulary = useLive(() => observeVocabulary(db), []) ?? EMPTY_VOCABULARY;
   const [searchQuery, setSearchQuery] = useState("");
 
   // Raised when a word could not be spoken, so the screen can say why.
@@ -79,68 +81,74 @@ export function useVocabulary() {
    */
   const [error, setError] = useState<TKey | null>(null);
 
-  const guarded = (work: Promise<unknown>, message: TKey) => {
-    void work.catch(() => setError(message));
-  };
-
-  const addVocabulary = (german: string, english: string) => {
+  const addVocabulary = async (german: string, english: string): Promise<boolean> => {
     const germanText = german.trim();
     const translation = english.trim();
-    if (!germanText || !translation) return;
-    guarded(
-      saveVocabulary(db, { germanText, englishTranslation: translation }),
-      "library.saveFailed"
-    );
+    if (!germanText || !translation) return false;
+    try {
+      await saveVocabulary(db, { germanText, englishTranslation: translation });
+      setError(null);
+      return true;
+    } catch {
+      setError("library.saveFailed");
+      return false;
+    }
   };
 
-  const deleteVocabulary = (entry: VocabularyEntry) => {
-    guarded(deleteVocabularyRow(db, entry), "library.deleteFailed");
+  const deleteVocabulary = async (entry: VocabularyEntry): Promise<boolean> => {
+    try {
+      await deleteVocabularyRow(db, entry);
+      setError(null);
+      return true;
+    } catch {
+      setError("library.deleteFailed");
+      return false;
+    }
   };
 
   /**
    * Puts a deleted word back, for the snackbar's Undo.
-   *
-   * Deleting was one menu tap with no confirmation and no way back, while a
-   * *transcript* — the far less valuable thing — already had an Undo. A word can
-   * carry months of scheduling, a hand-edited translation and AI-fetched grammar,
-   * so the protections were exactly inverted.
-   *
-   * Through saveVocabulary with the id dropped: the fold key is unique, and if the
-   * user typed the same word again in the seconds before pressing Undo, a bare
-   * insert would fail on the index. Save merges instead. The SRS fields are
-   * restored afterwards, since saveVocabulary treats an unknown word as new.
    */
-  const restoreVocabulary = (entry: VocabularyEntry) => {
-    guarded(
-      (async () => {
-        await saveVocabulary(db, {
-          germanText: entry.germanText,
-          englishTranslation: entry.englishTranslation,
-          timestamp: entry.timestamp,
-          exampleSentence: entry.exampleSentence,
-          article: entry.article,
-          plural: entry.plural,
-          conjugation: entry.conjugation,
-          synonyms: entry.synonyms,
-          antonyms: entry.antonyms,
+  const restoreVocabulary = async (entry: VocabularyEntry): Promise<boolean> => {
+    try {
+      await saveVocabulary(db, {
+        germanText: entry.germanText,
+        englishTranslation: entry.englishTranslation,
+        timestamp: entry.timestamp,
+        exampleSentence: entry.exampleSentence,
+        article: entry.article,
+        plural: entry.plural,
+        conjugation: entry.conjugation,
+        synonyms: entry.synonyms,
+        antonyms: entry.antonyms,
+      });
+      const restored = await findByGermanText(db, entry.germanText);
+      if (restored?.id !== undefined) {
+        await db.vocabulary.update(restored.id, {
+          nextReview: entry.nextReview,
+          interval: entry.interval,
+          easeFactor: entry.easeFactor,
+          reviewCount: entry.reviewCount,
         });
-        const restored = await findByGermanText(db, entry.germanText);
-        if (restored?.id !== undefined) {
-          await db.vocabulary.update(restored.id, {
-            nextReview: entry.nextReview,
-            interval: entry.interval,
-            easeFactor: entry.easeFactor,
-            reviewCount: entry.reviewCount,
-          });
-        }
-      })(),
-      "library.saveFailed"
-    );
+      }
+      setError(null);
+      return true;
+    } catch {
+      setError("library.saveFailed");
+      return false;
+    }
   };
 
   /** Through saveVocabulary (merge-on-conflict), never a bare update. */
-  const updateVocabulary = (entry: VocabularyEntry) => {
-    guarded(saveVocabulary(db, entry), "library.saveFailed");
+  const updateVocabulary = async (entry: VocabularyEntry): Promise<boolean> => {
+    try {
+      await saveVocabulary(db, entry);
+      setError(null);
+      return true;
+    } catch {
+      setError("library.saveFailed");
+      return false;
+    }
   };
 
   /**

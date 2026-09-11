@@ -21,6 +21,7 @@
     <string name="action_delete">Löschen</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_save">Speichern</string>
+    <string name="action_saving">Wird gespeichert…</string>
     <string name="action_copied">In die Zwischenablage kopiert</string>
     <string name="action_open_settings">Einstellungen öffnen</string>
     <string name="action_close">Schließen</string>
@@ -159,13 +160,15 @@
     <string name="roleplay_retry">Erneut versuchen</string>
     <string name="roleplay_scenario_berlin_bakery">Bestellen in einer Berliner Bäckerei</string>
     <string name="roleplay_restart_session">Gespräch neu starten</string>
+    <string name="roleplay_type_placeholder">Schreibe deine Nachricht auf Deutsch…</string>
+    <string name="roleplay_send">Senden</string>
+    <string name="roleplay_voice_unavailable">Spracheingabe ist in diesem Browser nicht verfügbar. Du kannst deine Antworten unten eintippen.</string>
     <string name="practice_tab">Wiederholung</string>
+    <string name="practice_speech_unavailable">Mikrofon-Übungen sind in diesem Browser nicht verfügbar. Du kannst dir die Sätze weiterhin anhören.</string>
     <string name="study_skip">Vorerst überspringen</string>
     <string name="transcript_grammar_spotlight">Grammatik im Fokus</string>
     <string name="transcript_listening_for">Erkennt: %1$s</string>
     <string name="detail_linguistic_connections">Sprachliche Verbindungen</string>
-
-    <!-- Cloud-Synchronisierung. Noch nicht gebaut; der Text sagt das auch. -->
 
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyme</string>
@@ -221,6 +224,8 @@
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API-Schlüssel gespeichert.</string>
     <string name="message_api_key_not_saved">Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.</string>
+    <string name="message_api_key_migration_failed">Dein vorhandener API-Schlüssel konnte nicht in den verschlüsselten Speicher verschoben werden. Er wurde nicht gelöscht; entsperre dein Gerät und öffne die Einstellungen erneut.</string>
+    <string name="message_api_key_unreadable">Der gespeicherte API-Schlüssel kann nicht mehr entschlüsselt werden. Gib den Schlüssel erneut ein und speichere ihn.</string>
     <string name="message_clear_failed">Fortschritt konnte nicht gelöscht werden. Bitte versuche es erneut.</string>
     <string name="message_progress_cleared">Bibliothek, Verlauf und Statistiken gelöscht.</string>
     <string name="message_notification_sent">Benachrichtigung gesendet.</string>

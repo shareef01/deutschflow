@@ -50,6 +50,7 @@ export function useSettings() {
 
   const [isPersisted, setIsPersisted] = useState<boolean | null>(null);
   const [isPersistenceSupported, setIsPersistenceSupported] = useState(false);
+  const [storageUsage, setStorageUsage] = useState<{ usage: number; quota: number } | null>(null);
   const [lastBackupTime, setLastBackupTime] = useState<number | null>(() => {
     if (typeof window === "undefined") return null;
     const stored = localStorage.getItem("deutschflow_last_backup");
@@ -63,6 +64,17 @@ export function useSettings() {
     } else {
       setIsPersistenceSupported(false);
       setIsPersisted(false);
+    }
+
+    if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
+      navigator.storage
+        .estimate()
+        .then((estimate) => {
+          if (estimate.usage !== undefined && estimate.quota !== undefined) {
+            setStorageUsage({ usage: estimate.usage, quota: estimate.quota });
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -146,21 +158,39 @@ export function useSettings() {
   const isAutoPlayEnabled = autoPlayRow ? autoPlayRow.value === "true" : true;
 
   const saveApiKey = useCallback(async (apiKey: string): Promise<TKey> => {
-    const saved = await persistApiKey(db, apiKey.trim());
-    return saved ? "message.apiKeySaved" : "message.apiKeyNotSaved";
+    try {
+      const saved = await persistApiKey(db, apiKey.trim());
+      return saved ? "message.apiKeySaved" : "message.apiKeyNotSaved";
+    } catch {
+      return "message.apiKeyNotSaved";
+    }
   }, []);
 
-  const saveDialect = useCallback((dialect: Dialect) => {
-    void setDialect(db, dialect);
+  const saveDialect = useCallback(async (dialect: Dialect): Promise<boolean> => {
+    try {
+      await setDialect(db, dialect);
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
-  const setAutoPlayEnabled = useCallback((enabled: boolean) => {
-    void setAutoPlay(db, enabled);
+  const setAutoPlayEnabled = useCallback(async (enabled: boolean): Promise<boolean> => {
+    try {
+      await setAutoPlay(db, enabled);
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
   const clearAllProgress = useCallback(async (): Promise<TKey> => {
-    await clearAllProgressRows(db);
-    return "message.progressCleared";
+    try {
+      await clearAllProgressRows(db);
+      return "message.progressCleared";
+    } catch {
+      return "message.progressClearFailed";
+    }
   }, []);
 
   return {
@@ -180,6 +210,7 @@ export function useSettings() {
     isPersisted,
     isPersistenceSupported,
     requestPersistence,
+    storageUsage,
     lastBackupTime,
   };
 }

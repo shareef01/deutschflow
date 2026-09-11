@@ -1,4 +1,4 @@
-"use client";
+import { useI18n } from "@/hooks/useI18n";
 
 /**
  * Snackbar — the one transient confirmation this app gives. The caller owns the
@@ -16,6 +16,7 @@ export function Snackbar({
   variant?: "default" | "error";
   onDismiss?: () => void;
 }) {
+  const { t } = useI18n();
   if (!message) return null;
   const isError = variant === "error";
   return (
@@ -42,7 +43,7 @@ export function Snackbar({
           <button
             type="button"
             onClick={onDismiss}
-            aria-label="Dismiss"
+            aria-label={t("action.close")}
             className="pointer-events-auto shrink-0 text-on-surface-variant hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow rounded px-1"
           >
             ✕

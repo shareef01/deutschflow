@@ -1,6 +1,8 @@
 package com.aus.deutschflow.data.local
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.aus.deutschflow.TestPreferencesRule
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -88,6 +90,55 @@ class ApiKeyStorageTest {
         assertNull(cipher.decrypt("not base64 at all"))
         assertNull(cipher.decrypt("YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXo="))
         assertNull(cipher.decrypt(""))
+    }
+
+    @Test
+    fun successfulLegacyMigrationEncryptsThenRemovesPlaintext() = runBlocking {
+        store.dataStore.edit { it[stringPreferencesKey("groq_api_key")] = SECRET }
+        val manager = PreferenceManager(store.dataStore, FakeCipher(encrypted = "ciphertext", decrypted = SECRET))
+
+        assertEquals(
+            PreferenceManager.ApiKeyMigrationResult.MIGRATED,
+            manager.migrateLegacyApiKey()
+        )
+        assertTrue(manager.apiKeyState.first() is PreferenceManager.ApiKeyState.Available)
+        val values = store.dataStore.data.first()
+        assertNull(values[stringPreferencesKey("groq_api_key")])
+        assertEquals("ciphertext", values[stringPreferencesKey("groq_api_key_encrypted")])
+    }
+
+    @Test
+    fun failedLegacyMigrationKeepsRecoverablePlaintextAndReportsFailure() = runBlocking {
+        store.dataStore.edit { it[stringPreferencesKey("groq_api_key")] = SECRET }
+        val manager = PreferenceManager(store.dataStore, FakeCipher(encrypted = null, decrypted = null))
+
+        assertEquals(
+            PreferenceManager.ApiKeyMigrationResult.FAILED,
+            manager.migrateLegacyApiKey()
+        )
+        val state = manager.apiKeyState.first()
+        assertTrue(state is PreferenceManager.ApiKeyState.LegacyPlaintext)
+        assertEquals(SECRET, manager.apiKey.first())
+        assertEquals(SECRET, store.dataStore.data.first()[stringPreferencesKey("groq_api_key")])
+    }
+
+    @Test
+    fun corruptCiphertextIsRepresentedAsUnreadableInsteadOfMissing() = runBlocking {
+        store.dataStore.edit {
+            it[stringPreferencesKey("groq_api_key_encrypted")] = "corrupt"
+        }
+        val manager = PreferenceManager(store.dataStore, FakeCipher(encrypted = null, decrypted = null))
+
+        assertEquals(PreferenceManager.ApiKeyState.Unreadable, manager.apiKeyState.first())
+        assertEquals("", manager.apiKey.first())
+    }
+
+    private class FakeCipher(
+        private val encrypted: String?,
+        private val decrypted: String?
+    ) : KeystoreCipher() {
+        override fun encrypt(plainText: String): String? = encrypted
+        override fun decrypt(stored: String): String? = decrypted
     }
 
     private companion object {

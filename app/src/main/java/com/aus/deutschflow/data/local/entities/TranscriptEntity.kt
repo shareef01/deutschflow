@@ -17,7 +17,7 @@ data class TranscriptEntity(
     val fullText: String,
     val timestamp: Long = System.currentTimeMillis(),
     
-    // Cloud Sync fields — The Bridge
+    // Stable identity and modification metadata retained for data portability.
     //
     // The SQL defaults are not decoration. Without them Room's CREATE TABLE for a
     // fresh install carries no DEFAULT while MIGRATION_10_11 adds one, so an
@@ -25,7 +25,7 @@ data class TranscriptEntity(
     // and any insert that omits the column succeeds on one and throws
     // SQLITE_CONSTRAINT_NOTNULL on the other. VocabularyEntity declares its own
     // for the same reason.
-    /** UUID for cross-device identity. */
+    /** UUID that is independent from the local Room id. */
     @ColumnInfo(defaultValue = "''")
     val remoteId: String = UUID.randomUUID().toString(),
     /** When this record was last touched. */

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { db } from "@/lib/db";
+import type { TranscriptEntry } from "@/lib/db/schema";
 import {
   deleteTranscript as deleteTranscriptRow,
   insertTranscript,
@@ -14,8 +15,10 @@ import { useLive } from "./useLive";
  * History destination does not build a SpeechRecognizerHelper for a screen
  * that never records; the web hook has the same scope.
  */
+const EMPTY_TRANSCRIPTS: TranscriptEntry[] = [];
+
 export function useHistory() {
-  const transcripts = useLive(() => observeTranscripts(db), []) ?? [];
+  const transcripts = useLive(() => observeTranscripts(db), []) ?? EMPTY_TRANSCRIPTS;
   const [query, setQuery] = useState("");
 
   // Case-insensitive contains — the in-memory analogue of the Room Flow filter

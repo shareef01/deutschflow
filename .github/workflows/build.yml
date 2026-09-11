@@ -48,10 +48,9 @@ jobs:
       # because they silently disagreed for a while - three tokens fixed on
       # Android for measured contrast failures were left behind on the web, so
       # the same failures survived there until someone thought to look.
-      - name: Design tokens
-        run: |
-          python tools/contrast.py
-          python tools/palette_parity.py
+      # Verify design token contrast, palette parity, translations parity, and repo hygiene.
+      - name: Static repository audit
+        run: python tools/audit_repo.py
 
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --console=plain
@@ -80,7 +79,7 @@ jobs:
 
 
   web:
-    name: PWA type check, tests and build
+    name: PWA lint, tests and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -101,8 +100,11 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Static analysis (lint)
+        run: npm run lint
+
       - name: Type check
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Unit tests
         run: npm test
@@ -110,13 +112,12 @@ jobs:
       - name: Production build
         run: npm run build
 
-      # The smoke suite drives a real browser: five routes, the responsive
-      # breakpoint, the language switch, and offline boot - which is the only
-      # thing that proves the service worker actually installs.
+      # Chromium carries the full functional, accessibility, and visual suite.
+      # Firefox and WebKit run a smaller compatibility/speech-fallback contract.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Browser smoke tests
+      - name: Browser, accessibility and visual tests
         run: npx playwright test
 
       - name: Upload Playwright report
@@ -124,16 +125,30 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
-          path: web/playwright-report/
+          path: |
+            web/playwright-report/
+            web/test-results/
           if-no-files-found: ignore
 
   # The Room migration and DAO tests need a real device. They cannot run on a
   # developer machine without an emulator attached, so this job is where they are
   # actually exercised.
   instrumented:
-    name: Instrumented tests
+    name: Instrumented tests (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: API 31 full suite
+            api-level: 31
+            script: ./gradlew connectedDebugAndroidTest --console=plain
+          - name: API 35 platform smoke
+            api-level: 35
+            script: >-
+              ./gradlew connectedDebugAndroidTest --console=plain
+              -Pandroid.testInstrumentationRunnerArguments.class=com.aus.deutschflow.service.ModernPlatformContractTest,com.aus.deutschflow.service.OnDeviceRecognitionTest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -158,17 +173,17 @@ jobs:
         with:
           # minSdk. The floor is where a migration is most likely to behave
           # differently from the developer's own device.
-          api-level: 31
+          api-level: ${{ matrix.api-level }}
           target: aosp_atd
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest --console=plain
+          script: ${{ matrix.script }}
 
       - name: Upload instrumented results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: instrumented-results
+          name: instrumented-results-${{ matrix.api-level }}
           path: app/build/reports/androidTests/
           if-no-files-found: ignore

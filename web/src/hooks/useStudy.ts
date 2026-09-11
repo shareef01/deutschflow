@@ -53,14 +53,17 @@ export function useStudy() {
    * cannot guard this — both taps read it before either re-render lands.
    */
   const inFlight = useRef(false);
+  const initGeneration = useRef(0);
 
   const ttsError = useSyncExternalStore(tts.subscribe, tts.getSnapshot, tts.getSnapshot)?.error ?? null;
 
   const startSession = useCallback(async () => {
+    const generation = ++initGeneration.current;
     setStatus("loading");
     setLoadError(null);
     try {
       const session = await loadStudySession(db);
+      if (generation !== initGeneration.current) return;
       setTotalWords(session.totalWords);
       setDueCount(session.dueCount);
       setCurrentIndex(0);
@@ -69,6 +72,7 @@ export function useStudy() {
       setStudyList(session.studyList);
       setStatus("ready");
     } catch {
+      if (generation !== initGeneration.current) return;
       setStatus("error");
       setLoadError("study.loadError");
     }

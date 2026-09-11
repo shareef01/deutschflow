@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { TEST_PASSWORD } from "./global-setup";
 
 /**
  * Smoke suite: the five tab routes load, the bottom bar becomes a rail at the
@@ -60,6 +61,30 @@ test.describe("the access gate", () => {
     await page.goto("/transcript");
 
     expect(new URL(page.url()).pathname).toBe("/login");
+  });
+
+  test("accepts the configured password through the HTTP login endpoint", async ({ page }) => {
+    await page.goto("/login?from=/history");
+    await page.getByLabel("Master Key").fill(TEST_PASSWORD);
+    await page.getByRole("button", { name: "Unlock" }).click();
+
+    await expect(page).toHaveURL(/\/history$/);
+    await expect(page.locator("h1")).toHaveText("History");
+  });
+
+  test("returns HTTP 429 with Retry-After instead of sleeping a throttled request", async ({ request }) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const response = await request.post("/api/login", {
+        form: { password: "definitely-wrong", from: "/history" },
+      });
+      expect(response.status()).toBe(401);
+    }
+
+    const throttled = await request.post("/api/login", {
+      form: { password: "definitely-wrong", from: "/history" },
+    });
+    expect(throttled.status()).toBe(429);
+    expect(Number(throttled.headers()["retry-after"])).toBeGreaterThan(0);
   });
 });
 
@@ -197,8 +222,8 @@ test.describe("the library row menu", () => {
     await row.getByRole("button", { name: "More actions" }).click();
 
     // Both live in the popover that used to be clipped away.
-    await expect(row.getByRole("button", { name: "Edit" })).toBeVisible();
-    await row.getByRole("button", { name: "Delete" }).click();
+    await expect(row.getByRole("menuitem", { name: "Edit" }).or(row.getByRole("button", { name: "Edit" }))).toBeVisible();
+    await row.getByRole("menuitem", { name: "Delete" }).or(row.getByRole("button", { name: "Delete" })).click();
 
     // The delete landed, and the undo path is offered rather than a silent loss.
     await expect(page.getByText("Word deleted.")).toBeVisible();

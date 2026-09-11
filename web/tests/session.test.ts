@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createSessionToken,
+  passwordMatches,
   safeRedirectTarget,
   SESSION_MAX_AGE_SECONDS,
   verifySessionToken,
@@ -81,6 +82,11 @@ describe("safeRedirectTarget — post-login destinations stay on site", () => {
     expect(safeRedirectTarget("https://evil.example/hook", FALLBACK)).toBe(FALLBACK);
   });
 
+  it("rejects browser-normalized backslash and control-character redirects", () => {
+    expect(safeRedirectTarget("/\\evil.example", FALLBACK)).toBe(FALLBACK);
+    expect(safeRedirectTarget("/history\r\nLocation: https://evil.example", FALLBACK)).toBe(FALLBACK);
+  });
+
   it("refuses to send the user back to the login page", () => {
     expect(safeRedirectTarget("/login", FALLBACK)).toBe(FALLBACK);
   });
@@ -89,5 +95,13 @@ describe("safeRedirectTarget — post-login destinations stay on site", () => {
     expect(safeRedirectTarget(undefined, FALLBACK)).toBe(FALLBACK);
     expect(safeRedirectTarget(null, FALLBACK)).toBe(FALLBACK);
     expect(safeRedirectTarget(42, FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+describe("passwordMatches", () => {
+  it("accepts only the full password", async () => {
+    expect(await passwordMatches("correct horse", "correct horse")).toBe(true);
+    expect(await passwordMatches("correct", "correct horse")).toBe(false);
+    expect(await passwordMatches("correct horse!", "correct horse")).toBe(false);
   });
 });

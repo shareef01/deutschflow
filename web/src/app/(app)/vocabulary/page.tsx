@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useVocabulary } from "@/hooks/useVocabulary";
 import { useHasSplitView } from "@/hooks/useViewport";
 import { useBackHandler } from "@/hooks/useBackHandler";
@@ -90,7 +90,7 @@ export default function VocabularyPage() {
   const exampleSentence = useMemo(() => {
     if (!selectedItem) return "";
     return selectedItem.exampleSentence || exampleFor(selectedItem.germanText);
-  }, [selectedItem?.germanText, selectedItem?.exampleSentence, exampleFor]);
+  }, [selectedItem, exampleFor]);
 
   useBackHandler(!isDesktop && selectedItem != null, () => setSelectedId(null));
 
@@ -152,9 +152,10 @@ export default function VocabularyPage() {
           initialGerman={editingItem.germanText}
           initialEnglish={editingItem.englishTranslation}
           onDismiss={() => setEditingId(null)}
-          onSave={(german, english) => {
-            updateVocabulary({ ...editingItem, germanText: german, englishTranslation: english });
-            setEditingId(null);
+          onSave={async (german, english) => {
+            const ok = await updateVocabulary({ ...editingItem, germanText: german, englishTranslation: english });
+            if (ok) setEditingId(null);
+            return ok;
           }}
           t={t}
         />
@@ -167,9 +168,10 @@ export default function VocabularyPage() {
           initialGerman=""
           initialEnglish=""
           onDismiss={() => setIsAdding(false)}
-          onSave={(german, english) => {
-            addVocabulary(german, english);
-            setIsAdding(false);
+          onSave={async (german, english) => {
+            const ok = await addVocabulary(german, english);
+            if (ok) setIsAdding(false);
+            return ok;
           }}
           t={t}
         />
@@ -230,43 +232,39 @@ function VocabularyListContent({
         <StatCell value={String(withExample)} label={t("library.statExamples")} />
       </div>
 
-      <div
-        role="radiogroup"
-        aria-label={t("library.sortBy")}
-        className="mt-3 flex gap-2"
-      >
-        {(
-          [
-            ["newest", t("library.sortNewest")],
-            ["alpha", t("library.sortAlphabetical")],
-          ] as const
-        ).map(([mode, label]) => {
-          const isSelected = sortMode === mode;
-          return (
-            <button
-              key={mode}
-              type="button"
-              role="radio"
-              aria-checked={isSelected}
-              tabIndex={isSelected ? 0 : -1}
-              onClick={() => onSortChange(mode)}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  onSortChange(mode === "newest" ? "alpha" : "newest");
-                }
-              }}
-              className={`press-scale flex min-h-11 items-center rounded-full border px-4 text-label-medium focus-visible:outline-2 focus-visible:outline-azure-glow ${
-                isSelected
-                  ? "border-azure-glow/60 bg-secondary-container/60 text-on-secondary-container font-semibold"
-                  : "border-outline-variant bg-glass-fill text-on-surface-variant"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      <fieldset className="mt-3 border-none p-0 m-0">
+        <legend className="sr-only">{t("library.sortBy")}</legend>
+        <div className="flex gap-2">
+          {(
+            [
+              ["newest", t("library.sortNewest")],
+              ["alpha", t("library.sortAlphabetical")],
+            ] as const
+          ).map(([mode, label]) => {
+            const isSelected = sortMode === mode;
+            return (
+              <label
+                key={mode}
+                className={`press-scale flex min-h-11 cursor-pointer items-center rounded-full border px-4 text-label-medium focus-within:outline-2 focus-within:outline-azure-glow ${
+                  isSelected
+                    ? "border-azure-glow/60 bg-secondary-container/60 text-on-secondary-container font-semibold"
+                    : "border-outline-variant bg-glass-fill text-on-surface-variant"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="vocab-sort"
+                  value={mode}
+                  checked={isSelected}
+                  onChange={() => onSortChange(mode)}
+                  className="sr-only"
+                />
+                <span>{label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
 
       <div className="mt-3 min-h-0 flex-1">
         {vocabularyList.length === 0 ? (
@@ -320,13 +318,68 @@ function VocabularyItem({
   t: TFunction;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const editItemRef = useRef<HTMLButtonElement>(null);
+  const deleteItemRef = useRef<HTMLButtonElement>(null);
+  const baseId = useId();
+  const triggerId = `vocab-menu-btn-${baseId}`;
+  const menuId = `vocab-menu-${baseId}`;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (menuOpen) {
+      editItemRef.current?.focus();
+    }
+  }, [menuOpen]);
+
+  const closeMenuAndFocusTrigger = () => {
+    setMenuOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeMenuAndFocusTrigger();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (document.activeElement === editItemRef.current) {
+        deleteItemRef.current?.focus();
+      } else {
+        editItemRef.current?.focus();
+      }
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      editItemRef.current?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      deleteItemRef.current?.focus();
+    } else if (e.key === "Tab") {
+      setMenuOpen(false);
+    }
+  };
 
   return (
-    // `list-row` carries content-visibility, which applies paint containment
-    // whether or not the row is on screen - so it clipped this row's own overflow
-    // menu (Delete fell outside the ~80px row) and trapped the menu's
-    // `fixed inset-0` dismiss backdrop inside it. Containment lifts for the one
-    // row whose menu is open; the other several hundred keep the saving.
     <li className={`glass-surface ${menuOpen ? "" : "list-row"}`}>
       <div className="flex items-start gap-1 p-2 pl-4">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 pr-2 text-left">
@@ -347,47 +400,57 @@ function VocabularyItem({
 
         <div className="relative shrink-0">
           <button
+            ref={triggerRef}
+            id={triggerId}
             type="button"
-            onClick={() => setMenuOpen(true)}
+            onClick={() => setMenuOpen((prev) => !prev)}
             aria-label={t("library.moreActions")}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-controls={menuId}
             className="press-scale rounded-full p-3 text-on-surface-variant"
           >
             <MoreVertIcon className="size-5" />
           </button>
 
           {menuOpen && (
-            <>
+            <div
+              ref={menuRef}
+              id={menuId}
+              role="menu"
+              aria-labelledby={triggerId}
+              onKeyDown={handleMenuKeyDown}
+              className="glass-surface absolute right-0 top-12 z-50 w-40 p-1"
+            >
               <button
+                ref={editItemRef}
                 type="button"
-                aria-label={t("action.cancel")}
-                className="fixed inset-0 z-40 cursor-default"
-                onClick={() => setMenuOpen(false)}
-              />
-              <div className="glass-surface absolute right-0 top-12 z-50 w-40 p-1">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-on-surface hover:bg-on-surface/5"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onEdit();
-                  }}
-                >
-                  <EditIcon className="size-4.5" />
-                  {t("action.edit")}
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-error hover:bg-on-surface/5"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete();
-                  }}
-                >
-                  <DeleteIcon className="size-4.5" />
-                  {t("action.delete")}
-                </button>
-              </div>
-            </>
+                role="menuitem"
+                tabIndex={0}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-on-surface hover:bg-on-surface/5 focus-visible:bg-on-surface/10 focus-visible:outline-none"
+                onClick={() => {
+                  closeMenuAndFocusTrigger();
+                  onEdit();
+                }}
+              >
+                <EditIcon className="size-4.5" />
+                {t("action.edit")}
+              </button>
+              <button
+                ref={deleteItemRef}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-body-medium text-error hover:bg-on-surface/5 focus-visible:bg-on-surface/10 focus-visible:outline-none"
+                onClick={() => {
+                  closeMenuAndFocusTrigger();
+                  onDelete();
+                }}
+              >
+                <DeleteIcon className="size-4.5" />
+                {t("action.delete")}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -497,22 +560,41 @@ function VocabularyEditorDialog({
   initialGerman: string;
   initialEnglish: string;
   onDismiss: () => void;
-  onSave: (german: string, english: string) => void;
+  onSave: (german: string, english: string) => Promise<boolean>;
   t: TFunction;
 }) {
   const [germanText, setGermanText] = useState(initialGerman);
   const [translation, setTranslation] = useState(initialEnglish);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const isValid = germanText.trim().length > 0 && translation.trim().length > 0;
+
+  const handleSave = async () => {
+    if (!isValid || isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const ok = await onSave(germanText.trim(), translation.trim());
+      if (!ok) {
+        setSaveError(t("library.saveFailed"));
+      }
+    } catch {
+      setSaveError(t("library.saveFailed"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <ModalDialog
       title={title}
-      onDismiss={onDismiss}
+      onDismiss={isSaving ? () => {} : onDismiss}
       actions={
         <>
           <GlassButton
             type="button"
+            disabled={isSaving}
             onClick={onDismiss}
             className="px-4 text-label-large font-bold"
           >
@@ -520,20 +602,26 @@ function VocabularyEditorDialog({
           </GlassButton>
           <GlassButton
             type="button"
-            disabled={!isValid}
-            onClick={() => onSave(germanText.trim(), translation.trim())}
+            disabled={!isValid || isSaving}
+            onClick={handleSave}
             className="px-4 text-label-large font-bold"
           >
-            {confirmLabel}
+            {isSaving ? t("action.saving") : confirmLabel}
           </GlassButton>
         </>
       }
     >
+      {saveError && (
+        <div role="alert" className="mb-3 rounded-lg bg-error/15 p-3 text-body-medium text-error">
+          {saveError}
+        </div>
+      )}
       <GlassTextField
         label={t("library.fieldGerman")}
         value={germanText}
         onChange={(event) => setGermanText(event.target.value)}
         placeholder="das Wort"
+        disabled={isSaving}
         autoFocus
       />
       <GlassTextField
@@ -541,6 +629,7 @@ function VocabularyEditorDialog({
         value={translation}
         onChange={(event) => setTranslation(event.target.value)}
         placeholder="the word"
+        disabled={isSaving}
       />
     </ModalDialog>
   );

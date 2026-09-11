@@ -184,7 +184,7 @@ function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate 
         </div>
       </div>
 
-      <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider opacity-75">
+      <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider">
         {t("dashboard.heatmapSub")}
       </p>
     </div>

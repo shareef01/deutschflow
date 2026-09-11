@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
@@ -86,6 +87,12 @@ fun ErrorBanner(
             modifier = modifier
                 .padding(bottom = 16.dp)
                 .fillMaxWidth()
+                .semantics {
+                    set(
+                        androidx.compose.ui.semantics.SemanticsProperties.LiveRegion,
+                        androidx.compose.ui.semantics.LiveRegionMode.Polite
+                    )
+                }
                 .background(
                     MaterialTheme.colorScheme.errorContainer,
                     MaterialTheme.shapes.small

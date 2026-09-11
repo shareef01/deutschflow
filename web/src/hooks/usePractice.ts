@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
 import { getAllVocabulary } from "@/lib/db/repository";
-import { getDialect } from "@/lib/db/settings";
 import { recognizer, isRecognitionSupported } from "@/lib/speech/recognizer";
 import { tts } from "@/lib/speech/tts";
+import { resolveRecognitionDialect } from "@/lib/speech/dialect";
 import { evaluateMatch, type PracticeFeedback, type WordResult } from "@/lib/scoring";
 
 /**
@@ -57,6 +57,7 @@ export function usePractice() {
    * only [loadRandomTarget], so the scorer always sees the current sentence.
    */
   const targetRef = useRef(targetSentence);
+  const isStarting = useRef(false);
 
   /** One error surface: whichever of the microphone or the voice engine last
    * had something to say — recognition preferred, like the Android combine. */
@@ -94,18 +95,26 @@ export function usePractice() {
   }, []);
 
   const startPractice = useCallback(async () => {
+    if (isStarting.current || recognizer.getSnapshot().isListening) return;
+    isStarting.current = true;
     setWordResults([]);
     setFeedback("NONE");
     // Stop any German playback before the microphone opens.
     tts.stop();
 
-    const granted = await recognizer.requestMicrophonePermission();
-    if (!granted) {
+    try {
+      const granted = await recognizer.requestMicrophonePermission();
+      if (!granted) {
+        recognizer.reportPermissionDenied();
+        return;
+      }
+      const dialect = await resolveRecognitionDialect();
+      recognizer.startListening(dialect);
+    } catch {
       recognizer.reportPermissionDenied();
-      return;
+    } finally {
+      isStarting.current = false;
     }
-    const dialect = await getDialect(db);
-    recognizer.startListening(dialect);
   }, []);
 
   const stopPractice = useCallback(() => recognizer.stopListening(), []);
