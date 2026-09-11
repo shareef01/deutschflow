@@ -7,11 +7,9 @@ A local-first, privacy-respecting German language practice app for Android and t
 ![Web: Next.js PWA](https://img.shields.io/badge/Web-Next.js%2016%20PWA-black?logo=next.js&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<p align="center">
-  <img src="docs/screenshots/dashboard.png" width="280" alt="DeutschFlow Android Dashboard" />
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/web/transcript-desktop-1440.png" width="540" alt="DeutschFlow Web PWA Transcript" />
-</p>
+| Native Android (Jetpack Compose) | Responsive Web PWA (Next.js 16) |
+| :---: | :---: |
+| <img src="docs/screenshots/dashboard.png" width="220" alt="DeutschFlow Android Dashboard" /> | <img src="docs/screenshots/web/transcript-desktop-1440.png" width="460" alt="DeutschFlow Web PWA Transcript" /> |
 
 DeutschFlow bridges the gap between passive consumption and active speaking. It pairs instant on-device speech transcription with low-latency Groq AI translations, deep grammatical breakdowns, interactive situational roleplay, and an SM-2 spaced repetition review deck.
 
