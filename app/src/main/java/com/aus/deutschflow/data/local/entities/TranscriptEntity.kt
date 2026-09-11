@@ -30,5 +30,11 @@ data class TranscriptEntity(
     val remoteId: String = UUID.randomUUID().toString(),
     /** When this record was last touched. */
     @ColumnInfo(defaultValue = "0")
-    val lastModifiedAt: Long = System.currentTimeMillis()
+    val lastModifiedAt: Long = System.currentTimeMillis(),
+    /** Cached translation from AI. */
+    @ColumnInfo(defaultValue = "''")
+    val translation: String = "",
+    /** Cached structured analysis (keywords, grammar notes) from AI. */
+    @ColumnInfo(defaultValue = "''")
+    val analysisJson: String = ""
 )

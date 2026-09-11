@@ -104,3 +104,15 @@ export function observeDialect(db: DeutschFlowDB) {
 export function observeAutoPlay(db: DeutschFlowDB) {
   return db.settings.get(SETTING_KEYS.autoPlay);
 }
+
+export const CEFR_LEVELS = ["", "A1", "A2", "B1", "B2", "C1+"] as const;
+export type CefrLevel = (typeof CEFR_LEVELS)[number];
+
+export async function getCefrLevel(db: DeutschFlowDB): Promise<string> {
+  const row = await db.settings.get("cefr_level");
+  return row?.value || "";
+}
+
+export async function setCefrLevel(db: DeutschFlowDB, level: string): Promise<void> {
+  await db.settings.put({ key: "cefr_level", value: level.trim() });
+}

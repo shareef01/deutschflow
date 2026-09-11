@@ -56,6 +56,9 @@ export interface TranscriptEntry {
   // Stable identity and modification metadata used by backup merging.
   remoteId: string;
   lastModifiedAt: number;
+
+  translation?: string;
+  analysisJson?: string;
 }
 
 export interface UserStatsEntry {
@@ -93,6 +96,17 @@ export interface RoleplayMessageEntry {
 export interface SettingEntry {
   key: string;
   value: string;
+}
+
+export interface ReviewEventEntry {
+  id?: number;
+  vocabularyId: number;
+  rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
+  scheduledDays: number;
+  actualDays: number;
+  reviewedAtTimestamp: number;
+  isExtraPractice: boolean;
+  remoteId: string;
 }
 
 /**
@@ -135,9 +149,23 @@ export class DeutschFlowDB extends Dexie {
   activityLog!: Table<ActivityEntry, string>;
   roleplayMessages!: Table<RoleplayMessageEntry, number>;
   settings!: Table<SettingEntry, string>;
+  reviewEvents!: Table<ReviewEventEntry, number>;
 
   constructor(name: string = "deutschflow") {
     super(name);
+
+    /**
+     * Version 8: Append-only review event history.
+     */
+    this.version(8).stores({
+      vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+      transcripts: "++id, timestamp",
+      userStats: "id",
+      activityLog: "date",
+      roleplayMessages: "position",
+      settings: "key",
+      reviewEvents: "++id, vocabularyId, reviewedAtTimestamp",
+    });
 
     /**
      * Version 7: Canonical NFC Unicode normalization.

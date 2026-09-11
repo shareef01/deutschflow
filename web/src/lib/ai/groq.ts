@@ -175,7 +175,13 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
   }
 }
 
-function translationRequestBody(text: string): string {
+export function appendCefrInstruction(prompt: string, learnerLevel?: string): string {
+  if (!learnerLevel || !learnerLevel.trim()) return prompt;
+  return `${prompt}\n\nLearner CEFR Level: ${learnerLevel.trim()}. Adjust explanation complexity, vocabulary choice, and sentence structure accordingly.`;
+}
+
+function translationRequestBody(text: string, learnerLevel?: string): string {
+  const prompt = appendCefrInstruction(SYSTEM_PROMPT, learnerLevel);
   return JSON.stringify({
     model: GROQ_MODEL,
     temperature: 0.2,
@@ -186,21 +192,55 @@ function translationRequestBody(text: string): string {
     // short — invisibly, because the parser produced a plausible result each time.
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: prompt },
       { role: "user", content: text },
     ],
   });
 }
 
-function interrogationRequestBody(word: string): string {
+function interrogationRequestBody(word: string, learnerLevel?: string): string {
+  const prompt = appendCefrInstruction(WORD_SYSTEM_PROMPT, learnerLevel);
   return JSON.stringify({
     model: GROQ_MODEL,
     temperature: 0.1,
     max_completion_tokens: 1024,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: WORD_SYSTEM_PROMPT },
+      { role: "system", content: prompt },
       { role: "user", content: word },
+    ],
+  });
+}
+
+export function roleplayOpeningPrompt(scenario: string, learnerLevel?: string): string {
+  let prompt = ROLEPLAY_SYSTEM_PROMPT.replace("<scenario>", scenario);
+  if (learnerLevel?.trim()) {
+    prompt = appendCefrInstruction(prompt, learnerLevel);
+  }
+  prompt += "\n\nYou are starting this conversation. Greet the learner in character for this scenario and provide the opening line to initiate the dialogue. Do not wait for the user to speak first.";
+  return prompt;
+}
+
+export function roleplayPrompt(scenario: string, learnerLevel?: string): string {
+  let prompt = ROLEPLAY_SYSTEM_PROMPT.replace("<scenario>", scenario);
+  if (learnerLevel?.trim()) {
+    prompt = appendCefrInstruction(prompt, learnerLevel);
+  }
+  return prompt;
+}
+
+function roleplayOpeningRequestBody(
+  scenario: string,
+  history: { role: "user" | "assistant"; content: string }[],
+  learnerLevel?: string
+): string {
+  return JSON.stringify({
+    model: GROQ_MODEL,
+    temperature: 0.7,
+    max_completion_tokens: 512,
+    messages: [
+      { role: "system", content: roleplayOpeningPrompt(scenario, learnerLevel) },
+      ...history,
     ],
   });
 }
@@ -208,14 +248,15 @@ function interrogationRequestBody(word: string): string {
 function roleplayRequestBody(
   userInput: string,
   history: { role: "user" | "assistant"; content: string }[],
-  scenario: string
+  scenario: string,
+  learnerLevel?: string
 ): string {
   return JSON.stringify({
     model: GROQ_MODEL,
     temperature: 0.7,
     max_completion_tokens: 512,
     messages: [
-      { role: "system", content: ROLEPLAY_SYSTEM_PROMPT.replace("<scenario>", scenario) },
+      { role: "system", content: roleplayPrompt(scenario, learnerLevel) },
       ...history,
       { role: "user", content: userInput },
     ],
@@ -225,22 +266,23 @@ function roleplayRequestBody(
 export async function translateAndExtract(
   text: string,
   apiKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  learnerLevel?: string
 ): Promise<AIResult> {
   if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
   const trimmed = text.trim();
   if (!trimmed) return { kind: "failure", message: t(AI_MESSAGES.unreadable) };
   if (trimmed.length > MAX_AI_INPUT_CHARS) {
-    return { kind: "failure", message: `Input is too long (maximum ${MAX_AI_INPUT_CHARS} characters)` };
+    return { kind: "failure", message: t("ai.inputTooLong", [MAX_AI_INPUT_CHARS]) || `Input is too long (maximum ${MAX_AI_INPUT_CHARS} characters)` };
   }
 
   try {
-    const content = contentOf(await post(translationRequestBody(trimmed), apiKey, signal));
+    const content = contentOf(await post(translationRequestBody(trimmed, learnerLevel), apiKey, signal));
     const parsed = parseResponse(content);
     return parsed ?? { kind: "failure", message: t(AI_MESSAGES.unreadable) };
   } catch (error) {
     if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
-      return { kind: "failure", message: "Request cancelled" };
+      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
     }
     const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
     return { kind: "failure", message: t("ai.failed", [detail]) };
@@ -250,24 +292,81 @@ export async function translateAndExtract(
 export async function interrogateWord(
   word: string,
   apiKey: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  learnerLevel?: string
 ): Promise<WordDetailsResult> {
   if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
   const trimmed = word.trim();
   if (!trimmed) return { kind: "failure", message: t(AI_MESSAGES.unreadable) };
   if (trimmed.length > MAX_AI_INPUT_CHARS) {
-    return { kind: "failure", message: `Input is too long (maximum ${MAX_AI_INPUT_CHARS} characters)` };
+    return { kind: "failure", message: t("ai.inputTooLong", [MAX_AI_INPUT_CHARS]) || `Input is too long (maximum ${MAX_AI_INPUT_CHARS} characters)` };
   }
 
   try {
-    const content = contentOf(await post(interrogationRequestBody(trimmed), apiKey, signal));
+    const content = contentOf(await post(interrogationRequestBody(trimmed, learnerLevel), apiKey, signal));
     const details = parseWordDetails(content);
     return details
       ? { kind: "success", details }
       : { kind: "failure", message: t(AI_MESSAGES.unreadable) };
   } catch (error) {
     if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
-      return { kind: "failure", message: "Request cancelled" };
+      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
+    }
+    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
+    return { kind: "failure", message: t("ai.failed", [detail]) };
+  }
+}
+
+export async function startRoleplay(
+  scenario: string,
+  history: { role: string; content: string }[] = [],
+  apiKey: string,
+  learnerLevel?: string,
+  signal?: AbortSignal
+): Promise<RoleplayResult> {
+  if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
+  const safeScenario = safeSlice(scenario.trim(), MAX_ROLEPLAY_SCENARIO_CHARS);
+  const safeHistory = filterAndTrimHistory(history);
+
+  try {
+    const content = contentOf(
+      await post(roleplayOpeningRequestBody(safeScenario, safeHistory, learnerLevel), apiKey, signal)
+    );
+    return parseRoleplayResponse(content);
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
+      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
+    }
+    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
+    return { kind: "failure", message: t("ai.failed", [detail]) };
+  }
+}
+
+export async function continueRoleplay(
+  userInput: string,
+  history: { role: string; content: string }[],
+  scenario: string,
+  apiKey: string,
+  learnerLevel?: string,
+  signal?: AbortSignal
+): Promise<RoleplayResult> {
+  if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
+  const trimmedInput = userInput.trim();
+  if (!trimmedInput) return { kind: "failure", message: t("ai.inputBlank") || "Input cannot be blank" };
+  if (trimmedInput.length > MAX_ROLEPLAY_USER_CHARS) {
+    return { kind: "failure", message: t("ai.messageTooLong", [MAX_ROLEPLAY_USER_CHARS]) || `Message is too long (maximum ${MAX_ROLEPLAY_USER_CHARS} characters)` };
+  }
+  const safeScenario = safeSlice(scenario.trim(), MAX_ROLEPLAY_SCENARIO_CHARS);
+  const safeHistory = filterAndTrimHistory(history);
+
+  try {
+    const content = contentOf(
+      await post(roleplayRequestBody(trimmedInput, safeHistory, safeScenario, learnerLevel), apiKey, signal)
+    );
+    return parseRoleplayResponse(content);
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
+      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
     }
     const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
     return { kind: "failure", message: t("ai.failed", [detail]) };
@@ -281,27 +380,7 @@ export async function processRoleplay(
   apiKey: string,
   signal?: AbortSignal
 ): Promise<RoleplayResult> {
-  if (!apiKey.trim()) return { kind: "failure", message: t(AI_MESSAGES.noKey) };
-  const trimmedInput = userInput.trim();
-  if (!trimmedInput) return { kind: "failure", message: "Input cannot be blank" };
-  if (trimmedInput.length > MAX_ROLEPLAY_USER_CHARS) {
-    return { kind: "failure", message: `Message is too long (maximum ${MAX_ROLEPLAY_USER_CHARS} characters)` };
-  }
-  const safeScenario = safeSlice(scenario.trim(), MAX_ROLEPLAY_SCENARIO_CHARS);
-  const safeHistory = filterAndTrimHistory(history);
-
-  try {
-    const content = contentOf(
-      await post(roleplayRequestBody(trimmedInput, safeHistory, safeScenario), apiKey, signal)
-    );
-    return parseRoleplayResponse(content);
-  } catch (error) {
-    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
-      return { kind: "failure", message: "Request cancelled" };
-    }
-    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
-    return { kind: "failure", message: t("ai.failed", [detail]) };
-  }
+  return continueRoleplay(userInput, history, scenario, apiKey, undefined, signal);
 }
 
 /**
@@ -398,46 +477,108 @@ export function parseResponse(text: string): Extract<AIResult, { kind: "success"
   return parseJsonResponse(text) ?? parsePrefixedResponse(text);
 }
 
+export const VALID_GRAMMAR_CASES = new Set([
+  "Nominativ",
+  "Akkusativ",
+  "Dativ",
+  "Genitiv",
+  "Unknown",
+]);
+
+export function normalizeGrammarCase(val: unknown): string {
+  if (typeof val !== "string") return "Unknown";
+  const trimmed = val.trim();
+  return VALID_GRAMMAR_CASES.has(trimmed) ? trimmed : "Unknown";
+}
+
+/** The four values the prompt allows. Anything else is the model improvising. */
+export const VALID_ARTICLES = new Set(["der", "die", "das", "none"]);
+
+export function normalizeArticle(value: unknown): string {
+  if (typeof value !== "string") return "none";
+  const article = value.trim().toLowerCase();
+  return VALID_ARTICLES.has(article) ? article : "none";
+}
+
+export function parseStrictString(value: unknown, maxChars: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return safeSlice(trimmed, maxChars);
+}
+
+export function parseOptionalString(value: unknown, maxChars: number): string {
+  if (typeof value !== "string") return "";
+  return safeSlice(value.trim(), maxChars);
+}
+
+export function parseStrictStringList(
+  value: unknown,
+  maxItems: number,
+  maxChars: number
+): string[] {
+  if (!Array.isArray(value)) return [];
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (trimmed) {
+        result.push(safeSlice(trimmed, maxChars));
+        if (result.length >= maxItems) break;
+      }
+    }
+  }
+  return result;
+}
+
 /** The JSON shape SYSTEM_PROMPT asks for. */
 function parseJsonResponse(text: string): Extract<AIResult, { kind: "success" }> | null {
   const json = extractJsonObject(text);
   if (!json) return null;
 
-  let obj: Record<string, unknown>;
+  let obj: unknown;
   try {
     obj = JSON.parse(json);
   } catch {
     return null;
   }
 
-  const translation = String(obj.translation ?? "").trim().slice(0, MAX_FIELD);
+  if (typeof obj !== "object" || obj === null || Array.isArray(obj)) {
+    return null;
+  }
+
+  const record = obj as Record<string, unknown>;
+
+  // translation: strict string required, non-empty, trimmed, bounded
+  const translation = parseStrictString(record.translation, MAX_FIELD);
   if (!translation) return null;
 
-  const keywords = (Array.isArray(obj.keywords) ? obj.keywords : [])
-    .map((word) => String(word).trim().slice(0, MAX_SHORT_FIELD))
-    .filter(Boolean)
-    .slice(0, MAX_KEYWORDS);
+  // keywords: array element-by-element string validation
+  const keywords = parseStrictStringList(record.keywords, MAX_KEYWORDS, MAX_SHORT_FIELD);
 
-  const grammarNotes = (Array.isArray(obj.grammar) ? obj.grammar : [])
-    .map((entry): GrammarNote | null => {
-      if (typeof entry !== "object" || entry === null) return null;
+  // example: optional primitive string
+  const example = parseOptionalString(record.example, MAX_FIELD);
+
+  // grammar: array of objects
+  const grammarNotes: GrammarNote[] = [];
+  if (Array.isArray(record.grammar)) {
+    for (const entry of record.grammar) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
       const note = entry as Record<string, unknown>;
-      const phrase = String(note.phrase ?? "").trim().slice(0, MAX_SHORT_FIELD);
-      if (!phrase) return null;
-      return {
-        phrase,
-        case: String(note.case ?? "").trim().slice(0, MAX_SHORT_FIELD) || "Unknown",
-        explanation: String(note.why ?? "").trim().slice(0, MAX_FIELD),
-      };
-    })
-    .filter((note): note is GrammarNote => note !== null)
-    .slice(0, MAX_GRAMMAR_NOTES);
+      const phrase = parseStrictString(note.phrase, MAX_SHORT_FIELD);
+      if (!phrase) continue;
+      const kase = normalizeGrammarCase(note.case);
+      const explanation = parseOptionalString(note.why, MAX_FIELD);
+      grammarNotes.push({ phrase, case: kase, explanation });
+      if (grammarNotes.length >= MAX_GRAMMAR_NOTES) break;
+    }
+  }
 
   return {
     kind: "success",
     translation,
     keywords,
-    example: String(obj.example ?? "").trim().slice(0, MAX_FIELD),
+    example,
     grammarNotes,
   };
 }
@@ -482,10 +623,11 @@ export function parsePrefixedResponse(
                 const [phrase, kase, explanation] = part.split("|");
                 return {
                     phrase: phrase?.trim() || "",
-                    case: kase?.trim() || "Unknown",
+                    case: normalizeGrammarCase(kase),
                     explanation: explanation?.trim() || ""
                 };
-            });
+            })
+            .filter((n) => n.phrase.length > 0);
     }
   }
 
@@ -503,48 +645,35 @@ export function parsePrefixedResponse(
 export function parseWordDetails(text: string): WordDetails | null {
   const json = extractJsonObject(text);
   if (!json) return null;
-  let obj: Record<string, unknown>;
+  let obj: unknown;
   try {
     obj = JSON.parse(json);
   } catch {
     return null;
   }
 
-  const word = String(obj.word ?? "").trim();
-  const meaning = String(obj.meaning ?? "").trim();
+  if (typeof obj !== "object" || obj === null || Array.isArray(obj)) {
+    return null;
+  }
+
+  const record = obj as Record<string, unknown>;
+  const word = parseStrictString(record.word, MAX_SHORT_FIELD);
+  const meaning = parseStrictString(record.meaning, MAX_FIELD);
   if (!word || !meaning) return null;
 
   return {
-    word: word.slice(0, MAX_SHORT_FIELD),
-    article: normalizeArticle(obj.article),
-    plural: String(obj.plural ?? "").trim().slice(0, MAX_SHORT_FIELD),
-    conjugationOrInfinitive: String(obj.conjugation_or_infinitive ?? "")
-      .trim()
-      .slice(0, MAX_SHORT_FIELD),
-    meaning: meaning.slice(0, MAX_FIELD),
-    exampleSentence: String(obj.example_sentence ?? "").trim().slice(0, MAX_FIELD),
-    synonyms: (Array.isArray(obj.synonyms) ? obj.synonyms : [])
-      .map((v) => String(v).slice(0, MAX_SHORT_FIELD))
-      .slice(0, MAX_KEYWORDS),
-    antonyms: (Array.isArray(obj.antonyms) ? obj.antonyms : [])
-      .map((v) => String(v).slice(0, MAX_SHORT_FIELD))
-      .slice(0, MAX_KEYWORDS),
+    word,
+    article: normalizeArticle(record.article),
+    plural: parseOptionalString(record.plural, MAX_SHORT_FIELD),
+    conjugationOrInfinitive: parseOptionalString(
+      record.conjugation_or_infinitive,
+      MAX_SHORT_FIELD
+    ),
+    meaning,
+    exampleSentence: parseOptionalString(record.example_sentence, MAX_FIELD),
+    synonyms: parseStrictStringList(record.synonyms, MAX_KEYWORDS, MAX_SHORT_FIELD),
+    antonyms: parseStrictStringList(record.antonyms, MAX_KEYWORDS, MAX_SHORT_FIELD),
   };
-}
-
-/** The four values the prompt allows. Anything else is the model improvising. */
-const ARTICLES = new Set(["der", "die", "das", "none"]);
-
-/**
- * German has three definite articles. A model that answers with a sentence, a
- * gendered guess in another language, or an empty string is not describing a noun -
- * and whatever it said would be written into the library verbatim and then
- * rehearsed as fact for months. "none" is the honest fallback: the detail sheet
- * already renders it as "no article".
- */
-function normalizeArticle(value: unknown): string {
-  const article = String(value ?? "").trim().toLowerCase();
-  return ARTICLES.has(article) ? article : "none";
 }
 
 function extractJsonObject(text: string): string | null {

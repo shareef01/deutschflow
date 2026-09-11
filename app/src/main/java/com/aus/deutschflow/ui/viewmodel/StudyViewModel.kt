@@ -8,6 +8,7 @@ import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.ActivityDao
 import com.aus.deutschflow.data.local.dao.UserStatsDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.ReviewQuality
@@ -134,22 +135,35 @@ class StudyViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                val now = System.currentTimeMillis()
                 val rescheduled = srsEngine.calculateNextReview(card, quality)
                 val persisted = scheduleFor(card, rescheduled, quality, extraPractice)
                 val updatedPersisted = persisted.copy(
-                    lastModifiedAt = maxOf(persisted.lastModifiedAt, System.currentTimeMillis())
+                    lastModifiedAt = maxOf(persisted.lastModifiedAt, now)
                 )
+                val actualDays = if (card.timestamp > 0L) {
+                    maxOf(0, ((now - card.timestamp) / (1000L * 60 * 60 * 24)).toInt())
+                } else {
+                    0
+                }
 
-                // One transaction, so the card's schedule and the XP it earned commit
-                // together or not at all. They used to be two - the second launched in
-                // a coroutine of its own - which left a window where the card had
-                // advanced and the XP had not, and put the write on a path where a
-                // database error escaped viewModelScope and killed the process.
+                // One transaction, so the card's schedule, review event, and the XP it earned commit
+                // together or not at all. Extra practice awards 0 XP to prevent XP farming.
                 database.withTransaction {
                     vocabularyDao.updateVocabulary(updatedPersisted)
-                    if (quality.value >= ReviewQuality.GOOD.value) {
+                    if (!extraPractice && quality.value >= ReviewQuality.GOOD.value) {
                         awardXp(XP_PER_CARD)
                     }
+                    database.reviewEventDao().insert(
+                        ReviewEventEntity(
+                            vocabularyId = card.id,
+                            rating = quality.name,
+                            scheduledDays = card.interval,
+                            actualDays = actualDays,
+                            reviewedAtTimestamp = now,
+                            isExtraPractice = extraPractice
+                        )
+                    )
                 }
 
                 _sessionReviewedCount.value++

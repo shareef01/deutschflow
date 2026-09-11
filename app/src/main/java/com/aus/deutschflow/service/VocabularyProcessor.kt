@@ -17,12 +17,29 @@ open class VocabularyProcessor(
     /**
      * Translates a German utterance and extracts key words from it.
      */
-    open suspend fun processText(text: String, apiKey: String): AIResult =
-        languageModel.translateAndExtract(text, apiKey)
+    open suspend fun processText(text: String, apiKey: String, learnerLevel: String? = null): AIResult =
+        languageModel.translateAndExtract(text, apiKey, learnerLevel)
 
     /** Fetches the full linguistic anatomy of a single word. */
-    open suspend fun interrogateWord(word: String, apiKey: String): WordDetailsResult =
-        languageModel.interrogateWord(word, apiKey)
+    open suspend fun interrogateWord(word: String, apiKey: String, learnerLevel: String? = null): WordDetailsResult =
+        languageModel.interrogateWord(word, apiKey, learnerLevel)
+
+    /** Initiates a conversational roleplay with an opening line from the assistant. */
+    open suspend fun startRoleplay(
+        scenario: String,
+        history: List<Pair<String, String>> = emptyList(),
+        apiKey: String,
+        learnerLevel: String? = null
+    ): GroqHelper.RoleplayResult = languageModel.startRoleplay(scenario, history, apiKey, learnerLevel)
+
+    /** Continues an ongoing conversational roleplay. */
+    open suspend fun continueRoleplay(
+        userInput: String,
+        history: List<Pair<String, String>>,
+        scenario: String,
+        apiKey: String,
+        learnerLevel: String? = null
+    ): GroqHelper.RoleplayResult = languageModel.continueRoleplay(userInput, history, scenario, apiKey, learnerLevel)
 
     /** Handles a conversational turn in a roleplay. */
     open suspend fun processRoleplay(
@@ -30,7 +47,7 @@ open class VocabularyProcessor(
         history: List<Pair<String, String>>,
         scenario: String,
         apiKey: String
-    ): GroqHelper.RoleplayResult = languageModel.roleplayTurn(userInput, history, scenario, apiKey)
+    ): GroqHelper.RoleplayResult = continueRoleplay(userInput, history, scenario, apiKey)
 
     /** @see Companion.generateExample */
     fun generateExample(word: String): String = Companion.generateExample(word)

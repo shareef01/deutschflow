@@ -261,6 +261,16 @@
     <string name="ai_key_rejected">Dieser API-Schlüssel wurde abgelehnt. Prüfe ihn in den Einstellungen.</string>
     <string name="ai_rate_limited">Zu viele Anfragen im Moment. Versuche es in einer Minute erneut.</string>
     <string name="ai_status">Der Dienst antwortete mit %1$d.</string>
+    <string name="ai_input_blank">Eingabe darf nicht leer sein</string>
+    <string name="ai_input_too_long">Eingabe ist zu lang (maximal %1$d Zeichen)</string>
+    <string name="ai_message_too_long">Nachricht ist zu lang (maximal %1$d Zeichen)</string>
+    <string name="ai_cancelled">Anfrage abgebrochen</string>
+    <string name="settings_cefr_level">GER-Niveau</string>
+    <string name="settings_cefr_level_desc">Komplexität der KI-Gespräche und Analysen anpassen</string>
+    <string name="settings_cefr_none">Keines (Standard)</string>
+    <string name="settings_tts_privacy">Datenschutz bei Sprachausgabe</string>
+    <string name="settings_tts_privacy_desc">Bevorzugt geräteinterne Stimmen für mehr Datenschutz.</string>
+    <string name="action_translate">Übersetzung</string>
 
     <!-- Daily word notification -->
     <string name="notification_channel_name">Deutsches Wort des Tages</string>

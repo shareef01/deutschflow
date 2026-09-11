@@ -25,6 +25,8 @@ export default function SettingsPage() {
     hasApiKey,
     selectedDialect,
     isAutoPlayEnabled,
+    cefrLevel,
+    saveCefrLevel,
     saveApiKey,
     saveDialect,
     setAutoPlayEnabled,
@@ -76,6 +78,15 @@ export default function SettingsPage() {
   const languages: { label: string; code: Lang }[] = [
     { label: t("language.english"), code: "en" },
     { label: t("language.german"), code: "de" },
+  ];
+
+  const cefrLevels: { label: string; code: string }[] = [
+    { label: t("settings.cefrAuto"), code: "" },
+    { label: "A1 (Beginner)", code: "A1" },
+    { label: "A2 (Elementary)", code: "A2" },
+    { label: "B1 (Intermediate)", code: "B1" },
+    { label: "B2 (Upper Intermediate)", code: "B2" },
+    { label: "C1+ (Advanced)", code: "C1+" },
   ];
 
   const streakLabel = streak === 1 ? t("streak.day", [streak]) : t("streak.days", [streak]);
@@ -196,6 +207,9 @@ export default function SettingsPage() {
           <GlassSwitch checked={isAutoPlayEnabled} onChange={setAutoPlayEnabled} label={t("settings.autoplay")} />
         </div>
       </div>
+      <p className="mt-2 px-1 text-label-medium text-on-surface-variant">
+        {t("settings.ttsPrivacy")}
+      </p>
 
       {/* ---- Recognition dialect --------------------------------------------- */}
       <SectionHeader title={t("settings.dialectHeader")} />
@@ -203,6 +217,10 @@ export default function SettingsPage() {
       <p className="mt-3 px-1 text-label-medium text-on-surface-variant">
         {t("settings.speechPrivacy")}
       </p>
+
+      {/* ---- Learner Level (CEFR) -------------------------------------------- */}
+      <SectionHeader title={t("settings.cefrHeader")} />
+      <RadioGroup name={t("settings.cefrHeader")} options={cefrLevels} selected={cefrLevel} onSelect={saveCefrLevel} />
 
       {/* ---- Language (web parity for Android 13+ per-app language) ---------- */}
       <SectionHeader title={t("settings.languageHeader")} />

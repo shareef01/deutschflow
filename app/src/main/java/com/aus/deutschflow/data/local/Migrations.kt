@@ -500,6 +500,38 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
 }
 
 /**
+ * Version 16:
+ * - Creates the `review_events` table and indices for immutable review history.
+ * - Adds `translation` and `analysisJson` caching columns to `transcripts`.
+ */
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `review_events` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`vocabularyId` INTEGER NOT NULL, " +
+                "`rating` TEXT NOT NULL, " +
+                "`scheduledDays` INTEGER NOT NULL, " +
+                "`actualDays` INTEGER NOT NULL, " +
+                "`reviewedAtTimestamp` INTEGER NOT NULL, " +
+                "`isExtraPractice` INTEGER NOT NULL, " +
+                "`remoteId` TEXT NOT NULL DEFAULT ''" +
+                ")"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_review_events_vocabularyId` " +
+                "ON `review_events` (`vocabularyId`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_review_events_reviewedAtTimestamp` " +
+                "ON `review_events` (`reviewedAtTimestamp`)"
+        )
+        db.execSQL("ALTER TABLE `transcripts` ADD COLUMN `translation` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `transcripts` ADD COLUMN `analysisJson` TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -517,5 +549,5 @@ val MIGRATIONS =
     arrayOf(
         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-        MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15
+        MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
     )

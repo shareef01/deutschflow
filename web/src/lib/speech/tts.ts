@@ -123,10 +123,10 @@ class Tts {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "de-DE";
-    const germanVoice = window.speechSynthesis
-      .getVoices()
-      .find((v) => v.lang?.toLowerCase().startsWith("de"));
+    const voices = window.speechSynthesis.getVoices();
+    const germanVoices = voices.filter((v) => v.lang?.toLowerCase().startsWith("de"));
+    const localGermanVoice = germanVoices.find((v) => v.localService === true);
+    const germanVoice = localGermanVoice ?? germanVoices[0];
     if (germanVoice) utterance.voice = germanVoice;
     utterance.rate = 0.95;
     window.speechSynthesis.speak(utterance);

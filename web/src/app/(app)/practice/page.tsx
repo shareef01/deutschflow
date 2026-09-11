@@ -11,6 +11,7 @@ import { MicIcon, NavigateNextIcon, RefreshIcon, StopIcon, VolumeUpIcon } from "
 import { PRACTICE_FEEDBACK_KEYS } from "@/lib/scoring";
 
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { ROLEPLAY_SCENARIOS } from "@/lib/ai/scenarios";
 
 export default function PracticePage() {
   const [selectedTab, setSelectedTab] = useState<"repetition" | "roleplay">("repetition");
@@ -220,6 +221,7 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const { t } = useI18n();
     const {
         messages, isProcessing, isListening, partialText, speechSupported,
+        error, retry, scenario,
         openScenarioIfEmpty, startSession, startListening, stopAndSend, speak, sendMessage
     } = roleplay;
 
@@ -227,11 +229,7 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const [isSending, setIsSending] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Open a scene only if there is nothing to come back to. The decision belongs
-    // to the hook: the saved conversation is read asynchronously, so this mounts
-    // while `messages` is still empty and used to start a new scene over the one
-    // the user left. Keyed on mount rather than on `messages.length`, which also
-    // re-fired the check every time a turn was added.
+    // Open a scene only if there is nothing to come back to.
     useEffect(() => {
         void openScenarioIfEmpty();
     }, [openScenarioIfEmpty]);
@@ -257,19 +255,24 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
 
     return (
         <div className="flex h-full flex-col p-4">
-            {/* The scenario, and the way out of it. Android has carried this
-                restart button all along; here a reload used to be the reset,
-                and now that the conversation is saved, a reload brings it
-                back — so without this there is no way out of a scene that has
-                gone wrong short of wiping all progress. */}
             <div className="mb-3 flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                    <p className="text-label-small uppercase tracking-wider text-on-surface-variant">
+                    <label htmlFor="roleplay-scenario-select" className="text-label-small uppercase tracking-wider text-on-surface-variant block mb-1">
                         {t("roleplay.tab")}
-                    </p>
-                    <p className="truncate text-label-large font-bold text-on-surface">
-                        {t("roleplay.scenarioBerlinBakery")}
-                    </p>
+                    </label>
+                    <select
+                        id="roleplay-scenario-select"
+                        value={scenario}
+                        onChange={(e) => void startSession(e.target.value)}
+                        disabled={isProcessing || isSending}
+                        className="w-full bg-surface-variant/50 text-on-surface text-label-large font-bold rounded-lg px-2 py-1 border border-outline-variant/30 focus:outline-none focus:border-azure-glow"
+                    >
+                        {ROLEPLAY_SCENARIOS.map((s) => (
+                            <option key={s.id} value={s.title} className="bg-background text-on-surface">
+                                {s.title} ({s.cefrLevel})
+                            </option>
+                        ))}
+                    </select>
                 </div>
                 <button
                     type="button"
@@ -277,11 +280,25 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                     disabled={isProcessing || isSending}
                     aria-label={t("roleplay.restart")}
                     title={t("roleplay.restart")}
-                    className="glass-button press-scale flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:text-azure-glow disabled:opacity-40"
+                    className="glass-button press-scale flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:text-azure-glow disabled:opacity-40 self-end"
                 >
                     <RefreshIcon className="size-5" />
                 </button>
             </div>
+
+            {error && (
+                <div className="mb-2">
+                    <ErrorBanner message={error} />
+                    <button
+                        type="button"
+                        onClick={retry}
+                        disabled={isProcessing || isSending}
+                        className="text-xs text-primary underline hover:text-azure-glow ml-1"
+                    >
+                        {t("action.retry") || "Retry"}
+                    </button>
+                </div>
+            )}
             <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pb-4">
                 {messages.map((msg, i) => (
                     <div key={i} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>

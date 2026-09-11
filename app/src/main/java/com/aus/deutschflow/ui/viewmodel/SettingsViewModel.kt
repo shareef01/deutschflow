@@ -67,6 +67,9 @@ class SettingsViewModel @Inject constructor(
     val selectedDialect: StateFlow<String> = preferenceManager.selectedDialect
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "de-DE")
 
+    val selectedCefrLevel: StateFlow<String> = preferenceManager.selectedCefrLevel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
     val isAutoPlayEnabled: StateFlow<Boolean> = preferenceManager.isAutoPlayEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
@@ -122,6 +125,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun saveCefrLevel(cefrLevel: String) {
+        viewModelScope.launch {
+            preferenceManager.saveCefrLevel(cefrLevel)
+        }
+    }
+
     fun setAutoPlayEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferenceManager.setAutoPlayEnabled(enabled)
@@ -146,6 +155,7 @@ class SettingsViewModel @Inject constructor(
                 // conversation behind would be the one thing the dialog promises not
                 // to do.
                 roleplayDao.deleteAll()
+                database.reviewEventDao().deleteAll()
             }
             widgetUpdater.refresh()
             _message.value = R.string.message_progress_cleared

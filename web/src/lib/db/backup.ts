@@ -1,6 +1,5 @@
-import type { DeutschFlowDB } from "./schema";
+import type { DeutschFlowDB, VocabularyEntry } from "./schema";
 import { foldGermanKey } from "./schema";
-import { saveVocabulary } from "./repository";
 
 /**
  * Export and import for the whole library.
@@ -407,44 +406,73 @@ async function applyImport(
     const englishTranslation = str(row.englishTranslation).trim();
     if (!germanText || !englishTranslation) continue;
 
+    const incomingRemoteId = sanitizeRemoteId(row.remoteId);
+    const incomingLastModifiedAt = num(row.lastModifiedAt, num(row.timestamp, 0));
+
     const existing = await db.vocabulary
       .where("germanTextKey")
       .equals(foldGermanKey(germanText))
       .first();
 
-    await saveVocabulary(db, {
-      germanText,
-      // Import is local-wins for an existing word. An older backup may fill a
-      // blank, but it must not overwrite a correction made in this library.
-      englishTranslation: existing?.englishTranslation || englishTranslation,
-      timestamp: Math.max(existing?.timestamp ?? 0, num(row.timestamp, 0)),
-      exampleSentence: existing?.exampleSentence || str(row.exampleSentence),
-      article: existing?.article || str(row.article),
-      plural: existing?.plural || str(row.plural),
-      conjugation: existing?.conjugation || str(row.conjugation),
-      synonyms: existing?.synonyms || str(row.synonyms),
-      antonyms: existing?.antonyms || str(row.antonyms),
-      lastModifiedAt: Math.max(existing?.lastModifiedAt ?? 0, num(row.lastModifiedAt, 0)),
-    });
-
     if (existing) {
       result.vocabularyMerged++;
+      const incomingIsNewer = incomingLastModifiedAt > (existing.lastModifiedAt || 0);
+
+      const merged: VocabularyEntry = {
+        ...existing,
+        id: existing.id,
+        germanText: incomingIsNewer && germanText ? germanText : existing.germanText,
+        germanTextKey: foldGermanKey(incomingIsNewer && germanText ? germanText : existing.germanText),
+        englishTranslation: incomingIsNewer
+          ? (englishTranslation || existing.englishTranslation)
+          : (existing.englishTranslation || englishTranslation),
+        exampleSentence: incomingIsNewer
+          ? (str(row.exampleSentence) || existing.exampleSentence)
+          : (existing.exampleSentence || str(row.exampleSentence)),
+        article: incomingIsNewer
+          ? (str(row.article) || existing.article)
+          : (existing.article || str(row.article)),
+        plural: incomingIsNewer
+          ? (str(row.plural) || existing.plural)
+          : (existing.plural || str(row.plural)),
+        conjugation: incomingIsNewer
+          ? (str(row.conjugation) || existing.conjugation)
+          : (existing.conjugation || str(row.conjugation)),
+        synonyms: incomingIsNewer
+          ? (str(row.synonyms) || existing.synonyms)
+          : (existing.synonyms || str(row.synonyms)),
+        antonyms: incomingIsNewer
+          ? (str(row.antonyms) || existing.antonyms)
+          : (existing.antonyms || str(row.antonyms)),
+        timestamp: Math.max(existing.timestamp, num(row.timestamp, 0)),
+        remoteId: existing.remoteId || incomingRemoteId,
+        lastModifiedAt: Math.max(existing.lastModifiedAt || 0, incomingLastModifiedAt),
+        nextReview: existing.reviewCount > 0 ? existing.nextReview : num(row.nextReview, existing.nextReview),
+        interval: existing.reviewCount > 0 ? existing.interval : num(row.interval, existing.interval),
+        easeFactor: existing.reviewCount > 0 ? existing.easeFactor : num(row.easeFactor, existing.easeFactor),
+        reviewCount: Math.max(existing.reviewCount, num(row.reviewCount, 0)),
+      };
+      await db.vocabulary.put(merged);
     } else {
       result.vocabularyAdded++;
-      const added = await db.vocabulary
-        .where("germanTextKey")
-        .equals(foldGermanKey(germanText))
-        .first();
-      if (added?.id !== undefined) {
-        await db.vocabulary.update(added.id, {
-          nextReview: num(row.nextReview, 0),
-          interval: num(row.interval, 0),
-          easeFactor: num(row.easeFactor, 2.5),
-          reviewCount: num(row.reviewCount, 0),
-          remoteId: sanitizeRemoteId(row.remoteId),
-          lastModifiedAt: num(row.lastModifiedAt, num(row.timestamp, 0)),
-        });
-      }
+      await db.vocabulary.add({
+        germanText,
+        germanTextKey: foldGermanKey(germanText),
+        englishTranslation,
+        timestamp: num(row.timestamp, Date.now()),
+        exampleSentence: str(row.exampleSentence),
+        article: str(row.article),
+        plural: str(row.plural),
+        conjugation: str(row.conjugation),
+        synonyms: str(row.synonyms),
+        antonyms: str(row.antonyms),
+        nextReview: num(row.nextReview, 0),
+        interval: num(row.interval, 0),
+        easeFactor: num(row.easeFactor, 2.5),
+        reviewCount: num(row.reviewCount, 0),
+        remoteId: incomingRemoteId,
+        lastModifiedAt: incomingLastModifiedAt,
+      });
     }
   }
 

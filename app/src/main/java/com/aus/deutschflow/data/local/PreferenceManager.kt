@@ -61,6 +61,7 @@ class PreferenceManager @Inject constructor(
 
     private val KEY_DIALECT = stringPreferencesKey("dialect")
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
+    private val KEY_CEFR_LEVEL = stringPreferencesKey("cefr_level")
 
     /**
      * Decryption is a Keystore round trip, so it happens off whichever thread is
@@ -112,6 +113,10 @@ class PreferenceManager @Inject constructor(
         preferences[KEY_DIALECT] ?: "de-DE"
     }
 
+    val selectedCefrLevel: Flow<String> = dataStore.data.map { preferences ->
+        preferences[KEY_CEFR_LEVEL] ?: ""
+    }
+
     val isAutoPlayEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[KEY_AUTO_PLAY] ?: true
     }
@@ -157,6 +162,12 @@ class PreferenceManager @Inject constructor(
     suspend fun saveDialect(dialect: String) {
         dataStore.edit { preferences ->
             preferences[KEY_DIALECT] = dialect
+        }
+    }
+
+    suspend fun saveCefrLevel(cefrLevel: String) {
+        dataStore.edit { preferences ->
+            preferences[KEY_CEFR_LEVEL] = cefrLevel
         }
     }
 

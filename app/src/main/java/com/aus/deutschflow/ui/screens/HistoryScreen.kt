@@ -366,6 +366,27 @@ private fun TranscriptDetailDialog(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
+                if (transcript.translation.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    GlassmorphicCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(Spacing.md)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_translate).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(Spacing.xs))
+                        Text(
+                            text = transcript.translation,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         },
         confirmButton = {

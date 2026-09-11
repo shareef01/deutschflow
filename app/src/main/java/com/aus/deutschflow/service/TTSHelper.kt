@@ -150,6 +150,18 @@ class TTSHelper @Inject constructor(
 
         if (failure == null) {
             _error.value = null
+            // Prefer on-device voice for privacy semantics
+            try {
+                val voices = engine?.voices
+                val onDeviceVoice = voices?.firstOrNull { voice ->
+                    voice.locale.language == Locale.GERMAN.language && !voice.isNetworkConnectionRequired
+                }
+                if (onDeviceVoice != null) {
+                    engine?.let { it.voice = onDeviceVoice }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to select on-device voice: ${e.message}")
+            }
             engine?.setOnUtteranceProgressListener(progressListener)
             queued?.let {
                 requestAudioFocus()

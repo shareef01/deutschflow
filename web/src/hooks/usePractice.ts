@@ -29,6 +29,30 @@ const SERVER_SNAPSHOT = {
   rmsLevel: 0,
 };
 
+export function selectWeightedVocabulary<T extends { interval?: number; easeFactor?: number }>(items: T[]): T | null {
+  if (items.length === 0) return null;
+  if (items.length === 1) return items[0];
+
+  const weights = items.map((item) => {
+    const interval = Math.max(1, item.interval ?? 0);
+    const ease = Math.min(3.0, Math.max(1.3, item.easeFactor ?? 2.5));
+    const intervalFactor = 1 / Math.sqrt(interval);
+    const difficultyFactor = 3.5 - ease;
+    return Math.max(0.1, intervalFactor * difficultyFactor);
+  });
+
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  let threshold = Math.random() * totalWeight;
+
+  for (let i = 0; i < items.length; i++) {
+    threshold -= weights[i];
+    if (threshold <= 0) {
+      return items[i];
+    }
+  }
+  return items[items.length - 1];
+}
+
 export function usePractice() {
   const speechSupported = useSyncExternalStore(
     () => () => {},
@@ -65,9 +89,9 @@ export function usePractice() {
 
   const loadRandomTarget = useCallback(async () => {
     const list = await getAllVocabulary(db);
-    if (list.length > 0) {
-      const randomItem = list[Math.floor(Math.random() * list.length)];
-      const next = randomItem.exampleSentence || randomItem.germanText;
+    const chosen = selectWeightedVocabulary(list);
+    if (chosen) {
+      const next = chosen.exampleSentence || chosen.germanText;
       // Keep the scorer's ref in step the moment the target changes, before
       // any utterance can arrive against it.
       targetRef.current = next;

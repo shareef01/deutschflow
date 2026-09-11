@@ -112,12 +112,30 @@ export function useStudy() {
       const persisted =
         !isExtraPractice || quality === ReviewQuality.AGAIN ? rescheduled : card;
 
-      // 2. Persist the schedule and the XP together, so a failure leaves neither.
-      await db.transaction("rw", db.vocabulary, db.userStats, db.activityLog, async () => {
+      const now = Date.now();
+      const actualDays = card.timestamp ? Math.max(0, Math.floor((now - card.timestamp) / 86_400_000)) : 0;
+      const ratingMap: Record<ReviewQuality, "AGAIN" | "HARD" | "GOOD" | "EASY"> = {
+        [ReviewQuality.AGAIN]: "AGAIN",
+        [ReviewQuality.HARD]: "HARD",
+        [ReviewQuality.GOOD]: "GOOD",
+        [ReviewQuality.EASY]: "EASY",
+      };
+
+      // 2. Persist the schedule, review event, and XP together
+      await db.transaction("rw", db.vocabulary, db.userStats, db.activityLog, db.reviewEvents, async () => {
         await updateVocabulary(db, persisted);
-        if (quality >= ReviewQuality.GOOD) {
+        if (!isExtraPractice && quality >= ReviewQuality.GOOD) {
           await rewardXp(db, XP_PER_CARD);
         }
+        await db.reviewEvents.add({
+          vocabularyId: card.id ?? 0,
+          rating: ratingMap[quality],
+          scheduledDays: card.interval,
+          actualDays,
+          reviewedAtTimestamp: now,
+          isExtraPractice,
+          remoteId: crypto.randomUUID(),
+        });
       });
 
       // 3. Update the queue.

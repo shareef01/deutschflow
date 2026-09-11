@@ -76,12 +76,12 @@ describe("parseResponse — the JSON shape", () => {
     expect(parseResponse(JSON.stringify({ translation: "   " }))).toBeNull();
   });
 
-  it("coerces wrong types instead of throwing", () => {
+  it("strictly discards wrong types instead of coercing", () => {
     const result = parseResponse(
-      json({ keywords: [1, 2], grammar: [{ phrase: 7, case: null, why: undefined }] })
+      json({ keywords: [1, 2, "lernen"], grammar: [{ phrase: "die Katze", case: "InvalidCase", why: undefined }] })
     );
-    expect(result?.keywords).toEqual(["1", "2"]);
-    expect(result?.grammarNotes[0]).toEqual({ phrase: "7", case: "Unknown", explanation: "" });
+    expect(result?.keywords).toEqual(["lernen"]);
+    expect(result?.grammarNotes[0]).toEqual({ phrase: "die Katze", case: "Unknown", explanation: "" });
   });
 
   it("ignores a grammar entry that is not an object", () => {

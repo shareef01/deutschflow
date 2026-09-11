@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -85,9 +86,9 @@ class PracticeViewModel @Inject constructor(
         viewModelScope.launch {
             vocabularyDao.getAllVocabulary().firstOrNull()?.let { list ->
                 if (list.isNotEmpty()) {
-                    val randomItem = list.random()
+                    val chosenItem = selectWeightedVocabulary(list) ?: list.random()
                     _targetSentence.value =
-                        randomItem.exampleSentence.ifBlank { randomItem.germanText }
+                        chosenItem.exampleSentence.ifBlank { chosenItem.germanText }
                 }
             }
             _wordResults.value = emptyList()
@@ -154,8 +155,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     companion object {
-        val WORD_SPLIT = Regex("\\s+")
-        val NON_LETTERS = Regex("[^a-zA-ZäöüÄÖÜß]")
+        val TOKEN_REGEX = Regex("[\\p{L}\\p{M}\\p{N}]+(?:[-'’][\\p{L}\\p{M}\\p{N}]+)*")
 
         /**
          * Folds a word to the form both spellings of it share.
@@ -170,13 +170,44 @@ class PracticeViewModel @Inject constructor(
          *
          * lowercase() is locale-invariant in Kotlin, which matters here: under a Turkish
          * locale a default-locale lowercase would map I to a dotless ı and stop matching.
+         * Apostrophes are stripped so spoken transcripts like "gehts" match "geht's".
          */
-        private fun String.foldGerman(): String = Normalizer.normalize(this, Normalizer.Form.NFC)
+        fun foldGerman(word: String): String = Normalizer.normalize(word, Normalizer.Form.NFC)
             .lowercase()
             .replace("ä", "ae")
             .replace("ö", "oe")
             .replace("ü", "ue")
             .replace("ß", "ss")
+            .replace(Regex("['’]"), "")
+
+        fun tokenize(text: String): List<String> {
+            val normalized = Normalizer.normalize(text, Normalizer.Form.NFC)
+            return TOKEN_REGEX.findAll(normalized).map { it.value }.toList()
+        }
+
+        fun selectWeightedVocabulary(items: List<VocabularyEntity>): VocabularyEntity? {
+            if (items.isEmpty()) return null
+            if (items.size == 1) return items[0]
+
+            val weights = items.map { item ->
+                val interval = maxOf(1, item.interval)
+                val ease = item.easeFactor.coerceIn(1.3f, 3.0f)
+                val intervalFactor = 1.0 / Math.sqrt(interval.toDouble())
+                val difficultyFactor = 3.5 - ease
+                maxOf(0.1, intervalFactor * difficultyFactor)
+            }
+
+            val totalWeight = weights.sum()
+            var threshold = Math.random() * totalWeight
+
+            for (i in items.indices) {
+                threshold -= weights[i]
+                if (threshold <= 0.0) {
+                    return items[i]
+                }
+            }
+            return items.last()
+        }
 
         /**
          * Scores [spokenText] against [targetSentence], in order.
@@ -204,18 +235,10 @@ class PracticeViewModel @Inject constructor(
             targetSentence: String,
             spokenText: String
         ): Pair<List<WordResult>, PracticeFeedback> {
-            val targetWords = Normalizer.normalize(targetSentence, Normalizer.Form.NFC)
-                .split(WORD_SPLIT)
-                .map { it.replace(NON_LETTERS, "") }
-                .filter { it.isNotBlank() }
+            val targetWords = tokenize(targetSentence)
+            val spokenWords = tokenize(spokenText).map { foldGerman(it) }
 
-            val spokenWords = Normalizer.normalize(spokenText, Normalizer.Form.NFC)
-                .split(WORD_SPLIT)
-                .map { it.replace(NON_LETTERS, "") }
-                .filter { it.isNotBlank() }
-                .map { it.foldGerman() }
-
-            val matched = alignedTargetIndices(targetWords.map { it.foldGerman() }, spokenWords)
+            val matched = alignedTargetIndices(targetWords.map { foldGerman(it) }, spokenWords)
 
             val results = targetWords.mapIndexed { index, targetWord ->
                 WordResult(
