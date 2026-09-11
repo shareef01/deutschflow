@@ -1,204 +1,203 @@
 # DeutschFlow
 
-DeutschFlow is a local-first German practice app for Android and the web: speak or type German, translate it with Groq, retain useful vocabulary, and review it with spaced repetition.
+A local-first, privacy-respecting German language practice app for Android and the Web. Speak or type German, translate it with Groq AI, retain useful vocabulary, and master it with spaced repetition.
 
 [![Build](https://github.com/shareef01/deutschflow/actions/workflows/build.yml/badge.svg)](https://github.com/shareef01/deutschflow/actions/workflows/build.yml)
-![License](https://img.shields.io/badge/license-MIT-999999)
+![Android: API 31+](https://img.shields.io/badge/Android-API%2031%2B%20(12%2B)-3DDC84?logo=android&logoColor=white)
+![Web: Next.js PWA](https://img.shields.io/badge/Web-Next.js%2016%20PWA-black?logo=next.js&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-| Android | Web PWA |
-| :---: | :---: |
-| <img src="docs/screenshots/device_dashboard_settled.png" width="300" alt="DeutschFlow Android dashboard"> | <img src="docs/screenshots/web/transcript-desktop-1440.png" width="520" alt="DeutschFlow web transcript screen"> |
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="280" alt="DeutschFlow Android Dashboard" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/screenshots/web/transcript-desktop-1440.png" width="540" alt="DeutschFlow Web PWA Transcript" />
+</p>
 
-## Features
+DeutschFlow bridges the gap between passive consumption and active speaking. It pairs instant on-device speech transcription with low-latency Groq AI translations, deep grammatical breakdowns, interactive situational roleplay, and an SM-2 spaced repetition review deck.
 
-- German speech transcription with selectable Germany, Austria, and Switzerland dialects
-- Groq-powered translation, grammar notes, vocabulary extraction, and roleplay
-- Local vocabulary library with German-aware duplicate handling
-- SM-2-derived spaced repetition, XP, streaks, and pronunciation shadowing
-- Persistent roleplay conversations and text input when browser speech is unavailable
-- English and German UI, responsive navigation, light/dark system themes, and offline-capable PWA shell
-- Android daily-word notification and home-screen widget
-- Manual JSON export/import for web learning data
+The project features two independent, production-grade clients—a native **Android** app (Jetpack Compose & Room) and an installable **Web PWA** (Next.js & IndexedDB)—both adhering to a shared cross-platform domain contract without shared runtime source code.
 
-## Architecture
+---
 
-DeutschFlow contains two independent clients. They share product behavior and test contracts, not runtime source.
+## 📸 Key Interfaces
 
-### Android
+| Real-Time Transcription | Vocabulary Library | Linguistic Word Detail | Spaced Repetition Study |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/transcript.png" width="220" alt="DeutschFlow German transcription interface" /><br><sub><b>Transcription & Translation</b><br>Real-time speech capture with dialect selection</sub> | <img src="docs/screenshots/library.png" width="220" alt="DeutschFlow vocabulary library" /><br><sub><b>Vocabulary Library</b><br>Saved words, search, and German audio playback</sub> | <img src="docs/screenshots/word-detail.png" width="220" alt="DeutschFlow linguistic word detail" /><br><sub><b>Word Spotlight</b><br>Grammar gender, forms, synonyms & example context</sub> | <img src="docs/screenshots/study.png" width="220" alt="DeutschFlow flashcard study session" /><br><sub><b>Spaced Repetition</b><br>SM-2 scheduling with 4-tier retention grading</sub> |
 
-The native app uses Kotlin, Jetpack Compose, Material 3, MVVM/UDF, Hilt, Room, DataStore, WorkManager, and Glance. Room schema migrations are exported under `app/schemas` and tested against historical versions. Speech uses Android's on-device recognizer; text-to-speech uses the platform TTS engine.
+| Pronunciation Shadowing | AI Situational Roleplay | Progress Dashboard | Privacy & Settings |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/practice.png" width="220" alt="DeutschFlow speech repetition and shadowing" /><br><sub><b>Pronunciation Shadowing</b><br>Sentence repetition with intelligibility scoring</sub> | <img src="docs/screenshots/roleplay.png" width="220" alt="DeutschFlow situational AI roleplay" /><br><sub><b>AI Roleplay</b><br>Contextual dialogues (e.g. bakery, clinic, transit)</sub> | <img src="docs/screenshots/dashboard.png" width="220" alt="DeutschFlow study dashboard and heatmap" /><br><sub><b>Learning Dashboard</b><br>Daily XP goal, streak tracking & activity heatmap</sub> | <img src="docs/screenshots/settings.png" width="220" alt="DeutschFlow preferences and privacy settings" /><br><sub><b>Settings & Privacy</b><br>On-device voice selection, CEFR level & key vault</sub> |
 
-### Web
+---
 
-`web/` is a Next.js PWA using React, TypeScript, Tailwind CSS, Dexie, IndexedDB, Vitest, and Playwright. The service worker caches the application shell and same-origin static assets. The Next.js access gate runs in `src/proxy.ts`, the Next.js 16 replacement for the deprecated `middleware.ts` convention.
+## ✨ Core Features
 
-### Shared behavior
+- **🎙️ Speech Transcription**: Multi-dialect German recognition (`de-DE`, `de-AT`, `de-CH`). Android explicitly binds the on-device recognizer for offline transcription privacy.
+- **⚡ AI Intelligence & Grammar Breakdown**: Groq-powered translations (`openai/gpt-oss-120b`), grammatical gender indicators (`der`, `die`, `das`), case identification (`Nominativ`, `Akkusativ`, `Dativ`, `Genitiv`), contextual examples, and configurable CEFR levels (`A1` through `C1+`).
+- **💬 Situational AI Roleplay**: 8 curated real-world conversational scenarios (Bakery, Café, Hotel, Doctor, Train Station, Apartment Viewing, Job Interview, Small Talk) with automatic opening prompts and contextual translations.
+- **🧠 Spaced Repetition (SRS)**: SuperMemo-2 (SM-2) derived algorithm with 4-tier grading (*Again*, *Hard*, *Good*, *Easy*), daily XP goals, streak calculations, and immutable review event history.
+- **🗣️ Pronunciation Shadowing**: Word-level intelligibility comparison with Unicode-aware tokenization and automatic German letter folding (`ü` $\rightarrow$ `ue`, `ß` $\rightarrow$ `ss`, apostrophe contractions).
+- **📚 Local Vocabulary Library**: Additive vocabulary storage, fast search, audio pronunciation playback, and custom phrase management.
+- **🔒 Privacy-First Architecture**: Audio never leaves the phone on Android; API credentials stay encrypted at rest via hardware-backed Android Keystore or WebCrypto IndexedDB. Zero third-party telemetry, ads, or analytics.
+- **📱 Android Integrations**: Glance home-screen widget and periodic daily-word notification via WorkManager.
+- **🌐 Offline-Ready PWA**: Responsive application shell with service-worker caching, keyboard navigation, password-gated deployment, and JSON backup export/import.
 
-The clients keep their implementations idiomatic to each platform. Cross-platform JSON fixtures exercise SRS, streak, normalization, and data-contract behavior where practical. `tools/audit_repo.py` checks translation parity, palette parity, contrast, and repository hygiene.
+---
 
-## Privacy model
+## 🏗️ Architecture
 
-DeutschFlow does not operate account-based cloud sync.
-
-- Android learning data is stored in the local Room database. Android OS cloud backup and device transfer are enabled for that database, so the operating system may copy learning data according to the device/account backup settings.
-- The Android settings DataStore is excluded from OS cloud backup and device transfer. Groq API keys are encrypted with AES-GCM under Android Keystore; failed legacy-key migration is reported and does not delete the recoverable key or downgrade new writes to plaintext.
-- Web learning data and preferences are stored in the browser's IndexedDB. Browsers may evict site data, so use the manual backup feature. A previously loaded app shell and IndexedDB data may remain available in that browser profile even after a network session expires.
-- Web API keys are encrypted with AES-GCM under a non-extractable WebCrypto key stored in IndexedDB. This protects copied storage at rest, but JavaScript running on the same origin must be able to decrypt the key to call Groq.
-- Text submitted for translation, grammar analysis, or roleplay is sent to Groq with the user's API key. Audio is not sent to Groq.
-- Android explicitly requests the on-device speech recognizer. Availability depends on the device and installed language model.
-- Browser speech recognition is vendor-provided and may send audio to the browser vendor. Firefox currently falls back to typed roleplay because it does not expose the required Web Speech recognition API.
-- Neither client includes an analytics SDK, advertising SDK, or crash reporter.
-
-## Repository structure
+DeutschFlow maintains two independent clients that share domain behavior and test contracts rather than runtime source code:
 
 ```text
-app/                    Android application, unit tests, instrumentation tests, Room schemas
-web/                    Next.js PWA, Vitest tests, Playwright tests
-app/src/test/resources/ Shared behavioral fixtures consumed by Kotlin and TypeScript tests
-docs/screenshots/       Product and Playwright visual baselines
-tools/                  Repository, contrast, and palette checks
-.github/workflows/      CI
+deutschflow/
+├── app/                        Android native application (Kotlin, Jetpack Compose, Room)
+│   ├── schemas/                Versioned Room database schemas (versions 2–16)
+│   └── src/test/resources/     Shared cross-platform behavioral contract fixtures
+├── web/                        Progressive Web App (Next.js 16, React 19, TypeScript, Dexie)
+│   └── tests/                  Vitest unit/contract tests and Playwright E2E suites
+├── docs/screenshots/           Curated mobile screenshots and Playwright visual baselines
+└── tools/                      Static repository audit, WCAG contrast, and palette parity tools
 ```
 
-## Requirements
+### Android Architecture
+- **Language & Toolchain**: Kotlin 2.4, Android Gradle Plugin 9.4, KSP 2.3, compileSdk 37, targetSdk 37, minSdk 31 (Android 12+).
+- **UI & Architecture**: 100% Jetpack Compose with Material 3, MVVM / Unidirectional Data Flow (UDF), Hilt dependency injection, Navigation Compose with adaptive navigation bar/rail.
+- **Persistence**: Room 2.8 database (version 16) with strict migrations and immutable entity representations. Settings stored via Jetpack DataStore Preferences.
+- **Speech & Audio**: Android `SpeechRecognizer` using `createOnDeviceSpeechRecognizer` with `EXTRA_PREFER_OFFLINE`; platform `TextToSpeech` with automatic preference for on-device voices (`!voice.isNetworkConnectionRequired`).
+- **Security**: AES-GCM encryption under Android Keystore for API keys.
 
-- Git
-- JDK 21
-- Android Studio with Android SDK Platform 37
-- Node.js 22 and npm
-- Android 12 / API 31 or newer for the app
-- A Groq API key for AI features
+### Web Architecture
+- **Framework & Libraries**: Next.js 16 (App Router), React 19, TypeScript 5.8, Tailwind CSS 4.
+- **Persistence**: IndexedDB via Dexie 4 (schema version 8) supporting additive merge and JSON backup portability.
+- **Authentication**: Zero-external-dependency access gate via `src/proxy.ts` (Next.js 16) with timing-safe HMAC-SHA256 session tokens.
+- **Security & Audio**: AES-GCM encryption with non-extractable WebCrypto keys; Web Speech API with automatic local voice preference (`voice.localService === true`).
+- **Testing**: Vitest for unit/contract tests; Playwright for cross-browser (Chromium, Firefox, WebKit) and visual regression testing.
 
-## Android setup
+### Shared Behavioral Contract
+Both clients execute identical test suites against a shared JSON contract fixture (`app/src/test/resources/cross-platform-contract.json`). This ensures parity across:
+- SuperMemo-2 mathematical scheduling intervals, review counts, and ease factors.
+- German key folding and Unicode normalization (`NFC`, umlauts, eszett, apostrophes).
+- Practice tokenization and word intelligibility evaluation.
+- Groq AI payload constraints, token thresholds, and strict JSON output parsing.
+
+---
+
+## 🔒 Privacy & Security Model
+
+DeutschFlow is designed around local-first data ownership:
+
+- **Audio Privacy (Android)**: Speech recognition explicitly requests `createOnDeviceSpeechRecognizer`. When the device has the German offline speech pack installed, audio is transcribed on-device and never transmitted over the network.
+- **Audio Privacy (Web)**: Browser speech recognition uses the platform's Web Speech API, which delegates to the browser vendor (Google for Chrome/Edge, Apple for Safari; Firefox falls back to text input). The in-app Settings screen clearly documents this difference.
+- **Speech Synthesis (TTS)**: Both clients query available voices and prioritize on-device voices to ensure synthesized German audio remains local whenever possible.
+- **AI Processing**: When configured with a user-provided Groq API key, only text prompts (transcriptions, sentences, or roleplay lines) are sent to Groq via HTTPS. Audio is never sent to Groq.
+- **Local Storage**: All learning history, flashcards, transcripts, and stats reside on your device (Room SQLite on Android; IndexedDB on Web).
+- **Encrypted Keys**: API keys are encrypted at rest with AES-GCM—using hardware-backed Android Keystore on Android, and a non-extractable WebCrypto key in IndexedDB on Web.
+- **Zero Telemetry**: No analytics SDKs, advertising libraries, tracking pixels, or third-party crash reporters are bundled in either client.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Git**
+- **JDK 21** (Temurin recommended)
+- **Android Studio** (Ladybug / Meerkat or newer) with **Android SDK Platform 37**
+- **Node.js 22+** and **npm** (for web development)
+- **Groq API Key**: Optional for core UI and practice; required for AI translation, grammar notes, and roleplay. Obtain a free key at [console.groq.com](https://console.groq.com/).
+
+---
+
+### Android Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/shareef01/deutschflow.git
+   cd deutschflow
+   ```
+
+2. **Build and install:**
+   ```bash
+   ./gradlew assembleDebug
+   ```
+   Open the repository in Android Studio or install `app/build/outputs/apk/debug/app-debug.apk` directly onto an Android 12+ (API 31+) device or emulator.
+
+3. **Configure API Key:**
+   - Tap the Settings icon (`⚙️`) in the top bar.
+   - Enter your Groq API key.
+   - *(Optional)* Select your preferred CEFR level (`A1`–`C1+`) and recognition dialect (`de-DE`, `de-AT`, `de-CH`).
+
+#### Useful Android Commands
 
 ```bash
-git clone https://github.com/shareef01/deutschflow.git
-cd deutschflow
-./gradlew assembleDebug
+./gradlew testDebugUnitTest          # Run unit and contract tests
+./gradlew lintDebug                  # Run Android lint
+./gradlew assembleRelease            # Compile unsigned release APK
+./gradlew connectedDebugAndroidTest  # Run on-device instrumentation tests (API 31+ required)
 ```
 
-Open the project in Android Studio or install `app/build/outputs/apk/debug/app-debug.apk`. Add a Groq API key in **Settings**. Speech recognition additionally requires microphone permission and an available on-device German model.
+---
 
-Useful Android checks:
+### Web PWA Setup
+
+1. **Navigate to the web workspace:**
+   ```bash
+   cd web
+   npm ci
+   ```
+
+2. **Configure environment:**
+   Create a `.env.local` file inside `web/`:
+   ```dotenv
+   SITE_PASSWORD=choose-a-long-random-password
+   SESSION_SECRET=replace-with-at-least-32-random-bytes
+   ```
+   *Tip: Generate a random secret with `openssl rand -base64 32`.*
+
+3. **Run development server:**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000), enter your `SITE_PASSWORD`, and enter your Groq API key in Settings.
+
+#### Useful Web Commands
 
 ```bash
-./gradlew testDebugUnitTest
-./gradlew lintDebug
-./gradlew assembleDebug assembleRelease
-./gradlew connectedDebugAndroidTest   # requires a running API 31+ emulator/device
+npm run lint         # ESLint check (zero-warning policy enforced)
+npm run typecheck    # TypeScript compiler check (tsc --noEmit)
+npm test             # Vitest unit and domain contract tests
+npm run build        # Production Next.js build
+npm run test:e2e     # Playwright cross-browser tests
 ```
 
-The release build is unsigned unless local signing configuration is supplied.
+---
 
-## Web setup
+## 🧪 Quality & Verification
 
-```bash
-cd web
-npm ci
-```
+Every push and pull request is validated by [GitHub Actions](.github/workflows/build.yml):
 
-Create `web/.env.local`:
+- **Static Repository Audit**: `python tools/audit_repo.py` enforces:
+  - 1:1 parity between English and German strings across Android (`strings.xml`) and Web (`i18n.ts`).
+  - Palette parity between Kotlin and Tailwind color definitions.
+  - WCAG 2.1 contrast compliance for all light and dark theme token pairings (`tools/contrast.py`).
+  - Repository hygiene rules (detecting accidental temporary files or debug artifacts).
+- **Android Quality**: Automated unit tests, domain contract tests, Room migration walk (v2 through v16), and Android lint.
+- **Web Quality**: ESLint, TypeScript compiler checks, Vitest test suite, production build, and Playwright browser regression tests.
 
-```dotenv
-SITE_PASSWORD=choose-a-long-random-password
-SESSION_SECRET=replace-with-at-least-32-random-bytes
-```
+---
 
-Generate a signing secret with a cryptographically secure tool, for example:
+## 💾 Backup & Data Portability
 
-```bash
-openssl rand -base64 32
-```
+- **Web Library Backup**: In the Web app under **Settings $\rightarrow$ Backup**, export your entire learning history (vocabulary, transcripts, review events, XP, and streaks) to a versioned JSON file.
+- **Additive Import**: Importing a backup file safely merges records:
+  - Existing local cards and transcripts are preserved.
+  - Matching German vocabulary entries merge linguistic metadata without resetting SRS progress.
+  - XP never decreases, and activity streaks are deterministically recomputed.
+- **Android Backup**: The Room database participates in standard Android OS cloud backup and device-to-device transfer. Keystore-encrypted settings and API keys are deliberately excluded from cloud backup to protect credentials.
 
-Then run:
+---
 
-```bash
-npm run dev
-```
+## 📄 License
 
-Open <http://localhost:3000>. Enter the site password, then add the Groq API key in the app's Settings page. Groq credentials are user data and must not be placed in `NEXT_PUBLIC_*` variables.
-
-### Environment variables
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `SITE_PASSWORD` | Yes | Authenticates access to the deployed instance |
-| `SESSION_SECRET` | Yes | Independent HMAC key for session cookies |
-| `VERCEL_GIT_COMMIT_SHA` | Vercel-provided | Stable build/cache identifier |
-
-The access cookie is HttpOnly, Secure in production, SameSite=Lax, path-scoped to `/`, and expires after 30 days. Rotating `SESSION_SECRET` invalidates every existing session. Redirect targets are restricted to local application paths.
-
-Login throttling is intentionally small and process-local. It returns an immediate cooldown response rather than sleeping a server invocation. It limits naive guessing on one long-lived process, but serverless instances do not share counters and cold starts reset them. Use a high-entropy password; deploy an external durable rate limiter only when the hosting architecture provides one cleanly.
-
-## Web testing
-
-```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npx playwright install chromium firefox webkit
-npm run test:e2e
-```
-
-Chromium runs the full browser and visual suite. Firefox and WebKit run compatibility and speech-fallback smoke coverage. Visual assertions compare against `docs/screenshots/web` with deterministic animation/caret settings and retain Playwright diffs in the HTML report.
-
-To intentionally refresh reviewed visual baselines:
-
-```bash
-npx playwright test visual-audit.spec.ts --project=chromium --update-snapshots
-```
-
-## Backup and import
-
-The web Settings page exports versioned JSON containing vocabulary, transcripts, XP/streak statistics, and daily activity. API keys, UI preferences, and the current roleplay conversation are excluded.
-
-Import uses additive merge semantics:
-
-- local rows absent from the backup remain;
-- stable record IDs prevent duplicate imports;
-- German-equivalent vocabulary keys merge;
-- an SRS schedule is kept as a coherent set rather than mixing dependent fields;
-- XP never decreases;
-- streak and last-activity state are recomputed from merged activity history;
-- malformed, oversized, unsupported-version, or invalid-calendar data is rejected transactionally.
-
-Android has no manual JSON import/export feature. Its Room data may participate in Android OS backup and device transfer as described above.
-
-## Security
-
-- Session authentication and session signing use independent secrets.
-- Password and signature checks use length-safe constant-time comparisons.
-- The app fails closed when either web access-gate secret is absent.
-- Security headers include CSP, frame denial, MIME-sniffing protection, Referrer-Policy, and Permissions-Policy.
-- The CSP permits only same-origin application resources and the Groq API connection. Next.js currently requires inline bootstrap/style allowances for this static offline architecture; the app does not render untrusted HTML or load third-party scripts.
-- The service worker never intercepts Groq POST requests and does not cache login redirects under private application routes.
-- GitHub Actions use minimal read permissions and SHA-pinned actions. Dependabot covers Gradle, npm, and workflow actions.
-
-Do not commit `.env.local`, API keys, passwords, signing keys, or generated credentials.
-
-## CI
-
-The GitHub Actions workflow runs:
-
-- repository parity/contrast/hygiene audit;
-- Android unit tests, lint, and release compilation;
-- web lint, type checking, unit tests, production build, and browser tests;
-- Android instrumentation tests on the minimum supported API plus targeted modern-platform coverage;
-- report and Playwright artifact uploads even on failure.
-
-## Known limitations
-
-- AI translation and roleplay require network access, a user-supplied Groq key, and the configured Groq model remaining available.
-- Browser speech support and privacy characteristics vary by vendor; typed roleplay remains available without recognition.
-- The PWA is local-first, not a synchronization service. Clearing or losing browser site data without an export loses the web library.
-- Process-local login throttling is not a globally consistent serverless rate limit.
-- Android hardware-backed Keystore storage depends on device capabilities.
-
-## Development workflow
-
-Keep data migrations backward-compatible and add a regression test for every fixed invariant. Run `python tools/audit_repo.py`, both platform unit suites, relevant browser/instrumentation tests, and production builds before opening a pull request. Update visual baselines only after reviewing the diff.
-
-## License
-
-DeutschFlow is available under the [MIT License](LICENSE).
+DeutschFlow is open-source software licensed under the [MIT License](LICENSE).
