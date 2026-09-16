@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
-import { getApiKey } from "@/lib/db/settings";
+import { getApiKey, getCefrLevel } from "@/lib/db/settings";
 import { insertTranscript, saveVocabulary, updateTranscriptAnalysis } from "@/lib/db/repository";
 import { isRecognitionSupported, recognizer, type RecognizerState } from "@/lib/speech/recognizer";
 import { resolveRecognitionDialect } from "@/lib/speech/dialect";
@@ -98,6 +98,8 @@ export function useTranscript() {
 
   const handleUtterance = useCallback(async (text: string) => {
     const token = ++utteranceToken.current;
+    setState((prev) => ({ ...prev, finalText: text, isTranslating: true,
+      translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
     let transcriptId: number | null = null;
     try {
       transcriptId = await insertTranscript(db, text);
@@ -114,29 +116,28 @@ export function useTranscript() {
     setState((prev) => ({ ...prev, isTranslating: true }));
     try {
       const apiKey = (await getApiKey(db)) ?? "";
-      const result = await vocabularyProcessor.processText(text, apiKey);
+      const result = await vocabularyProcessor.processText(text, apiKey, await getCefrLevel(db));
+      if (token !== utteranceToken.current) return;
+      let storageFailed = transcriptId === null;
+      if (result.kind === "success" && transcriptId !== null) {
+        try {
+          await updateTranscriptAnalysis(db, transcriptId, result.translation, JSON.stringify({
+            keywords: result.keywords, example: result.example, grammarNotes: result.grammarNotes,
+          }));
+        } catch {
+          storageFailed = true;
+        }
+      }
       if (token !== utteranceToken.current) return;
       setState((prev) => {
         if (result.kind === "success") {
-          if (transcriptId !== null) {
-            void updateTranscriptAnalysis(
-              db,
-              transcriptId,
-              result.translation,
-              JSON.stringify({
-                keywords: result.keywords,
-                example: result.example,
-                grammarNotes: result.grammarNotes,
-              })
-            );
-          }
           return {
             ...prev,
             translation: result.translation,
             suggestedWords: result.keywords,
             example: result.example,
             grammarNotes: result.grammarNotes,
-            aiError: null,
+            aiError: storageFailed ? t("ai.storageFailed") : null,
           };
         }
         return { ...prev, translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: result.message };
@@ -183,7 +184,7 @@ export function useTranscript() {
     // A new session clears the screen; an older utterance still in flight would
     // otherwise repopulate it with a result for text that is no longer shown.
     utteranceToken.current++;
-    setState((prev) => ({ ...prev, translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
+    setState((prev) => ({ ...prev, finalText: "", translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
 
     try {
       const granted = await recognizer.requestMicrophonePermission();
@@ -257,7 +258,7 @@ export function useTranscript() {
     void (async () => {
       try {
         const apiKey = (await getApiKey(db)) ?? "";
-        const result = await vocabularyProcessor.interrogateWord(trimmed, apiKey);
+        const result = await vocabularyProcessor.interrogateWord(trimmed, apiKey, await getCefrLevel(db));
         if (token !== interrogationToken.current) return;
         setState((prev) =>
           result.kind === "success"
@@ -312,7 +313,7 @@ export function useTranscript() {
   const view: TranscriptState = {
     ...state,
     partialText: recognizerState.partialText,
-    finalText: recognizerState.finalText,
+    finalText: state.finalText,
     isListening: recognizerState.isListening,
     isProcessing: recognizerState.isProcessing,
     rmsLevel: recognizerState.rmsLevel,

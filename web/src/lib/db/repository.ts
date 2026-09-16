@@ -200,6 +200,14 @@ export async function deleteTranscript(
   if (transcript.id !== undefined) await db.transcripts.delete(transcript.id);
 }
 
+/** Undo keeps the original identity and analysis and never replaces a newer copy. */
+export async function restoreTranscript(db: DeutschFlowDB, transcript: TranscriptEntry): Promise<void> {
+  await db.transaction("rw", db.transcripts, async () => {
+    const existing = await db.transcripts.filter((row) => row.remoteId === transcript.remoteId).first();
+    if (!existing) await db.transcripts.add({ ...transcript, id: undefined });
+  });
+}
+
 export async function deleteVocabulary(db: DeutschFlowDB, entry: VocabularyEntry): Promise<void> {
   if (entry.id !== undefined) await db.vocabulary.delete(entry.id);
 }
@@ -328,7 +336,7 @@ export async function rewardXp(db: DeutschFlowDB, points: number = XP_PER_CARD):
 export async function clearAllProgress(db: DeutschFlowDB): Promise<void> {
   await db.transaction(
     "rw",
-    db.vocabulary, db.transcripts, db.userStats, db.activityLog, db.roleplayMessages,
+    [db.vocabulary, db.transcripts, db.userStats, db.activityLog, db.roleplayMessages, db.reviewEvents],
     async () => {
       await db.vocabulary.clear();
       await db.transcripts.clear();
@@ -337,6 +345,7 @@ export async function clearAllProgress(db: DeutschFlowDB): Promise<void> {
       // The saved roleplay is the user's speech too. "Clear all progress" that
       // left a conversation behind would be the one thing it promised not to do.
       await db.roleplayMessages.clear();
+      await db.reviewEvents.clear();
     }
   );
 }

@@ -8,6 +8,7 @@ import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.service.ReviewQuality
 import com.aus.deutschflow.service.SRSEngine
 import com.aus.deutschflow.service.TTSHelper
@@ -75,6 +76,22 @@ class StudyViewModelTest {
     }
 
     private suspend fun xp(): Int? = database.userStatsDao().getUserStatsOnce()?.xp
+
+    @Test
+    fun elapsedTimeUsesPreviousReviewEvenWhenCardWasSavedToday() = runBlocking {
+        startSessionOf(1)
+        val card = viewModel.studyList.value.first()
+        database.reviewEventDao().insert(ReviewEventEntity(
+            vocabularyId = card.id, rating = "AGAIN", scheduledDays = 0, actualDays = 0,
+            reviewedAtTimestamp = System.currentTimeMillis() - 2 * 86_400_000L - 60_000L,
+            isExtraPractice = false
+        ))
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(awaitCondition {
+            database.reviewEventDao().getAllEvents().first().size == 2 && !viewModel.isSubmitting.value
+        })
+        assertEquals(2, database.reviewEventDao().getAllEvents().first().first().actualDays)
+    }
 
     /** Seeds [count] words and starts a session over them. */
     private suspend fun startSessionOf(count: Int) {

@@ -7,6 +7,14 @@ import java.time.ZoneId
 
 class StudyStreakTest {
 
+    @Test
+    fun `review elapsed time starts at the previous review rather than card creation`() {
+        val now = 1_900_000_000_000L
+        assertEquals(0, StudyViewModel.elapsedReviewDays(null, now))
+        assertEquals(2, StudyViewModel.elapsedReviewDays(now - 2 * 86_400_000L, now))
+        assertEquals(0, StudyViewModel.elapsedReviewDays(now + 86_400_000L, now))
+    }
+
     private fun at(dateTime: LocalDateTime): Long =
         dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 

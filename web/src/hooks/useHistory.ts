@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import type { TranscriptEntry } from "@/lib/db/schema";
 import {
   deleteTranscript as deleteTranscriptRow,
-  insertTranscript,
+  restoreTranscript as restoreTranscriptRow,
   observeTranscripts,
 } from "@/lib/db/repository";
 import { useLive } from "./useLive";
@@ -37,8 +37,8 @@ export function useHistory() {
    * Puts a deleted transcript back, for the snackbar's Undo. Re-inserted with
    * its original timestamp, so it lands exactly where it was in the list.
    */
-  const restoreTranscript = (transcript: { fullText: string; timestamp: number }) => {
-    void insertTranscript(db, transcript.fullText, transcript.timestamp);
+  const restoreTranscript = (transcript: TranscriptEntry) => {
+    void restoreTranscriptRow(db, transcript);
   };
 
   return { query, setQuery, transcripts: filtered, deleteTranscript, restoreTranscript };

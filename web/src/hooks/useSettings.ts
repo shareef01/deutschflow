@@ -101,7 +101,7 @@ export function useSettings() {
   const downloadBackup = useCallback(async (): Promise<TKey> => {
     try {
       const backup = await exportLibrary(db);
-      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      const blob = new Blob([JSON.stringify(backup)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
@@ -118,8 +118,9 @@ export function useSettings() {
       }
       setLastBackupTime(now);
       return "settings.backupDownloaded";
-    } catch {
-      return "settings.backupFailed";
+    } catch (error) {
+      return error instanceof ImportError && error.reason === "capacity"
+        ? "settings.backupCapacity" : "settings.backupFailed";
     }
   }, []);
 
@@ -134,12 +135,14 @@ export function useSettings() {
   const restoreBackup = useCallback(async (file: File): Promise<TKey> => {
     try {
       if (file.size > MAX_BACKUP_FILE_BYTES) {
-        throw new ImportError("invalid", "Backup file exceeds maximum allowed size.");
+        throw new ImportError("capacity", "Backup file exceeds maximum allowed size.");
       }
       await importLibrary(db, JSON.parse(await file.text()));
       return "settings.backupRestored";
     } catch (error) {
       if (error instanceof ImportError) {
+        if (error.reason === "storage") return "settings.backupStorageFailed";
+        if (error.reason === "capacity") return "settings.backupCapacity";
         return error.reason === "newer" ? "settings.backupNewer" : "settings.backupInvalid";
       }
       // Not a rejected file: JSON.parse choking on something that is not JSON is

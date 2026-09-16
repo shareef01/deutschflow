@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { clearConversation, db, loadConversation, saveConversationTurn } from "@/lib/db";
-import { getApiKey, getCefrLevel } from "@/lib/db/settings";
+import { getApiKey, getAutoPlay, getCefrLevel } from "@/lib/db/settings";
 import { startRoleplay, continueRoleplay } from "@/lib/ai/groq";
 import { DEFAULT_SCENARIO_TITLE } from "@/lib/ai/scenarios";
 import { t } from "@/lib/i18n";
@@ -115,7 +115,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
                 historyRef.current = [reply];
                 setMessages(historyRef.current);
                 persist(reply, 0);
-                tts.speak(result.aiResponse);
+                if (await getAutoPlay(db)) tts.speak(result.aiResponse);
             } else {
                 setError(result.message);
             }
@@ -167,7 +167,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
                 historyRef.current = [...historyRef.current, reply];
                 setMessages(historyRef.current);
                 persist(reply, historyRef.current.length - 1);
-                tts.speak(result.aiResponse);
+                if (await getAutoPlay(db)) tts.speak(result.aiResponse);
             } else {
                 setError(result.message);
             }

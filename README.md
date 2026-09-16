@@ -196,10 +196,12 @@ Every push and pull request is validated by [GitHub Actions](.github/workflows/b
 ## 💾 Backup & Data Portability
 
 - **Web Library Backup**: In the Web app under **Settings $\rightarrow$ Backup**, export your entire learning history (vocabulary, transcripts, review events, XP, and streaks) to a versioned JSON file.
+- **Backup format v2**: Includes saved transcript translations/analysis and the current roleplay conversation, with review events linked to the restored vocabulary IDs. Version 1 backups remain supported. Backups are limited to 10 MB; an oversized export is reported before downloading a file, and no library data is removed.
 - **Additive Import**: Importing a backup file safely merges records:
   - Existing local cards and transcripts are preserved.
   - Matching German vocabulary entries merge linguistic metadata without resetting SRS progress.
   - XP never decreases, and activity streaks are deterministically recomputed.
+  - Review events merge by stable identity. An existing roleplay conversation is preserved; the backup conversation is restored when no local conversation exists.
 - **Android Backup**: The Room database participates in standard Android OS cloud backup and device-to-device transfer. Keystore-encrypted settings and API keys are deliberately excluded from cloud backup to protect credentials.
 
 ---

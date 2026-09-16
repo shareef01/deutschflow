@@ -13,12 +13,12 @@ import {
 } from "./groq";
 
 export class VocabularyProcessor {
-  async processText(text: string, apiKey: string): Promise<AIResult> {
-    return groqTranslate(text, apiKey);
+  async processText(text: string, apiKey: string, learnerLevel?: string): Promise<AIResult> {
+    return groqTranslate(text, apiKey, undefined, learnerLevel);
   }
 
-  async interrogateWord(word: string, apiKey: string): Promise<WordDetailsResult> {
-    return groqInterrogate(word, apiKey);
+  async interrogateWord(word: string, apiKey: string, learnerLevel?: string): Promise<WordDetailsResult> {
+    return groqInterrogate(word, apiKey, undefined, learnerLevel);
   }
 
   generateExample(word: string): string {
