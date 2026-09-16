@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
-import { getAllVocabulary, getDueVocabulary, rewardXp, XP_PER_CARD, updateVocabulary } from "@/lib/db/repository";
+import { getAllVocabulary, getDueVocabulary } from "@/lib/db/repository";
+import { recordReview, StaleReviewError } from "@/lib/db/review";
 import { getAutoPlay } from "@/lib/db/settings";
 import { tts } from "@/lib/speech/tts";
 import type { VocabularyEntry } from "@/lib/db/schema";
 import type { TKey } from "@/lib/i18n";
-import { ReviewQuality, calculateNextReview } from "@/lib/ai/srs";
+import { ReviewQuality } from "@/lib/ai/srs";
 
 export type StudyStatus = "loading" | "ready" | "error";
 
@@ -102,43 +103,16 @@ export function useStudy() {
     inFlight.current = true;
 
     try {
-      // 1. Calculate next SRS state.
+      // Commit the schedule, event, and reward against the current database row.
       //
       // On extra practice a success changes nothing: the card was not due, and
       // rewarding the user for drilling by pushing the word further away is the
       // opposite of what they asked for. A failure still counts — finding out early
       // that a card is not known is real information.
-      const rescheduled = calculateNextReview(card, quality);
-      const persisted =
-        !isExtraPractice || quality === ReviewQuality.AGAIN ? rescheduled : card;
+      const persisted = await recordReview(db, card, quality, isExtraPractice);
+      setReviewError(null);
 
-      const now = Date.now();
-      const actualDays = card.timestamp ? Math.max(0, Math.floor((now - card.timestamp) / 86_400_000)) : 0;
-      const ratingMap: Record<ReviewQuality, "AGAIN" | "HARD" | "GOOD" | "EASY"> = {
-        [ReviewQuality.AGAIN]: "AGAIN",
-        [ReviewQuality.HARD]: "HARD",
-        [ReviewQuality.GOOD]: "GOOD",
-        [ReviewQuality.EASY]: "EASY",
-      };
-
-      // 2. Persist the schedule, review event, and XP together
-      await db.transaction("rw", db.vocabulary, db.userStats, db.activityLog, db.reviewEvents, async () => {
-        await updateVocabulary(db, persisted);
-        if (!isExtraPractice && quality >= ReviewQuality.GOOD) {
-          await rewardXp(db, XP_PER_CARD);
-        }
-        await db.reviewEvents.add({
-          vocabularyId: card.id ?? 0,
-          rating: ratingMap[quality],
-          scheduledDays: card.interval,
-          actualDays,
-          reviewedAtTimestamp: now,
-          isExtraPractice,
-          remoteId: crypto.randomUUID(),
-        });
-      });
-
-      // 3. Update the queue.
+      // Update the queue only after the transaction commits.
       //
       // Computed here rather than inside a setStudyList updater. Updaters must be
       // pure, and that one called setCurrentIndex from inside itself; StrictMode
@@ -156,15 +130,21 @@ export function useStudy() {
       // only moves when it ran off the end.
       setCurrentIndex(currentIndex >= nextList.length ? 0 : currentIndex);
       setIsFlipped(false);
-    } catch {
-      // The transaction rolled back, so the card is exactly where it was.
-      setReviewError("study.reviewNotSaved");
+    } catch (error) {
+      // Refresh stale sessions without awarding XP or overwriting the current row.
+      if (error instanceof StaleReviewError) {
+        setReviewError("study.sessionChanged");
+        await startSession();
+      } else {
+        setReviewError("study.reviewNotSaved");
+      }
     } finally {
       inFlight.current = false;
     }
-  }, [studyList, currentIndex, isExtraPractice]);
+  }, [studyList, currentIndex, isExtraPractice, startSession]);
 
   const skipCard = useCallback(() => {
+    if (inFlight.current) return;
     if (studyList.length > 0) {
       setCurrentIndex((index) => (index + 1) % studyList.length);
     }

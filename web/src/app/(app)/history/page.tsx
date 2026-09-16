@@ -97,10 +97,7 @@ export default function HistoryPage() {
                     onDelete={() => {
                       deleteTranscript(transcript);
                       showSnackbar(t("history.deleted"), () =>
-                        restoreTranscript({
-                          fullText: transcript.fullText,
-                          timestamp: transcript.timestamp,
-                        })
+                        restoreTranscript(transcript)
                       );
                     }}
                     t={t}

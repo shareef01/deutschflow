@@ -240,7 +240,7 @@ export default function TranscriptPage() {
       <div className="flex flex-1 flex-col items-center justify-center pb-6">
         <ErrorBanner message={state.errorState} />
 
-        <OracleMic
+        {speechSupported ? <OracleMic
           icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
           label={
             state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
@@ -248,7 +248,7 @@ export default function TranscriptPage() {
           isListening={state.isListening}
           isBusy={isBusy}
           onClick={state.isListening ? stopListening : () => void startListening()}
-        />
+        /> : <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />}
 
         {(state.isListening || isBusy) && (
           <p

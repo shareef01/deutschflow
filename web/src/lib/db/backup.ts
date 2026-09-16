@@ -20,7 +20,7 @@ import { foldGermanKey } from "./schema";
  */
 
 /** Bumped only if the shape changes in a way an older import cannot read. */
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export interface LibraryBackup {
   format: "deutschflow-library";
@@ -30,25 +30,37 @@ export interface LibraryBackup {
   transcripts: unknown[];
   userStats: unknown[];
   activityLog: unknown[];
+  reviewEvents?: unknown[];
+  roleplayMessages?: unknown[];
 }
 
 export async function exportLibrary(db: DeutschFlowDB): Promise<LibraryBackup> {
-  const [vocabulary, transcripts, userStats, activityLog] = await Promise.all([
-    db.vocabulary.toArray(),
-    db.transcripts.toArray(),
-    db.userStats.toArray(),
-    db.activityLog.toArray(),
-  ]);
+  return db.transaction("r", [db.vocabulary, db.transcripts, db.userStats, db.activityLog,
+    db.reviewEvents, db.roleplayMessages], async () => {
+    const [vocabulary, transcripts, userStats, activityLog, reviewEvents, roleplayMessages] = await Promise.all([
+      db.vocabulary.toArray(),
+      db.transcripts.toArray(),
+      db.userStats.toArray(),
+      db.activityLog.toArray(),
+      db.reviewEvents.toArray(),
+      db.roleplayMessages.orderBy("position").toArray(),
+    ]);
 
-  return {
-    format: "deutschflow-library",
-    version: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
-    vocabulary,
-    transcripts,
-    userStats,
-    activityLog,
-  };
+    const backup: LibraryBackup = {
+      format: "deutschflow-library",
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      vocabulary,
+      transcripts,
+      userStats,
+      activityLog,
+      reviewEvents,
+      roleplayMessages,
+    };
+    // Never offer a successful download that this application cannot restore.
+    validateBackup(backup);
+    return backup;
+  });
 }
 
 export interface ImportResult {
@@ -85,16 +97,11 @@ function num(value: unknown, fallback: number): number {
  */
 export const MAX_BACKUP_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-export const MAX_VOCABULARY_ROWS = 10_000;
-export const MAX_TRANSCRIPT_ROWS = 5_000;
-export const MAX_ACTIVITY_ROWS = 1_000;
 // The schema has exactly one aggregate stats row (id = 1). Accepting extras would
 // make the selected row depend on input ordering while silently discarding data.
 export const MAX_USER_STATS_ROWS = 1;
 
-export const MAX_FIELD_LENGTH = 2_000;
-export const MAX_SHORT_FIELD_LENGTH = 200;
-export const MAX_TRANSCRIPT_LENGTH = 10_000;
+// Limit the whole payload, not individual legitimate phrases or years of history.
 export const MAX_REMOTE_ID_LENGTH = 100;
 
 const MAX_FUTURE_TIMESTAMP = 4_102_444_800_000; // 2100-01-01T00:00:00Z
@@ -219,7 +226,7 @@ export function calculateStreakFromDates(dates: string[], today = new Date()): n
 /**
  * Why a restore failed, in a form the caller can translate.
  */
-export type ImportFailure = "invalid" | "newer" | "storage";
+export type ImportFailure = "invalid" | "newer" | "storage" | "capacity";
 
 export class ImportError extends Error {
   constructor(readonly reason: ImportFailure, message: string) {
@@ -228,10 +235,7 @@ export class ImportError extends Error {
   }
 }
 
-export async function importLibrary(
-  db: DeutschFlowDB,
-  backup: unknown
-): Promise<ImportResult> {
+export function validateBackup(backup: unknown): asserts backup is LibraryBackup {
   if (!isRecord(backup) || backup.format !== "deutschflow-library") {
     throw new ImportError("invalid", "That file is not a DeutschFlow library export.");
   }
@@ -252,15 +256,8 @@ export async function importLibrary(
     throw new ImportError("invalid", "Malformed backup structure: collections must be arrays.");
   }
 
-  // Resource limits
-  if (backup.vocabulary.length > MAX_VOCABULARY_ROWS) {
-    throw new ImportError("invalid", `Vocabulary count exceeds limit (${MAX_VOCABULARY_ROWS}).`);
-  }
-  if (backup.transcripts.length > MAX_TRANSCRIPT_ROWS) {
-    throw new ImportError("invalid", `Transcripts count exceeds limit (${MAX_TRANSCRIPT_ROWS}).`);
-  }
-  if (backup.activityLog.length > MAX_ACTIVITY_ROWS) {
-    throw new ImportError("invalid", `Activity log count exceeds limit (${MAX_ACTIVITY_ROWS}).`);
+  if (new TextEncoder().encode(JSON.stringify(backup)).byteLength > MAX_BACKUP_FILE_BYTES) {
+    throw new ImportError("capacity", "Backup exceeds the 10 MB size limit.");
   }
   if (backup.userStats.length > MAX_USER_STATS_ROWS) {
     throw new ImportError("invalid", `User stats count exceeds limit (${MAX_USER_STATS_ROWS}).`);
@@ -276,19 +273,8 @@ export async function importLibrary(
     if (!germanText || !englishTranslation) {
       throw new ImportError("invalid", "Vocabulary text and translation are required.");
     }
-    if (germanText.length > MAX_SHORT_FIELD_LENGTH || englishTranslation.length > MAX_FIELD_LENGTH) {
-      throw new ImportError("invalid", "Vocabulary field exceeds maximum allowed length.");
-    }
-    if (
-      str(row.exampleSentence).length > MAX_FIELD_LENGTH ||
-      str(row.article).length > MAX_SHORT_FIELD_LENGTH ||
-      str(row.plural).length > MAX_SHORT_FIELD_LENGTH ||
-      str(row.conjugation).length > MAX_SHORT_FIELD_LENGTH ||
-      str(row.synonyms).length > MAX_FIELD_LENGTH ||
-      str(row.antonyms).length > MAX_FIELD_LENGTH
-    ) {
-      throw new ImportError("invalid", "Vocabulary metadata field exceeds maximum allowed length.");
-    }
+    validateStrings(row, ["germanText", "englishTranslation", "exampleSentence", "article", "plural",
+      "conjugation", "synonyms", "antonyms"]);
     if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
       throw new ImportError("invalid", "Invalid vocabulary timestamp.");
     }
@@ -328,9 +314,7 @@ export async function importLibrary(
     if (!fullText.trim()) {
       throw new ImportError("invalid", "Transcript text is required.");
     }
-    if (fullText.length > MAX_TRANSCRIPT_LENGTH) {
-      throw new ImportError("invalid", "Transcript text exceeds maximum allowed length.");
-    }
+    validateStrings(row, ["fullText", "translation", "analysisJson"]);
     if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
       throw new ImportError("invalid", "Invalid transcript timestamp.");
     }
@@ -373,6 +357,61 @@ export async function importLibrary(
     }
   }
 
+  for (const collection of ["reviewEvents", "roleplayMessages"] as const) {
+    if ((backup.version >= 2 || backup[collection] !== undefined) && !Array.isArray(backup[collection])) {
+      throw new ImportError("invalid", `${collection} must be an array.`);
+    }
+  }
+  const ids = new Set<number>();
+  for (const row of backup.vocabulary) {
+    if (isRecord(row) && row.id !== undefined) {
+      if (!Number.isSafeInteger(row.id) || (row.id as number) <= 0 || ids.has(row.id as number)) {
+        throw new ImportError("invalid", "Invalid or duplicate vocabulary id.");
+      }
+      ids.add(row.id as number);
+    }
+  }
+  for (const row of (backup.reviewEvents ?? []) as unknown[]) {
+    if (!isRecord(row) || !["AGAIN", "HARD", "GOOD", "EASY"].includes(str(row.rating)) ||
+      typeof row.isExtraPractice !== "boolean" || !UUID_REGEX.test(str(row.remoteId))) {
+      throw new ImportError("invalid", "Invalid review event.");
+    }
+    for (const field of ["vocabularyId", "scheduledDays", "actualDays", "reviewedAtTimestamp"]) {
+      if (!Number.isSafeInteger(row[field]) || (row[field] as number) < 0) {
+        throw new ImportError("invalid", `Invalid review ${field}.`);
+      }
+    }
+    if ((row.scheduledDays as number) > 365 || (row.reviewedAtTimestamp as number) > MAX_FUTURE_TIMESTAMP) {
+      throw new ImportError("invalid", "Invalid review schedule or timestamp.");
+    }
+  }
+  const positions = new Set<number>();
+  let scenario: string | undefined;
+  for (const row of (backup.roleplayMessages ?? []) as unknown[]) {
+    if (!isRecord(row) || !["user", "assistant"].includes(str(row.role)) ||
+      !str(row.content).trim() || !str(row.scenario).trim() ||
+      !Number.isSafeInteger(row.position) || (row.position as number) < 0 ||
+      positions.has(row.position as number) || !Number.isSafeInteger(row.timestamp) ||
+      (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP ||
+      (scenario !== undefined && scenario !== row.scenario)) {
+      throw new ImportError("invalid", "Invalid roleplay conversation.");
+    }
+    validateStrings(row, ["content", "scenario", "translation"]);
+    positions.add(row.position as number);
+    scenario = row.scenario as string;
+  }
+}
+
+function validateStrings(row: Record<string, unknown>, fields: string[]): void {
+  for (const field of fields) {
+    if (row[field] !== undefined && typeof row[field] !== "string") {
+      throw new ImportError("invalid", `Invalid ${field}: expected text.`);
+    }
+  }
+}
+
+export async function importLibrary(db: DeutschFlowDB, backup: unknown): Promise<ImportResult> {
+  validateBackup(backup);
   const result: ImportResult = {
     vocabularyAdded: 0,
     vocabularyMerged: 0,
@@ -382,8 +421,8 @@ export async function importLibrary(
   try {
     await db.transaction(
       "rw",
-      db.vocabulary, db.transcripts, db.userStats, db.activityLog,
-      () => applyImport(db, backup as Record<string, unknown>, result)
+      [db.vocabulary, db.transcripts, db.userStats, db.activityLog, db.reviewEvents, db.roleplayMessages],
+      () => applyImport(db, backup, result)
     );
   } catch (err) {
     if (err instanceof ImportError) throw err;
@@ -396,10 +435,11 @@ export async function importLibrary(
 /** The body of [importLibrary], run inside its transaction. */
 async function applyImport(
   db: DeutschFlowDB,
-  backup: Record<string, unknown>,
+  backup: LibraryBackup,
   result: ImportResult
 ): Promise<void> {
   const vocabulary = Array.isArray(backup.vocabulary) ? backup.vocabulary : [];
+  const vocabularyIds = new Map<number, number>();
   for (const row of vocabulary) {
     if (!isRecord(row)) continue;
     const germanText = str(row.germanText).trim();
@@ -453,9 +493,10 @@ async function applyImport(
         reviewCount: Math.max(existing.reviewCount, num(row.reviewCount, 0)),
       };
       await db.vocabulary.put(merged);
+      if (typeof row.id === "number") vocabularyIds.set(row.id, existing.id!);
     } else {
       result.vocabularyAdded++;
-      await db.vocabulary.add({
+      const localId = await db.vocabulary.add({
         germanText,
         germanTextKey: foldGermanKey(germanText),
         englishTranslation,
@@ -473,14 +514,15 @@ async function applyImport(
         remoteId: incomingRemoteId,
         lastModifiedAt: incomingLastModifiedAt,
       });
+      if (typeof row.id === "number") vocabularyIds.set(row.id, localId as number);
     }
   }
 
   const transcripts = Array.isArray(backup.transcripts) ? backup.transcripts : [];
   if (transcripts.length > 0) {
     const existing = await db.transcripts.toArray();
-    const knownRemoteIds = new Set(existing.map((t) => t.remoteId));
-    const knownContent = new Set(existing.map((t) => `${t.fullText}:${t.timestamp}`));
+    const knownRemoteIds = new Map(existing.map((t) => [t.remoteId, t]));
+    const knownContent = new Map(existing.map((t) => [`${t.fullText}:${t.timestamp}`, t]));
 
     for (const row of transcripts) {
       if (!isRecord(row)) continue;
@@ -489,16 +531,59 @@ async function applyImport(
       const ts = num(row.timestamp, 0);
       const remoteId = sanitizeRemoteId(row.remoteId, fullText, ts);
       const contentKey = `${fullText}:${ts}`;
-      if (knownRemoteIds.has(remoteId) || knownContent.has(contentKey)) continue;
-      knownRemoteIds.add(remoteId);
-      knownContent.add(contentKey);
-      await db.transcripts.add({
+      const current = knownRemoteIds.get(remoteId) ?? knownContent.get(contentKey);
+      const incomingModified = num(row.lastModifiedAt, ts);
+      const analysis = { translation: str(row.translation), analysisJson: str(row.analysisJson) };
+      if (current) {
+        const incomingIsNewer = incomingModified > current.lastModifiedAt;
+        const merged = { ...current,
+          translation: incomingIsNewer ? analysis.translation || current.translation : current.translation || analysis.translation,
+          analysisJson: incomingIsNewer ? analysis.analysisJson || current.analysisJson : current.analysisJson || analysis.analysisJson,
+          lastModifiedAt: Math.max(current.lastModifiedAt, incomingModified),
+        };
+        await db.transcripts.put(merged);
+        knownRemoteIds.set(merged.remoteId, merged);
+        knownContent.set(contentKey, merged);
+        continue;
+      }
+      const entry = {
         fullText,
         timestamp: ts,
         remoteId,
-        lastModifiedAt: num(row.lastModifiedAt, ts),
-      });
+        lastModifiedAt: incomingModified,
+        ...analysis,
+      };
+      const id = await db.transcripts.add(entry);
+      knownRemoteIds.set(remoteId, { ...entry, id: id as number });
+      knownContent.set(contentKey, { ...entry, id: id as number });
       result.transcriptsAdded++;
+    }
+  }
+
+  const knownEvents = new Set((await db.reviewEvents.toArray()).map((event) => event.remoteId.toLowerCase()));
+  for (const row of backup.reviewEvents ?? []) {
+    if (!isRecord(row)) continue; // validated above
+    const remoteId = str(row.remoteId).toLowerCase();
+    if (knownEvents.has(remoteId)) continue;
+    await db.reviewEvents.add({
+      // Deleted words have no target; retain their history without linking it to an unrelated local ID.
+      vocabularyId: vocabularyIds.get(row.vocabularyId as number) ?? 0,
+      rating: row.rating as "AGAIN" | "HARD" | "GOOD" | "EASY",
+      scheduledDays: row.scheduledDays as number, actualDays: row.actualDays as number,
+      reviewedAtTimestamp: row.reviewedAtTimestamp as number,
+      isExtraPractice: row.isExtraPractice as boolean, remoteId,
+    });
+    knownEvents.add(remoteId);
+  }
+  // A current conversation is a unit: additive restore must not splice two scenarios together.
+  if (await db.roleplayMessages.count() === 0) {
+    for (const row of backup.roleplayMessages ?? []) {
+      if (!isRecord(row)) continue;
+      await db.roleplayMessages.add({ position: row.position as number, scenario: str(row.scenario),
+        role: row.role as "user" | "assistant", content: str(row.content),
+        translation: typeof row.translation === "string" ? row.translation : undefined,
+        timestamp: row.timestamp as number,
+      });
     }
   }
 

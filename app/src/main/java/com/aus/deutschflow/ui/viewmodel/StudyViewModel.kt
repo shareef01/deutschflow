@@ -141,15 +141,11 @@ class StudyViewModel @Inject constructor(
                 val updatedPersisted = persisted.copy(
                     lastModifiedAt = maxOf(persisted.lastModifiedAt, now)
                 )
-                val actualDays = if (card.timestamp > 0L) {
-                    maxOf(0, ((now - card.timestamp) / (1000L * 60 * 60 * 24)).toInt())
-                } else {
-                    0
-                }
 
                 // One transaction, so the card's schedule, review event, and the XP it earned commit
                 // together or not at all. Extra practice awards 0 XP to prevent XP farming.
                 database.withTransaction {
+                    val actualDays = elapsedReviewDays(database.reviewEventDao().latestReviewTimestamp(card.id), now)
                     vocabularyDao.updateVocabulary(updatedPersisted)
                     if (!extraPractice && quality.value >= ReviewQuality.GOOD.value) {
                         awardXp(XP_PER_CARD)
@@ -292,6 +288,10 @@ class StudyViewModel @Inject constructor(
          * literal 50 with nothing tying it to what a reviewed card pays out.
          */
         const val DAILY_XP_GOAL = XP_PER_CARD * 5
+
+        /** A first review has no preceding review interval; card creation is unrelated. */
+        internal fun elapsedReviewDays(previousReview: Long?, now: Long): Int =
+            previousReview?.let { maxOf(0L, (now - it) / 86_400_000L).toInt() } ?: 0
 
         internal fun nextStreak(currentStreak: Int, lastActivity: Long, now: Long): Int {
             if (lastActivity <= 0L || currentStreak <= 0) return 1

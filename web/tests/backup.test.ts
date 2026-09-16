@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "fake-indexeddb/auto";
 import { DeutschFlowDB } from "@/lib/db/schema";
-import { deterministicTranscriptId, exportLibrary, importLibrary } from "@/lib/db/backup";
+import { deterministicTranscriptId, exportLibrary, importLibrary, validateBackup, MAX_BACKUP_FILE_BYTES } from "@/lib/db/backup";
 import { saveVocabulary, insertTranscript, rewardXp } from "@/lib/db/repository";
 
 /**
@@ -132,7 +132,7 @@ describe("exportLibrary / importLibrary", () => {
     await expect(importLibrary(db, backup)).rejects.toThrow(/array/i);
   });
 
-  it("rejects collections exceeding maximum row counts", async () => {
+  it("uses a total byte budget rather than rejecting a long-lived library by row count", async () => {
     const oversizedVocab = new Array(10_001).fill({
       germanText: "Wort",
       englishTranslation: "word",
@@ -145,7 +145,9 @@ describe("exportLibrary / importLibrary", () => {
       userStats: [],
       activityLog: [],
     };
-    await expect(importLibrary(db, backup)).rejects.toThrow(/limit/i);
+    expect(() => validateBackup(backup)).not.toThrow();
+    expect(() => validateBackup({ ...backup, vocabulary: [{ germanText: "Wort",
+      englishTranslation: "A".repeat(MAX_BACKUP_FILE_BYTES) }] })).toThrow(/size limit/i);
 
     await expect(importLibrary(db, {
       ...backup,
@@ -154,7 +156,7 @@ describe("exportLibrary / importLibrary", () => {
     })).rejects.toThrow(/stats count exceeds limit/i);
   });
 
-  it("rejects giant text fields in vocabulary and transcripts", async () => {
+  it("restores legitimate long text fields from legacy backups within the byte budget", async () => {
     const giantText = "A".repeat(5_000);
     const backupVocab = {
       format: "deutschflow-library",
@@ -164,7 +166,8 @@ describe("exportLibrary / importLibrary", () => {
       userStats: [],
       activityLog: [],
     };
-    await expect(importLibrary(db, backupVocab)).rejects.toThrow(/length/i);
+    await importLibrary(db, backupVocab);
+    expect((await db.vocabulary.toArray())[0].englishTranslation).toBe(giantText);
 
     const giantTranscript = "T".repeat(20_000);
     const backupTranscript = {
@@ -175,7 +178,8 @@ describe("exportLibrary / importLibrary", () => {
       userStats: [],
       activityLog: [],
     };
-    await expect(importLibrary(db, backupTranscript)).rejects.toThrow(/length/i);
+    await importLibrary(db, backupTranscript);
+    expect((await db.transcripts.toArray())[0].fullText).toBe(giantTranscript);
   });
 
   it("rejects invalid numeric values (negative interval, interval > 365, invalid ease factor, negative XP)", async () => {

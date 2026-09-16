@@ -17,7 +17,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 data class ChatMessage(
@@ -50,6 +49,12 @@ class RoleplayViewModel @Inject constructor(
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
 
     private var currentScenario = SCENARIO_BERLIN_BAKERY
+
+    init {
+        speechRecognizerHelper.results
+            .onEach { text -> sendInput(text) }
+            .launchIn(viewModelScope)
+    }
 
     private val _selectedScenario = MutableStateFlow(
         RoleplayScenarioCatalog.SCENARIOS.find { it.title == SCENARIO_BERLIN_BAKERY }
@@ -167,24 +172,11 @@ class RoleplayViewModel @Inject constructor(
     }
 
     /**
-     * Ends the utterance and sends whatever the engine delivers.
-     *
-     * The wait is bounded and the result is taken as an event. Awaiting a non-blank
-     * [SpeechRecognizerHelper.finalText] instead hung forever when recognition failed
-     * - the send button stuck mid-tap - or, worse, re-sent the previous turn, because
-     * that field keeps the last utterance until a new session clears it.
+     * Requests the final result. The results collector sends it whether recognition
+     * finishes automatically or the user presses Stop, without rereading old finalText.
      */
     fun stopListeningAndSend() {
         speechRecognizerHelper.stopListening()
-        viewModelScope.launch {
-            val text = withTimeoutOrNull(RECOGNITION_TIMEOUT_MS) {
-                speechRecognizerHelper.finalText.filter { it.isNotBlank() }.first()
-            }
-            if (text != null) {
-                speechRecognizerHelper.clearTranscript()
-                sendInput(text)
-            }
-        }
     }
 
     /** Re-sends the turn that failed, so a failed opening line is recoverable. */
@@ -310,12 +302,6 @@ class RoleplayViewModel @Inject constructor(
          * startSession call sites and this default all share the one constant.
          */
         const val SCENARIO_BERLIN_BAKERY = "Ordering at a Berlin Bakery"
-
-        /**
-         * Long enough for the engine to finish an utterance it already heard, short
-         * enough that a failed recognition returns the button rather than keeping it.
-         */
-        private const val RECOGNITION_TIMEOUT_MS = 5_000L
 
         /**
          * How much of the conversation the model is shown.
