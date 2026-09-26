@@ -113,7 +113,12 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
         }
     }
 
-    OnLeavingScreen { viewModel.cancelListening() }
+    OnLeavingScreen {
+        viewModel.cancelListening()
+        // The transcript is speakable, so leaving mid-playback used to carry the
+        // voice into whatever screen came next.
+        viewModel.stopSpeaking()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         TranscriptContent(
