@@ -150,6 +150,12 @@ export function foldGermanKey(text: string): string {
 /**
  * The loose fold, for matching rather than identity. Adds ß→ss, so it also matches
  * Strasse to Straße. Never use this as a uniqueness key - see [foldGermanKey].
+ *
+ * No production caller yet: search filters on the word as written and `lib/scoring.ts`
+ * has its own `foldGerman`, neither of which touches the identity key, so tightening
+ * [foldGermanKey] left both unaffected. This is the named, tested statement of the
+ * loose rule - and the shared expectation the contract test pins `foldGerman` against,
+ * so the two cannot drift.
  */
 export function germanMatchKey(text: string): string {
   return foldGermanKey(text).replaceAll("ß", "ss");

@@ -63,6 +63,15 @@ fun germanKey(text: String): String = Normalizer.normalize(text, Normalizer.Form
  * Deliberately never used as a uniqueness key: see [germanKey] for why that would
  * destroy rows. Use it to *find* candidates, then disambiguate on the word as
  * written.
+ *
+ * No production caller yet. Search filters on `germanText` substrings and speech
+ * scoring has its own [PracticeViewModel.foldGerman], so neither needs this today -
+ * both are unaffected by the stricter identity key either way, which is why nothing
+ * had to change when [germanKey] was tightened. It exists as the named, tested
+ * statement of the loose rule, and as somewhere for a future substring or fuzzy
+ * search to fold to instead of writing the fold inline a third time.
+ *
+ * Mirrors germanMatchKey in web/src/lib/db/schema.ts.
  */
 fun germanMatchKey(text: String): String = germanKey(text).replace("ß", "ss")
 

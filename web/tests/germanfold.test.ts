@@ -40,9 +40,10 @@ describe("foldGermanKey", () => {
   });
 
   // The trade-off, stated so it cannot be quietly reverted: Straße and Strasse really
-  // are one word and no longer merge here. germanMatchKey still matches them, so search
-  // and scoring are unaffected, and a false split leaves a deletable duplicate where a
-  // false merge would have destroyed a row.
+  // are one word and no longer merge here. That costs nothing observable: search filters
+  // on the word as written and lib/scoring.ts has its own foldGerman, so neither reads
+  // this key. A false split leaves a deletable duplicate where a false merge would have
+  // destroyed a row.
   it("keeps ß and s apart for identity while the match fold still joins them", () => {
     expect(foldGermanKey("Straße")).not.toBe(foldGermanKey("Strasse"));
     expect(germanMatchKey("Straße")).toBe(germanMatchKey("Strasse"));
