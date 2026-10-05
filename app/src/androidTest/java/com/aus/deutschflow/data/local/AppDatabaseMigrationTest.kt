@@ -677,9 +677,13 @@ class AppDatabaseMigrationTest {
         try {
             val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
 
-            assertEquals("ten rows fold to six words", 6, saved.size)
+            // Ten rows at v12. 12->13 merges the umlaut/case and ß duplicates with the
+            // fold of that era, then 16->17 re-keys to the stricter one - which splits
+            // Straße from Strasse, since keeping ß means they are no longer one word.
+            // So seven rows, not six.
+            assertEquals("ten rows fold to seven words", 7, saved.size)
             assertEquals(
-                setOf("uebung", "strasse", "oel", "hund", "gehen", "café"),
+                setOf("uebung", "straße", "strasse", "oel", "hund", "gehen", "café"),
                 saved.map { it.germanTextKey }.toSet()
             )
 
@@ -703,10 +707,16 @@ class AppDatabaseMigrationTest {
             assertEquals(30, uebung.interval)
             assertEquals(5_000L, uebung.nextReview)
 
-            val strasse = saved.single { it.germanTextKey == "strasse" }
+            // The ß pair no longer merges, so each spelling is its own row and keeps
+            // only its own fields. Under the old key this was one row carrying all four.
+            val strasse = saved.single { it.germanText == "Straße" }
+            assertEquals("straße", strasse.germanTextKey)
             assertEquals("die", strasse.article)
             assertEquals("Straßen", strasse.plural)
-            assertEquals("Eine Strasse.", strasse.exampleSentence)
+
+            val strasseAscii = saved.single { it.germanText == "Strasse" }
+            assertEquals("strasse", strasseAscii.germanTextKey)
+            assertEquals("Eine Strasse.", strasseAscii.exampleSentence)
 
             val oel = saved.single { it.germanTextKey == "oel" }
             assertEquals("das", oel.article)
@@ -750,24 +760,6 @@ class AppDatabaseMigrationTest {
             }
             // Every distinct word is still findable by any of its spellings.
             runBlocking {
-                // The umlaut/case rules still merge, through the production save path -
-                // the one place duplicates can be created now that v16 forbids seeding
-                // them directly.
-                val before = database.vocabularyDao().getAllVocabulary().first().size
-                database.vocabularyDao().save(
-                    VocabularyEntity(
-                        germanText = "übung",
-                        englishTranslation = "practice",
-                        timestamp = 9000L
-                    )
-                )
-                val after = database.vocabularyDao().getAllVocabulary().first()
-                assertEquals("the case variant must still fold into the existing row", before, after.size)
-                val mergedUbung = after.first { it.germanText == "Übung" }
-                assertEquals("die", mergedUbung.article)
-                assertEquals(9000L, mergedUbung.timestamp)
-                assertEquals("uebung", mergedUbung.germanTextKey)
-
                 assertNotNull(database.vocabularyDao().findByGermanText("uebung"))
                 assertNotNull(database.vocabularyDao().findByGermanText("ÜBUNG"))
                 assertNotNull(database.vocabularyDao().findByGermanText("Strasse"))
@@ -1054,6 +1046,26 @@ class AppDatabaseMigrationTest {
                     both.getValue("Maße").germanTextKey,
                     both.getValue("Masse").germanTextKey
                 )
+
+                // The umlaut/case rules still merge after the re-key. v16 forbids
+                // seeding such a pair directly (the index is UNIQUE), so this has to go
+                // through the production save path - which is where the ß pairs above
+                // prove the opposite behaviour.
+                val beforeCaseSave = withBothHalves.size
+                database.vocabularyDao().save(
+                    VocabularyEntity(
+                        germanText = "übung",
+                        englishTranslation = "practice",
+                        timestamp = 9000L
+                    )
+                )
+                val afterCaseSave = database.vocabularyDao().getAllVocabulary().first()
+                assertEquals(
+                    "the case variant must still fold into the existing row",
+                    beforeCaseSave,
+                    afterCaseSave.size
+                )
+                assertEquals("Übung", afterCaseSave.single { it.germanTextKey == "uebung" }.germanText)
 
                 // The re-key left a word that never needed re-keying completely alone.
                 val ubung = byText.getValue("Übung")
