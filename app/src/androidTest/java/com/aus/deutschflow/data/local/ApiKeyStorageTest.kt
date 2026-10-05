@@ -117,26 +117,38 @@ class ApiKeyStorageTest {
      * operations and a save from Settings can land between them. The naive version wrote
      * the encrypted *stale* value afterwards, silently replacing the key the user had
      * just typed. The fix re-checks inside the write, which is what this pins.
+     *
+     * Uses the rule's single store rather than constructing a PreferenceManager: a
+     * second DataStore over the same file is refused outright ("multiple DataStores
+     * active for the same file"), which is the same constraint production gets from
+     * the @Singleton provider - so this test cannot accidentally prove anything about
+     * a shape the app never uses.
      */
     @Test
     fun aKeySavedDuringMigrationIsNotOverwrittenByTheStaleValue() = runBlocking {
+        // The store must outlive every coroutine this test starts, including on the
+        // failure path, hence the explicit join and the runBlocking scope.
         store.dataStore.edit { it[stringPreferencesKey("groq_api_key")] = SECRET }
-        val manager = PreferenceManager(
-            store.dataStore,
-            // Distinguishes the two: the migration encrypts SECRET, the concurrent save
-            // encrypts NEWER_SECRET, so a clobber is visible in the stored value.
-            SequencedCipher
-        )
+        val manager = PreferenceManager(store.dataStore, SequencedCipher)
 
-        // Simulate the interleaving: the save happens after the migration has read the
-        // legacy value and before it commits, which is the only window that matters.
+        // The migration reads SECRET, then blocks in the Keystore; the save lands in
+        // that window with a different key.
+        //
+        // join() before the assertion, not just await(): if this method returned while
+        // the migration was still touching the store, TestPreferencesRule.after() would
+        // cancel its scope and delete the file underneath the in-flight coroutine. The
+        // next test method then opens a second DataStore over the same file and the
+        // whole run dies with "multiple DataStores active for the same file" - a failure
+        // that looks like it belongs to an unrelated test.
         val migration = async { manager.migrateLegacyApiKey() }
         yield()
         manager.saveApiKey(NEWER_SECRET)
         assertEquals(PreferenceManager.ApiKeyMigrationResult.MIGRATED, migration.await())
+        migration.join()
 
         val values = store.dataStore.data.first()
-        // The newer key survives; the stale one never overwrote it.
+        // The newer key survives. Had the migration written last, this would be
+        // "ciphertext-of-stale" and the user would have lost what they just typed.
         assertEquals("ciphertext-of-newer", values[stringPreferencesKey("groq_api_key_encrypted")])
         assertNull(values[stringPreferencesKey("groq_api_key")])
     }
