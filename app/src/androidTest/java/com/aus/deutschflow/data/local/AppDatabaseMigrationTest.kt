@@ -677,13 +677,18 @@ class AppDatabaseMigrationTest {
         try {
             val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
 
-            // Ten rows at v12. 12->13 merges the umlaut/case and ß duplicates with the
-            // fold of that era, then 16->17 re-keys to the stricter one - which splits
-            // Straße from Strasse, since keeping ß means they are no longer one word.
-            // So seven rows, not six.
-            assertEquals("ten rows fold to seven words", 7, saved.size)
+            // Ten rows at v12 fold to six words. 12->13 merges Straße with Strasse
+            // using the fold of that era, and the merge happens before 16->17 runs -
+            // so by the time the stricter fold re-keys the survivors there is only one
+            // Straße row left to re-key. 16->17 cannot resurrect the row 12->13 deleted;
+            // that is the part of the bug it does not repair, and the KDoc says so.
+            //
+            // Which spelling survives is decided by 12->13's winner rule (most grammar
+            // filled in, then latest, then highest id): "Straße" carries article and
+            // plural, so it wins and re-keys to "straße".
+            assertEquals("ten rows fold to six words", 6, saved.size)
             assertEquals(
-                setOf("uebung", "straße", "strasse", "oel", "hund", "gehen", "café"),
+                setOf("uebung", "straße", "oel", "hund", "gehen", "café"),
                 saved.map { it.germanTextKey }.toSet()
             )
 
@@ -707,16 +712,13 @@ class AppDatabaseMigrationTest {
             assertEquals(30, uebung.interval)
             assertEquals(5_000L, uebung.nextReview)
 
-            // The ß pair no longer merges, so each spelling is its own row and keeps
-            // only its own fields. Under the old key this was one row carrying all four.
-            val strasse = saved.single { it.germanText == "Straße" }
-            assertEquals("straße", strasse.germanTextKey)
+            // The surviving ß row is re-keyed by 16->17, so it now carries the stricter
+            // fold - but the merge that produced it was 12->13's, and the ASCII spelling
+            // it absorbed is not coming back. What the merge did keep is kept.
+            val strasse = saved.single { it.germanTextKey == "straße" }
             assertEquals("die", strasse.article)
             assertEquals("Straßen", strasse.plural)
-
-            val strasseAscii = saved.single { it.germanText == "Strasse" }
-            assertEquals("strasse", strasseAscii.germanTextKey)
-            assertEquals("Eine Strasse.", strasseAscii.exampleSentence)
+            assertEquals("Eine Strasse.", strasse.exampleSentence)
 
             val oel = saved.single { it.germanTextKey == "oel" }
             assertEquals("das", oel.article)
