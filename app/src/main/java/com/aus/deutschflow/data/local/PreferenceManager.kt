@@ -150,20 +150,46 @@ class PreferenceManager @Inject constructor(
      * deliberately keeps reporting such a key as usable ([ApiKeyState.LegacyPlaintext]),
      * nothing anywhere ever complained.
      *
-     * Idempotent and concurrency-safe, which is what lets it run unattended at launch
-     * alongside any save: the encrypted value and the removal of the plaintext one
-     * happen in a single DataStore edit, so there is no window where the credential is
-     * lost, and a failure writes nothing at all and leaves the legacy value to retry
-     * next time. Deliberately never falls back to plaintext.
+     * Idempotent, which is what lets it run unattended at launch: a key that is
+     * already encrypted yields NOT_NEEDED, so the Keystore round trip happens at most
+     * once per install. Deliberately never falls back to plaintext, and writes nothing
+     * at all on failure, so the legacy value is always available to retry.
+     *
+     * Concurrent with [saveApiKey]: the value is read before the Keystore call and
+     * re-checked inside the write, so a key the user saved in between wins and this
+     * becomes a no-op rather than overwriting the newer key with the stale one.
      */
     suspend fun migrateLegacyApiKey(): ApiKeyMigrationResult {
+        // The legacy value has to be read outside the edit: encrypting it is a Keystore
+        // round trip, and DataStore forbids suspending inside an edit block. That splits
+        // what used to be one atomic step into a read, then a write - so a save that
+        // lands in between must not be overwritten by the stale value. Hence the
+        // re-check inside the edit below, which is what actually makes this safe to run
+        // at launch alongside a save from Settings.
         val legacy = dataStore.data.first()[KEY_API_KEY_LEGACY]
             ?: return ApiKeyMigrationResult.NOT_NEEDED
-        return if (saveApiKey(legacy)) {
+        val encrypted = withContext(Dispatchers.IO) { cipher.encrypt(legacy) }
+            ?: return ApiKeyMigrationResult.FAILED
+
+        var migrated = false
+        dataStore.edit { preferences ->
+            // Either the user saved a new key while the Keystore was busy - in which
+            // case that key is the current one and the legacy copy is already gone, so
+            // there is nothing to migrate - or the legacy value is still exactly what we
+            // encrypted. Anything else means it changed under us and we leave it alone.
+            val current = preferences[KEY_API_KEY_LEGACY]
+            if (current == null || preferences[KEY_API_KEY_ENCRYPTED] != null) return@edit
+            preferences[KEY_API_KEY_ENCRYPTED] = encrypted
+            preferences.remove(KEY_API_KEY_LEGACY)
+            migrated = true
+        }
+        // A concurrent save already superseded the migration, which is a success from
+        // here: there is no plaintext left behind and the newer key is intact.
+        return if (migrated || dataStore.data.first()[KEY_API_KEY_LEGACY] == null) {
             ApiKeyMigrationResult.MIGRATED
         } else {
-            // saveApiKey writes nothing on failure, so this recoverable legacy
-            // value remains available for a later retry.
+            // Nothing was written, so this recoverable legacy value remains for a later
+            // retry.
             ApiKeyMigrationResult.FAILED
         }
     }

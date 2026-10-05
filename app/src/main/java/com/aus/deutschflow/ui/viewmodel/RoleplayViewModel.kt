@@ -166,6 +166,11 @@ class RoleplayViewModel @Inject constructor(
         }
     }
 
+    /** The user refused the microphone, so say so rather than doing nothing. */
+    fun onPermissionDenied() {
+        speechRecognizerHelper.reportPermissionDenied()
+    }
+
     /** Called when the screen leaves composition or the app is backgrounded. */
     fun cancelListening() {
         speechRecognizerHelper.cancel()

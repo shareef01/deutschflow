@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.aus.deutschflow.TestPreferencesRule
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -107,6 +109,38 @@ class ApiKeyStorageTest {
         assertEquals("ciphertext", values[stringPreferencesKey("groq_api_key_encrypted")])
     }
 
+    /**
+     * A save that lands while the migration is mid-flight must win.
+     *
+     * migrateLegacyApiKey reads the plaintext value and then encrypts it, and DataStore
+     * forbids suspending inside an edit - so the read and the write are two separate
+     * operations and a save from Settings can land between them. The naive version wrote
+     * the encrypted *stale* value afterwards, silently replacing the key the user had
+     * just typed. The fix re-checks inside the write, which is what this pins.
+     */
+    @Test
+    fun aKeySavedDuringMigrationIsNotOverwrittenByTheStaleValue() = runBlocking {
+        store.dataStore.edit { it[stringPreferencesKey("groq_api_key")] = SECRET }
+        val manager = PreferenceManager(
+            store.dataStore,
+            // Distinguishes the two: the migration encrypts SECRET, the concurrent save
+            // encrypts NEWER_SECRET, so a clobber is visible in the stored value.
+            SequencedCipher
+        )
+
+        // Simulate the interleaving: the save happens after the migration has read the
+        // legacy value and before it commits, which is the only window that matters.
+        val migration = async { manager.migrateLegacyApiKey() }
+        yield()
+        manager.saveApiKey(NEWER_SECRET)
+        assertEquals(PreferenceManager.ApiKeyMigrationResult.MIGRATED, migration.await())
+
+        val values = store.dataStore.data.first()
+        // The newer key survives; the stale one never overwrote it.
+        assertEquals("ciphertext-of-newer", values[stringPreferencesKey("groq_api_key_encrypted")])
+        assertNull(values[stringPreferencesKey("groq_api_key")])
+    }
+
     @Test
     fun failedLegacyMigrationKeepsRecoverablePlaintextAndReportsFailure() = runBlocking {
         store.dataStore.edit { it[stringPreferencesKey("groq_api_key")] = SECRET }
@@ -141,8 +175,17 @@ class ApiKeyStorageTest {
         override fun decrypt(stored: String): String? = decrypted
     }
 
+    /** Encrypts by identity of the plaintext, so each key maps to a distinct value. */
+    private object SequencedCipher : KeystoreCipher() {
+        override fun encrypt(plainText: String): String? =
+            if (plainText == SECRET) "ciphertext-of-stale" else "ciphertext-of-newer"
+
+        override fun decrypt(stored: String): String? = SECRET
+    }
+
     private companion object {
         const val SECRET = "gsk_TESTKEY_do_not_ship_9f3a2b7c1d"
+        const val NEWER_SECRET = "gsk_TESTKEY_typed_after_upgrade_5e1d"
         const val STORE_NAME = "api-key-storage-test"
     }
 }

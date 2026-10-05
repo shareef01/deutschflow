@@ -1,5 +1,9 @@
 package com.aus.deutschflow.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -25,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aus.deutschflow.data.model.RoleplayScenario
 import com.aus.deutschflow.data.model.RoleplayScenarioCatalog
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -54,6 +59,36 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     val recognitionError by viewModel.errorState.collectAsStateWithLifecycle()
     val selectedScenario by viewModel.selectedScenario.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    // Roleplay was the one recording entry point with no permission handling at all:
+    // the mic button went straight to the recogniser, so on a fresh install - or after
+    // a revoke, or entering this tab first - tapping it raised a SecurityException
+    // surfaced as a generic error, with no prompt and no route to Settings. Practice and
+    // Transcript both already request it; this brings Roleplay in line.
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.startListening()
+        } else {
+            // Reports the same "turn it on in Android settings" message the other
+            // screens show, which is the honest outcome once the user has said no -
+            // the OS stops showing the prompt after a permanent denial.
+            viewModel.onPermissionDenied()
+        }
+    }
+
+    /** Checks first, so the recogniser is never started without the grant. */
+    val requestMicThenListen: () -> Unit = {
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.startListening()
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     var showScenarioMenu by remember { mutableStateOf(false) }
 
@@ -305,7 +340,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                     IconButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (isListening) viewModel.stopListeningAndSend() else viewModel.startListening()
+                            if (isListening) viewModel.stopListeningAndSend() else requestMicThenListen()
                         },
                         enabled = !isProcessing,
                         modifier = Modifier
