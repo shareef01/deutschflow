@@ -83,13 +83,15 @@ describe("v4 → v5, the German fold", () => {
     db.close();
   });
 
+  // Opening a v4 database now runs every upgrade up to v9, and v9 re-keys with the
+  // ß-preserving fold. The word itself is never rewritten - only the key.
   it("re-keys a word that has no duplicate", async () => {
     const name = await seedV4([row({ germanText: "Straße", englishTranslation: "street" })]);
     const db = new DeutschFlowDB(name);
     await db.open();
 
     const only = (await db.vocabulary.toArray())[0];
-    expect(only.germanTextKey).toBe("strasse");
+    expect(only.germanTextKey).toBe("straße");
     expect(only.germanText).toBe("Straße");
     db.close();
   });

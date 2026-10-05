@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.Reader
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
@@ -167,11 +168,12 @@ class GroqHelper @Inject constructor(
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
 
             if (connection.responseCode in 200..299) {
-                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readBounded(MAX_SUCCESS_CHARS) }
             } else {
                 // The body carries the reason - an expired key, a retired model, a
                 // rate limit - and all of them are worth putting in front of the user.
-                val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)
+                    ?.use { it.readBounded(MAX_ERROR_CHARS) }
                 throw IllegalStateException(errorMessage(connection.responseCode, errBody))
             }
         } finally {
@@ -565,6 +567,14 @@ class GroqHelper @Inject constructor(
          * then rendered on a card, so an unbounded field is a row the user cannot
          * read and cannot easily fix.
          */
+        /**
+         * Ceilings on how much of a response body is read into memory. Generous
+         * against a transcript analysis, tight enough that a hostile or broken server
+         * cannot make the app allocate without limit - see [readBounded].
+         */
+        private const val MAX_SUCCESS_CHARS = 1_000_000
+        private const val MAX_ERROR_CHARS = 8_000
+
         private const val MAX_FIELD = 2_000
         private const val MAX_SHORT_FIELD = 200
         private const val MAX_KEYWORDS = 12
@@ -889,3 +899,33 @@ class GroqHelper @Inject constructor(
         private fun String.cleanValue() = trim().removeSurrounding("[", "]").trim()
     }
 }
+
+/**
+ * Reads at most [limit] characters, and stops reading there.
+ *
+ * `readText()` sizes its buffer from `contentLength` when the server sends one, so
+ * a response that lies about its length - or sends none at all - makes it grow
+ * without limit. This endpoint is a third-party API reachable by URL, and the
+ * readTimeout only bounds how long a *stall* takes, not how much arrives: a
+ * server that keeps sending slowly never trips it. The result is an unbounded
+ * allocation in a phone process, from input the app did not choose.
+ *
+ * The cap is a ceiling on what the parser is asked to handle, not an assumption
+ * about the response: a truncated body then fails the JSON parse and the user sees
+ * the existing malformed-response error, which is the honest outcome for a
+ * response too large to be what we asked for.
+ *
+ * The limit counts characters, so a truncation never splits a character. Top level
+ * rather than a member so it can be tested directly; internal for the same reason.
+ */
+internal fun Reader.readBounded(limit: Int): String =
+    use { reader ->
+        val buffer = CharArray(limit)
+        var read = 0
+        while (read < limit) {
+            val n = reader.read(buffer, read, limit - read)
+            if (n < 0) break
+            read += n
+        }
+        String(buffer, 0, read)
+    }

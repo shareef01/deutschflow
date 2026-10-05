@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "fake-indexeddb/auto";
-import { DeutschFlowDB, foldGermanKey } from "@/lib/db/schema";
+import { DeutschFlowDB, foldGermanKey, germanMatchKey } from "@/lib/db/schema";
 import { saveVocabulary, findByGermanText } from "@/lib/db/repository";
 
 /**
@@ -19,10 +19,34 @@ describe("foldGermanKey", () => {
     expect(foldGermanKey("Ärger")).toBe(foldGermanKey("ärger"));
   });
 
-  it("treats the transliterated spellings as the same word", () => {
+  it("treats the transliterated umlauts as the same word", () => {
+    // A transliteration is two spellings of one word, so folding is correct here.
     expect(foldGermanKey("Übung")).toBe(foldGermanKey("Uebung"));
-    expect(foldGermanKey("Straße")).toBe(foldGermanKey("Strasse"));
     expect(foldGermanKey("schön")).toBe(foldGermanKey("schoen"));
+    expect(foldGermanKey("Ärger")).toBe(foldGermanKey("Aerger"));
+  });
+
+  // The regression: ß is not folded to ss in the identity key. German writes both
+  // "ss" and "ß" natively and distinguishes them, so folding them merged words that
+  // are not the same word - and germanTextKey is unique, so saving one after the other
+  // merged and deleted a row.
+  it("does not fold eszett to double-s", () => {
+    expect(foldGermanKey("Maße")).not.toBe(foldGermanKey("Masse"));
+    expect(foldGermanKey("Buße")).not.toBe(foldGermanKey("Busse"));
+    // Not merely unequal - the sharp s survives intact.
+    expect(foldGermanKey("Maße")).toBe("maße");
+    expect(foldGermanKey("Buße")).toBe("buße");
+    expect(foldGermanKey("Fuß")).toBe("fuß");
+  });
+
+  // The trade-off, stated so it cannot be quietly reverted: Straße and Strasse really
+  // are one word and no longer merge here. germanMatchKey still matches them, so search
+  // and scoring are unaffected, and a false split leaves a deletable duplicate where a
+  // false merge would have destroyed a row.
+  it("keeps ß and s apart for identity while the match fold still joins them", () => {
+    expect(foldGermanKey("Straße")).not.toBe(foldGermanKey("Strasse"));
+    expect(germanMatchKey("Straße")).toBe(germanMatchKey("Strasse"));
+    expect(germanMatchKey("Straße")).toBe("strasse");
   });
 
   it("normalizes decomposed Unicode (NFD) to canonical NFC", () => {
@@ -52,7 +76,7 @@ describe("foldGermanKey", () => {
       ["Übung", "uebung"],
       ["übung", "uebung"],
       ["Uebung", "uebung"],
-      ["Straße", "strasse"],
+      ["Straße", "straße"],
       ["Strasse", "strasse"],
       ["Öl", "oel"],
       ["Ärger", "aerger"],
@@ -93,10 +117,11 @@ describe("saving an umlaut word twice", () => {
     expect(row.englishTranslation).toBe("practice");
   });
 
-  it("merges Straße and Strasse", async () => {
+  // Deliberate: these now stay separate words in the library. See foldGermanKey.
+  it("keeps Straße and Strasse as separate rows", async () => {
     await saveVocabulary(db, { germanText: "Straße", englishTranslation: "street" });
     await saveVocabulary(db, { germanText: "Strasse", englishTranslation: "road" });
-    expect(await db.vocabulary.count()).toBe(1);
+    expect(await db.vocabulary.count()).toBe(2);
   });
 
   it("finds a word however it was written", async () => {

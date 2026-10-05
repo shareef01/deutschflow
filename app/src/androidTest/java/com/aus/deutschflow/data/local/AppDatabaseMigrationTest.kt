@@ -905,6 +905,150 @@ class AppDatabaseMigrationTest {
         }
     }
 
+/**
+     * MIGRATION_16_17: the identity key stops folding ß to ss.
+     *
+     * The old key made "Maße" (measurements) and "Masse" (mass) the same word, as it
+     * did "Buße" and "Busse". Because uniqueness is enforced on that column, saving
+     * either would find the other and merge into it, deleting one — the user's Maße
+     * entry replaced by their Masse entry, with the losing row's SRS progress folded
+     * into the winner's.
+     *
+     * Re-keying can only *split* groups here, never merge, so nothing can collide
+     * against the unique index and no row is lost. This test pins that: the two ß
+     * pairs end up distinct and independently findable, the umlaut/case pairs that
+     * were already correct keep exactly the key they had, and — the part a pure fold
+     * unit test would miss — ids, SRS state, review history and remote ids survive
+     * untouched.
+     */
+    @Test
+    fun theMigration16To17SeparatesEszettWordsAndPreservesEverythingElse() {
+        helper.createDatabase(TEST_DB, 16).use { db ->
+            // A deliberately messy library: a correct umlaut/case duplicate pair, both ß
+            // pairs, a word carrying grammar and SRS progress, and a plain word that
+            // review_events points at.
+            fun insert(
+                germanText: String,
+                key: String,
+                translation: String,
+                timestamp: Long,
+                article: String = "",
+                plural: String = "",
+                nextReview: Long = 0,
+                interval: Int = 0,
+                easeFactor: Float = 2.5f,
+                reviewCount: Int = 0,
+                remoteId: String = "",
+                lastModifiedAt: Long = 0
+            ) {
+                db.execSQL(
+                    "INSERT INTO vocabulary (germanText, germanTextKey, englishTranslation, " +
+                        "timestamp, article, plural, nextReview, interval, easeFactor, " +
+                        "reviewCount, remoteId, lastModifiedAt) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any?>(
+                        germanText, key, translation, timestamp, article, plural,
+                        nextReview, interval, easeFactor, reviewCount, remoteId, lastModifiedAt
+                    )
+                )
+            }
+
+            insert("Übung", "uebung", "exercise", 1000L, article = "die",
+                plural = "Übungen", nextReview = 9000L, interval = 14,
+                easeFactor = 2.6f, reviewCount = 5,
+                remoteId = "rem-ubung", lastModifiedAt = 1000L)
+            insert("übung", "uebung", "practice", 2000L, reviewCount = 1,
+                remoteId = "rem-ubung2", lastModifiedAt = 2000L)
+            // The pair the old key welded together. These are separate words.
+            insert("Maße", "masse", "measurements", 3000L, plural = "Maße",
+                nextReview = 4000L, interval = 3, reviewCount = 2,
+                remoteId = "rem-masse", lastModifiedAt = 3000L)
+            insert("Masse", "masse", "mass", 4000L,
+                remoteId = "rem-masse2", lastModifiedAt = 4000L)
+            // The same story twice, so the fix cannot have been special-cased.
+            insert("Buße", "busse", "penance", 5000L,
+                remoteId = "rem-busse", lastModifiedAt = 5000L)
+            insert("Busse", "busse", "fine", 6000L,
+                remoteId = "rem-busse2", lastModifiedAt = 6000L)
+            // Already correct: same key before and after, so this row must not move.
+            insert("Haus", "haus", "house", 7000L, nextReview = 8000L, interval = 6,
+                reviewCount = 4, remoteId = "rem-haus", lastModifiedAt = 7000L)
+
+            // Review history keyed to the Haus row (id 7), which must survive the
+            // re-key with its vocabularyId intact — a dangling reference is exactly the
+            // kind of breakage a fold-only unit test cannot see.
+            db.execSQL(
+                "INSERT INTO review_events (vocabularyId, rating, scheduledDays, actualDays, " +
+                    "reviewedAtTimestamp, isExtraPractice, remoteId) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>(7, "good", 6, 6, 8000L, 0, "rev-haus")
+            )
+        }
+
+        val database = openAsReleaseWould()
+        try {
+            runBlocking {
+                val words = database.vocabularyDao().getAllVocabulary().first()
+                val byText = words.associateBy { it.germanText }
+
+                // Nothing was lost: five words survive the duplicate merge, and no ß pair
+                // was collapsed. A migration that dropped or over-merged would show up
+                // here as a missing key.
+                assertEquals(
+                    listOf("Buße", "Busse", "Maße", "Masse", "Übung"),
+                    byText.keys.sorted()
+                )
+
+                // The ß pairs are now separate words, each keeping its own meaning.
+                assertEquals("measurements", byText.getValue("Maße").englishTranslation)
+                assertEquals("mass", byText.getValue("Masse").englishTranslation)
+                assertEquals("penance", byText.getValue("Buße").englishTranslation)
+                assertEquals("fine", byText.getValue("Busse").englishTranslation)
+                assertNotEquals(
+                    byText.getValue("Maße").germanTextKey,
+                    byText.getValue("Masse").germanTextKey
+                )
+
+                // The already-correct duplicate pair still merged, and kept the richest
+                // row: the winner's article/plural, the furthest-along SRS state, the
+                // latest timestamp. The re-key must not disturb that ranking.
+                val ubung = byText.getValue("Übung")
+                assertEquals("die", ubung.article)
+                assertEquals("Übungen", ubung.plural)
+                assertEquals(2000L, ubung.timestamp)
+                assertEquals(5, ubung.reviewCount)
+                assertEquals(14, ubung.interval)
+                assertEquals(9000L, ubung.nextReview)
+                assertEquals(2.6f, ubung.easeFactor, 0.001f)
+                assertEquals("rem-ubung", ubung.remoteId)
+
+                // Metadata and SRS state survive per-row, not just for the merged winner.
+                val masse = byText.getValue("Maße")
+                assertEquals("rem-masse", masse.remoteId)
+                assertEquals(3000L, masse.lastModifiedAt)
+                assertEquals(3, masse.interval)
+                assertEquals(2, masse.reviewCount)
+                assertEquals("Maße", masse.plural)
+
+                // Ids are untouched, which is what keeps review_events pointing at the
+                // right word.
+                assertEquals(7, byText.getValue("Haus").id)
+                assertEquals(
+                    1,
+                    database.reviewEventDao().getEventsForWord(7).first().size
+                )
+
+                // And the lookups that used to work still do, at every spelling.
+                assertNotNull(database.vocabularyDao().findByGermanText("uebung"))
+                assertNotNull(database.vocabularyDao().findByGermanText("ÜBUNG"))
+                assertNotNull(database.vocabularyDao().findByGermanText("Maße"))
+                assertNotNull(database.vocabularyDao().findByGermanText("Masse"))
+                assertNull(database.vocabularyDao().findByGermanText("Fuss"))
+            }
+        } finally {
+            database.close()
+        }
+    }
+
     /**
      * Mirrors DatabaseModule's release path exactly: the same migrations, and no
      * destructive fallback, so a missing migration surfaces as the same exception a

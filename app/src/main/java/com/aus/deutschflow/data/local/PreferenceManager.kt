@@ -144,8 +144,17 @@ class PreferenceManager @Inject constructor(
     /**
      * Re-writes a key left in the clear by an older build, encrypted.
      *
-     * Called when Settings opens, which is the only screen that cares about the key
-     * and so the one place where paying for a Keystore round trip is warranted.
+     * Runs on the startup path (see MainApp.onCreate), not only when Settings opens.
+     * It used to run only there, which meant a user who set a key and never visited
+     * Settings again kept it in plaintext indefinitely - and since [apiKeyState]
+     * deliberately keeps reporting such a key as usable ([ApiKeyState.LegacyPlaintext]),
+     * nothing anywhere ever complained.
+     *
+     * Idempotent and concurrency-safe, which is what lets it run unattended at launch
+     * alongside any save: the encrypted value and the removal of the plaintext one
+     * happen in a single DataStore edit, so there is no window where the credential is
+     * lost, and a failure writes nothing at all and leaves the legacy value to retry
+     * next time. Deliberately never falls back to plaintext.
      */
     suspend fun migrateLegacyApiKey(): ApiKeyMigrationResult {
         val legacy = dataStore.data.first()[KEY_API_KEY_LEGACY]
