@@ -1,8 +1,10 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.RoleplayDao
 import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
@@ -12,8 +14,8 @@ import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
-import com.aus.deutschflow.util.StartSessionGate
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
@@ -28,17 +30,20 @@ data class ChatMessage(
 
 @HiltViewModel
 class RoleplayViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val groqHelper: GroqHelper,
     private val speechRecognizerHelper: SpeechRecognizerHelper,
-    private val vocabularyProcessor: VocabularyProcessor,
-    private val ttsHelper: TTSHelper,
     private val preferenceManager: PreferenceManager,
+    private val ttsHelper: TTSHelper,
+    private val vocabularyProcessor: VocabularyProcessor,
     private val roleplayDao: RoleplayDao
 ) : ViewModel() {
 
-    /** Single-flight gate for startListening(); see PracticeViewModel.startPractice. */
-    private val startGate = StartSessionGate()
-
-    private var startJob: Job? = null
+    /**
+     * Waits for the dialect, then opens the mic; single-flight across attempts.
+     * The recogniser streams re-arm the gate on a terminal path (init below).
+     */
+    private val startOrchestrator = StartSessionOrchestrator(preferenceManager.selectedDialect)
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages
@@ -69,13 +74,13 @@ class RoleplayViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         speechRecognizerHelper.isListening
-            .onEach { if (it) startGate.release() }
+            .onEach { if (it) startOrchestrator.release() }
             .launchIn(viewModelScope)
         speechRecognizerHelper.isProcessing
-            .onEach { if (it) startGate.release() }
+            .onEach { if (it) startOrchestrator.release() }
             .launchIn(viewModelScope)
         speechRecognizerHelper.errorState
-            .onEach { if (it != null) startGate.release() }
+            .onEach { if (it != null) startOrchestrator.release() }
             .launchIn(viewModelScope)
     }
 
@@ -175,7 +180,12 @@ class RoleplayViewModel @Inject constructor(
     }
 
     fun startListening() {
-        if (!startGate.tryStart()) {
+        val started = startOrchestrator.start(
+            scope = viewModelScope,
+            onStarted = { dialect -> speechRecognizerHelper.startListening(dialect) },
+            onError = { _error.value = context.getString(R.string.speech_start_failed) },
+        )
+        if (started == null) {
             Log.w(TAG, "startListening ignored: a recognition session is already starting")
             return
         }
@@ -185,13 +195,6 @@ class RoleplayViewModel @Inject constructor(
         // renders it, so a stale one would greet the new attempt. The banner should
         // belong to the action the user just took.
         speechRecognizerHelper.dismissError()
-        startJob = viewModelScope.launch {
-            // The stored dialect, not the de-DE default. Transcript and Practice both
-            // pass it; roleplay called the no-argument overload, so an Austrian or
-            // Swiss user's setting silently did not apply on the one screen where
-            // they speak the most.
-            speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
-        }
     }
 
     /** The user refused the microphone, so say so rather than doing nothing. */
@@ -202,9 +205,7 @@ class RoleplayViewModel @Inject constructor(
 
     /** Called when the screen leaves composition or the app is backgrounded. */
     fun cancelListening() {
-        startJob?.cancel()
-        startJob = null
-        startGate.release()
+        startOrchestrator.cancel()
         speechRecognizerHelper.cancel()
     }
 
@@ -325,7 +326,7 @@ class RoleplayViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        startJob?.cancel()
+        startOrchestrator.clear()
         // No super call: ViewModel.onCleared is @EmptySuper, and the rest of the
         // app's ViewModels omit it for the same reason.
         speechRecognizerHelper.destroy()
