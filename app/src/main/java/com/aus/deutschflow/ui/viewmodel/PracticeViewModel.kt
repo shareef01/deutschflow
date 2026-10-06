@@ -9,7 +9,9 @@ import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
+import com.aus.deutschflow.util.StartSessionGate
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.Normalizer
@@ -40,7 +42,9 @@ class PracticeViewModel @Inject constructor(
 ) : ViewModel() {
 
     /** Single-flight gate for startPractice(); reset via the recogniser streams in init. */
-    private var practiceStarting = false
+    private val startGate = StartSessionGate()
+
+    private var startJob: Job? = null
 
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
@@ -93,13 +97,13 @@ class PracticeViewModel @Inject constructor(
         // without polling. Recognition-only errorState (not the screen's combined
         // errorState) is used so a stale TTS error cannot drop the gate mid-attempt.
         speechRecognizerHelper.isListening
-            .onEach { if (it) practiceStarting = false }
+            .onEach { if (it) startGate.release() }
             .launchIn(viewModelScope)
         speechRecognizerHelper.isProcessing
-            .onEach { if (it) practiceStarting = false }
+            .onEach { if (it) startGate.release() }
             .launchIn(viewModelScope)
         speechRecognizerHelper.errorState
-            .onEach { if (it != null) practiceStarting = false }
+            .onEach { if (it != null) startGate.release() }
             .launchIn(viewModelScope)
     }
 
@@ -132,13 +136,12 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun startPractice() {
-        if (practiceStarting) {
+        if (!startGate.tryStart()) {
             Log.w(TAG, "startPractice ignored: a recognition session is already starting")
             return
         }
-        practiceStarting = true
         _permissionDenied.value = false
-        viewModelScope.launch {
+        startJob = viewModelScope.launch {
             _wordResults.value = emptyList()
             _feedback.value = PracticeFeedback.NONE
             // Stop any German playback before the microphone opens, or the engine's
@@ -154,6 +157,9 @@ class PracticeViewModel @Inject constructor(
 
     /** Called when the screen leaves composition or the app is backgrounded. */
     fun cancelListening() {
+        startJob?.cancel()
+        startJob = null
+        startGate.release()
         speechRecognizerHelper.cancel()
     }
 
@@ -188,6 +194,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        startJob?.cancel()
         speechRecognizerHelper.destroy()
     }
 

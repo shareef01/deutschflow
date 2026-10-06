@@ -12,6 +12,7 @@ import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
+import com.aus.deutschflow.util.StartSessionGate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -35,7 +36,9 @@ class RoleplayViewModel @Inject constructor(
 ) : ViewModel() {
 
     /** Single-flight gate for startListening(); see PracticeViewModel.startPractice. */
-    private var speechStarting = false
+    private val startGate = StartSessionGate()
+
+    private var startJob: Job? = null
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages
@@ -66,13 +69,13 @@ class RoleplayViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         speechRecognizerHelper.isListening
-            .onEach { if (it) speechStarting = false }
+            .onEach { if (it) startGate.release() }
             .launchIn(viewModelScope)
         speechRecognizerHelper.isProcessing
-            .onEach { if (it) speechStarting = false }
+            .onEach { if (it) startGate.release() }
             .launchIn(viewModelScope)
         speechRecognizerHelper.errorState
-            .onEach { if (it != null) speechStarting = false }
+            .onEach { if (it != null) startGate.release() }
             .launchIn(viewModelScope)
     }
 
@@ -172,18 +175,17 @@ class RoleplayViewModel @Inject constructor(
     }
 
     fun startListening() {
-        if (speechStarting) {
+        if (!startGate.tryStart()) {
             Log.w(TAG, "startListening ignored: a recognition session is already starting")
             return
         }
-        speechStarting = true
         _permissionDenied.value = false
         _error.value = null
         // The recogniser's error outlives the turn that caused it, and this screen
         // renders it, so a stale one would greet the new attempt. The banner should
         // belong to the action the user just took.
         speechRecognizerHelper.dismissError()
-        viewModelScope.launch {
+        startJob = viewModelScope.launch {
             // The stored dialect, not the de-DE default. Transcript and Practice both
             // pass it; roleplay called the no-argument overload, so an Austrian or
             // Swiss user's setting silently did not apply on the one screen where
@@ -200,6 +202,9 @@ class RoleplayViewModel @Inject constructor(
 
     /** Called when the screen leaves composition or the app is backgrounded. */
     fun cancelListening() {
+        startJob?.cancel()
+        startJob = null
+        startGate.release()
         speechRecognizerHelper.cancel()
     }
 
@@ -320,6 +325,7 @@ class RoleplayViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        startJob?.cancel()
         // No super call: ViewModel.onCleared is @EmptySuper, and the rest of the
         // app's ViewModels omit it for the same reason.
         speechRecognizerHelper.destroy()
