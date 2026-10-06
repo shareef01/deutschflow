@@ -71,6 +71,7 @@ class PracticeAttemptStateTest {
         recognizer = SpeechRecognizerHelper(context)
 
         viewModel = PracticeViewModel(
+            context = context,
             speechRecognizerHelper = recognizer,
             vocabularyDao = database.vocabularyDao(),
             preferenceManager = store.preferences,

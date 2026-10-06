@@ -48,7 +48,15 @@ class RoleplayViewModelTest {
             instrumentation.runOnMainSync {
                 recognizer = SpeechRecognizerHelper(context)
                 tts = TTSHelper(context)
-                viewModel = RoleplayViewModel(recognizer, processor, requireNotNull(tts), preferences.preferences, database.roleplayDao())
+                viewModel = RoleplayViewModel(
+                    context = context,
+                    groqHelper = GroqHelper(context),
+                    speechRecognizerHelper = recognizer,
+                    preferenceManager = preferences.preferences,
+                    ttsHelper = requireNotNull(tts),
+                    vocabularyProcessor = processor,
+                    roleplayDao = database.roleplayDao()
+                )
                 owner.put("roleplay", viewModel)
             }
             instrumentation.waitForIdleSync()
