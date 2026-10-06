@@ -44,6 +44,13 @@ class RoleplayViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    /**
+     * Whether the microphone was refused, kept apart from [error] so it can anchor an
+     * "Open Settings" action. Mirrors PracticeViewModel and TranscriptViewModel.
+     */
+    private val _permissionDenied = MutableStateFlow(false)
+    val permissionDenied: StateFlow<Boolean> = _permissionDenied
+
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
@@ -152,6 +159,7 @@ class RoleplayViewModel @Inject constructor(
     }
 
     fun startListening() {
+        _permissionDenied.value = false
         _error.value = null
         // The recogniser's error outlives the turn that caused it, and this screen
         // renders it, so a stale one would greet the new attempt. The banner should
@@ -168,6 +176,7 @@ class RoleplayViewModel @Inject constructor(
 
     /** The user refused the microphone, so say so rather than doing nothing. */
     fun onPermissionDenied() {
+        _permissionDenied.value = true
         speechRecognizerHelper.reportPermissionDenied()
     }
 

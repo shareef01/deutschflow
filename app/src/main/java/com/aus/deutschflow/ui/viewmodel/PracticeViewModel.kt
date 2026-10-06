@@ -54,6 +54,16 @@ class PracticeViewModel @Inject constructor(
     ) { recognition, speech -> recognition ?: speech }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    /**
+     * Whether the microphone was refused, kept apart from [errorState].
+     *
+     * errorState also carries the denial text, but it is shared with unrelated
+     * recognition/TTS failures and is cleared by the next attempt, so it is not a
+     * stable anchor for an "Open Settings" affordance. Mirrors TranscriptViewModel.
+     */
+    private val _permissionDenied = MutableStateFlow(false)
+    val permissionDenied: StateFlow<Boolean> = _permissionDenied
+
     private val _targetSentence = MutableStateFlow("Ich lerne Deutsch.")
     val targetSentence: StateFlow<String> = _targetSentence
 
@@ -102,6 +112,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun startPractice() {
+        _permissionDenied.value = false
         viewModelScope.launch {
             _wordResults.value = emptyList()
             _feedback.value = PracticeFeedback.NONE
@@ -123,6 +134,7 @@ class PracticeViewModel @Inject constructor(
 
     /** The user refused the microphone, so say so rather than doing nothing. */
     fun onPermissionDenied() {
+        _permissionDenied.value = true
         speechRecognizerHelper.reportPermissionDenied()
     }
 

@@ -43,9 +43,9 @@ import java.util.UUID
  * That is a real cost, and it is the lesser one, because the two mistakes are not
  * symmetric: a false *merge* destroys a vocabulary entry and cannot be undone from
  * inside the app, while a false *split* leaves the user looking at a near-duplicate
- * they can delete. Looser matching still happens where it is safe - see
- * [germanMatchKey], which backs search and speech scoring, where a wrong match costs
- * a search result rather than a row.
+ * they can delete. Nothing that consumed the loose fold reads this key: search and
+ * scoring filter on the word as written and fold independently, so tightening
+ * [germanKey] changed neither. See [germanMatchKey] for the loose rule itself.
  *
  * Mirrors foldGermanKey in web/src/lib/db/schema.ts.
  */

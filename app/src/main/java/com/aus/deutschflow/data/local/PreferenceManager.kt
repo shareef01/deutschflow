@@ -14,11 +14,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
+
+private const val TAG = "PreferenceManager"
 
 /**
  * The store is injected rather than reached for through a Context extension.
@@ -132,11 +136,38 @@ class PreferenceManager @Inject constructor(
      * instead of claiming a save that did not happen.
      */
     suspend fun saveApiKey(apiKey: String): Boolean {
-        val encrypted = withContext(Dispatchers.IO) { cipher.encrypt(apiKey) } ?: return false
+        // Guarded end to end. KeystoreCipher.encrypt swallows its own failures and
+        // returns null, which the `?: return false` below handles - but the DataStore
+        // write was unguarded, so an unexpected IO or corruption error there would
+        // propagate out of SettingsViewModel's launch and crash the app. Catching it
+        // turns any such failure into "not saved", and because the edit is atomic the
+        // key already stored is left intact for the user to keep using.
+        //
+        // CancellationException is rethrown so this still composes with structured
+        // concurrency: a scope cancellation propagates instead of being swallowed.
+        val trimmed = apiKey.trim()
+        val encrypted = try {
+            withContext(Dispatchers.IO) { cipher.encrypt(trimmed) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not encrypt the API key", e)
+            null
+        } ?: return false
 
-        dataStore.edit { preferences ->
-            preferences[KEY_API_KEY_ENCRYPTED] = encrypted
-            preferences.remove(KEY_API_KEY_LEGACY)
+        try {
+            dataStore.edit { preferences ->
+                preferences[KEY_API_KEY_ENCRYPTED] = encrypted
+                preferences.remove(KEY_API_KEY_LEGACY)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // dataStore.edit is atomic per preferences file: if it threw, neither the
+            // encrypted write nor the legacy removal stuck, so the prior credential
+            // survives untouched.
+            Log.w(TAG, "Could not store the API key", e)
+            return false
         }
         return true
     }
