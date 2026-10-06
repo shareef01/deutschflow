@@ -10,8 +10,12 @@ import com.aus.deutschflow.data.local.KeystoreCipher
 import com.aus.deutschflow.data.local.PreferenceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.junit.rules.ExternalResource
 import java.io.File
 
@@ -58,7 +62,27 @@ class TestPreferencesRule(private val name: String) : ExternalResource() {
     }
 
     override fun after() {
-        scope.cancel()
+        // DataStore allows one active instance per file per process, and only forgets
+        // an instance once its scope has finished draining. scope.cancel() is
+        // asynchronous, so without waiting the next test's before() can still see this
+        // store as active and throw "multiple DataStores active for the same file" - a
+        // failure that lands on an unrelated test and reads as a flake. Cancel and wait
+        // for the job to drain, bounded, so a stuck store cannot hang teardown forever
+        // and the file is released before deletion and the next store is created.
+        val job = scope.coroutineContext[Job]
+        if (job != null) {
+            runBlocking(Dispatchers.IO) {
+                try {
+                    withTimeout(5_000) {
+                        job.cancel()
+                        while (job.isActive) yield()
+                    }
+                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                    // Bounded teardown: if a coroutine is stuck past 5s, tear down
+                    // anyway rather than hanging the whole test run.
+                }
+            }
+        }
         file.delete()
     }
 }

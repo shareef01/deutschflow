@@ -179,6 +179,30 @@ class ApiKeyStorageTest {
         assertEquals("", manager.apiKey.first())
     }
 
+    /**
+     * Pins the saveApiKey guard: a cipher whose encrypt throws (rather than returning
+     * null) - the failure shape KeystoreCipher's own catch does not cover, plus any IO
+     * error from the DataStore write it wraps. The save must report failure and the key
+     * saved beforehand must survive unchanged.
+     */
+    @Test
+    fun aFailedSaveKeepsThePreviousUsableCredential() = runBlocking {
+        preferences.saveApiKey(SECRET)
+        assertEquals(SECRET, preferences.apiKey.first())
+
+        val manager = PreferenceManager(store.dataStore, ThrowingCipher())
+        assertFalse(manager.saveApiKey(NEWER_SECRET))
+
+        // The real-ciphertext key saved above is untouched: the throw aborted the
+        // write before it could remove or overwrite it.
+        assertEquals(SECRET, manager.apiKey.first())
+    }
+
+    private class ThrowingCipher : KeystoreCipher() {
+        override fun encrypt(plainText: String): String? =
+            throw RuntimeException("simulated Keystore/IO failure during save")
+    }
+
     private class FakeCipher(
         private val encrypted: String?,
         private val decrypted: String?
