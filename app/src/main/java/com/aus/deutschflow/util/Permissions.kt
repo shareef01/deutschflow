@@ -3,6 +3,7 @@ package com.aus.deutschflow.util
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -30,19 +31,57 @@ enum class PermissionState {
     DENIED_PERMANENTLY
 }
 
-fun Context.recordAudioPermissionState(askedBefore: Boolean): PermissionState = when {
-    ContextCompat.checkSelfPermission(
-        this, Manifest.permission.RECORD_AUDIO
-    ) == PackageManager.PERMISSION_GRANTED -> PermissionState.GRANTED
-    // shouldShowRequestPermissionRationale is an Activity-only API, so a plain
-    // Context cannot answer it; a non-Activity falls through to the askedBefore
-    // rule and is treated as a transient denial (the safe "ask again" branch).
-    this is Activity && shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) ->
-        PermissionState.REQUESTABLE
-    // No rationale owed and we have asked before: the user chose "Don't ask again".
+/**
+ * The grant decision, as a pure function of the three signals the platform exposes.
+ *
+ * Extracted from the Context call so the four branches are deterministic and testable
+ * without a real permission dialog:
+ * - granted -> GRANTED (covers "grant after Settings")
+ * - !granted && canShowRationale -> REQUESTABLE (explain, then re-ask)
+ * - !granted && !canShowRationale && askedBefore -> DENIED_PERMANENTLY (Settings only)
+ * - !granted && !canShowRationale && !askedBefore -> REQUESTABLE (a real first request)
+ */
+fun computePermissionState(
+    granted: Boolean,
+    canShowRationale: Boolean,
+    askedBefore: Boolean,
+): PermissionState = when {
+    granted -> PermissionState.GRANTED
+    canShowRationale -> PermissionState.REQUESTABLE
     askedBefore -> PermissionState.DENIED_PERMANENTLY
-    // No rationale and we have not asked: a real first request, so ask.
     else -> PermissionState.REQUESTABLE
+}
+
+/**
+ * Unwraps a [ContextWrapper] chain to the underlying [Activity], if any.
+ *
+ * `LocalContext.current` is frequently a wrapper rather than the raw Activity, and
+ * `shouldShowRequestPermissionRationale` is an Activity-only API - so a wrapped
+ * Activity must be unwrapped before its rationale can be read.
+ */
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext?.findActivity()
+    else -> null
+}
+
+fun Context.recordAudioPermissionState(askedBefore: Boolean): PermissionState {
+    val granted = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.RECORD_AUDIO,
+    ) == PackageManager.PERMISSION_GRANTED
+    if (granted) return PermissionState.GRANTED
+    // shouldShowRequestPermissionRationale is Activity-only. Unwrap context wrappers so
+    // a wrapped Activity still answers it; a non-Activity context cannot answer it and
+    // so can never decide "Don't ask again" and stays REQUESTABLE. (This was the bug:
+    // the old `askedBefore -> DENIED_PERMANENTLY` branch fired for non-Activity contexts
+    // too once askedBefore was true.)
+    val activity = findActivity() ?: return PermissionState.REQUESTABLE
+    val canShowRationale = activity.shouldShowRequestPermissionRationale(
+        Manifest.permission.RECORD_AUDIO,
+    )
+    return computePermissionState(
+        granted = false, canShowRationale = canShowRationale, askedBefore = askedBefore,
+    )
 }
 
 /**

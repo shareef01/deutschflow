@@ -1,6 +1,7 @@
 package com.aus.deutschflow
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -8,16 +9,15 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.test.core.app.ApplicationProvider
 import com.aus.deutschflow.data.local.KeystoreCipher
 import com.aus.deutschflow.data.local.PreferenceManager
+import com.aus.deutschflow.util.cancelAndDrain
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.yield
 import org.junit.rules.ExternalResource
 import java.io.File
+
+private const val TAG = "TestPreferencesRule"
 
 /**
  * A settings store belonging to one test, not to the user.
@@ -63,26 +63,26 @@ class TestPreferencesRule(private val name: String) : ExternalResource() {
 
     override fun after() {
         // DataStore allows one active instance per file per process, and only forgets
-        // an instance once its scope has finished draining. scope.cancel() is
-        // asynchronous, so without waiting the next test's before() can still see this
-        // store as active and throw "multiple DataStores active for the same file" - a
-        // failure that lands on an unrelated test and reads as a flake. Cancel and wait
-        // for the job to drain, bounded, so a stuck store cannot hang teardown forever
-        // and the file is released before deletion and the next store is created.
-        val job = scope.coroutineContext[Job]
-        if (job != null) {
-            runBlocking(Dispatchers.IO) {
-                try {
-                    withTimeout(5_000) {
-                        job.cancel()
-                        while (job.isActive) yield()
-                    }
-                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                    // Bounded teardown: if a coroutine is stuck past 5s, tear down
-                    // anyway rather than hanging the whole test run.
-                }
-            }
+        // an instance once its scope has finished draining. Teardown must therefore
+        // cancel AND wait for completion - not just cancel and assume - so the next
+        // test's before() cannot see this store as still active and crash with
+        // "multiple DataStores active for the same file" (a failure that lands on the
+        // wrong test and reads as a flake).
+        //
+        // cancel+join run in runBlocking: the caller's coroutine, a separate active
+        // scope, never this scope's own job (a coroutine cancelled along with its own
+        // scope never reaches completion). cancelAndDrain is bounded, and a timeout is
+        // a real failure: we must NOT delete the file when the drain timed out, because
+        // a child may still be writing to it. Leaving it in place is noisy but safe;
+        // deleting it under an in-flight write is what corrupts the next store.
+        val drained = runBlocking(Dispatchers.IO) { cancelAndDrain(scope, 5_000) }
+        if (drained) {
+            file.delete()
+        } else {
+            Log.e(
+                TAG,
+                "DataStore scope for $file did not drain within 5s; leaving the file in place to avoid racing an in-flight write",
+            )
         }
-        file.delete()
     }
 }

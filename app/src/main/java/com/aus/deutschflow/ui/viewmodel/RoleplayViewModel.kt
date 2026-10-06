@@ -34,6 +34,9 @@ class RoleplayViewModel @Inject constructor(
     private val roleplayDao: RoleplayDao
 ) : ViewModel() {
 
+    /** Single-flight gate for startListening(); see PracticeViewModel.startPractice. */
+    private var speechStarting = false
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages
 
@@ -60,6 +63,16 @@ class RoleplayViewModel @Inject constructor(
     init {
         speechRecognizerHelper.results
             .onEach { text -> sendInput(text) }
+            .launchIn(viewModelScope)
+
+        speechRecognizerHelper.isListening
+            .onEach { if (it) speechStarting = false }
+            .launchIn(viewModelScope)
+        speechRecognizerHelper.isProcessing
+            .onEach { if (it) speechStarting = false }
+            .launchIn(viewModelScope)
+        speechRecognizerHelper.errorState
+            .onEach { if (it != null) speechStarting = false }
             .launchIn(viewModelScope)
     }
 
@@ -159,6 +172,11 @@ class RoleplayViewModel @Inject constructor(
     }
 
     fun startListening() {
+        if (speechStarting) {
+            Log.w(TAG, "startListening ignored: a recognition session is already starting")
+            return
+        }
+        speechStarting = true
         _permissionDenied.value = false
         _error.value = null
         // The recogniser's error outlives the turn that caused it, and this screen
