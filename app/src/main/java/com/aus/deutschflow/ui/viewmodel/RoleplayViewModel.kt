@@ -1,8 +1,10 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.RoleplayDao
 import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
@@ -13,6 +15,7 @@ import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
@@ -27,12 +30,23 @@ data class ChatMessage(
 
 @HiltViewModel
 class RoleplayViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val groqHelper: GroqHelper,
     private val speechRecognizerHelper: SpeechRecognizerHelper,
-    private val vocabularyProcessor: VocabularyProcessor,
-    private val ttsHelper: TTSHelper,
     private val preferenceManager: PreferenceManager,
+    private val ttsHelper: TTSHelper,
+    private val vocabularyProcessor: VocabularyProcessor,
     private val roleplayDao: RoleplayDao
 ) : ViewModel() {
+
+    /**
+     * Waits for the dialect, then opens the mic; single-flight across attempts.
+     * The recogniser streams re-arm the gate on a terminal path (init below).
+     */
+    private val startOrchestrator = StartSessionOrchestrator(preferenceManager.selectedDialect)
+
+    /** The attempt id that owns the live recogniser session; drives ownership-tagged release(). */
+    private var currentAttempt: Long = 0L
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages
@@ -44,6 +58,13 @@ class RoleplayViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    /**
+     * Whether the microphone was refused, kept apart from [error] so it can anchor an
+     * "Open Settings" action. Mirrors PracticeViewModel and TranscriptViewModel.
+     */
+    private val _permissionDenied = MutableStateFlow(false)
+    val permissionDenied: StateFlow<Boolean> = _permissionDenied
+
     val isListening: StateFlow<Boolean> = speechRecognizerHelper.isListening
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
@@ -53,6 +74,16 @@ class RoleplayViewModel @Inject constructor(
     init {
         speechRecognizerHelper.results
             .onEach { text -> sendInput(text) }
+            .launchIn(viewModelScope)
+
+        speechRecognizerHelper.isListening
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
+            .launchIn(viewModelScope)
+        speechRecognizerHelper.isProcessing
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
+            .launchIn(viewModelScope)
+        speechRecognizerHelper.errorState
+            .onEach { if (it != null) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
     }
 
@@ -152,22 +183,37 @@ class RoleplayViewModel @Inject constructor(
     }
 
     fun startListening() {
-        _error.value = null
-        // The recogniser's error outlives the turn that caused it, and this screen
-        // renders it, so a stale one would greet the new attempt. The banner should
-        // belong to the action the user just took.
-        speechRecognizerHelper.dismissError()
-        viewModelScope.launch {
-            // The stored dialect, not the de-DE default. Transcript and Practice both
-            // pass it; roleplay called the no-argument overload, so an Austrian or
-            // Swiss user's setting silently did not apply on the one screen where
-            // they speak the most.
-            speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
+        val started = startOrchestrator.start(
+            scope = viewModelScope,
+            onStarted = { dialect -> speechRecognizerHelper.startListening(dialect) },
+            onError = { _error.value = context.getString(R.string.speech_start_failed) },
+            onAccepted = { attempt ->
+                // Accepted new attempt: tag it so recogniser terminal events can only
+                // re-arm this attempt's gate, and clear stale errors before onError can fire.
+                _permissionDenied.value = false
+                currentAttempt = attempt
+                _error.value = null
+                // The recogniser's error outlives the turn that caused it, and this screen
+                // renders it, so a stale one would greet the new attempt. The banner should
+                // belong to the action the user just took.
+                speechRecognizerHelper.dismissError()
+            },
+        )
+        if (started == null) {
+            Log.w(TAG, "startListening ignored: a recognition session is already starting")
+            return
         }
+    }
+
+    /** The user refused the microphone, so say so rather than doing nothing. */
+    fun onPermissionDenied() {
+        _permissionDenied.value = true
+        speechRecognizerHelper.reportPermissionDenied()
     }
 
     /** Called when the screen leaves composition or the app is backgrounded. */
     fun cancelListening() {
+        startOrchestrator.cancel()
         speechRecognizerHelper.cancel()
     }
 
@@ -288,6 +334,7 @@ class RoleplayViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        startOrchestrator.clear()
         // No super call: ViewModel.onCleared is @EmptySuper, and the rest of the
         // app's ViewModels omit it for the same reason.
         speechRecognizerHelper.destroy()

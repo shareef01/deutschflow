@@ -162,7 +162,12 @@ describe("the version 6 upgrade", () => {
 
     const db = new DeutschFlowDB(name);
     await db.open();
-    expect(db.verno).toBe(8);
+    // The schema version this test upgrades a v5 database to. Bump it whenever a version
+    // is added to src/lib/db/schema.ts - it is here to catch an upgrade that silently
+    // stops running, not to assert anything about the version's contents.
+    const LATEST_SCHEMA_VERSION = 9;
+
+    expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
     // Nothing is backfilled — the table starts empty either way. What matters is
     // that adding it leaves the library alone.
     expect(await loadConversation(db)).toEqual([]);

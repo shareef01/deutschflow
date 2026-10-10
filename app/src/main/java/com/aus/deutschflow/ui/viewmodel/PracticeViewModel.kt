@@ -1,18 +1,24 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.Normalizer
 import javax.inject.Inject
+
+private const val TAG = "PracticeViewModel"
 
 @Immutable
 data class WordResult(val word: String, val isCorrect: Boolean)
@@ -30,11 +36,27 @@ enum class PracticeFeedback { NONE, PERFECT, GOOD, KEEP_GOING }
 
 @HiltViewModel
 class PracticeViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val speechRecognizerHelper: SpeechRecognizerHelper,
     private val vocabularyDao: VocabularyDao,
     private val preferenceManager: PreferenceManager,
     private val ttsHelper: TTSHelper
 ) : ViewModel() {
+
+    /**
+     * Waits for the dialect, then opens the mic; single-flight across attempts.
+     * The recogniser streams re-arm the gate on a terminal path (init below).
+     */
+    internal var startOrchestrator = StartSessionOrchestrator(preferenceManager.selectedDialect)
+
+    /** The attempt id that owns the live recogniser session; drives ownership-tagged release(). */
+    private var currentAttempt: Long = 0L
+
+    /** Start error kept separate from the recogniser's so it clears per attempt. */
+    private val _startError = MutableStateFlow<String?>(null)
+
+    /** _startError, observable independent of the recogniser's own errors. */
+    internal val startError: StateFlow<String?> = _startError
 
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
@@ -44,15 +66,26 @@ class PracticeViewModel @Inject constructor(
     /** Input level 0..1 for the live waveform; read in a draw phase, not composition. */
     val rmsLevel: StateFlow<Float> = speechRecognizerHelper.rmsLevel
     /**
-     * One error surface for the screen: whichever of the microphone or the voice
-     * engine last had something to say. Both are reasons the user is looking at a
-     * control that did not do what they expected.
+     * One error surface for the screen: the start attempt, the microphone, or the
+     * voice engine — whichever last had something to say. The start error is
+     * per-attempt, so a dialect-read failure does not linger next to a success.
      */
     val errorState: StateFlow<String?> = combine(
+        _startError,
         speechRecognizerHelper.errorState,
         ttsHelper.error
-    ) { recognition, speech -> recognition ?: speech }
+    ) { startError, recognition, speech -> startError ?: recognition ?: speech }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * Whether the microphone was refused, kept apart from [errorState].
+     *
+     * errorState also carries the denial text, but it is shared with unrelated
+     * recognition/TTS failures and is cleared by the next attempt, so it is not a
+     * stable anchor for an "Open Settings" affordance. Mirrors TranscriptViewModel.
+     */
+    private val _permissionDenied = MutableStateFlow(false)
+    val permissionDenied: StateFlow<Boolean> = _permissionDenied
 
     private val _targetSentence = MutableStateFlow("Ich lerne Deutsch.")
     val targetSentence: StateFlow<String> = _targetSentence
@@ -70,6 +103,20 @@ class PracticeViewModel @Inject constructor(
         // after stopPractice() scored the *previous* attempt against this sentence.
         speechRecognizerHelper.results
             .onEach { evaluatePronunciation(it) }
+            .launchIn(viewModelScope)
+
+        // Release the startPractice gate. The recogniser flips isListening/isProcessing
+        // and errorState from its handler thread; collecting them here clears the gate
+        // without polling. Recognition-only errorState (not the screen's combined
+        // errorState) is used so a stale TTS error cannot drop the gate mid-attempt.
+        speechRecognizerHelper.isListening
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
+            .launchIn(viewModelScope)
+        speechRecognizerHelper.isProcessing
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
+            .launchIn(viewModelScope)
+        speechRecognizerHelper.errorState
+            .onEach { if (it != null) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
     }
 
@@ -102,13 +149,28 @@ class PracticeViewModel @Inject constructor(
     }
 
     fun startPractice() {
-        viewModelScope.launch {
-            _wordResults.value = emptyList()
-            _feedback.value = PracticeFeedback.NONE
-            // Stop any German playback before the microphone opens, or the engine's
-            // own voice would be recognised as the user's.
-            ttsHelper.stop()
-            speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
+        val started = startOrchestrator.start(
+            scope = viewModelScope,
+            onStarted = { dialect ->
+                _wordResults.value = emptyList()
+                _feedback.value = PracticeFeedback.NONE
+                // Stop any German playback before the microphone opens, or the
+                // engine's own voice would be recognised as the user's.
+                ttsHelper.stop()
+                speechRecognizerHelper.startListening(dialect)
+            },
+            onError = { _startError.value = context.getString(R.string.speech_start_failed) },
+            onAccepted = { attempt ->
+                // Accepted new attempt: clear any stale start error and tag the live
+                // attempt so recogniser terminal events can only re-arm this attempt's gate.
+                _startError.value = null
+                currentAttempt = attempt
+                _permissionDenied.value = false
+            },
+        )
+        if (started == null) {
+            Log.w(TAG, "startPractice ignored: a recognition session is already starting")
+            return
         }
     }
 
@@ -118,11 +180,13 @@ class PracticeViewModel @Inject constructor(
 
     /** Called when the screen leaves composition or the app is backgrounded. */
     fun cancelListening() {
+        startOrchestrator.cancel()
         speechRecognizerHelper.cancel()
     }
 
     /** The user refused the microphone, so say so rather than doing nothing. */
     fun onPermissionDenied() {
+        _permissionDenied.value = true
         speechRecognizerHelper.reportPermissionDenied()
     }
 
@@ -151,6 +215,7 @@ class PracticeViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        startOrchestrator.clear()
         speechRecognizerHelper.destroy()
     }
 
