@@ -3,6 +3,7 @@ package com.aus.deutschflow.data.local
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.aus.deutschflow.data.local.entities.germanKey
+import java.text.Normalizer
 
 /**
  * Adds the example sentence to the vocabulary table.
@@ -284,7 +285,7 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
 }
 
 /**
- * The fold [germanKey] used to be, pinned here so shipped migrations keep the meaning
+ * The fold [germanKey] used to be, written out so shipped migrations keep the meaning
  * they were written and tested with.
  *
  * [MIGRATION_12_13] and [MIGRATION_14_15] both re-key every row through
@@ -295,12 +296,23 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
  * versions later, and a migration's behaviour would depend on when it happened to run
  * rather than on the schema it bridges.
  *
- * So the historical fold is frozen here. ß→ss is kept deliberately: that *is* what
- * v13 and v15 did, their tests assert it, and re-running them must reproduce it
- * exactly. MIGRATION_16_17 is what moves the app to the stricter key.
+ * So the fold is spelled out in full rather than derived from the live one. It used to
+ * read `germanKey(text).replace("ß", "ss")`, which reproduces the historical fold only
+ * for as long as ß is the *sole* difference between the two: the normalisation and
+ * umlaut rules were shared with the live function, so a later change to any of them
+ * would have re-keyed these two migrations silently - exactly the failure the freeze
+ * exists to prevent. ß→ss is kept deliberately: that *is* what v13 and v15 did, their
+ * tests assert it, and re-running them must reproduce it exactly. MIGRATION_16_17 is
+ * what moves the app to the stricter key, and it calls the live [germanKey] on purpose.
  */
-private fun legacyGermanKey(text: String): String =
-    germanKey(text).replace("ß", "ss")
+internal fun legacyGermanKey(text: String): String =
+    Normalizer.normalize(text, Normalizer.Form.NFC)
+        .trim()
+        .lowercase()
+        .replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ü", "ue")
+        .replace("ß", "ss")
 
 /**
  * Backfills `germanTextKey` using the app's own fold, one row at a time.
