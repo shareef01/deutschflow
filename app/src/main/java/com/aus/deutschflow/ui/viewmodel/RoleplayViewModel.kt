@@ -45,6 +45,9 @@ class RoleplayViewModel @Inject constructor(
      */
     private val startOrchestrator = StartSessionOrchestrator(preferenceManager.selectedDialect)
 
+    /** The attempt id that owns the live recogniser session; drives ownership-tagged release(). */
+    private var currentAttempt: Long = 0L
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages
 
@@ -74,13 +77,13 @@ class RoleplayViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         speechRecognizerHelper.isListening
-            .onEach { if (it) startOrchestrator.release() }
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
         speechRecognizerHelper.isProcessing
-            .onEach { if (it) startOrchestrator.release() }
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
         speechRecognizerHelper.errorState
-            .onEach { if (it != null) startOrchestrator.release() }
+            .onEach { if (it != null) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
     }
 
@@ -184,17 +187,22 @@ class RoleplayViewModel @Inject constructor(
             scope = viewModelScope,
             onStarted = { dialect -> speechRecognizerHelper.startListening(dialect) },
             onError = { _error.value = context.getString(R.string.speech_start_failed) },
+            onAccepted = { attempt ->
+                // Accepted new attempt: tag it so recogniser terminal events can only
+                // re-arm this attempt's gate, and clear stale errors before onError can fire.
+                _permissionDenied.value = false
+                currentAttempt = attempt
+                _error.value = null
+                // The recogniser's error outlives the turn that caused it, and this screen
+                // renders it, so a stale one would greet the new attempt. The banner should
+                // belong to the action the user just took.
+                speechRecognizerHelper.dismissError()
+            },
         )
         if (started == null) {
             Log.w(TAG, "startListening ignored: a recognition session is already starting")
             return
         }
-        _permissionDenied.value = false
-        _error.value = null
-        // The recogniser's error outlives the turn that caused it, and this screen
-        // renders it, so a stale one would greet the new attempt. The banner should
-        // belong to the action the user just took.
-        speechRecognizerHelper.dismissError()
     }
 
     /** The user refused the microphone, so say so rather than doing nothing. */

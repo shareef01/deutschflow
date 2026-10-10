@@ -3,6 +3,7 @@ package com.aus.deutschflow.ui.viewmodel
 import com.aus.deutschflow.util.StartSessionGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -50,6 +51,9 @@ internal class StartSessionOrchestrator(
      * - Any other exception is delivered to [onError] (the VM localizes it) and
      *   this attempt's gate ownership is released, so the next start succeeds.
      *
+     * [onAccepted] runs synchronously once the gate is acquired, before any
+     * coroutine work, with the new attempt token.
+     *
      * @return the attempt token if the gate was acquired, or null if a previous
      *   attempt is still pending.
      */
@@ -57,12 +61,21 @@ internal class StartSessionOrchestrator(
         scope: CoroutineScope,
         onStarted: (String) -> Unit,
         onError: (Throwable) -> Unit,
+        onAccepted: (Long) -> Unit = {},
     ): Long? {
         val myAttempt = synchronized(this) {
             if (!gate.tryStart()) return null
             ++attempt
         }
-        job = scope.launch {
+        // Runs before the coroutine can start, so per-attempt state set here (attempt id,
+        // cleared errors) can never overwrite what onStarted/onError produce.
+        onAccepted(myAttempt)
+        // Publish the Job before starting the coroutine. stillOwns() reads the
+        // `job` field, so under eager (e.g. Dispatchers.Unconfined) execution the
+        // body must not run before the assignment — otherwise it observes a null
+        // job, skips onStarted, and leaves the gate held. A lazy Job is published
+        // first, then start() dispatches it.
+        val newJob = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 // The delay under test: the saved dialect, read as a cold flow so a
                 // corrupt/IO failure surfaces here rather than mid-recognition.
@@ -81,6 +94,8 @@ internal class StartSessionOrchestrator(
                 releaseIfOwner(myAttempt)
             }
         }
+        synchronized(this) { job = newJob }
+        newJob.start()
         return myAttempt
     }
 
@@ -100,9 +115,16 @@ internal class StartSessionOrchestrator(
         }
     }
 
-    /** Re-arms the gate (recognizer committed / errored on its own stream). */
-    fun release() {
-        synchronized(this) { gate.release() }
+    /**
+     * Re-arms the gate for the attempt identified by [attempt] — the recognizer
+     * terminal event belonging to that attempt's session. A stale event for a
+     * superseded attempt is a no-op: it cannot re-arm a gate that a newer attempt
+     * now holds, so a late callback cannot drop a newer pending lookup.
+     */
+    fun release(attempt: Long) {
+        synchronized(this) {
+            if (attempt == this.attempt) gate.release()
+        }
     }
 
     /** Tears the job down on ViewModel teardown; does NOT re-arm the gate. */

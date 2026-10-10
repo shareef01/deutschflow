@@ -11,7 +11,9 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
+import java.io.IOException
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -143,6 +145,35 @@ class PracticeAttemptStateTest {
             "and so should the verdict",
             PracticeFeedback.NONE,
             viewModel.feedback.first()
+        )
+    }
+
+    /**
+     * Defect #3 regression: a start error is set when the dialect read fails, and is
+     * cleared on an accepted retry — not left to shadow later attempts. The dialect is
+     * driven through the production start() path via the observable startOrchestrator.
+     */
+    @Test
+    fun startError_isClearedOnAcceptedRetryAfterFailure() = runBlocking {
+        var readAttempts = 0
+        val flakyDialect = flow<String> {
+            if (readAttempts++ == 0) throw IOException("simulated preference read failure")
+            emit("de-DE")
+        }
+        viewModel.startOrchestrator = StartSessionOrchestrator(flakyDialect)
+
+        // Attempt 1: the dialect read fails -> onError surfaces the start error.
+        viewModel.startPractice()
+        assertTrue(
+            "start error should surface when the dialect read fails",
+            awaitCondition { viewModel.startError.first() != null }
+        )
+
+        // The failure re-arms the gate; the retry acquires it and clears the error.
+        viewModel.startPractice()
+        assertTrue(
+            "start error should clear on an accepted new attempt",
+            awaitCondition { viewModel.startError.first() == null }
         )
     }
 

@@ -1,5 +1,9 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -147,28 +151,36 @@ class StartSessionOrchestratorTest {
             var starts = 0
             val (channel, dialect) = controlledDialect()
             val orch = StartSessionOrchestrator(dialect)
+            try {
+                val a = orch.start(this, onStarted = { starts++ }, onError = { })
+                assertNotNull(a)
+                assertTrue("A is pending", orch.isPending)
 
-            val a = orch.start(this, onStarted = { starts++ }, onError = { })
-            assertNotNull(a)
-            assertTrue(orch.isPending)
+                orch.cancel() // A cancelled; its ownership is released
+                // A must enter its controlled cancellation cleanup before B begins.
+                yield()
+                assertFalse("cancelled attempt is no longer pending", orch.isPending)
 
-            orch.cancel() // A cancelled; its ownership is released
-            assertFalse("cancelled attempt is no longer pending", orch.isPending)
+                val b = orch.start(this, onStarted = { starts++ }, onError = { })
+                assertNotNull("B re-acquires the gate", b)
+                assertTrue("B is pending", orch.isPending)
 
-            val b = orch.start(this, onStarted = { starts++ }, onError = { })
-            assertNotNull("B re-acquires the gate")
-            assertTrue(orch.isPending)
+                // A stale start while B is pending must be rejected, not queued behind it.
+                val c = orch.start(this, onStarted = { starts++ }, onError = { })
+                assertNull("a start while B is pending is rejected", c)
 
-            // Let A's cancelled job finish its cleanup. A must not release B's gate.
-            yield()
-            yield()
+                // Only B is consuming this channel; A was already cancelled.
+                channel.send("de-DE")
+                yield()
 
-            // Only B is consuming this channel; A was already cancelled.
-            channel.send("de-DE")
-            yield()
-
-            assertEquals("only B starts; A's cleanup did not drop B's gate", 1, starts)
-            assertFalse(orch.isPending)
+                assertEquals("only B starts; A's cleanup did not drop B's gate", 1, starts)
+                orch.clear()
+                assertFalse(orch.isPending)
+            } finally {
+                // Reap the live job even if an assertion above threw, so a failed
+                // run cannot leak a coroutine into the next test.
+                orch.clear()
+            }
         }
     }
 
@@ -179,12 +191,13 @@ class StartSessionOrchestratorTest {
             val orch = StartSessionOrchestrator(dialect)
 
             // First attempt acquires the gate and resolves cleanly.
-            orch.start(this, onStarted = { }, onError = { })
+            val token1 = orch.start(this, onStarted = { }, onError = { })
+            assertNotNull(token1)
             channel.send("de-DE")
             yield() // first attempt completes via onStarted
 
             // The recognizer committing re-arms the gate for the next attempt.
-            orch.release()
+            orch.release(token1!!)
 
             val token2 = orch.start(this, onStarted = { }, onError = { })
             assertNotNull("release() must re-arm the gate", token2)
@@ -207,6 +220,90 @@ class StartSessionOrchestratorTest {
             // The gate is still held: a new start is rejected until the recognizer
             // commits or cancels it.
             assertNull("clear must not re-arm the gate", orch.start(this, onStarted = { }, onError = { }))
+        }
+    }
+
+    @Test
+    fun immediateDialect_underEagerExecution_invokesOnStarted() = runBlocking {
+        withTimeout(timeoutMs) {
+            // Eager execution (Unconfined) + a dialect that emits with no suspension
+            // point: the coroutine body runs during start() unless the job is
+            // published before it starts. onStarted must still fire.
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+            try {
+                var started = false
+                val dialect = flow { emit("de-DE") }
+                val orch = StartSessionOrchestrator(dialect)
+                val token = orch.start(scope, onStarted = { started = true }, onError = { })
+                assertNotNull(token)
+                assertTrue(
+                    "onStarted must fire even when the dialect emits immediately under eager execution",
+                    started
+                )
+                orch.clear()
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    @Test
+    fun staleReleaseAttempt_doesNotDropNewerPendingGate() = runBlocking {
+        withTimeout(timeoutMs) {
+            val (channel, dialect) = controlledDialect()
+            val orch = StartSessionOrchestrator(dialect)
+            try {
+                val a = orch.start(this, onStarted = { }, onError = { })
+                assertNotNull(a)
+                // A's recognizer commits A's session — re-arms the gate.
+                orch.release(a!!)
+
+                // B acquires the gate and waits on its dialect.
+                val b = orch.start(this, onStarted = { }, onError = { })
+                assertNotNull(b)
+                assertTrue("B is pending", orch.isPending)
+
+                // A stale terminal event for the superseded attempt A must not re-arm
+                // a gate that B now holds.
+                orch.release(a)
+                val c = orch.start(this, onStarted = { }, onError = { })
+                assertNull("a stale attempt's release cannot drop a newer pending gate", c)
+
+                channel.send("de-DE")
+                yield()
+                orch.clear()
+            } finally {
+                orch.clear()
+            }
+        }
+    }
+
+    @Test
+    fun cancelledBeforeExecution_rearmsForRetry() = runBlocking {
+        withTimeout(timeoutMs) {
+            var started = 0
+            val (channel, dialect) = controlledDialect()
+            val orch = StartSessionOrchestrator(dialect)
+            try {
+                val a = orch.start(this, onStarted = { started++ }, onError = { })
+                assertNotNull(a)
+                assertTrue(orch.isPending)
+                // Cancel before the (lazy) job's body runs.
+                orch.cancel()
+                // A's cancelled job finishes its cleanup before B begins.
+                yield()
+                assertFalse("cancelled before execution: no start", orch.isPending)
+                assertEquals(0, started)
+                // The gate is re-armed; a retry acquires it.
+                val b = orch.start(this, onStarted = { started++ }, onError = { })
+                assertNotNull("retry acquires the gate", b)
+                channel.send("de-DE")
+                yield()
+                assertEquals("retry starts after a cancelled attempt", 1, started)
+                orch.clear()
+            } finally {
+                orch.clear()
+            }
         }
     }
 }

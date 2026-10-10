@@ -47,10 +47,16 @@ class PracticeViewModel @Inject constructor(
      * Waits for the dialect, then opens the mic; single-flight across attempts.
      * The recogniser streams re-arm the gate on a terminal path (init below).
      */
-    private val startOrchestrator = StartSessionOrchestrator(preferenceManager.selectedDialect)
+    internal var startOrchestrator = StartSessionOrchestrator(preferenceManager.selectedDialect)
+
+    /** The attempt id that owns the live recogniser session; drives ownership-tagged release(). */
+    private var currentAttempt: Long = 0L
 
     /** Start error kept separate from the recogniser's so it clears per attempt. */
     private val _startError = MutableStateFlow<String?>(null)
+
+    /** _startError, observable independent of the recogniser's own errors. */
+    internal val startError: StateFlow<String?> = _startError
 
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val finalText: StateFlow<String> = speechRecognizerHelper.finalText
@@ -104,13 +110,13 @@ class PracticeViewModel @Inject constructor(
         // without polling. Recognition-only errorState (not the screen's combined
         // errorState) is used so a stale TTS error cannot drop the gate mid-attempt.
         speechRecognizerHelper.isListening
-            .onEach { if (it) startOrchestrator.release() }
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
         speechRecognizerHelper.isProcessing
-            .onEach { if (it) startOrchestrator.release() }
+            .onEach { if (it) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
         speechRecognizerHelper.errorState
-            .onEach { if (it != null) startOrchestrator.release() }
+            .onEach { if (it != null) startOrchestrator.release(currentAttempt) }
             .launchIn(viewModelScope)
     }
 
@@ -154,12 +160,18 @@ class PracticeViewModel @Inject constructor(
                 speechRecognizerHelper.startListening(dialect)
             },
             onError = { _startError.value = context.getString(R.string.speech_start_failed) },
+            onAccepted = { attempt ->
+                // Accepted new attempt: clear any stale start error and tag the live
+                // attempt so recogniser terminal events can only re-arm this attempt's gate.
+                _startError.value = null
+                currentAttempt = attempt
+                _permissionDenied.value = false
+            },
         )
         if (started == null) {
             Log.w(TAG, "startPractice ignored: a recognition session is already starting")
             return
         }
-        _permissionDenied.value = false
     }
 
     fun stopPractice() {
