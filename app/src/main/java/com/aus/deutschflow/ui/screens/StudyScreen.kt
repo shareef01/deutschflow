@@ -40,9 +40,18 @@ fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
 
     var userSelectedTab by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableIntStateOf(1) } // 0 = Dashboard, 1 = Flashcards
+    // One automatic tab choice per screen entry, made when the freshly-loaded
+    // session state first arrives. Keying the effect on studyList.size as well
+    // meant answering the final card emptied the deck, re-fired the effect and
+    // yanked the user to the Dashboard before the Session Complete view ever
+    // rendered. The flag survives recomposition (and rotation) so the choice is
+    // never re-made for this entry; a user who leaves and re-enters the screen
+    // gets a fresh decision, which is the intended behaviour.
+    var autoTabChosen by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(hasLoaded, isExtraPractice, studyList.size) {
-        if (!userSelectedTab && hasLoaded) {
+    LaunchedEffect(hasLoaded) {
+        if (!userSelectedTab && !autoTabChosen && hasLoaded) {
+            autoTabChosen = true
             val hasDueCards = !isExtraPractice && studyList.isNotEmpty()
             selectedTab = if (hasDueCards) 1 else 0
         }
@@ -107,7 +116,10 @@ private fun StudySessionContent(
 
     LaunchedEffect(Unit) {
         viewModel.dismissTtsError()
-        viewModel.startSession()
+        // Idempotent: this composable leaves composition on every tab switch, so a
+        // plain startSession() here reshuffled the deck and reset the counters
+        // mid-session on every return to Flashcards.
+        viewModel.ensureSessionStarted()
     }
 
     // The voice is a @Singleton and outlives this screen; without this a word

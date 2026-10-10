@@ -19,7 +19,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class ChatMessage(
@@ -102,7 +101,7 @@ class RoleplayViewModel @Inject constructor(
      * anything they could retype. Everything that decides whether to open a *new*
      * scene joins this first; see [openScenarioIfEmpty].
      */
-    private val restore: Job = viewModelScope.launch {
+    private val restore: Job = launchGuarded(TAG) {
         val saved = try {
             roleplayDao.getConversation()
         } catch (e: Exception) {
@@ -128,7 +127,9 @@ class RoleplayViewModel @Inject constructor(
      * and `isRestoring` from two independently-conflated collectors.
      */
     fun openScenarioIfEmpty(scenario: String) {
-        viewModelScope.launch {
+        // Guarded: joining the restore cannot rethrow (it is supervised), but a
+        // bare launch here had no handler at all if that ever changed.
+        launchGuarded(TAG) {
             restore.join()
             if (_messages.value.isEmpty() && !_isProcessing.value) startSession(scenario)
         }
@@ -146,7 +147,11 @@ class RoleplayViewModel @Inject constructor(
         }
         _messages.value = emptyList()
         _error.value = null
-        viewModelScope.launch {
+        // Guarded: the clear is itself wrapped in `write`, but the launch around
+        // it had no handler - a throw anywhere else in the block killed the
+        // process. Sequencing is unchanged: the clear still lands before the
+        // opening turn's first write.
+        launchGuarded(TAG) {
             // Sequenced, not fired alongside: the clear and the first turn's write
             // both touch this table, and a delete that landed second would take the
             // new scene's opening line with it.
@@ -248,7 +253,13 @@ class RoleplayViewModel @Inject constructor(
             .takeLast(MAX_HISTORY_TURNS)
             .map { it.role to it.content }
 
-        viewModelScope.launch {
+        // Guarded: the processor's own failures arrive as RoleplayResult.Failure
+        // and reach _error, but a throw before that - the DataStore read of the
+        // key, or the TTS call - used to escape a bare launch and kill the
+        // process. _error holds prose built from resources by GroqHelper, and no
+        // existing string fits an unexpected failure here, so it is log-only; the
+        // spinner still clears in finally.
+        launchGuarded(TAG) {
             try {
                 val apiKey = preferenceManager.apiKey.first()
                 val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
@@ -288,7 +299,10 @@ class RoleplayViewModel @Inject constructor(
 
         _messages.value += ChatMessage("user", trimmed)
 
-        viewModelScope.launch {
+        // Guarded, for the same reason as startOpeningTurn: failures the processor
+        // knows about reach _error; a throw from the preference reads or TTS did
+        // not, and took the process down. Log-only; the spinner clears in finally.
+        launchGuarded(TAG) {
             _messages.value.lastOrNull()?.let { persist(it, _messages.value.size - 1) }
             try {
                 val apiKey = preferenceManager.apiKey.first()

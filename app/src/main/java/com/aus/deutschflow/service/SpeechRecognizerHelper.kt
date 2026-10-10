@@ -15,13 +15,21 @@ import android.util.Log
 import androidx.annotation.VisibleForTesting
 import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 private const val TAG = "SpeechRecognizerHelper"
@@ -154,6 +162,83 @@ private class HandlerExecutor(private val handler: Handler) : Executor {
 }
 
 /**
+ * Delivers completed utterances to collectors with exactly-once, in-order semantics.
+ *
+ * [publish] is called from a [RecognitionListener] on the main thread, so it must
+ * never block - and it must never silently drop the user's words, which is what
+ * the old `tryEmit`-and-forget path did when the flow's single buffer slot was
+ * taken by an utterance the collector was still chewing on (e.g. translating it
+ * over the network).
+ *
+ * Every utterance therefore goes through one FIFO [Channel] drained by a single
+ * supervised coroutine that feeds the flow. Ordering and exactly-once come from
+ * there being exactly one consumer emitting in take order - an earlier design
+ * parked each overflowed utterance in its own coroutine, and two parked
+ * coroutines raced for the next buffer slot, delivering out of order. The
+ * channel is unlimited, so `trySend` always succeeds and the caller returns
+ * immediately; growth stays bounded in practice because the recognizer produces
+ * utterances at speaking pace while a collector is stalled.
+ *
+ * [onOverflow] fires when the drainer has fallen behind - items are queuing up,
+ * the exact window in which the old path lost words. Nothing is dropped any
+ * more, but contention stays loud rather than silent.
+ *
+ * The scope uses a [SupervisorJob] so one failed delivery cannot take down the
+ * ones behind it, and is cancelled from [close] when the owning helper is
+ * destroyed, so a ViewModel being cleared never leaves a parked utterance
+ * holding a reference to it.
+ *
+ * Pure kotlinx-coroutines with no Android types and an injectable dispatcher, so
+ * the contention behaviour is testable on the JVM - same seam pattern as
+ * [SpeechCapabilityDecider].
+ */
+@VisibleForTesting
+internal class UtteranceDeliveryBus(
+    private val onOverflow: (String) -> Unit = {},
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
+) {
+    private val _results = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val results: SharedFlow<String> = _results.asSharedFlow()
+
+    /** Accepted but not yet taken by the drainer; the contention signal for [onOverflow]. */
+    private val queued = AtomicInteger(0)
+    private val queue = Channel<String>(Channel.UNLIMITED)
+
+    /** Supervisor so one stuck or failing delivery never cancels its successors. */
+    private val deliveryScope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    init {
+        deliveryScope.launch {
+            for (text in queue) {
+                queued.decrementAndGet()
+                _results.emit(text)
+            }
+        }
+    }
+
+    /**
+     * Offers one completed utterance. Never blocks the caller; never silently
+     * drops the utterance.
+     */
+    fun publish(text: String) {
+        // Loud, not silent: a non-empty queue means the collector is behind, the
+        // exact situation the old tryEmit path handled by losing the utterance.
+        if (queued.get() > 0) onOverflow(text)
+        queued.incrementAndGet()
+        queue.trySend(text)
+    }
+
+    /**
+     * Cancels every parked delivery. Called when the owning helper is destroyed;
+     * an utterance that could not be delivered by then belongs to a session that
+     * no longer exists, and keeping it parked would only pin the dead ViewModel.
+     */
+    fun close() {
+        deliveryScope.cancel()
+    }
+}
+
+/**
  * Wraps [SpeechRecognizer], which must be driven from the main thread and answers
  * asynchronously through [RecognitionListener].
  *
@@ -215,9 +300,17 @@ class SpeechRecognizerHelper @Inject constructor(
      * Callers must react to this rather than reading [finalText] after calling
      * [stopListening]: the engine has not answered at that point, so the state flow
      * still holds the previous session's text.
+     *
+     * Delivery is delegated to [UtteranceDeliveryBus]: an utterance completing
+     * while the collector is still busy is parked in a supervised coroutine
+     * instead of being dropped on the floor, and reaches the collector once it
+     * catches up - exactly once, in order.
      */
-    private val _results = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val results: SharedFlow<String> = _results.asSharedFlow()
+    @VisibleForTesting
+    internal val deliveryBus = UtteranceDeliveryBus(
+        onOverflow = { Log.w(TAG, "Utterance buffer full - parking delivery until the collector catches up") }
+    )
+    val results: SharedFlow<String> = deliveryBus.results
 
     fun startListening(languageTag: String = DEFAULT_LANGUAGE) {
         mainHandler.post {
@@ -250,38 +343,57 @@ class SpeechRecognizerHelper @Inject constructor(
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     platformSeam.checkRecognitionSupport(recognizer, intent, HandlerExecutor(mainHandler)) { supportResult ->
-                        // Reject stale async response if cancelled or superseded
+                        // Reject stale async response if cancelled or superseded.
+                        // This guard stays outside the try-catch below and runs
+                        // first: a callback from a dead session must be turned away
+                        // before it touches anything, whatever happens afterwards.
                         if (sessionGeneration != currentSession || !_isListening.value) {
                             recognizer.destroy()
                             return@checkRecognitionSupport
                         }
 
-                        when (supportResult) {
-                            is SupportResult.Supported -> {
-                                if (supportResult.isInstalled) {
+                        // This callback runs on the main handler AFTER the enclosing
+                        // try-catch in startListening has already exited, so an
+                        // exception here is an uncaught main-thread crash. The
+                        // recognizer calls below can still throw - SecurityException
+                        // if RECORD_AUDIO is revoked mid-flight, IllegalStateException
+                        // from a torn-down engine - so the body gets its own net.
+                        try {
+                            when (supportResult) {
+                                is SupportResult.Supported -> {
+                                    if (supportResult.isInstalled) {
+                                        recognizer.setRecognitionListener(buildRecognitionListener(currentSession))
+                                        recognizer.startListening(intent)
+                                        speechRecognizer = recognizer
+                                    } else {
+                                        // Language model downloadable: trigger fetch, do not record prematurely
+                                        _isListening.value = false
+                                        _errorState.value = context.getString(R.string.speech_error_language_unavailable)
+                                        platformSeam.triggerModelDownload(recognizer, intent)
+                                        recognizer.destroy()
+                                    }
+                                }
+                                is SupportResult.Unsupported -> {
+                                    // Language permanently unsupported on this device
+                                    _isListening.value = false
+                                    _errorState.value = context.getString(R.string.speech_error_language_unsupported)
+                                    recognizer.destroy()
+                                }
+                                is SupportResult.Error -> {
+                                    // On support query error, attempt direct start with error listener
                                     recognizer.setRecognitionListener(buildRecognitionListener(currentSession))
                                     recognizer.startListening(intent)
                                     speechRecognizer = recognizer
-                                } else {
-                                    // Language model downloadable: trigger fetch, do not record prematurely
-                                    _isListening.value = false
-                                    _errorState.value = context.getString(R.string.speech_error_language_unavailable)
-                                    platformSeam.triggerModelDownload(recognizer, intent)
-                                    recognizer.destroy()
                                 }
                             }
-                            is SupportResult.Unsupported -> {
-                                // Language permanently unsupported on this device
-                                _isListening.value = false
-                                _errorState.value = context.getString(R.string.speech_error_language_unsupported)
-                                recognizer.destroy()
-                            }
-                            is SupportResult.Error -> {
-                                // On support query error, attempt direct start with error listener
-                                recognizer.setRecognitionListener(buildRecognitionListener(currentSession))
-                                recognizer.startListening(intent)
-                                speechRecognizer = recognizer
-                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Could not start recognition after support check", e)
+                            // This recognizer never became speechRecognizer, so
+                            // nothing else will ever tear it down.
+                            recognizer.destroy()
+                            _errorState.value = context.getString(R.string.speech_start_failed)
+                            _isListening.value = false
+                            _isProcessing.value = false
                         }
                     }
                 } else {
@@ -377,6 +489,9 @@ class SpeechRecognizerHelper @Inject constructor(
             _isListening.value = false
             _isProcessing.value = false
             _rmsLevel.value = 0f
+            // An utterance still parked behind a busy collector belongs to this
+            // dead session; releasing it also releases the ViewModel it pins.
+            deliveryBus.close()
         }
     }
 
@@ -504,6 +619,10 @@ class SpeechRecognizerHelper @Inject constructor(
 
     /**
      * Publishes a completed utterance and closes the session it belonged to.
+     *
+     * The utterance itself goes through [UtteranceDeliveryBus]: called here on the
+     * main thread, so publishing must not block - and must not drop the user's
+     * words when the collector is a beat behind.
      */
     @VisibleForTesting
     internal fun deliverUtterance(text: String) {
@@ -513,7 +632,7 @@ class SpeechRecognizerHelper @Inject constructor(
 
         if (text.isNotBlank()) {
             _finalText.value = text
-            _results.tryEmit(text)
+            deliveryBus.publish(text)
         }
     }
 
