@@ -141,11 +141,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The floor runs the whole suite: minSdk is where the schema, the
+          # permissions model and the migration paths are most likely to differ from
+          # the developer's own device.
           - name: API 31 full suite
             api-level: 31
             script: ./gradlew connectedDebugAndroidTest --console=plain
+          # The top of the range runs the version-gated contract instead. Oldest and
+          # newest supported, not every level between: the point is to catch a
+          # platform-version gate (POST_NOTIFICATIONS, data-extraction rules, the
+          # on-device recogniser) behaving differently at the two ends.
           - name: API 35 platform smoke
             api-level: 35
+            script: >-
+              ./gradlew connectedDebugAndroidTest --console=plain
+              -Pandroid.testInstrumentationRunnerArguments.class=com.aus.deutschflow.service.ModernPlatformContractTest,com.aus.deutschflow.service.OnDeviceRecognitionTest
+          # Newest stable platform, and the closest emulator to targetSdk 37: there is
+          # no API 37 system image to run against yet, so 36 is the frontier. Kept
+          # alongside 35 because the two are where a current platform change lands
+          # first, and a smoke job is cheap next to the full suite.
+          - name: API 36 platform smoke
+            api-level: 36
             script: >-
               ./gradlew connectedDebugAndroidTest --console=plain
               -Pandroid.testInstrumentationRunnerArguments.class=com.aus.deutschflow.service.ModernPlatformContractTest,com.aus.deutschflow.service.OnDeviceRecognitionTest
