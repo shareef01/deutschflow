@@ -1,12 +1,53 @@
 # Dependency automation - the one gap the 2026 audit found in an otherwise
 # pinned, permissioned CI. Weekly cadence, grouped so minor and patch bumps
 # arrive as one reviewable PR per ecosystem instead of a daily trickle.
+#
+# The ignore entries skip the exact versions of the first batch of group PRs
+# (closed unmerged in October 2026). Later releases of the same packages are still
+# proposed; delete an entry to take that version.
 version: 2
 updates:
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "gradle-wrapper"
+        versions:
+          - "9.8.0"
+      - dependency-name: "androidx.core:core-ktx"
+        versions:
+          - "1.19.1"
+      - dependency-name: "androidx.compose:compose-bom"
+        versions:
+          - "2026.09.00"
+      - dependency-name: "androidx.room:room-runtime"
+        versions:
+          - "2.8.5"
+      - dependency-name: "androidx.room:room-ktx"
+        versions:
+          - "2.8.5"
+      - dependency-name: "androidx.room:room-compiler"
+        versions:
+          - "2.8.5"
+      - dependency-name: "androidx.room:room-testing"
+        versions:
+          - "2.8.5"
+      - dependency-name: "androidx.navigation:navigation-compose"
+        versions:
+          - "2.10.2"
+      - dependency-name: "androidx.work:work-runtime-ktx"
+        versions:
+          - "2.12.0"
+      - dependency-name: "androidx.tracing:tracing"
+        versions:
+          - "2.0.3"
+      - dependency-name: "com.android.application"
+        versions:
+          - "9.4.1"
+      - dependency-name: "com.google.devtools.ksp"
+        versions:
+          - "2.3.12"
     groups:
       minor-and-patch:
         update-types:
@@ -17,6 +58,22 @@ updates:
     directory: "/web"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "dexie"
+        versions:
+          - "4.4.6"
+      - dependency-name: "next"
+        versions:
+          - "16.3.5"
+      - dependency-name: "react"
+        versions:
+          - "19.3.0"
+      - dependency-name: "@types/react"
+        versions:
+          - "19.3.0"
+      - dependency-name: "react-dom"
+        versions:
+          - "19.3.0"
     groups:
       minor-and-patch:
         update-types:
@@ -29,6 +86,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "actions/setup-java"
+        versions:
+          - "6.0.1"
+      - dependency-name: "gradle/actions/setup-gradle"
+        versions:
+          - "6.4.0"
     groups:
       minor-and-patch:
         update-types:
