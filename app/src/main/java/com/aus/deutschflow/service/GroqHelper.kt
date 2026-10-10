@@ -916,18 +916,28 @@ class GroqHelper @Inject constructor(
  * the existing malformed-response error, which is the honest outcome for a
  * response too large to be what we asked for.
  *
+ * Read in fixed chunks rather than into a `CharArray(limit)` sized up front. The
+ * cap is 1,000,000 characters, but a well-formed reply to a request capped at 1024
+ * completion tokens is a few kilobytes - so the old shape allocated ~2 MB on every
+ * call to hold something it never used. Chunking keeps the ceiling identical for a
+ * genuinely large body while making the common case allocate about one chunk.
+ *
  * The limit counts characters, so a truncation never splits a character. Top level
  * rather than a member so it can be tested directly; internal for the same reason.
  */
+private const val READ_CHUNK_CHARS = 8_192
+
 internal fun Reader.readBounded(limit: Int): String =
     use { reader ->
-        val buffer = CharArray(limit)
-        var read = 0
-        while (read < limit) {
-            val n = reader.read(buffer, read, limit - read)
+        val chunk = CharArray(minOf(limit, READ_CHUNK_CHARS).coerceAtLeast(0))
+        val builder = StringBuilder(chunk.size)
+        var remaining = limit
+        while (remaining > 0) {
+            val n = reader.read(chunk, 0, minOf(remaining, chunk.size))
             // <= 0: a misbehaving Reader answering 0 would otherwise spin here forever.
             if (n <= 0) break
-            read += n
+            builder.append(chunk, 0, n)
+            remaining -= n
         }
-        String(buffer, 0, read)
+        builder.toString()
     }
