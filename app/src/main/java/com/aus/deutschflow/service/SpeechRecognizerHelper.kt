@@ -72,6 +72,44 @@ object SpeechCapabilityDecider {
 }
 
 /**
+ * What an asynchronous [RecognitionSupportCallback] answer means for the live session.
+ *
+ * A single guard used to answer two different questions at once -
+ * `sessionGeneration != currentSession || !_isListening.value` - and treated every
+ * rejection as "drop and forget". That is right for the first condition and wrong for
+ * the second: a session the user *stopped* while the capability check was still in
+ * flight never attached a listener, so nothing will ever lower the "processing" flag
+ * [SpeechRecognizerHelper.stopListening] raised, and the screen stays busy until the
+ * next start. Naming the two cases is what lets [ABORT] clear that flag while [DROP]
+ * leaves a superseding session's state untouched.
+ *
+ * Pure, so the distinction is testable on the JVM - the same seam pattern as
+ * [SpeechCapabilityDecider].
+ */
+internal enum class SupportCallbackAction {
+    /** The live session's answer: attach the listener and start recognition. */
+    START,
+
+    /** Superseded by a newer session, which now owns the shared state: drop silently. */
+    DROP,
+
+    /** Stopped while the check was in flight: no result is coming, so clear the flag. */
+    ABORT
+}
+
+internal fun supportCallbackAction(
+    sessionGeneration: Long,
+    callbackSession: Long,
+    isListening: Boolean
+): SupportCallbackAction = when {
+    // Superseding wins even when the newer session is itself not listening: it owns
+    // the shared state, so neither destroy nor a flag reset may run on its behalf.
+    sessionGeneration != callbackSession -> SupportCallbackAction.DROP
+    !isListening -> SupportCallbackAction.ABORT
+    else -> SupportCallbackAction.START
+}
+
+/**
  * Result of querying on-device language support on Android 13+ (API 33+).
  */
 sealed interface SupportResult {
@@ -343,13 +381,25 @@ class SpeechRecognizerHelper @Inject constructor(
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     platformSeam.checkRecognitionSupport(recognizer, intent, HandlerExecutor(mainHandler)) { supportResult ->
-                        // Reject stale async response if cancelled or superseded.
-                        // This guard stays outside the try-catch below and runs
-                        // first: a callback from a dead session must be turned away
-                        // before it touches anything, whatever happens afterwards.
-                        if (sessionGeneration != currentSession || !_isListening.value) {
-                            recognizer.destroy()
-                            return@checkRecognitionSupport
+                        // Decide what this asynchronous answer means for the live session
+                        // before it touches anything. A callback from a dead session must
+                        // be turned away whatever happens next; a stopped one has state of
+                        // its own to unwind.
+                        when (supportCallbackAction(sessionGeneration, currentSession, _isListening.value)) {
+                            SupportCallbackAction.DROP -> {
+                                recognizer.destroy()
+                                return@checkRecognitionSupport
+                            }
+                            SupportCallbackAction.ABORT -> {
+                                // Stop arrived while the check was still out, so the mic
+                                // never opened and no listener will ever fire. Nothing
+                                // else will lower the "processing" flag stopListening
+                                // raised - leaving it up strands the screen busy.
+                                recognizer.destroy()
+                                _isProcessing.value = false
+                                return@checkRecognitionSupport
+                            }
+                            SupportCallbackAction.START -> Unit
                         }
 
                         // This callback runs on the main handler AFTER the enclosing
