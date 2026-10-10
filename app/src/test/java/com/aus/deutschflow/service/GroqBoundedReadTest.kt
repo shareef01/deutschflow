@@ -83,6 +83,22 @@ class GroqBoundedReadTest {
     }
 
     @Test
+    fun assemblesABodySpanningSeveralChunksInOrder() {
+        // The read is chunked at 8 KiB now, so a body longer than one chunk must be
+        // reassembled exactly - not truncated at the first chunk, and not reordered.
+        val body = (0 until 20_000).joinToString("") { (it % 10).toString() }
+        val read = body.reader().readBounded(1_000_000)
+        assertEquals(body.length, read.length)
+        assertEquals(body, read)
+    }
+
+    @Test
+    fun aBodyExactlyOneChunkLongIsReadWhole() {
+        val body = "x".repeat(8_192)
+        assertEquals(body, body.reader().readBounded(8_192))
+    }
+
+    @Test
     fun handlesAnEmptyBody() {
         assertEquals("", "".reader().readBounded(1_000))
     }
