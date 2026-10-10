@@ -22,10 +22,11 @@ class MainActivity : ComponentActivity() {
     /**
      * No permissions are requested here.
      *
-     * Both recording screens already check and request RECORD_AUDIO on the tap that
-     * needs it, and Settings requests POST_NOTIFICATIONS when the user asks for a
-     * notification. Demanding both on the very first launch, before the user had seen
-     * a screen, only produced the version of the prompt most likely to be denied.
+     * Every runtime permission is requested at the moment the user does the thing that
+     * needs it: RECORD_AUDIO on the tap that starts recording (Practice, Transcript and
+     * Roleplay all check first), POST_NOTIFICATIONS on the tap that sends a test
+     * notification. Demanding them on the very first launch, before the user had seen a
+     * screen, only produced the version of the prompt most likely to be denied.
      */
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {

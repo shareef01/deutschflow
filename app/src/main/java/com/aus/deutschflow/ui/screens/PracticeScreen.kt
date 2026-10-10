@@ -1,7 +1,6 @@
 package com.aus.deutschflow.ui.screens
 
 import android.Manifest
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -37,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.GlassmorphicCard
@@ -49,6 +47,9 @@ import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.PracticeFeedback
 import com.aus.deutschflow.ui.viewmodel.PracticeViewModel
 import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
+import com.aus.deutschflow.util.PermissionState
+import com.aus.deutschflow.util.openAppSettings
+import com.aus.deutschflow.util.recordAudioPermissionState
 
 @Composable
 fun PracticeScreen(
@@ -88,6 +89,7 @@ private fun ShadowingMode(viewModel: PracticeViewModel) {
     val spokenText by viewModel.finalText.collectAsStateWithLifecycle()
     val wordResults by viewModel.wordResults.collectAsStateWithLifecycle()
     val errorState by viewModel.errorState.collectAsStateWithLifecycle()
+    val permissionDenied by viewModel.permissionDenied.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -116,13 +118,32 @@ private fun ShadowingMode(viewModel: PracticeViewModel) {
             stringResource(R.string.practice_feedback_keep_going, heardCount, totalCount)
     }
 
+    var askedForPermission by rememberSaveable { mutableStateOf(false) }
+    // Guards against a double-tap sending two requests (or two starts) while the
+    // permission dialog is open; the callback clears it when it returns.
+    var permissionRequestInProgress by remember { mutableStateOf(false) }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        permissionRequestInProgress = false
         if (isGranted) {
             viewModel.startPractice()
         } else {
             viewModel.onPermissionDenied()
+        }
+    }
+
+    /** Mirrors Transcript: check, then either ask again or point to Settings. */
+    val requestMicrophone: () -> Unit = {
+        when (context.recordAudioPermissionState(askedForPermission)) {
+            PermissionState.GRANTED -> viewModel.startPractice()
+            PermissionState.REQUESTABLE -> {
+                askedForPermission = true
+                permissionRequestInProgress = true
+                launcher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+            PermissionState.DENIED_PERMANENTLY -> viewModel.onPermissionDenied()
         }
     }
 
@@ -274,6 +295,14 @@ private fun ShadowingMode(viewModel: PracticeViewModel) {
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.SemiBold
                 )
+                // Only a refused microphone is something the user can fix, and only
+                // from outside the app - so the action appears only for a denial.
+                if (permissionDenied) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = { context.openAppSettings() }) {
+                        Text(stringResource(R.string.action_open_settings))
+                    }
+                }
             }
         }
 
@@ -331,12 +360,8 @@ private fun ShadowingMode(viewModel: PracticeViewModel) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (isListening) {
                         viewModel.stopPractice()
-                    } else {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            viewModel.startPractice()
-                        } else {
-                            launcher.launch(Manifest.permission.RECORD_AUDIO)
-                        }
+                    } else if (!permissionRequestInProgress) {
+                        requestMicrophone()
                     }
                 },
                 modifier = Modifier.weight(1f)

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DeutschFlowDB, foldGermanKey } from "@/lib/db/schema";
+import { DeutschFlowDB, foldGermanKey, germanMatchKey } from "@/lib/db/schema";
 import { foldGerman, evaluateMatch } from "@/lib/scoring";
 import {
   MIN_EASE_FACTOR,
@@ -79,11 +79,27 @@ const contract: ContractFixture = JSON.parse(
 );
 
 describe("Cross-Platform Behavioral Contract", () => {
+  // The identity fold and the scoring fold are deliberately NOT the same function, and
+  // this block is what keeps them from quietly drifting apart again. Identity keeps the
+  // sharp s (see lib/db/schema.ts for why: folding it merged "Maße" into "Masse" and
+  // deleted a row); scoring folds ß to ss so a recogniser that omits it still matches a
+  // target. Both are pinned here from one shared fixture, alongside the Kotlin
+  // germanKey and PracticeViewModel.foldGerman that the Android tests assert.
   describe("German folding identity contract", () => {
     for (const { input, expected } of contract.germanKeyCases) {
-      it(`folds '${input}' to '${expected}' in foldGermanKey and foldGerman`, () => {
+      it(`folds '${input}' to '${expected}' in foldGermanKey`, () => {
         expect(foldGermanKey(input)).toBe(expected);
-        expect(foldGerman(input)).toBe(expected);
+      });
+    }
+  });
+
+  describe("German scoring fold contract", () => {
+    for (const { input } of contract.germanKeyCases) {
+      it(`folds '${input}' the same way in foldGerman as in germanMatchKey`, () => {
+        // germanMatchKey is the shared rule. foldGerman additionally strips
+        // apostrophes so spoken "gehts" matches "geht's" - which the identity fold
+        // must not do, hence the separate expectation.
+        expect(foldGerman(input)).toBe(germanMatchKey(input));
       });
     }
   });

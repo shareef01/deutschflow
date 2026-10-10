@@ -1,5 +1,8 @@
 package com.aus.deutschflow.ui.screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -21,10 +24,12 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aus.deutschflow.data.model.RoleplayScenario
 import com.aus.deutschflow.data.model.RoleplayScenarioCatalog
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -43,6 +48,9 @@ import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.ChatMessage
 import com.aus.deutschflow.ui.viewmodel.RoleplayViewModel
+import com.aus.deutschflow.util.PermissionState
+import com.aus.deutschflow.util.openAppSettings
+import com.aus.deutschflow.util.recordAudioPermissionState
 
 @Composable
 fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
@@ -52,8 +60,44 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     val partialText by viewModel.partialText.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val recognitionError by viewModel.errorState.collectAsStateWithLifecycle()
+    val permissionDenied by viewModel.permissionDenied.collectAsStateWithLifecycle()
     val selectedScenario by viewModel.selectedScenario.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    // Roleplay was the one recording entry point with no permission handling at all:
+    // the mic button went straight to the recogniser, so on a fresh install - or after
+    // a revoke, or entering this tab first - tapping it raised a SecurityException
+    // surfaced as a generic error, with no prompt and no route to Settings. Practice and
+    // Transcript both already request it; this brings Roleplay in line.
+    var askedForPermission by rememberSaveable { mutableStateOf(false) }
+    var permissionRequestInProgress by remember { mutableStateOf(false) }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        permissionRequestInProgress = false
+        if (granted) {
+            viewModel.startListening()
+        } else {
+            // A transient denial still reports the error text; a permanent one is
+            // surfaced by requestMicThenListen as a Settings affordance below.
+            viewModel.onPermissionDenied()
+        }
+    }
+
+    /** Mirrors Practice and Transcript: check, then ask again or offer Settings. */
+    val requestMicThenListen: () -> Unit = {
+        when (context.recordAudioPermissionState(askedForPermission)) {
+            PermissionState.GRANTED -> viewModel.startListening()
+            PermissionState.REQUESTABLE -> {
+                askedForPermission = true
+                permissionRequestInProgress = true
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+            PermissionState.DENIED_PERMANENTLY -> viewModel.onPermissionDenied()
+        }
+    }
 
     var showScenarioMenu by remember { mutableStateOf(false) }
 
@@ -245,11 +289,23 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(Spacing.md)
                     ) {
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (permissionDenied) {
+                                TextButton(onClick = { context.openAppSettings() }) {
+                                    Text(stringResource(R.string.action_open_settings))
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -305,7 +361,8 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                     IconButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (isListening) viewModel.stopListeningAndSend() else viewModel.startListening()
+                            if (isListening) viewModel.stopListeningAndSend()
+                            else if (!permissionRequestInProgress) requestMicThenListen()
                         },
                         enabled = !isProcessing,
                         modifier = Modifier

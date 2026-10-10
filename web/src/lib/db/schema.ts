@@ -120,11 +120,17 @@ export interface ReviewEventEntry {
  * consistently wrong; both are now consistently right.
  *
  * Full case fold, then the standard transliteration for keyboards without umlauts,
- * which also makes "Straße" and "Strasse" one word — the correct German
- * equivalence, and the same fold `lib/scoring.ts` has always used to judge
- * pronunciation. The app now answers "are these the same word" one way instead of
- * two.
- *
+  * so "Übung" and "Uebung" are one word — the same fold `lib/scoring.ts` has always
+  * used to judge pronunciation. The app now answers "are these the same word" one way
+  * instead of two.
+  *
+  * ß is deliberately NOT folded to ss, unlike the scoring fold. That fold also made
+  * "Maße" (measurements) and "Masse" (mass) the same word — as it does "Buße" and
+  * "Busse" — and since `&germanTextKey` is unique, saving one after the other merged
+  * and deleted a row. A false split (Straße vs Strasse) leaves a deletable duplicate;
+  * a false merge destroys vocabulary entry and SRS progress. Use [germanMatchKey] where
+  * the loose comparison is wanted.
+  *
  * `toLowerCase()` (not `toLocaleLowerCase`) is deliberate: locale-invariant, so a
  * Turkish locale cannot map I to a dotless ı and break matching.
  *
@@ -138,8 +144,21 @@ export function foldGermanKey(text: string): string {
     .toLowerCase()
     .replaceAll("ä", "ae")
     .replaceAll("ö", "oe")
-    .replaceAll("ü", "ue")
-    .replaceAll("ß", "ss");
+    .replaceAll("ü", "ue");
+}
+
+/**
+ * The loose fold, for matching rather than identity. Adds ß→ss, so it also matches
+ * Strasse to Straße. Never use this as a uniqueness key - see [foldGermanKey].
+ *
+ * No production caller yet: search filters on the word as written and `lib/scoring.ts`
+ * has its own `foldGerman`, neither of which touches the identity key, so tightening
+ * [foldGermanKey] left both unaffected. This is the named, tested statement of the
+ * loose rule - and the shared expectation the contract test pins `foldGerman` against,
+ * so the two cannot drift.
+ */
+export function germanMatchKey(text: string): string {
+  return foldGermanKey(text).replaceAll("ß", "ss");
 }
 
 export class DeutschFlowDB extends Dexie {
@@ -155,9 +174,38 @@ export class DeutschFlowDB extends Dexie {
     super(name);
 
     /**
-     * Version 8: Append-only review event history.
-     */
-    this.version(8).stores({
+         * Version 9: ß-preserving identity key.
+         *
+         * foldGermanKey used to fold ß to ss, which made "Maße" (measurements) and
+         * "Masse" (mass) the same word — as it did "Buße" and "Busse". With
+         * `&germanTextKey` unique, saving one after the other merged the second into the
+         * first and dropped the loser. German writes "ss" and "ß" natively and
+         * distinguishes them, so identity must not conflate the two.
+         *
+         * Only splits: two words that share a ß-preserving key necessarily already shared
+         * the old one, so re-keying can never collide and no merge pass is needed. Mirrors
+         * Room's MIGRATION_16_17.
+         */
+        this.version(9)
+          .stores({
+            vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+            transcripts: "++id, timestamp",
+            userStats: "id",
+            activityLog: "date",
+            roleplayMessages: "position",
+            settings: "key",
+            reviewEvents: "++id, vocabularyId, reviewedAtTimestamp",
+          })
+          .upgrade(async (tx) => {
+            await tx.table("vocabulary").toCollection().modify((row: VocabularyEntry) => {
+              row.germanTextKey = foldGermanKey(row.germanText);
+            });
+          });
+
+        /**
+         * Version 8: Append-only review event history.
+         */
+        this.version(8).stores({
       vocabulary: "++id, timestamp, &germanTextKey, nextReview",
       transcripts: "++id, timestamp",
       userStats: "id",

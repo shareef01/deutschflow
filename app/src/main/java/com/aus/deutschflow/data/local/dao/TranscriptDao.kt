@@ -27,8 +27,27 @@ interface TranscriptDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTranscript(transcript: TranscriptEntity): Long
 
-    @Query("UPDATE transcripts SET translation = :translation, analysisJson = :analysisJson WHERE id = :id")
-    suspend fun updateAnalysis(id: Int, translation: String, analysisJson: String)
+    /**
+     * Files the analysis against the transcript it belongs to.
+     *
+     * `lastModifiedAt` is set in the same statement, and that is the point: it is what
+     * backup merging compares to decide which copy of a transcript is newer, so a
+     * transcript whose analysis arrived after the last sync otherwise looked untouched
+     * by it. A newer local analysis would lose to a stale remote copy and silently
+     * revert on the next merge - so the stamp goes in the UPDATE rather than in a
+     * separate save that could interleave with, or fail apart from, the write it
+     * describes.
+     */
+    @Query(
+        "UPDATE transcripts SET translation = :translation, analysisJson = :analysisJson, " +
+            "lastModifiedAt = :modifiedAt WHERE id = :id"
+    )
+    suspend fun updateAnalysis(
+        id: Int,
+        translation: String,
+        analysisJson: String,
+        modifiedAt: Long = System.currentTimeMillis()
+    )
 
     @Delete
     suspend fun deleteTranscript(transcript: TranscriptEntity)

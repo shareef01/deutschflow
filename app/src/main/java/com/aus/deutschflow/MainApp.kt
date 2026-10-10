@@ -47,5 +47,25 @@ class MainApp : Application() {
         appScope.launch {
             DailyWordWorker.rescheduleIfZoneChanged(this@MainApp, preferenceManager)
         }
+
+        // A key left in the clear by a pre-encryption build used to be re-encrypted
+        // only when the user happened to open Settings - so a user who set their key
+        // and never visited that screen again kept a plaintext copy in their data
+        // directory indefinitely, and apiKeyState deliberately still reports it as
+        // usable (ApiKeyState.LegacyPlaintext), which is exactly why nothing surfaced.
+        //
+        // On the startup path instead: the app already runs startup work in this
+        // scope, and this removes the dependency on the user visiting one particular
+        // screen for their key to stop being plaintext.
+        //
+        // Safe to run concurrently with a save, and safe to run twice.
+        // migrateLegacyApiKey writes the encrypted value and removes the plaintext one
+        // in a single DataStore edit, so the credential is never absent and never
+        // written back in the clear; if encryption fails it writes nothing and the
+        // legacy value stays available to retry on the next launch. Nothing here can
+        // throw past appScope's handler, which only logs.
+        appScope.launch {
+            preferenceManager.migrateLegacyApiKey()
+        }
     }
 }

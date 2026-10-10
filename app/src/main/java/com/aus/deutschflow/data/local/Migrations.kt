@@ -284,6 +284,25 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
 }
 
 /**
+ * The fold [germanKey] used to be, pinned here so shipped migrations keep the meaning
+ * they were written and tested with.
+ *
+ * [MIGRATION_12_13] and [MIGRATION_14_15] both re-key every row through
+ * [backfillGermanKeys], and they merge whatever collides. If they called the live
+ * [germanKey], then the day that function changes, those two migrations silently
+ * change too - re-keying to today's rules and merging on today's idea of which words
+ * are equal. An install upgrading from v12 would then be rebuilt by rules from three
+ * versions later, and a migration's behaviour would depend on when it happened to run
+ * rather than on the schema it bridges.
+ *
+ * So the historical fold is frozen here. ß→ss is kept deliberately: that *is* what
+ * v13 and v15 did, their tests assert it, and re-running them must reproduce it
+ * exactly. MIGRATION_16_17 is what moves the app to the stricter key.
+ */
+private fun legacyGermanKey(text: String): String =
+    germanKey(text).replace("ß", "ss")
+
+/**
  * Backfills `germanTextKey` using the app's own fold, one row at a time.
  *
  * This was a SQL expression - uppercase umlauts replaced before `lower()`, the
@@ -298,12 +317,15 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
  * Calling the real function removes the whole class of divergence rather than
  * chasing accents one `replace()` at a time. The rows are read into memory first:
  * updating through an open cursor over the same table is undefined.
+ *
+ * Uses [legacyGermanKey], not [germanKey] - see there for why a shipped migration
+ * must not track the live fold.
  */
 private fun backfillGermanKeys(db: SupportSQLiteDatabase) {
     val keys = mutableListOf<Pair<Long, String>>()
     db.query("SELECT `id`, `germanText` FROM `vocabulary`").use { cursor ->
         while (cursor.moveToNext()) {
-            keys += cursor.getLong(0) to germanKey(cursor.getString(1))
+            keys += cursor.getLong(0) to legacyGermanKey(cursor.getString(1))
         }
     }
     for ((id, key) in keys) {
@@ -532,6 +554,54 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
 }
 
 /**
+ * Recomputes `germanTextKey` with the ß-preserving [germanKey].
+ *
+ * The key used to fold ß to ss, which merged words that are not the same word:
+ * "Maße" (measurements) and "Masse" (mass) both became `masse`, as did "Buße" and
+ * "Busse". Because uniqueness is enforced on this column, [VocabularyDao.save] would
+ * take one of the pair, merge the other into it field by field, and delete the loser -
+ * fusing two words' translations, grammar and SRS progress, irreversibly.
+ *
+ * ## Why this migration can only ever split
+ *
+ * The new key is strictly finer than the old one: if two words share a new key they
+ * necessarily shared the old one, so dropping the ß→ss replacement never brings two
+ * previously-distinct keys into the same group. Recomputing can therefore only
+ * *separate* rows that were wrongly welded together by an earlier migration - it
+ * cannot create a new collision, and so it needs no merge pass and cannot lose a
+ * row to the unique index.
+ *
+ * Note what that does and does not recover. If MIGRATION_12_13 already merged "Maße"
+ * into "Masse", the surviving row still has the winner's id, spelling and SRS
+ * history, and the loser's translations were copied in only where they did not
+ * conflict. Re-splitting cannot reconstruct a row whose contents are gone, and it
+ * cannot know which of the two the user actually meant. Those historical merges are
+ * not automatically recoverable; the user re-adds the word if they still want it,
+ * and from this version forward the two stay apart.
+ *
+ * Rows that were already correct - "Hund"/"hund", "Übung"/"Uebung" - keep exactly the
+ * key they had, so their ids, review history and timestamps are untouched.
+ */
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Same row-by-row approach as backfillGermanKeys: updating through an open
+        // cursor over the same table is undefined, so read first, then write.
+        val keys = mutableListOf<Pair<Long, String>>()
+        db.query("SELECT `id`, `germanText` FROM `vocabulary`").use { cursor ->
+            while (cursor.moveToNext()) {
+                keys += cursor.getLong(0) to germanKey(cursor.getString(1))
+            }
+        }
+        for ((id, key) in keys) {
+            db.execSQL(
+                "UPDATE `vocabulary` SET `germanTextKey` = ? WHERE `id` = ?",
+                arrayOf<Any?>(key, id)
+            )
+        }
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -549,5 +619,6 @@ val MIGRATIONS =
     arrayOf(
         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-        MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16
+        MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+        MIGRATION_16_17
     )

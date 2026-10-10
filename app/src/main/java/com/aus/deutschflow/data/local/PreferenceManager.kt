@@ -14,11 +14,15 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
+
+private const val TAG = "PreferenceManager"
 
 /**
  * The store is injected rather than reached for through a Context extension.
@@ -132,11 +136,38 @@ class PreferenceManager @Inject constructor(
      * instead of claiming a save that did not happen.
      */
     suspend fun saveApiKey(apiKey: String): Boolean {
-        val encrypted = withContext(Dispatchers.IO) { cipher.encrypt(apiKey) } ?: return false
+        // Guarded end to end. KeystoreCipher.encrypt swallows its own failures and
+        // returns null, which the `?: return false` below handles - but the DataStore
+        // write was unguarded, so an unexpected IO or corruption error there would
+        // propagate out of SettingsViewModel's launch and crash the app. Catching it
+        // turns any such failure into "not saved", and because the edit is atomic the
+        // key already stored is left intact for the user to keep using.
+        //
+        // CancellationException is rethrown so this still composes with structured
+        // concurrency: a scope cancellation propagates instead of being swallowed.
+        val trimmed = apiKey.trim()
+        val encrypted = try {
+            withContext(Dispatchers.IO) { cipher.encrypt(trimmed) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not encrypt the API key", e)
+            null
+        } ?: return false
 
-        dataStore.edit { preferences ->
-            preferences[KEY_API_KEY_ENCRYPTED] = encrypted
-            preferences.remove(KEY_API_KEY_LEGACY)
+        try {
+            dataStore.edit { preferences ->
+                preferences[KEY_API_KEY_ENCRYPTED] = encrypted
+                preferences.remove(KEY_API_KEY_LEGACY)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // dataStore.edit is atomic per preferences file: if it threw, neither the
+            // encrypted write nor the legacy removal stuck, so the prior credential
+            // survives untouched.
+            Log.w(TAG, "Could not store the API key", e)
+            return false
         }
         return true
     }
@@ -144,17 +175,52 @@ class PreferenceManager @Inject constructor(
     /**
      * Re-writes a key left in the clear by an older build, encrypted.
      *
-     * Called when Settings opens, which is the only screen that cares about the key
-     * and so the one place where paying for a Keystore round trip is warranted.
+     * Runs on the startup path (see MainApp.onCreate), not only when Settings opens.
+     * It used to run only there, which meant a user who set a key and never visited
+     * Settings again kept it in plaintext indefinitely - and since [apiKeyState]
+     * deliberately keeps reporting such a key as usable ([ApiKeyState.LegacyPlaintext]),
+     * nothing anywhere ever complained.
+     *
+     * Idempotent, which is what lets it run unattended at launch: a key that is
+     * already encrypted yields NOT_NEEDED, so the Keystore round trip happens at most
+     * once per install. Deliberately never falls back to plaintext, and writes nothing
+     * at all on failure, so the legacy value is always available to retry.
+     *
+     * Concurrent with [saveApiKey]: the value is read before the Keystore call and
+     * re-checked inside the write, so a key the user saved in between wins and this
+     * becomes a no-op rather than overwriting the newer key with the stale one.
      */
     suspend fun migrateLegacyApiKey(): ApiKeyMigrationResult {
+        // The legacy value has to be read outside the edit: encrypting it is a Keystore
+        // round trip, and DataStore forbids suspending inside an edit block. That splits
+        // what used to be one atomic step into a read, then a write - so a save that
+        // lands in between must not be overwritten by the stale value. Hence the
+        // re-check inside the edit below, which is what actually makes this safe to run
+        // at launch alongside a save from Settings.
         val legacy = dataStore.data.first()[KEY_API_KEY_LEGACY]
             ?: return ApiKeyMigrationResult.NOT_NEEDED
-        return if (saveApiKey(legacy)) {
+        val encrypted = withContext(Dispatchers.IO) { cipher.encrypt(legacy) }
+            ?: return ApiKeyMigrationResult.FAILED
+
+        var migrated = false
+        dataStore.edit { preferences ->
+            // Either the user saved a new key while the Keystore was busy - in which
+            // case that key is the current one and the legacy copy is already gone, so
+            // there is nothing to migrate - or the legacy value is still exactly what we
+            // encrypted. Anything else means it changed under us and we leave it alone.
+            val current = preferences[KEY_API_KEY_LEGACY]
+            if (current == null || preferences[KEY_API_KEY_ENCRYPTED] != null) return@edit
+            preferences[KEY_API_KEY_ENCRYPTED] = encrypted
+            preferences.remove(KEY_API_KEY_LEGACY)
+            migrated = true
+        }
+        // A concurrent save already superseded the migration, which is a success from
+        // here: there is no plaintext left behind and the newer key is intact.
+        return if (migrated || dataStore.data.first()[KEY_API_KEY_LEGACY] == null) {
             ApiKeyMigrationResult.MIGRATED
         } else {
-            // saveApiKey writes nothing on failure, so this recoverable legacy
-            // value remains available for a later retry.
+            // Nothing was written, so this recoverable legacy value remains for a later
+            // retry.
             ApiKeyMigrationResult.FAILED
         }
     }

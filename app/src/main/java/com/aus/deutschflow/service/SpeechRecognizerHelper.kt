@@ -175,6 +175,10 @@ class SpeechRecognizerHelper @Inject constructor(
     /** Guard counter incremented on every session or cancellation to avoid async races. */
     private var sessionGeneration: Long = 0L
 
+    /** Current generation, for tests that drive a captured listener against a superseding session. */
+    @VisibleForTesting
+    internal val currentGeneration: Long get() = sessionGeneration
+
     /** The tag of the session in flight, so a failure can name the language it wanted. */
     private var currentLanguage = DEFAULT_LANGUAGE
 
@@ -255,7 +259,7 @@ class SpeechRecognizerHelper @Inject constructor(
                         when (supportResult) {
                             is SupportResult.Supported -> {
                                 if (supportResult.isInstalled) {
-                                    recognizer.setRecognitionListener(recognitionListener)
+                                    recognizer.setRecognitionListener(buildRecognitionListener(currentSession))
                                     recognizer.startListening(intent)
                                     speechRecognizer = recognizer
                                 } else {
@@ -274,14 +278,14 @@ class SpeechRecognizerHelper @Inject constructor(
                             }
                             is SupportResult.Error -> {
                                 // On support query error, attempt direct start with error listener
-                                recognizer.setRecognitionListener(recognitionListener)
+                                recognizer.setRecognitionListener(buildRecognitionListener(currentSession))
                                 recognizer.startListening(intent)
                                 speechRecognizer = recognizer
                             }
                         }
                     }
                 } else {
-                    recognizer.setRecognitionListener(recognitionListener)
+                    recognizer.setRecognitionListener(buildRecognitionListener(currentSession))
                     recognizer.startListening(intent)
                     speechRecognizer = recognizer
                 }
@@ -409,30 +413,46 @@ class SpeechRecognizerHelper @Inject constructor(
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
 
-    private val recognitionListener = object : RecognitionListener {
+    /**
+     * Builds a listener bound to one recognition session.
+     *
+     * startListening() captures the session's [sessionGeneration]; the returned
+     * listener rejects any callback that belongs to an earlier generation — a
+     * superseded recogniser's in-flight callback — before it can flip a shared
+     * StateFlow or drive a late release() against the live attempt's gate.
+     */
+    @VisibleForTesting
+    internal fun buildRecognitionListener(sessionId: Long): RecognitionListener = object : RecognitionListener {
+
+        private fun isStale(): Boolean = sessionGeneration != sessionId
 
         override fun onReadyForSpeech(params: Bundle?) {
+            if (isStale()) return
             _isListening.value = true
             _errorState.value = null
         }
 
         override fun onBeginningOfSpeech() {
+            if (isStale()) return
             _partialText.value = ""
         }
 
         override fun onRmsChanged(rmsdB: Float) {
+            if (isStale()) return
             _rmsLevel.value = (rmsdB / 10f).coerceIn(0f, 1f)
         }
 
         override fun onBufferReceived(buffer: ByteArray?) {}
 
         override fun onEndOfSpeech() {
+            if (isStale()) return
             _isListening.value = false
             _isProcessing.value = true
             _rmsLevel.value = 0f
         }
 
         override fun onError(error: Int) {
+            if (isStale()) return
             Log.w(TAG, "Recognition failed with error code $error")
 
             _isListening.value = false
@@ -462,6 +482,7 @@ class SpeechRecognizerHelper @Inject constructor(
         }
 
         override fun onResults(results: Bundle?) {
+            if (isStale()) return
             deliverUtterance(
                 results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -471,6 +492,7 @@ class SpeechRecognizerHelper @Inject constructor(
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
+            if (isStale()) return
             partialResults
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()

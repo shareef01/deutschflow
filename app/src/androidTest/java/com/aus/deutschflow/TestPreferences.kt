@@ -1,6 +1,7 @@
 package com.aus.deutschflow
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -8,12 +9,15 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.test.core.app.ApplicationProvider
 import com.aus.deutschflow.data.local.KeystoreCipher
 import com.aus.deutschflow.data.local.PreferenceManager
+import com.aus.deutschflow.util.cancelAndDrain
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import org.junit.rules.ExternalResource
 import java.io.File
+
+private const val TAG = "TestPreferencesRule"
 
 /**
  * A settings store belonging to one test, not to the user.
@@ -32,7 +36,10 @@ import java.io.File
  *
  * [name] must still be unique per test class, so two classes never overlap.
  */
-class TestPreferencesRule(private val name: String) : ExternalResource() {
+class TestPreferencesRule(
+    private val name: String,
+    private val drainTimeoutMs: Long = 5_000,
+) : ExternalResource() {
 
     /** The file backing this test's store, for assertions about what reaches disk. */
     lateinit var file: File
@@ -44,21 +51,51 @@ class TestPreferencesRule(private val name: String) : ExternalResource() {
     lateinit var preferences: PreferenceManager
         private set
 
-    private lateinit var scope: CoroutineScope
+    internal lateinit var scope: CoroutineScope
 
-    override fun before() {
+    public override fun before() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         file = context.preferencesDataStoreFile(name)
-        // A store left behind by a previous run would carry its state into this one.
-        file.delete()
+        // A store left behind by a timed-out teardown still owns this file. Reusing it
+        // races an in-flight write; refuse it instead of deleting under an active store.
+        if (file.exists()) {
+            throw AssertionError(
+                "DataStore file for $name leaked from a previous test " +
+                    "(a drain timed out and was left in place): $file",
+            )
+        }
 
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         dataStore = PreferenceDataStoreFactory.create(scope = scope) { file }
         preferences = PreferenceManager(dataStore, KeystoreCipher())
     }
 
-    override fun after() {
-        scope.cancel()
+    public override fun after() {
+        // DataStore allows one active instance per file per process, and only forgets
+        // an instance once its scope has finished draining. Teardown must therefore
+        // cancel AND wait for completion - not just cancel and assume - so the next
+        // test's before() cannot see this store as still active and crash with
+        // "multiple DataStores active for the same file" (a failure that lands on the
+        // wrong test and reads as a flake).
+        //
+        // cancel+join run in runBlocking: the caller's coroutine, a separate active
+        // scope, never this scope's own job (a coroutine cancelled along with its own
+        // scope never reaches completion). cancelAndDrain is bounded, and a timeout is
+        // a real failure: we must NOT delete the file when the drain timed out, because
+        // a child may still be writing to it. Leaving it in place is noisy but safe;
+        // deleting it under an in-flight write is what corrupts the next store.
+        val drained = runBlocking(Dispatchers.IO) { cancelAndDrain(scope, drainTimeoutMs) }
+        if (!drained) {
+            Log.e(
+                TAG,
+                "DataStore scope for $file did not drain within ${drainTimeoutMs}ms; " +
+                    "leaving the file in place to avoid racing an in-flight write",
+            )
+            throw AssertionError(
+                "DataStore scope for $file did not drain within ${drainTimeoutMs}ms; " +
+                    "leaving the file in place to avoid racing an in-flight write",
+            )
+        }
         file.delete()
     }
 }

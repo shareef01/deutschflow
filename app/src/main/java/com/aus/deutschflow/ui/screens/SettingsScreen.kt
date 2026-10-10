@@ -8,6 +8,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -17,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -49,6 +55,16 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val selectedCefrLevel by viewModel.selectedCefrLevel.collectAsStateWithLifecycle()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Granted or denied, the button still has to do something visible: on grant we post
+    // the test notification the user asked for, and on denial the existing
+    // "notifications off" message stands in for it.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.testNotification()
+    }
 
     var apiKeyInput by remember(hasApiKey) { mutableStateOf("") }
     var isApiKeyVisible by remember { mutableStateOf(false) }
@@ -392,7 +408,22 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 },
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    viewModel.testNotification()
+                    // Contextual, and only here. POST_NOTIFICATIONS is declared in the
+                    // manifest and read before posting, but nothing ever asked for it, so
+                    // on API 33+ a fresh install never holds the grant: the daily-word
+                    // worker's post was silently dropped and this button could only
+                    // report "notifications off". Asking at the moment the user asks for a
+                    // notification is also the moment the answer is obvious to them - the
+                    // same reasoning MainActivity gives for not demanding it on first
+                    // launch.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        viewModel.testNotification()
+                    }
                 },
                 modifier = Modifier.fillMaxWidth()
             )
