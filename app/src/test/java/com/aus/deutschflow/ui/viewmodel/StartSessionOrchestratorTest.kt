@@ -306,4 +306,54 @@ class StartSessionOrchestratorTest {
             }
         }
     }
+
+    @Test
+    fun onAccepted_runsBeforeOnStarted_andBeforeOnError_underEagerDispatch() = runBlocking {
+        withTimeout(timeoutMs) {
+            // Unconfined runs the body inline inside start(), the worst case for ordering:
+            // anything set after start() returns would land after onStarted/onError.
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+            try {
+                val events = mutableListOf<String>()
+                val ok = StartSessionOrchestrator(flow { emit("de-DE") })
+                val token = ok.start(
+                    scope,
+                    onStarted = { events += "started" },
+                    onError = { events += "error" },
+                    onAccepted = { events += "accepted:$it" },
+                )
+                assertEquals(listOf("accepted:$token", "started"), events)
+
+                events.clear()
+                val failing = StartSessionOrchestrator(flow<String> { throw IOException("boom") })
+                val failToken = failing.start(
+                    scope,
+                    onStarted = { events += "started" },
+                    onError = { events += "error" },
+                    onAccepted = { events += "accepted:$it" },
+                )
+                assertEquals(listOf("accepted:$failToken", "error"), events)
+            } finally {
+                scope.cancel()
+            }
+        }
+    }
+
+    @Test
+    fun onAccepted_notCalledForRejectedStart() = runBlocking {
+        withTimeout(timeoutMs) {
+            val (_, dialect) = controlledDialect()
+            val orch = StartSessionOrchestrator(dialect)
+            try {
+                var accepted = 0
+                val a = orch.start(this, onStarted = { }, onError = { }, onAccepted = { accepted++ })
+                assertNotNull(a)
+                val b = orch.start(this, onStarted = { }, onError = { }, onAccepted = { accepted++ })
+                assertNull("duplicate start is rejected", b)
+                assertEquals("only the accepted attempt is announced", 1, accepted)
+            } finally {
+                orch.clear()
+            }
+        }
+    }
 }
