@@ -71,6 +71,9 @@ updates:
       - dependency-name: "@types/react"
         versions:
           - "19.3.0"
+      - dependency-name: "@types/react-dom"
+        versions:
+          - "19.3.0"
       - dependency-name: "react-dom"
         versions:
           - "19.3.0"
