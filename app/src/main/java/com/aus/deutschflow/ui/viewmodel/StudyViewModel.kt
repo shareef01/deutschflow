@@ -87,8 +87,31 @@ class StudyViewModel @Inject constructor(
     val allWordsCount: StateFlow<Int> = vocabularyDao.countVocabulary()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    /**
+     * Loads the session if none is in progress; a no-op otherwise.
+     *
+     * This is what the screen calls on entry. StudySessionContent leaves
+     * composition whenever the user switches to the Dashboard tab, so a plain
+     * [startSession] on every entry reshuffled the deck and zeroed the counters
+     * mid-session each time the user came back to Flashcards.
+     *
+     * The guard is a plain boolean set on the caller's thread, not [hasLoaded]:
+     * the load runs in a coroutine, so two entries before the first one lands
+     * would both see `hasLoaded == false` and both launch. [hasLoaded] itself
+     * only flips once the deck is on screen, so the loading spinner never
+     * doubles as a completion view. Genuinely new sittings still go through
+     * [startSession] or [restartSession], which reload unconditionally.
+     */
+    private var sessionKickoffDone = false
+
+    fun ensureSessionStarted() {
+        if (sessionKickoffDone) return
+        sessionKickoffDone = true
+        startSession()
+    }
+
     fun startSession() {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = ::sessionLoadFailed) {
             val now = System.currentTimeMillis()
             val dueList = vocabularyDao.getDueVocabulary(now).firstOrNull().orEmpty()
             val allList = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
@@ -106,7 +129,7 @@ class StudyViewModel @Inject constructor(
 
     /** Re-drills the whole library. Always extra practice, by definition. */
     fun restartSession() {
-        viewModelScope.launch {
+        launchGuarded(TAG, onError = ::sessionLoadFailed) {
             val allList = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
             _currentIndex.value = 0
             _isFlipped.value = false
@@ -114,6 +137,21 @@ class StudyViewModel @Inject constructor(
             _studyList.value = allList.shuffled()
             _sessionReviewedCount.value = 0
         }
+    }
+
+    /**
+     * A session that could not be loaded is reported through the same banner a
+     * failed review uses: the deck is stale or absent either way, and the user
+     * should hear about it rather than study from a lie. The string is the
+     * review one - a load failure leaves the previous sitting on screen, so
+     * "try answering the card again" is still the honest instruction.
+     *
+     * The kickoff guard is re-armed so leaving and returning to the tab retries
+     * the load; a disk hiccup should not end studying for the process's lifetime.
+     */
+    private fun sessionLoadFailed(e: Exception) {
+        sessionKickoffDone = false
+        _reviewError.value = R.string.study_review_not_saved
     }
 
 
@@ -178,6 +216,12 @@ class StudyViewModel @Inject constructor(
 
                 if (newList.isEmpty()) {
                     _currentIndex.value = 0
+                    // Re-arm the kickoff guard: the sitting is over, so the next
+                    // entry into the Flashcards tab must load a fresh deck rather
+                    // than resurrect this completion screen for the rest of the
+                    // process's lifetime. A mid-session tab switch still finds
+                    // the guard set and does not reshuffle.
+                    sessionKickoffDone = false
                 } else if (index >= newList.size) {
                     _currentIndex.value = 0
                 }
@@ -225,7 +269,9 @@ class StudyViewModel @Inject constructor(
     }
 
     fun autoPlay(text: String) {
-        viewModelScope.launch {
+        // No onError: the voice failing is already reported through ttsError,
+        // and a preference read that fails has nowhere more specific to go.
+        launchGuarded(TAG) {
             if (preferenceManager.isAutoPlayEnabled.first()) {
                 ttsHelper.speak(text)
             }

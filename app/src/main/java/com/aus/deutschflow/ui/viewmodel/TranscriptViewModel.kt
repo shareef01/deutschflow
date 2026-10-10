@@ -21,7 +21,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -47,6 +46,19 @@ class TranscriptViewModel @Inject constructor(
         if (text.isNotBlank()) {
             ttsHelper.speak(text)
         }
+    }
+
+    /**
+     * Silences the engine when the screen goes away.
+     *
+     * TTSHelper is a @Singleton and was only ever torn down in
+     * MainActivity.onDestroy behind `isFinishing`, which is false when the app is
+     * merely backgrounded - so a word spoken here kept playing after the user
+     * switched tabs or left the app. The microphone was already released on both
+     * paths; the voice was not.
+     */
+    fun stopSpeaking() {
+        ttsHelper.stop()
     }
 
 
@@ -196,7 +208,10 @@ class TranscriptViewModel @Inject constructor(
      * Settings radio group does - there is one dialect, not two.
      */
     fun selectDialect(dialect: String) {
-        viewModelScope.launch { preferenceManager.saveDialect(dialect) }
+        // Guarded: a DataStore write can fail on disk pressure, and a preference
+        // save is not worth taking the process down over. No user-facing surface -
+        // the chip still shows the old dialect, which is the truth of what is set.
+        launchGuarded(TAG) { preferenceManager.saveDialect(dialect) }
     }
 
     /**
@@ -216,7 +231,10 @@ class TranscriptViewModel @Inject constructor(
     fun startListening() {
         _permissionDenied.value = false
         utteranceToken++
-        viewModelScope.launch {
+        // Guarded: the recogniser reports its own failures through errorState, but
+        // a throw before it gets that far - or from the DataStore read of the
+        // dialect - used to escape a bare launch and kill the process.
+        launchGuarded(TAG) {
             _translation.value = ""
             _suggestedWords.value = emptyList()
             _example.value = ""
@@ -344,7 +362,13 @@ class TranscriptViewModel @Inject constructor(
         if (trimmed.isBlank()) return
 
         interrogationJob?.cancel()
-        interrogationJob = viewModelScope.launch {
+        // Guarded: the processor's own failures arrive as WordDetailsResult.Failure
+        // and reach _wordDetailError, but a throw before that - the DataStore read
+        // of the key, say - used to escape a bare launch and kill the process. The
+        // error surface holds prose built from resources by GroqHelper; there is no
+        // existing string this ViewModel can put there without a Context, so an
+        // unexpected failure is log-only and the spinner still clears in finally.
+        interrogationJob = launchGuarded(TAG) {
             _wordDetails.value = null
             _wordDetailError.value = null
             _interrogatingWord.value = trimmed
@@ -419,6 +443,10 @@ class TranscriptViewModel @Inject constructor(
 
     override fun onCleared() {
         speechRecognizerHelper.destroy()
+    }
+
+    private companion object {
+        private const val TAG = "TranscriptViewModel"
     }
 }
 

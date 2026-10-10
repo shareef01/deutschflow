@@ -1,6 +1,7 @@
 package com.aus.deutschflow.service
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -924,7 +925,8 @@ internal fun Reader.readBounded(limit: Int): String =
         var read = 0
         while (read < limit) {
             val n = reader.read(buffer, read, limit - read)
-            if (n < 0) break
+            // <= 0: a misbehaving Reader answering 0 would otherwise spin here forever.
+            if (n <= 0) break
             read += n
         }
         String(buffer, 0, read)

@@ -1,6 +1,5 @@
 package com.aus.deutschflow.ui.viewmodel
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
@@ -17,7 +16,6 @@ import com.aus.deutschflow.service.DailyWordNotification
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -93,7 +91,10 @@ class SettingsViewModel @Inject constructor(
                 PreferenceManager.ApiKeyMigrationResult.MIGRATED -> Unit
             }
         }
-        viewModelScope.launch {
+        // Guarded: a failing DataStore read would otherwise escape a bare launch
+        // and kill the process. Log-only - the banner's wording exists for the
+        // Unreadable state, not for the stream itself failing.
+        launchGuarded(TAG) {
             preferenceManager.apiKeyState.collect { state ->
                 if (state == PreferenceManager.ApiKeyState.Unreadable) {
                     _message.value = R.string.message_api_key_unreadable
@@ -107,7 +108,9 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun saveApiKey(apiKey: String) {
-        viewModelScope.launch {
+        // Guarded, with the same message a false return gives: a Keystore that
+        // throws instead of returning false is still "the key couldn't be stored".
+        launchGuarded(TAG, onError = { _message.value = R.string.message_api_key_not_saved }) {
             // The Keystore can refuse to encrypt (e.g. the entry was dropped when the
             // lock screen was removed). Saying "saved" then is a lie that surfaces
             // later as a mysterious "no API key" translation failure.
@@ -120,19 +123,21 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun saveDialect(dialect: String) {
-        viewModelScope.launch {
+        // Guarded, log-only: a preference write is not worth a crash, and the
+        // radio group still shows what is actually stored.
+        launchGuarded(TAG) {
             preferenceManager.saveDialect(dialect)
         }
     }
 
     fun saveCefrLevel(cefrLevel: String) {
-        viewModelScope.launch {
+        launchGuarded(TAG) {
             preferenceManager.saveCefrLevel(cefrLevel)
         }
     }
 
     fun setAutoPlayEnabled(enabled: Boolean) {
-        viewModelScope.launch {
+        launchGuarded(TAG) {
             preferenceManager.setAutoPlayEnabled(enabled)
         }
     }
@@ -163,7 +168,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun testNotification() {
-        viewModelScope.launch {
+        // Guarded, log-only: the outcomes the user can act on already carry their
+        // own messages; a throw from the notification manager has no existing
+        // string and is not worth a crash.
+        launchGuarded(TAG) {
             _message.value = dailyWordNotification.showNotification()
                 ?: R.string.message_notification_sent
         }

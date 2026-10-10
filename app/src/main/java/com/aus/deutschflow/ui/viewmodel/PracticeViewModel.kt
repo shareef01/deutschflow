@@ -14,7 +14,6 @@ import com.aus.deutschflow.service.TTSHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import java.text.Normalizer
 import javax.inject.Inject
 
@@ -130,7 +129,11 @@ class PracticeViewModel @Inject constructor(
      * for the entry is a real German sentence; the entry itself is one too.
      */
     private fun loadRandomTarget() {
-        viewModelScope.launch {
+        // Guarded: a corrupted database throws out of the DAO read, and this runs
+        // from init - an uncaught failure there killed the process on the way to
+        // the screen. The banner is shared from the two helpers' flows, so there
+        // is nowhere here to put the news; the fallback sentence stays on screen.
+        launchGuarded(TAG) {
             vocabularyDao.getAllVocabulary().firstOrNull()?.let { list ->
                 if (list.isNotEmpty()) {
                     val chosenItem = selectWeightedVocabulary(list) ?: list.random()
@@ -214,12 +217,27 @@ class PracticeViewModel @Inject constructor(
         ttsHelper.dismissError()
     }
 
+    /**
+     * Silences the engine when the screen goes away.
+     *
+     * TTSHelper is a @Singleton and was only ever torn down in
+     * MainActivity.onDestroy behind `isFinishing`, which is false when the app is
+     * merely backgrounded - so a word spoken here kept playing after the user
+     * switched tabs or left the app. The microphone was already released on both
+     * paths; the voice was not.
+     */
+    fun stopSpeaking() {
+        ttsHelper.stop()
+    }
+
     override fun onCleared() {
         startOrchestrator.clear()
         speechRecognizerHelper.destroy()
     }
 
     companion object {
+        private const val TAG = "PracticeViewModel"
+
         val TOKEN_REGEX = Regex("[\\p{L}\\p{M}\\p{N}]+(?:[-'’][\\p{L}\\p{M}\\p{N}]+)*")
 
         /**

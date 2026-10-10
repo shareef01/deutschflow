@@ -150,7 +150,12 @@ private fun ShadowingMode(viewModel: PracticeViewModel) {
     // The ViewModel is scoped to the saved back stack entry, so tab switches and
     // backgrounding would otherwise leave the recogniser holding the microphone
     // behind whatever screen the user moved on to.
-    OnLeavingScreen { viewModel.cancelListening() }
+    OnLeavingScreen {
+        viewModel.cancelListening()
+        // The target sentence is speakable, so leaving mid-playback used to carry
+        // the voice into whatever screen came next.
+        viewModel.stopSpeaking()
+    }
 
     Column(
         modifier = Modifier
