@@ -125,7 +125,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     // composes while `messages` is still empty and used to start a new scene over
     // the one the user left.
     LaunchedEffect(Unit) {
-        viewModel.openScenarioIfEmpty(selectedScenario.title)
+        viewModel.openScenarioIfEmpty(selectedScenario.id)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -203,7 +203,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        viewModel.startSession(selectedScenario.title)
+                        viewModel.startSession(selectedScenario.id)
                     },
                     // Restarting mid-turn cleared the table and the list, then had
                     // its own opening line swallowed by the in-flight guard - so the
