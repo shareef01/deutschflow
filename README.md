@@ -50,7 +50,7 @@ DeutschFlow maintains two independent clients that share domain behavior and tes
 ```text
 deutschflow/
 ├── app/                        Android native application (Kotlin, Jetpack Compose, Room)
-│   ├── schemas/                Versioned Room database schemas (versions 2–16)
+│   ├── schemas/                Versioned Room database schemas (versions 2–18)
 │   └── src/test/resources/     Shared cross-platform behavioral contract fixtures
 ├── web/                        Progressive Web App (Next.js 16, React 19, TypeScript, Dexie)
 │   └── tests/                  Vitest unit/contract tests and Playwright E2E suites
@@ -61,7 +61,7 @@ deutschflow/
 ### Android Architecture
 - **Language & Toolchain**: Kotlin 2.4, Android Gradle Plugin 9.4, KSP 2.3, compileSdk 37, targetSdk 37, minSdk 31 (Android 12+).
 - **UI & Architecture**: 100% Jetpack Compose with Material 3, MVVM / Unidirectional Data Flow (UDF), Hilt dependency injection, Navigation Compose with adaptive navigation bar/rail.
-- **Persistence**: Room 2.8 database (version 16) with strict migrations and immutable entity representations. Settings stored via Jetpack DataStore Preferences.
+- **Persistence**: Room 2.8 database (version 18) with strict migrations and immutable entity representations. Settings stored via Jetpack DataStore Preferences.
 - **Speech & Audio**: Android `SpeechRecognizer` using `createOnDeviceSpeechRecognizer` with `EXTRA_PREFER_OFFLINE`; platform `TextToSpeech` with automatic preference for on-device voices (`!voice.isNetworkConnectionRequired`).
 - **Security**: AES-GCM encryption under Android Keystore for API keys.
 
