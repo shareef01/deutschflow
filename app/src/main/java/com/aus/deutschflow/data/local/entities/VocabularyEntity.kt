@@ -163,12 +163,33 @@ data class VocabularyEntity(
         synonyms = incoming.synonyms.ifBlank { synonyms },
         antonyms = incoming.antonyms.ifBlank { antonyms },
         timestamp = maxOf(timestamp, incoming.timestamp),
-        // SRS data is usually kept from the existing row unless the incoming one
-        // explicitly has newer progress (which wouldn't happen in the current UI).
+        // The schedule is this row's. Content merges field by field, but a schedule
+        // is four fields that only mean something together; choosing between two of
+        // them is [withFurthestScheduleOf]'s job, not a field-wise blend.
         nextReview = nextReview,
         interval = interval,
         easeFactor = easeFactor,
         reviewCount = reviewCount,
         lastModifiedAt = maxOf(lastModifiedAt, incoming.lastModifiedAt, now)
     )
+
+    /**
+     * This entry with whichever of the two schedules is further along.
+     *
+     * Ranked the way MIGRATION_12_13 and MIGRATION_14_15 rank duplicates - most
+     * successful reviews, then longest interval - and taken as a set so the four SRS
+     * fields stay consistent with each other. A tie keeps this row's. The migrations
+     * already promised that folding two rows together never loses review progress;
+     * the runtime merge used to keep the surviving row's schedule regardless.
+     */
+    fun withFurthestScheduleOf(other: VocabularyEntity): VocabularyEntity {
+        val otherIsFurther = compareValuesBy(other, this, { it.reviewCount }, { it.interval }) > 0
+        if (!otherIsFurther) return this
+        return copy(
+            nextReview = other.nextReview,
+            interval = other.interval,
+            easeFactor = other.easeFactor,
+            reviewCount = other.reviewCount
+        )
+    }
 }

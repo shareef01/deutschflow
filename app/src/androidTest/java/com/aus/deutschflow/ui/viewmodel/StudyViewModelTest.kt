@@ -253,6 +253,55 @@ class StudyViewModelTest {
         assertEquals(3 * StudyViewModel.XP_PER_CARD, log.first().xpGained)
     }
 
+    /**
+     * The deck is a set of snapshots, and it survives a trip to the library. A review
+     * used to write its snapshot back whole, so a correction made there in the
+     * meantime was silently reverted the moment the card was answered.
+     */
+    @Test
+    fun aReviewKeepsAnEditMadeInTheLibraryMidSession() = runBlocking {
+        startSessionOf(1)
+        val dealt = viewModel.studyList.value.first()
+
+        // The user fixes the word in the library while the sitting is open.
+        database.vocabularyDao().save(dealt.copy(germanText = "Haus", englishTranslation = "house"))
+
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(awaitCondition {
+            database.vocabularyDao().findById(dealt.id)?.reviewCount == 1 && !viewModel.isSubmitting.value
+        })
+
+        val written = database.vocabularyDao().findById(dealt.id)
+        assertEquals("the edit must survive the review", "Haus", written?.germanText)
+        assertEquals("house", written?.englishTranslation)
+        assertEquals("and the review must still land", 1, written?.interval)
+    }
+
+    /**
+     * A card deleted from the library mid-session is not there to review. It used to
+     * bank XP and file a review event against an id no row held any more.
+     */
+    @Test
+    fun aCardDeletedMidSessionBanksNothingAndLeavesNoHistory() = runBlocking {
+        startSessionOf(2)
+        val dealt = viewModel.studyList.value.first()
+
+        database.vocabularyDao().deleteById(dealt.id)
+
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(awaitCondition {
+            viewModel.studyList.value.size == 1 && !viewModel.isSubmitting.value
+        })
+
+        assertEquals("no XP for a word that no longer exists", null, xp())
+        assertTrue(
+            "no review event for a deleted word",
+            database.reviewEventDao().getAllEvents().first().isEmpty()
+        )
+        assertEquals("it was not a review", 0, viewModel.sessionReviewedCount.value)
+        assertEquals("nor did it come back", null, database.vocabularyDao().findById(dealt.id))
+    }
+
     @Test
     fun anEmptyLibraryBanksNothing() = runBlocking {
         viewModel.startSession()
