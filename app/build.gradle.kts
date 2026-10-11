@@ -16,6 +16,35 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+/**
+ * The app's version, and the only place it is written.
+ *
+ * The version code is derived from the name rather than set by hand, so the two cannot
+ * drift and no release can carry a code the Play Console already holds. The scheme is
+ * MAJOR*10000 + MINOR*100 + PATCH - three two-digit fields, so "1.0.0" is 10000 and
+ * "1.2.3" is 10203. A major bump jumps the code by 10000, leaving a hundred minor and a
+ * hundred patch releases of room inside it, more than a line ever needs before the next
+ * major. Bump [APP_VERSION_NAME] and nothing else; the code follows.
+ */
+val APP_VERSION_NAME = "1.0.0"
+
+/** [APP_VERSION_NAME] as a Play-acceptable version code - see the scheme above. */
+fun androidVersionCode(versionName: String): Int {
+    val parts = versionName.split(".")
+    require(parts.size in 2..3) {
+        "APP_VERSION_NAME must be MAJOR.MINOR or MAJOR.MINOR.PATCH, was '$versionName'"
+    }
+    val numbers = parts.map {
+        it.toIntOrNull() ?: error("APP_VERSION_NAME component is not a number: '$versionName'")
+    }
+    require(numbers.all { it in 0..99 }) {
+        "APP_VERSION_NAME components must be 0..99: '$versionName'"
+    }
+    val (major, minor) = numbers
+    val patch = numbers.getOrElse(2) { 0 }
+    return major * 10_000 + minor * 100 + patch
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -37,8 +66,8 @@ android {
         // behaviour changes were smoke-tested on a real device rather than
         // arriving as a side effect of a dependency bump.
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = androidVersionCode(APP_VERSION_NAME)
+        versionName = APP_VERSION_NAME
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
