@@ -614,6 +614,45 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
 }
 
 /**
+ * Re-keys saved roleplay conversations from the scenario's display title to its id.
+ *
+ * `roleplay_messages.scenario` recorded the human title ("Ordering at a Berlin
+ * Bakery"), which made a saved conversation's identity a display string: renaming the
+ * scenario - or translating it, the same edit - orphaned it and reset the screen to the
+ * default scene. It now records the catalog id ("bakery"), so identity survives any
+ * change to the wording.
+ *
+ * The mapping is written out rather than read from
+ * [com.aus.deutschflow.data.model.RoleplayScenarioCatalog], for the reason
+ * [legacyGermanKey] gives: a migration must re-encode titles as they were when it
+ * shipped, not as the catalog reads years later. A row whose scenario matches no title
+ * here is left alone - it is already an id, or a scene this build no longer ships, and
+ * blanking it would throw away the only record of which conversation it was.
+ */
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        for ((title, id) in SCENARIO_TITLE_TO_ID) {
+            db.execSQL(
+                "UPDATE `roleplay_messages` SET `scenario` = ? WHERE `scenario` = ?",
+                arrayOf<Any?>(id, title)
+            )
+        }
+    }
+}
+
+/** The catalog's titles as [MIGRATION_17_18] shipped them, keyed to their stable ids. */
+private val SCENARIO_TITLE_TO_ID = mapOf(
+    "Ordering at a Berlin Bakery" to "bakery",
+    "Ordering at a Viennese Café" to "cafe",
+    "Asking for Items at a Supermarket" to "supermarket",
+    "Buying a Train Ticket at the Station" to "train_station",
+    "Registering at the Bürgeramt" to "buergeramt",
+    "Visiting a Doctor's Clinic" to "doctor",
+    "Apartment Viewing in Munich" to "apartment",
+    "Job Interview for a Professional Role" to "job_interview"
+)
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -632,5 +671,5 @@ val MIGRATIONS =
         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
         MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
-        MIGRATION_16_17
+        MIGRATION_16_17, MIGRATION_17_18
     )

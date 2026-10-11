@@ -567,10 +567,10 @@ class AppDatabaseMigrationTest {
     }
 
     /**
-     * The whole run a real install takes, 7 to 14 in one go.
+     * The whole run a real install takes, 7 to 18 in one go.
      *
      * The per-step tests each start from a hand-written fixture; this one is the only
-     * check that the steps compose - that a row written by version 7 survives all seven
+     * check that the steps compose - that a row written by version 7 survives all eleven
      * and still reads correctly through the release configuration.
      */
     @Test
@@ -586,9 +586,10 @@ class AppDatabaseMigrationTest {
         }
 
         helper.runMigrationsAndValidate(
-            TEST_DB, 14, true,
+            TEST_DB, 18, true,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-            MIGRATION_12_13, MIGRATION_13_14
+            MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+            MIGRATION_16_17, MIGRATION_17_18
         )
 
         val database = openAsReleaseWould()
@@ -1104,6 +1105,49 @@ class AppDatabaseMigrationTest {
                 assertNotNull(database.vocabularyDao().findByGermanText("Masse"))
                 assertNull(database.vocabularyDao().findByGermanText("Fuss"))
             }
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * The 17 -> 18 step, which re-keys a saved conversation from the scenario's title
+     * to its id.
+     *
+     * The row is written the way version 17 wrote it - the title, not the id - and has
+     * to come out naming the id. Otherwise restore, which now looks the scenario up by
+     * id, would find nothing and drop the user back to the default scene. A row whose
+     * scenario is already an id, or names a scene this build no longer ships, is left
+     * exactly as it was rather than blanked.
+     */
+    @Test
+    fun roleplayScenariosAreRekeyedFromTitleToId() {
+        helper.createDatabase(TEST_DB, 17).use { db ->
+            db.execSQL(
+                "INSERT INTO roleplay_messages " +
+                    "(position, scenario, role, content, translation, timestamp) " +
+                    "VALUES (0, 'Ordering at a Berlin Bakery', 'assistant', 'Guten Tag', 'Good day', 1000)"
+            )
+            db.execSQL(
+                "INSERT INTO roleplay_messages " +
+                    "(position, scenario, role, content, translation, timestamp) " +
+                    "VALUES (1, 'cafe', 'user', 'Einen Kaffee, bitte', NULL, 2000)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 18, true, MIGRATION_17_18)
+
+        val database = openAsReleaseWould()
+        try {
+            val conversation = runBlocking { database.roleplayDao().getConversation() }
+
+            assertEquals(2, conversation.size)
+            val opening = conversation.first { it.position == 0 }
+            // The title became the id; the turn itself is untouched.
+            assertEquals("bakery", opening.scenario)
+            assertEquals("Good day", opening.translation)
+            // Already an id: left alone, not blanked.
+            assertEquals("cafe", conversation.first { it.position == 1 }.scenario)
         } finally {
             database.close()
         }
