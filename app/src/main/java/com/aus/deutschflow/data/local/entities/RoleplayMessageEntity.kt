@@ -23,11 +23,19 @@ import androidx.room.PrimaryKey
  * live one are ordered by the same field. It carries no @Index: a single-column
  * INTEGER PRIMARY KEY is the rowid in SQLite, so "ORDER BY position" already
  * reads in storage order and a second index would only be a duplicate to write.
+ *
+ * [scenario] is the scenario's stable id, not its title: identity was the display
+ * string once, so rewording a scenario orphaned the saved conversation. MIGRATION_17_18
+ * re-keyed the rows written before that.
  */
 @Immutable
 @Entity(tableName = "roleplay_messages")
 data class RoleplayMessageEntity(
     @PrimaryKey val position: Int,
+    /**
+     * The scenario's stable id - see [com.aus.deutschflow.data.model.RoleplayScenario.id] -
+     * not its display title, which can change without the conversation moving.
+     */
     val scenario: String,
     /** "user" or "assistant" — the same two values the Groq API takes. */
     val role: String,

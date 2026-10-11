@@ -68,7 +68,15 @@ class RoleplayViewModel @Inject constructor(
     val partialText: StateFlow<String> = speechRecognizerHelper.partialText
     val errorState: StateFlow<String?> = speechRecognizerHelper.errorState
 
-    private var currentScenario = SCENARIO_BERLIN_BAKERY
+    /**
+     * The live scenario's stable id, not its display title.
+     *
+     * Identity used to be the human title, so renaming a scenario - or translating
+     * it, which is the same edit - orphaned every saved conversation and silently
+     * reset it to the default. [RoleplayMessageEntity.scenario] records this id and
+     * restore matches on it; the title is only ever shown, or handed to the model.
+     */
+    private var currentScenarioId = DEFAULT_SCENARIO_ID
 
     init {
         speechRecognizerHelper.results
@@ -87,7 +95,7 @@ class RoleplayViewModel @Inject constructor(
     }
 
     private val _selectedScenario = MutableStateFlow(
-        RoleplayScenarioCatalog.SCENARIOS.find { it.title == SCENARIO_BERLIN_BAKERY }
+        RoleplayScenarioCatalog.SCENARIOS.find { it.id == DEFAULT_SCENARIO_ID }
             ?: RoleplayScenarioCatalog.DEFAULT_SCENARIO
     )
     val selectedScenario: StateFlow<RoleplayScenario> = _selectedScenario
@@ -109,8 +117,8 @@ class RoleplayViewModel @Inject constructor(
             emptyList()
         }
         if (saved.isNotEmpty() && _messages.value.isEmpty()) {
-            currentScenario = saved.first().scenario
-            RoleplayScenarioCatalog.SCENARIOS.find { it.title == currentScenario }?.let {
+            currentScenarioId = saved.first().scenario
+            RoleplayScenarioCatalog.SCENARIOS.find { it.id == currentScenarioId }?.let {
                 _selectedScenario.value = it
             }
             _messages.value = saved.map { ChatMessage(it.role, it.content, it.translation) }
@@ -118,7 +126,7 @@ class RoleplayViewModel @Inject constructor(
     }
 
     /**
-     * Opens [scenario] only if there is nothing to come back to.
+     * Opens the scenario [scenarioId] only if there is nothing to come back to.
      *
      * The screen cannot make this decision itself: it composes before the restore
      * has run, sees an empty list, and would start a new scene over the saved one.
@@ -126,23 +134,23 @@ class RoleplayViewModel @Inject constructor(
      * from racing at all - a flag would still leave the screen reading `messages`
      * and `isRestoring` from two independently-conflated collectors.
      */
-    fun openScenarioIfEmpty(scenario: String) {
+    fun openScenarioIfEmpty(scenarioId: String) {
         // Guarded: joining the restore cannot rethrow (it is supervised), but a
         // bare launch here had no handler at all if that ever changed.
         launchGuarded(TAG) {
             restore.join()
-            if (_messages.value.isEmpty() && !_isProcessing.value) startSession(scenario)
+            if (_messages.value.isEmpty() && !_isProcessing.value) startSession(scenarioId)
         }
     }
 
     fun selectScenario(scenario: RoleplayScenario) {
         _selectedScenario.value = scenario
-        startSession(scenario.title)
+        startSession(scenario.id)
     }
 
-    fun startSession(scenario: String) {
-        currentScenario = scenario
-        RoleplayScenarioCatalog.SCENARIOS.find { it.title == scenario }?.let {
+    fun startSession(scenarioId: String) {
+        currentScenarioId = scenarioId
+        RoleplayScenarioCatalog.SCENARIOS.find { it.id == scenarioId }?.let {
             _selectedScenario.value = it
         }
         _messages.value = emptyList()
@@ -179,13 +187,24 @@ class RoleplayViewModel @Inject constructor(
         roleplayDao.insert(
             RoleplayMessageEntity(
                 position = position,
-                scenario = currentScenario,
+                scenario = currentScenarioId,
                 role = message.role,
                 content = message.content,
                 translation = message.translation
             )
         )
     }
+
+    /**
+     * The scene-setting text the model is shown for [id].
+     *
+     * Identity is the id; the model still needs the descriptive title, so it is
+     * resolved back here. A conversation whose scenario is no longer shipped falls
+     * back to the stored value, so the model keeps whatever context there is rather
+     * than an empty scenario slot.
+     */
+    private fun promptScenario(id: String): String =
+        RoleplayScenarioCatalog.SCENARIOS.find { it.id == id }?.title ?: id
 
     fun startListening() {
         val started = startOrchestrator.start(
@@ -265,7 +284,7 @@ class RoleplayViewModel @Inject constructor(
                 val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
                     ?: _selectedScenario.value.cefrLevel
                 when (val result =
-                    vocabularyProcessor.startRoleplay(currentScenario, history, apiKey, cefr)) {
+                    vocabularyProcessor.startRoleplay(promptScenario(currentScenarioId), history, apiKey, cefr)) {
                     is GroqHelper.RoleplayResult.Success -> {
                         val reply = ChatMessage(
                             "assistant",
@@ -309,7 +328,7 @@ class RoleplayViewModel @Inject constructor(
                 val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
                     ?: _selectedScenario.value.cefrLevel
                 when (val result =
-                    vocabularyProcessor.continueRoleplay(trimmed, history, currentScenario, apiKey, cefr)) {
+                    vocabularyProcessor.continueRoleplay(trimmed, history, promptScenario(currentScenarioId), apiKey, cefr)) {
                     is GroqHelper.RoleplayResult.Success -> {
                         val reply = ChatMessage(
                             "assistant",
@@ -358,11 +377,12 @@ class RoleplayViewModel @Inject constructor(
         private const val TAG = "RoleplayViewModel"
 
         /**
-         * Sent to the model as scene-setting, not shown in the UI - the header
-         * renders the localized resource for the same scenario. The screen's two
-         * startSession call sites and this default all share the one constant.
+         * The scenario the screen opens on before the user picks one.
+         *
+         * The stable id, not the title - see [RoleplayViewModel.currentScenarioId].
+         * The model is still handed the descriptive title, resolved from this id.
          */
-        const val SCENARIO_BERLIN_BAKERY = "Ordering at a Berlin Bakery"
+        const val DEFAULT_SCENARIO_ID = "bakery"
 
         /**
          * How much of the conversation the model is shown.
