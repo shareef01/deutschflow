@@ -202,6 +202,7 @@
     <string name="settings_api_key_placeholder_saved">Key saved (Enter new to replace)</string>
     <string name="settings_api_key_show">Show API Key</string>
     <string name="settings_api_key_hide">Hide API Key</string>
+    <string name="settings_api_key_remove">Remove saved key</string>
     <string name="settings_stat_vocabulary">Vocabulary</string>
     <string name="settings_stat_sessions">Sessions</string>
     <string name="settings_stat_xp">XP Points</string>
@@ -229,6 +230,8 @@
     <string name="message_api_key_not_saved">The key couldn\'t be stored. Try again, or restart the device.</string>
     <string name="message_api_key_migration_failed">Your existing API key could not be moved to encrypted storage. It was not deleted; unlock your device and reopen Settings to retry.</string>
     <string name="message_api_key_unreadable">The stored API key can no longer be decrypted. Enter and save the key again.</string>
+    <string name="message_api_key_removed">API key removed. AI features stay off until you save a key again.</string>
+    <string name="message_api_key_not_removed">The key couldn\'t be removed. Try again.</string>
     <string name="message_clear_failed">Couldn\'t clear your progress. Please try again.</string>
     <string name="message_progress_cleared">All vocabulary, history, and stats have been reset.</string>
     <string name="message_notification_sent">Daily reminder notification sent.</string>

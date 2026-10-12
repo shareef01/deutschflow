@@ -173,6 +173,32 @@ class PreferenceManager @Inject constructor(
     }
 
     /**
+     * Forgets the stored key - the encrypted copy and any plaintext one an older build
+     * left behind - in one edit.
+     *
+     * There was no way to do this short of clearing the app's data, which also takes
+     * the whole library with it; "Wipe all progress" deliberately leaves settings alone.
+     * A credential the user cannot withdraw is one they cannot be asked to trust. The
+     * Keystore entry stays: it holds no secret of its own once the ciphertext is gone,
+     * and the next save reuses it.
+     *
+     * @return false when the store could not be written, so the caller does not report
+     * a removal that did not happen. The edit is atomic, so on failure the key is intact.
+     */
+    suspend fun clearApiKey(): Boolean = try {
+        dataStore.edit { preferences ->
+            preferences.remove(KEY_API_KEY_ENCRYPTED)
+            preferences.remove(KEY_API_KEY_LEGACY)
+        }
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not remove the API key", e)
+        false
+    }
+
+    /**
      * Re-writes a key left in the clear by an older build, encrypted.
      *
      * Runs on the startup path (see MainApp.onCreate), not only when Settings opens.

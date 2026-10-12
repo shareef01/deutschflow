@@ -94,6 +94,24 @@ class ApiKeyStorageTest {
         assertNull(cipher.decrypt(""))
     }
 
+    /**
+     * Removing the key forgets every copy - the encrypted one and a plaintext one an
+     * older build may have left - so nothing that could authenticate stays on disk.
+     */
+    @Test
+    fun removingTheKeyForgetsEveryCopy() = runBlocking {
+        preferences.saveApiKey(SECRET)
+        store.dataStore.edit { it[stringPreferencesKey("groq_api_key")] = SECRET }
+
+        assertTrue(preferences.clearApiKey())
+
+        assertEquals(PreferenceManager.ApiKeyState.Missing, preferences.apiKeyState.first())
+        assertEquals("", preferences.apiKey.first())
+        val values = store.dataStore.data.first()
+        assertNull(values[stringPreferencesKey("groq_api_key_encrypted")])
+        assertNull(values[stringPreferencesKey("groq_api_key")])
+    }
+
     @Test
     fun successfulLegacyMigrationEncryptsThenRemovesPlaintext() = runBlocking {
         store.dataStore.edit { it[stringPreferencesKey("groq_api_key")] = SECRET }
