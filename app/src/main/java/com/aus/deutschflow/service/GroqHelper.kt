@@ -105,9 +105,9 @@ class GroqHelper @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             try {
-                val content = contentOf(post(requestBody(trimmed, learnerLevel), apiKey))
-                parseResponse(content)
-                    ?: AIResult.Failure(context.getString(R.string.ai_unreadable))
+                val raw = post(requestBody(trimmed, learnerLevel), apiKey)
+                parseResponse(contentOf(raw))
+                    ?: AIResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 // Cancellation is not a translation failure. Swallowing it here would
                 // turn "the screen went away" into a Failure handed to a dead
@@ -141,10 +141,10 @@ class GroqHelper @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             try {
-                val content = contentOf(post(wordRequestBody(trimmed, learnerLevel), apiKey))
-                parseWordDetails(content)
+                val raw = post(wordRequestBody(trimmed, learnerLevel), apiKey)
+                parseWordDetails(contentOf(raw))
                     ?.let { WordDetailsResult.Success(it) }
-                    ?: WordDetailsResult.Failure(context.getString(R.string.ai_unreadable))
+                    ?: WordDetailsResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -153,6 +153,14 @@ class GroqHelper @Inject constructor(
             }
         }
     }
+
+    /**
+     * The message for an answer that could not be read: a specific one when the model
+     * ran out of room, the general one otherwise. See [wasCutOff].
+     */
+    private fun unreadable(rawResponse: String): String = context.getString(
+        if (wasCutOff(rawResponse)) R.string.ai_cut_off else R.string.ai_unreadable
+    )
 
     private suspend fun post(body: String, apiKey: String): String =
         postTo(ENDPOINT, body, apiKey, ::errorMessage)
@@ -260,10 +268,10 @@ class GroqHelper @Inject constructor(
         return withContext(Dispatchers.IO) {
             try {
                 val body = roleplayOpeningRequestBody(safeScenario, safeHistory, learnerLevel)
-                val content = contentOf(post(body, apiKey))
-                parseRoleplayTurn(content)
+                val raw = post(body, apiKey)
+                parseRoleplayTurn(contentOf(raw))
                     ?.let { (reply, gloss) -> RoleplayResult.Success(reply, gloss) }
-                    ?: RoleplayResult.Failure(context.getString(R.string.ai_unreadable))
+                    ?: RoleplayResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -299,10 +307,10 @@ class GroqHelper @Inject constructor(
         return withContext(Dispatchers.IO) {
             try {
                 val body = roleplayRequestBody(trimmedInput, safeHistory, safeScenario, learnerLevel)
-                val content = contentOf(post(body, apiKey))
-                parseRoleplayTurn(content)
+                val raw = post(body, apiKey)
+                parseRoleplayTurn(contentOf(raw))
                     ?.let { (reply, gloss) -> RoleplayResult.Success(reply, gloss) }
-                    ?: RoleplayResult.Failure(context.getString(R.string.ai_unreadable))
+                    ?: RoleplayResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -687,6 +695,22 @@ class GroqHelper @Inject constructor(
         private const val KEYWORDS_PREFIX = "Keywords:"
         private const val EXAMPLE_PREFIX = "Example:"
         private const val GRAMMAR_PREFIX = "Grammar:"
+
+        /**
+         * Whether the provider stopped the answer at the token limit instead of letting
+         * it finish (`finish_reason: "length"`).
+         *
+         * That answer is truncated JSON, or nothing at all, and it used to surface as
+         * the same "couldn't read the response" as a garbled one - which says try again,
+         * when trying the same long input again will be cut off the same way. Telling
+         * the two apart is what lets the message say to shorten it instead.
+         */
+        internal fun wasCutOff(json: String): Boolean = runCatching {
+            JSONObject(json)
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optString("finish_reason") == "length"
+        }.getOrDefault(false)
 
         /** Pulls the assistant's text out of the OpenAI chat response shape. */
         internal fun contentOf(json: String): String =
