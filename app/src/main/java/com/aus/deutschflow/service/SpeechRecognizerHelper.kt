@@ -238,6 +238,17 @@ internal class UtteranceDeliveryBus(
     private val _results = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val results: SharedFlow<String> = _results.asSharedFlow()
 
+    /**
+     * How many collectors are subscribed to [results].
+     *
+     * The flow has no replay, so an utterance published before anyone collects is
+     * dropped. A test that knows when the collector is in place can publish once,
+     * rather than republishing until one lands - which left surplus copies queued to
+     * arrive after the test had moved on.
+     */
+    @VisibleForTesting
+    internal val subscriberCount: StateFlow<Int> get() = _results.subscriptionCount
+
     /** Accepted but not yet taken by the drainer; the contention signal for [onOverflow]. */
     private val queued = AtomicInteger(0)
     private val queue = Channel<String>(Channel.UNLIMITED)
