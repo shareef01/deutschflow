@@ -223,6 +223,23 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 })
             )
 
+            // The one way to withdraw the key short of clearing the app's data, which
+            // would take the library with it. Only offered when there is a key to remove.
+            if (hasApiKey) {
+                TextButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.removeApiKey()
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_api_key_remove),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(Spacing.md))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             Spacer(modifier = Modifier.height(Spacing.md))

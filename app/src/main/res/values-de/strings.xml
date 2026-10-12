@@ -199,6 +199,7 @@
     <string name="settings_api_key_placeholder_saved">Schlüssel gespeichert (zum Ersetzen neu eingeben)</string>
     <string name="settings_api_key_show">API-Schlüssel anzeigen</string>
     <string name="settings_api_key_hide">API-Schlüssel verbergen</string>
+    <string name="settings_api_key_remove">Gespeicherten Schlüssel entfernen</string>
     <string name="settings_stat_vocabulary">Wörter</string>
     <string name="settings_stat_sessions">Sitzungen</string>
     <string name="settings_stat_xp">XP-Punkte</string>
@@ -226,6 +227,8 @@
     <string name="message_api_key_not_saved">Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.</string>
     <string name="message_api_key_migration_failed">Dein vorhandener API-Schlüssel konnte nicht in den verschlüsselten Speicher verschoben werden. Er wurde nicht gelöscht; entsperre dein Gerät und öffne die Einstellungen erneut.</string>
     <string name="message_api_key_unreadable">Der gespeicherte API-Schlüssel kann nicht mehr entschlüsselt werden. Gib den Schlüssel erneut ein und speichere ihn.</string>
+    <string name="message_api_key_removed">API-Schlüssel entfernt. KI-Funktionen bleiben aus, bis du wieder einen Schlüssel speicherst.</string>
+    <string name="message_api_key_not_removed">Der Schlüssel konnte nicht entfernt werden. Versuche es erneut.</string>
     <string name="message_clear_failed">Fortschritt konnte nicht gelöscht werden. Bitte versuche es erneut.</string>
     <string name="message_progress_cleared">Bibliothek, Verlauf und Statistiken gelöscht.</string>
     <string name="message_notification_sent">Benachrichtigung gesendet.</string>
