@@ -2,7 +2,6 @@ package com.aus.deutschflow.service
 
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
-import kotlinx.coroutines.flow.firstOrNull
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,10 +19,13 @@ class DailyWord @Inject constructor(
     private val vocabularyDao: VocabularyDao
 ) {
 
-    suspend fun today(now: LocalDateTime = LocalDateTime.now()): VocabularyEntity? = select(
-        words = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty(),
-        epochDay = wordDay(now)
-    )
+    /**
+     * One row, chosen in SQL by the rule [select] states. It used to load the whole
+     * library to pick one word, on every widget redraw - and the widget is redrawn after
+     * every write to the library.
+     */
+    suspend fun today(now: LocalDateTime = LocalDateTime.now()): VocabularyEntity? =
+        vocabularyDao.wordOfTheDay(wordDay(now))
 
     companion object {
 
@@ -44,6 +46,9 @@ class DailyWord @Inject constructor(
             now.minusHours(ROLLOVER_HOUR.toLong()).toLocalDate().toEpochDay()
 
         /**
+         * The rule, as a pure function: VocabularyDao.wordOfTheDay applies it in SQL,
+         * and this is what the tests pin it to.
+         *
          * Picks by date rather than at random, so every caller on a given day picks
          * the same word and picks it again on every redraw.
          *

@@ -5,6 +5,14 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.data.local.entities.germanKey
 import kotlinx.coroutines.flow.Flow
 
+/** The row [VocabularyDao.masteryCounts] returns; its column names are these fields. */
+data class MasteryCounts(
+    val totalWords: Int,
+    val masteredWords: Int,
+    val learningWords: Int,
+    val newWords: Int
+)
+
 @Dao
 interface VocabularyDao {
     @Query("SELECT * FROM vocabulary ORDER BY timestamp DESC")
@@ -56,6 +64,44 @@ interface VocabularyDao {
 
     @Query("DELETE FROM vocabulary WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("SELECT COUNT(*) FROM vocabulary")
+    suspend fun countOnce(): Int
+
+    @Query("SELECT * FROM vocabulary ORDER BY id ASC LIMIT 1 OFFSET :offset")
+    suspend fun nthById(offset: Int): VocabularyEntity?
+
+    /**
+     * The word of the day for [wordDay], read as one row rather than the library.
+     *
+     * The same choice as DailyWord.select - position `wordDay mod size` in id order -
+     * but without materialising every row to make it. DailyWord used to load the whole
+     * library for this, and it runs on every widget redraw, which follows every write
+     * to the library. One transaction, so the count and the fetch see the same table.
+     */
+    @Transaction
+    suspend fun wordOfTheDay(wordDay: Long): VocabularyEntity? {
+        val size = countOnce()
+        if (size == 0) return null
+        return nthById(Math.floorMod(wordDay, size.toLong()).toInt())
+    }
+
+    /**
+     * The library's mastery split, counted by SQLite rather than by loading every row.
+     *
+     * The Dashboard used to map the whole table on every change to it. The buckets are
+     * those DashboardViewModel defines: never answered is new; answered and on an
+     * interval of [masteredDays] or more is mastered; answered on a shorter one is
+     * learning - one axis, so they always sum to the total.
+     */
+    @Query(
+        "SELECT COUNT(*) AS totalWords, " +
+            "COALESCE(SUM(CASE WHEN reviewCount > 0 AND `interval` >= :masteredDays THEN 1 ELSE 0 END), 0) AS masteredWords, " +
+            "COALESCE(SUM(CASE WHEN reviewCount > 0 AND `interval` < :masteredDays THEN 1 ELSE 0 END), 0) AS learningWords, " +
+            "COALESCE(SUM(CASE WHEN reviewCount = 0 THEN 1 ELSE 0 END), 0) AS newWords " +
+            "FROM vocabulary"
+    )
+    fun masteryCounts(masteredDays: Int): Flow<MasteryCounts>
 
     /** The row as it is now, for callers holding a snapshot that may have gone stale. */
     @Query("SELECT * FROM vocabulary WHERE id = :id")
