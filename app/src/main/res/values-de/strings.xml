@@ -262,6 +262,7 @@
     <string name="ai_failed">Übersetzung fehlgeschlagen: %1$s</string>
     <string name="ai_no_response">keine Antwort von Groq</string>
     <string name="ai_unreadable">Die Antwort war nicht lesbar. Versuche es erneut.</string>
+    <string name="ai_cut_off">Die Antwort wurde abgeschnitten, bevor sie fertig war. Versuche einen kürzeren Satz.</string>
     <string name="ai_key_rejected">Dieser API-Schlüssel wurde abgelehnt. Prüfe ihn in den Einstellungen.</string>
     <string name="ai_rate_limited">Zu viele Anfragen im Moment. Versuche es in einer Minute erneut.</string>
     <string name="ai_status">Der Dienst antwortete mit %1$d.</string>

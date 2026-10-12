@@ -265,6 +265,7 @@
     <string name="ai_failed">Translation failed: %1$s</string>
     <string name="ai_no_response">No response from AI service.</string>
     <string name="ai_unreadable">Couldn\'t read the response. Try again.</string>
+    <string name="ai_cut_off">The answer was cut off before it finished. Try a shorter sentence.</string>
     <string name="ai_key_rejected">The API key was rejected. Please check it in Settings.</string>
     <string name="ai_rate_limited">Too many requests right now. Try again in a minute.</string>
     <string name="ai_status">The service answered with code %1$d.</string>
