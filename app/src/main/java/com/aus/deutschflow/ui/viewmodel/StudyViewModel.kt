@@ -114,9 +114,14 @@ class StudyViewModel @Inject constructor(
         launchGuarded(TAG, onError = ::sessionLoadFailed) {
             val now = System.currentTimeMillis()
             val dueList = vocabularyDao.getDueVocabulary(now).firstOrNull().orEmpty()
-            val allList = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
             val isExtra = dueList.isEmpty()
-            val targetList = if (isExtra) allList else dueList
+            // The whole library only when it is actually the deck: it used to be read on
+            // every session start and then thrown away whenever anything was due.
+            val targetList = if (isExtra) {
+                vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
+            } else {
+                dueList
+            }
 
             _currentIndex.value = 0
             _isFlipped.value = false

@@ -230,11 +230,12 @@ class TranscriptViewModelTest {
 
         fun isWaitingOn(word: String): Boolean = gates[word]?.isCompleted == false
 
-        fun answer(word: String) {
+        /** Answers [word] as the model does for an inflected form: with [dictionaryForm]. */
+        fun answer(word: String, dictionaryForm: String = word) {
             gates.getOrPut(word) { CompletableDeferred() }.complete(
                 WordDetailsResult.Success(
                     WordDetails(
-                        word = word,
+                        word = dictionaryForm,
                         article = "der",
                         plural = "",
                         conjugationOrInfinitive = "",
@@ -324,6 +325,27 @@ class TranscriptViewModelTest {
         failing.saveTranscript("Ich lerne Deutsch", "I am learning German")
 
         assertEquals(SaveOutcome.FAILED, withTimeout(5_000) { outcome.await() })
+    }
+
+    /**
+     * The lookup answers with the dictionary form, and Save files that form. The tapped
+     * word is kept beside it, so the sheet can say "dictionary form of ging" instead of
+     * silently saving a word the user never tapped.
+     */
+    @Test
+    fun theTappedWordIsKeptBesideItsDictionaryForm() = runBlocking {
+        val scripted = ScriptedProcessor(context)
+        val lookup = viewModelWith(scripted)
+
+        lookup.interrogateWord("ging")
+        assertTrue(awaitCondition { scripted.isWaitingOn("ging") })
+        scripted.answer("ging", dictionaryForm = "gehen")
+
+        assertTrue(awaitCondition { lookup.wordDetails.first()?.word == "gehen" })
+        assertEquals("ging", lookup.wordDetailsFor.first())
+
+        lookup.dismissWordDetails()
+        assertNull("closing the sheet forgets the tapped word too", lookup.wordDetailsFor.first())
     }
 
     @Test

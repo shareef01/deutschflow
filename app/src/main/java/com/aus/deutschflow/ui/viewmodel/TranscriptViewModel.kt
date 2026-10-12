@@ -175,6 +175,17 @@ class TranscriptViewModel @Inject constructor(
     val wordDetails: StateFlow<WordDetails?> = _wordDetails
 
     /**
+     * The chip that was tapped for [wordDetails], as it appeared in the transcript.
+     *
+     * The lookup answers with the dictionary form - "gehen" for a tapped "ging", "Hund"
+     * for "Hunde" - and that form is what Save files, so it can fold into an entry the
+     * library already holds under that name. Kept so the sheet can say so rather than
+     * silently saving a word the user did not tap.
+     */
+    private val _wordDetailsFor = MutableStateFlow<String?>(null)
+    val wordDetailsFor: StateFlow<String?> = _wordDetailsFor
+
+    /**
      * The word whose interrogation is in flight, so the chip that was tapped is the one
      * that shows a spinner.
      *
@@ -419,7 +430,10 @@ class TranscriptViewModel @Inject constructor(
                 val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
                 when (val result =
                     vocabularyProcessor.interrogateWord(trimmed, apiKey, cefr)) {
-                    is WordDetailsResult.Success -> _wordDetails.value = result.details
+                    is WordDetailsResult.Success -> {
+                        _wordDetailsFor.value = trimmed
+                        _wordDetails.value = result.details
+                    }
                     is WordDetailsResult.Failure -> _wordDetailError.value = result.message
                 }
             } finally {
@@ -437,6 +451,7 @@ class TranscriptViewModel @Inject constructor(
     /** Closes the detail sheet and forgets the current word. */
     fun dismissWordDetails() {
         _wordDetails.value = null
+        _wordDetailsFor.value = null
         _wordDetailError.value = null
     }
 

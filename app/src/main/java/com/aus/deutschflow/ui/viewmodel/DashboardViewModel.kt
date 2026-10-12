@@ -49,14 +49,15 @@ class DashboardViewModel @Inject constructor(
             LocalDate.now().minusDays(HEATMAP_DAYS).format(DateTimeFormatter.ISO_LOCAL_DATE)
         ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val masteryStats: StateFlow<MasteryStats> = vocabularyDao.getAllVocabulary()
-        .map { list ->
-            val (seen, unseen) = list.partition { it.reviewCount > 0 }
+    // Counted in SQL: this used to load and partition every row of the library on every
+    // change to it, to produce four numbers. Same buckets - see VocabularyDao.masteryCounts.
+    val masteryStats: StateFlow<MasteryStats> = vocabularyDao.masteryCounts(MASTERED_INTERVAL_DAYS)
+        .map { counts ->
             MasteryStats(
-                totalWords = list.size,
-                masteredWords = seen.count { it.interval >= MASTERED_INTERVAL_DAYS },
-                learningWords = seen.count { it.interval < MASTERED_INTERVAL_DAYS },
-                newWords = unseen.size
+                totalWords = counts.totalWords,
+                masteredWords = counts.masteredWords,
+                learningWords = counts.learningWords,
+                newWords = counts.newWords
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MasteryStats(0, 0, 0, 0))

@@ -74,6 +74,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
     val ttsError by viewModel.ttsError.collectAsStateWithLifecycle()
     val aiError by viewModel.aiError.collectAsStateWithLifecycle()
     val wordDetails by viewModel.wordDetails.collectAsStateWithLifecycle()
+    val wordDetailsFor by viewModel.wordDetailsFor.collectAsStateWithLifecycle()
     val wordDetailError by viewModel.wordDetailError.collectAsStateWithLifecycle()
     val interrogatingWord by viewModel.interrogatingWord.collectAsStateWithLifecycle()
     val selectedDialect by viewModel.selectedDialect.collectAsStateWithLifecycle()
@@ -184,6 +185,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
 
         WordDetailsBottomSheet(
             details = wordDetails,
+            tappedWord = wordDetailsFor,
             onDismiss = { viewModel.dismissWordDetails() },
             onSave = { details ->
                 viewModel.dismissWordDetails()
