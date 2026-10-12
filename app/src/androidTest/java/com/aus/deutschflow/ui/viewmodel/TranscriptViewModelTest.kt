@@ -1,12 +1,15 @@
 package com.aus.deutschflow.ui.viewmodel
 
 import android.content.Context
+import android.database.sqlite.SQLiteFullException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
@@ -15,8 +18,11 @@ import com.aus.deutschflow.service.WordDetails
 import com.aus.deutschflow.service.WordDetailsResult
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -241,6 +247,46 @@ class TranscriptViewModelTest {
             gates.getOrPut(word) { CompletableDeferred() }
                 .complete(WordDetailsResult.Failure(message))
         }
+    }
+
+    /** The screen's Save reports a completed write, once. */
+    @Test
+    fun aRequestedSaveReportsThatItLanded() = runBlocking {
+        val outcome = async(start = CoroutineStart.UNDISPATCHED) { viewModel.saveOutcomes.first() }
+
+        viewModel.saveTranscript("Ich lerne Deutsch", "I am learning German")
+
+        assertEquals(SaveOutcome.SAVED, withTimeout(5_000) { outcome.await() })
+        assertEquals(1, database.vocabularyDao().getAllVocabulary().first().size)
+    }
+
+    /**
+     * A write the database refuses is reported, not fatal. Save used to run in the
+     * screen's own coroutine scope, which has no exception handler, so this exact
+     * failure took the app down.
+     */
+    @Test
+    fun aSaveTheDatabaseRefusesIsReportedNotThrown() = runBlocking {
+        // A full disk, delivered where a real one would surface: from the DAO's write.
+        val fullDisk = object : VocabularyDao by database.vocabularyDao() {
+            override suspend fun save(entry: VocabularyEntity) {
+                throw SQLiteFullException("database or disk is full")
+            }
+        }
+        val failing = TranscriptViewModel(
+            speechRecognizerHelper = SpeechRecognizerHelper(context),
+            vocabularyProcessor = VocabularyProcessor(GroqHelper(context)),
+            vocabularyDao = fullDisk,
+            transcriptDao = database.transcriptDao(),
+            preferenceManager = store.preferences,
+            widgetUpdater = WidgetUpdater(context),
+            ttsHelper = TTSHelper(context)
+        )
+        val outcome = async(start = CoroutineStart.UNDISPATCHED) { failing.saveOutcomes.first() }
+
+        failing.saveTranscript("Ich lerne Deutsch", "I am learning German")
+
+        assertEquals(SaveOutcome.FAILED, withTimeout(5_000) { outcome.await() })
     }
 
     @Test

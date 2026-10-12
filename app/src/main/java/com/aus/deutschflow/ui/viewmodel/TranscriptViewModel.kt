@@ -340,6 +340,41 @@ class TranscriptViewModel @Inject constructor(
     }
 
     /**
+     * How a Save the screen asked for turned out, delivered once to whoever is
+     * showing the snackbar.
+     */
+    private val _saveOutcomes = MutableSharedFlow<SaveOutcome>(extraBufferCapacity = 1)
+    val saveOutcomes: SharedFlow<SaveOutcome> = _saveOutcomes.asSharedFlow()
+
+    /** Saves the current utterance, for the screen's Save button. See [launchSave]. */
+    fun saveTranscript(german: String, english: String) {
+        launchSave { saveToVocabulary(german, english) }
+    }
+
+    /** Saves one interrogated word, for the detail sheet's Save. See [launchSave]. */
+    fun saveWord(details: WordDetails) {
+        launchSave { saveWordDetails(details) }
+    }
+
+    /**
+     * Runs a save in this ViewModel's scope and reports how it went.
+     *
+     * The screen used to run these itself, from rememberCoroutineScope. That scope has
+     * no exception handler, so a database that failed the write - a full disk, a
+     * corrupted file - threw straight to the thread's default handler and took the app
+     * down, on the one button whose whole job is to keep what the user just said. And
+     * because the scope dies with the composition, leaving the screen mid-save
+     * cancelled the transaction, which rolled back with nobody told. Here the write
+     * outlives the screen, a failure is reported rather than fatal, and a blank side
+     * is still quietly refused (no outcome at all), exactly as before.
+     */
+    private fun launchSave(write: suspend () -> Boolean) {
+        launchGuarded(TAG, onError = { _saveOutcomes.tryEmit(SaveOutcome.FAILED) }) {
+            if (write()) _saveOutcomes.emit(SaveOutcome.SAVED)
+        }
+    }
+
+    /**
      * The interrogation in flight, so a second tap supersedes the first rather than
      * racing it.
      */
@@ -449,6 +484,9 @@ class TranscriptViewModel @Inject constructor(
         private const val TAG = "TranscriptViewModel"
     }
 }
+
+/** How a requested save ended. A refused save (a blank side) reports nothing. */
+enum class SaveOutcome { SAVED, FAILED }
 
 /** The states the transcript screen moves through, in the order they occur. */
 enum class RecordingPhase { IDLE, LISTENING, TRANSCRIBING, RESULT }

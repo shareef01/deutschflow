@@ -279,6 +279,12 @@ class StudyViewModel @Inject constructor(
     }
 
     fun skipCard() {
+        // Inert while a review is being written, like the rating buttons. submitReview
+        // removes the card by the index it captured at tap time and leaves the index
+        // where it was, so a skip landing in between moved the index on top of the
+        // removal: the card on screen changed under the user, and the one after the
+        // rated card was passed over without being chosen.
+        if (_isSubmitting.value) return
         val size = _studyList.value.size
         if (size > 0) {
             _currentIndex.value = (_currentIndex.value + 1) % size

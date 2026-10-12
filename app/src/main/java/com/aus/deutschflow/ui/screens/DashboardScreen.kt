@@ -58,7 +58,8 @@ fun DashboardScreen(
     ) {
         DailyGoalCard(
             xp = todayXp,
-            streak = userStats?.streak ?: 0,
+            // The live streak, not the stored one: see UserStatsEntity.currentStreak.
+            streak = userStats?.currentStreak() ?: 0,
             onStartReview = onStartReview
         )
         MasteryBreakdownCard(masteryStats)

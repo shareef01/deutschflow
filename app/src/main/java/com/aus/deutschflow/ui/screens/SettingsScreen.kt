@@ -373,7 +373,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
                 StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_xp), (userStats?.xp ?: 0).toString())
-                val streak = userStats?.streak ?: 0
+                val streak = userStats?.currentStreak() ?: 0
                 StatGridItem(
                     Modifier.weight(1f),
                     stringResource(R.string.settings_stat_streak),
