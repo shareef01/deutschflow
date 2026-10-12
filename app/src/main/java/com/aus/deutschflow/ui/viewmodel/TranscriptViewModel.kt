@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.data.local.entities.NO_ARTICLE
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.AIResult
@@ -238,6 +239,11 @@ class TranscriptViewModel @Inject constructor(
             _translation.value = ""
             _suggestedWords.value = emptyList()
             _example.value = ""
+            // With the rest of the last utterance's analysis. Leaving these behind was
+            // harmless only because the screen happens to hide grammar until a new
+            // translation arrives - a layout change away from showing the previous
+            // sentence's cases under the next one.
+            _grammarNotes.value = emptyList()
             _aiError.value = null
             speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
         }
@@ -306,6 +312,7 @@ class TranscriptViewModel @Inject constructor(
                     _translation.value = ""
                     _suggestedWords.value = emptyList()
                     _example.value = ""
+                    _grammarNotes.value = emptyList()
                     _aiError.value = result.message
                 }
             }
@@ -462,7 +469,8 @@ class TranscriptViewModel @Inject constructor(
                 germanText = details.word,
                 englishTranslation = details.meaning,
                 exampleSentence = details.exampleSentence,
-                article = details.article,
+                // Stored blank, not as "none": see NO_ARTICLE.
+                article = details.article.takeUnless { it == NO_ARTICLE }.orEmpty(),
                 plural = details.plural,
                 conjugation = details.conjugationOrInfinitive,
                 // Comma-joined, the shape LinguisticBox on the detail screen
