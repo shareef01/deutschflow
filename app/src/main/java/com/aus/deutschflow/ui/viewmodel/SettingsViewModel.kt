@@ -167,6 +167,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The user refused notifications, or had refused them for good and Android no
+     * longer asks. Same message showNotification gives, since the remedy is the same:
+     * the system settings page is the only place left to turn them on.
+     */
+    fun onNotificationPermissionDenied() {
+        _message.value = R.string.message_notifications_off
+    }
+
     fun testNotification() {
         // Guarded, log-only: the outcomes the user can act on already carry their
         // own messages; a throw from the notification manager has no existing
