@@ -56,6 +56,7 @@ import com.aus.deutschflow.R
 import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.ui.components.*
 import com.aus.deutschflow.ui.theme.*
+import com.aus.deutschflow.ui.viewmodel.SaveOutcome
 import com.aus.deutschflow.ui.viewmodel.TranscriptViewModel
 import kotlinx.coroutines.launch
 
@@ -95,6 +96,20 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
     val copiedMessage = stringResource(R.string.action_copied)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Saves run in the ViewModel (see TranscriptViewModel.launchSave); this only
+    // reports how they ended.
+    val saveFailedMessage = stringResource(R.string.library_save_failed)
+    LaunchedEffect(viewModel) {
+        viewModel.saveOutcomes.collect { outcome ->
+            snackbarHostState.showSnackbar(
+                when (outcome) {
+                    SaveOutcome.SAVED -> savedMessage
+                    SaveOutcome.FAILED -> saveFailedMessage
+                }
+            )
+        }
+    }
 
     LaunchedEffect(wordDetailError) {
         wordDetailError?.let {
@@ -159,13 +174,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
                 copyToClipboard(context, text)
                 scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
             },
-            onSave = {
-                scope.launch {
-                    if (viewModel.saveToVocabulary(finalText, translation)) {
-                        snackbarHostState.showSnackbar(savedMessage)
-                    }
-                }
-            }
+            onSave = { viewModel.saveTranscript(finalText, translation) }
         )
 
         SnackbarHost(
@@ -178,11 +187,7 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
             onDismiss = { viewModel.dismissWordDetails() },
             onSave = { details ->
                 viewModel.dismissWordDetails()
-                scope.launch {
-                    if (viewModel.saveWordDetails(details)) {
-                        snackbarHostState.showSnackbar(savedMessage)
-                    }
-                }
+                viewModel.saveWord(details)
             }
         )
     }
