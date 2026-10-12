@@ -155,6 +155,42 @@ class StudySessionPersistenceTest {
     }
 
     @Test
+    fun tabSwitchDuringDrillAgainDoesNotReshuffle() = runBlocking {
+        seedWords(2)
+        viewModel.ensureSessionStarted()
+        assertTrue(awaitCondition { viewModel.studyList.value.size == 2 })
+        // One at a time: submitReview refuses re-entry while a save is in flight,
+        // so a second answer fired before the first lands is dropped by design.
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(
+            awaitCondition { viewModel.sessionReviewedCount.value == 1 && !viewModel.isSubmitting.value }
+        )
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(
+            "the sitting should be over",
+            awaitCondition { viewModel.studyList.value.isEmpty() && !viewModel.isSubmitting.value }
+        )
+
+        // "Drill again" from the completion screen.
+        viewModel.restartSession()
+        assertTrue(awaitCondition { viewModel.studyList.value.size == 2 })
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(
+            "the drill-again review never landed",
+            awaitCondition { viewModel.sessionReviewedCount.value == 1 && !viewModel.isSubmitting.value }
+        )
+        val deck = viewModel.studyList.value
+
+        // The tab switch: completion re-armed the kickoff guard, and only an
+        // armed restartSession keeps this entry from reloading mid-sitting.
+        viewModel.ensureSessionStarted()
+
+        kotlinx.coroutines.delay(500)
+        assertEquals("the drill-again deck must not be reshuffled", deck, viewModel.studyList.value)
+        assertEquals("the drill-again progress must not be zeroed", 1, viewModel.sessionReviewedCount.value)
+    }
+
+    @Test
     fun completingTheDeckReArmsTheNextTabEntry() = runBlocking {
         seedWords(1)
         viewModel.ensureSessionStarted()
