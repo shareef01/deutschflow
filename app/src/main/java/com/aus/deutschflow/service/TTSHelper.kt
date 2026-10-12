@@ -35,8 +35,18 @@ class TTSHelper @Inject constructor(
     @Volatile
     private var tts: TextToSpeech? = null
 
+    /**
+     * Starts as UNAVAILABLE, with no engine: the first [speak] builds one, through the
+     * same path that rebuilds an engine that failed or was shut down, and its text is
+     * spoken the moment the engine answers.
+     *
+     * The engine used to be bound in the constructor, and this is a @Singleton injected
+     * into MainActivity and the start screen - so every cold start connected to the
+     * system TTS service and loaded a German voice, whether or not anything was ever
+     * spoken that session.
+     */
     @Volatile
-    private var state = State.CONNECTING
+    private var state = State.UNAVAILABLE
 
     private val lock = Any()
 
@@ -88,10 +98,6 @@ class TTSHelper @Inject constructor(
      */
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
-
-    init {
-        initialize()
-    }
 
     /**
      * The engine used to be built in a field initializer with `this` as the
@@ -207,9 +213,11 @@ class TTSHelper @Inject constructor(
                     false
                 }
 
-                // Voice data can be installed while the app is running, and the engine
-                // is also torn down when the last Activity finishes while this
-                // @Singleton lives on. So retry rather than staying mute - and if the
+                // Also the very first speak: the engine is not built until something
+                // needs saying (see [state]). Beyond that, voice data can be installed
+                // while the app is running, and the engine is torn down when the last
+                // Activity finishes while this @Singleton lives on. So retry rather
+                // than staying mute - and if the
                 // retry fails too, onEngineInit says so, because this text is a user
                 // asking to hear it.
                 State.UNAVAILABLE -> {

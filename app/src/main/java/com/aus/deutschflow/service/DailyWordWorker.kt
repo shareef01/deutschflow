@@ -154,7 +154,11 @@ class DailyWordWorker(
 
         private const val UNIQUE_NAME = "daily-word"
 
-        /** Late enough to be awake, early enough to still be part of the day. */
-        private const val HOUR_OF_DAY = 9
+        /**
+         * Late enough to be awake, early enough to still be part of the day. The word
+         * of the day rolls over at this same hour, so the announcement and the change
+         * are one moment - see DailyWord.ROLLOVER_HOUR.
+         */
+        private const val HOUR_OF_DAY = DailyWord.ROLLOVER_HOUR
     }
 }

@@ -3,7 +3,9 @@ package com.aus.deutschflow.data.local
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.aus.deutschflow.data.local.dao.MasteryCounts
 import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.service.DailyWord
 import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import kotlinx.coroutines.flow.first
@@ -153,6 +155,38 @@ class VocabularyDaoTest {
         assertEquals("der", saved.first().article)
         assertEquals("Der Hund schläft.", saved.first().exampleSentence)
         assertEquals("dog, mistyped", saved.first().englishTranslation)
+    }
+
+    // --- queries that replaced whole-library reads ------------------------------
+
+    /**
+     * The word of the day is now chosen in SQL; it must be exactly the word the
+     * pure rule (DailyWord.select) picks from the full list, day after day - including
+     * after a deletion leaves a gap in the ids.
+     */
+    @Test
+    fun theOneRowWordOfTheDayMatchesTheRule() = runBlocking {
+        assertEquals("an empty library has none", null, dao.wordOfTheDay(20_000L))
+        repeat(7) { dao.save(VocabularyEntity(germanText = "wort$it", englishTranslation = "word$it")) }
+        dao.deleteById(dao.getAllVocabulary().first().minOf { it.id } + 2)
+
+        val all = dao.getAllVocabulary().first()
+        for (day in 20_000L until 20_014L) {
+            assertEquals("day $day", DailyWord.select(all, day), dao.wordOfTheDay(day))
+        }
+    }
+
+    /** The Dashboard's split, counted in SQL, matches the buckets it used to compute. */
+    @Test
+    fun masteryCountsSplitTheLibraryOnOneAxis() = runBlocking {
+        assertEquals(MasteryCounts(0, 0, 0, 0), dao.masteryCounts(21).first())
+
+        dao.save(VocabularyEntity(germanText = "neu", englishTranslation = "new"))
+        dao.save(VocabularyEntity(germanText = "lernend", englishTranslation = "learning", reviewCount = 2, interval = 6))
+        dao.save(VocabularyEntity(germanText = "sicher", englishTranslation = "mastered", reviewCount = 5, interval = 40))
+        dao.save(VocabularyEntity(germanText = "grenze", englishTranslation = "boundary", reviewCount = 3, interval = 21))
+
+        assertEquals(MasteryCounts(totalWords = 4, masteredWords = 2, learningWords = 1, newWords = 1), dao.masteryCounts(21).first())
     }
 
     // --- learning data across merge and undo -------------------------------------

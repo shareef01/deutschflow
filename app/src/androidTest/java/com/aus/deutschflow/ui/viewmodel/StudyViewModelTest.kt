@@ -184,9 +184,15 @@ class StudyViewModelTest {
         // The ease penalty, not the review count: a seeded card already has
         // reviewCount 0, so waiting on that would be true before the write landed
         // and would let this test pass without the code doing anything.
-        awaitCondition {
-            database.vocabularyDao().findByGermanText(card.germanText)?.easeFactor == 2.3f
-        }
+        //
+        // And the submit finishing, not just the write: the deck is reordered after
+        // the transaction commits, and isSubmitting only drops once it has been. On a
+        // slow emulator the ease could be visible while the deck was still the old
+        // one, and the move-to-the-end assertion below read it too early.
+        assertTrue(awaitCondition {
+            database.vocabularyDao().findByGermanText(card.germanText)?.easeFactor == 2.3f &&
+                !viewModel.isSubmitting.value
+        })
 
         val written = database.vocabularyDao().findByGermanText(card.germanText)
         assertEquals("Again costs ease", 2.3f, written?.easeFactor ?: 0f, 0.0001f)

@@ -86,11 +86,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
     val cefrLevels = listOf(
         stringResource(R.string.settings_cefr_none) to "",
-        "A1 (Beginner)" to "A1",
-        "A2 (Elementary)" to "A2",
-        "B1 (Intermediate)" to "B1",
-        "B2 (Upper Intermediate)" to "B2",
-        "C1+ (Advanced)" to "C1+"
+        stringResource(R.string.settings_cefr_a1) to "A1",
+        stringResource(R.string.settings_cefr_a2) to "A2",
+        stringResource(R.string.settings_cefr_b1) to "B1",
+        stringResource(R.string.settings_cefr_b2) to "B2",
+        stringResource(R.string.settings_cefr_c1) to "C1+"
     )
 
     Column(
