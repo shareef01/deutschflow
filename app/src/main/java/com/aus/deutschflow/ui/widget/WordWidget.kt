@@ -14,6 +14,8 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import com.aus.deutschflow.MainActivity
@@ -48,7 +50,13 @@ class WordWidget : GlanceAppWidget() {
                 // different products on the same screen.
                 .background(ColorProvider(R.color.widget_background))
                 .padding(12.dp)
-                .clickable(actionStartActivity<MainActivity>()),
+                // Opens the word shown, like the notification does, rather than just
+                // the app. Glance hands action parameters to the Activity as extras.
+                .clickable(
+                    actionStartActivity<MainActivity>(
+                        vocab?.let { actionParametersOf(WordIdKey to it.id) } ?: actionParametersOf()
+                    )
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -94,6 +102,9 @@ class WordWidget : GlanceAppWidget() {
         }
     }
 }
+
+/** Named after the extra MainActivity reads, which is what makes Glance's extra land there. */
+private val WordIdKey = ActionParameters.Key<Int>(MainActivity.EXTRA_WORD_ID)
 
 class WordWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = WordWidget()

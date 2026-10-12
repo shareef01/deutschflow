@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -23,9 +24,16 @@ import com.aus.deutschflow.ui.theme.Spacing
 @Composable
 fun LibraryScreen(
     windowSizeClass: WindowSizeClass,
-    onStartTranscript: () -> Unit = {}
+    onStartTranscript: () -> Unit = {},
+    openWordId: Int? = null,
+    onWordOpened: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
+    // A word asked for from outside lives on the Words pane, not the transcripts one.
+    LaunchedEffect(openWordId) {
+        if (openWordId != null) selectedTab = 0
+    }
     val tabLabels = listOf(
         stringResource(R.string.library_tab_words),
         stringResource(R.string.library_tab_transcripts)
@@ -42,7 +50,7 @@ fun LibraryScreen(
 
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == 0) {
-                VocabularyScreen(windowSizeClass)
+                VocabularyScreen(windowSizeClass, openWordId = openWordId, onWordOpened = onWordOpened)
             } else {
                 HistoryScreen(onStartTranscript = onStartTranscript)
             }

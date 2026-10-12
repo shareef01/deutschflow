@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -37,12 +38,21 @@ import com.aus.deutschflow.ui.screens.*
 @Composable
 fun MainNavigation(
     navController: NavHostController,
-    windowSizeClass: WindowSizeClass
+    windowSizeClass: WindowSizeClass,
+    /** A word to open in the library - from the daily notification or the widget. */
+    openWordId: Int? = null,
+    /** Called once the library has taken [openWordId], so it is opened only once. */
+    onWordOpened: () -> Unit = {}
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
     val haptic = LocalHapticFeedback.current
+
+    // The word lives in the library, wherever the user happens to be.
+    LaunchedEffect(openWordId) {
+        if (openWordId != null) navigateToTab(navController, Screen.Vocabulary)
+    }
 
     val currentScreen = when (currentRoute) {
         Screen.Transcript.route -> Screen.Transcript
@@ -250,7 +260,9 @@ fun MainNavigation(
                 composable(Screen.Vocabulary.route) {
                     LibraryScreen(
                         windowSizeClass = windowSizeClass,
-                        onStartTranscript = { navigateToTab(navController, Screen.Transcript) }
+                        onStartTranscript = { navigateToTab(navController, Screen.Transcript) },
+                        openWordId = openWordId,
+                        onWordOpened = onWordOpened
                     )
                 }
                 composable(Screen.Study.route) { StudyScreen(hiltViewModel()) }
