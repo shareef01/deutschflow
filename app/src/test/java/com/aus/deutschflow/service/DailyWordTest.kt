@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 class DailyWordTest {
 
@@ -75,6 +76,20 @@ class DailyWordTest {
         val seen = (0..4).map { DailyWord.select(words, start + it) }.toSet()
 
         assertEquals(words.toSet(), seen)
+    }
+
+    /**
+     * The word changes when it is announced (09:00), not at midnight - the widget only
+     * redraws at 09:00, so a midnight rollover left it on yesterday's word all morning.
+     */
+    @Test
+    fun `the word day starts at the announcement hour, not at midnight`() {
+        fun at(day: Int, hour: Int, minute: Int = 0) = LocalDateTime.of(2026, 10, day, hour, minute)
+
+        assertEquals("before 09:00 it is still yesterday's word", day(2026, 10, 11), DailyWord.wordDay(at(12, 8, 59)))
+        assertEquals("from 09:00 it is today's", day(2026, 10, 12), DailyWord.wordDay(at(12, 9, 0)))
+        assertEquals("and it holds until 09:00 tomorrow", day(2026, 10, 12), DailyWord.wordDay(at(13, 8, 59)))
+        assertEquals("midnight changes nothing", DailyWord.wordDay(at(12, 23, 59)), DailyWord.wordDay(at(13, 0, 1)))
     }
 
     @Test
