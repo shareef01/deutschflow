@@ -136,6 +136,21 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Withdraws the stored key. Every AI feature then reports "no key" until one is
+     * saved again; the library and progress are untouched. See
+     * [PreferenceManager.clearApiKey].
+     */
+    fun removeApiKey() {
+        launchGuarded(TAG, onError = { _message.value = R.string.message_api_key_not_removed }) {
+            _message.value = if (preferenceManager.clearApiKey()) {
+                R.string.message_api_key_removed
+            } else {
+                R.string.message_api_key_not_removed
+            }
+        }
+    }
+
     fun saveDialect(dialect: String) {
         // Guarded, log-only: a preference write is not worth a crash, and the
         // radio group still shows what is actually stored.

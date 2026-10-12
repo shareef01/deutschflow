@@ -24,6 +24,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -146,6 +147,19 @@ class SettingsViewModelTest {
         assertTrue(awaitCondition { settings.message.value == R.string.message_api_key_not_saved })
         assertTrue("a refused key must not clear the field", saved.isActive)
         saved.cancel()
+    }
+
+    /** Settings can withdraw the key, and says so; the library is not touched. */
+    @Test
+    fun removingTheKeyWithdrawsItAndLeavesTheLibrary() = runBlocking {
+        seedEverything()
+        assertTrue(store.preferences.saveApiKey("gsk_test_key"))
+
+        viewModel.removeApiKey()
+
+        assertTrue(awaitCondition { viewModel.message.value == R.string.message_api_key_removed })
+        assertEquals(PreferenceManager.ApiKeyState.Missing, store.preferences.apiKeyState.first())
+        assertFalse("removing the key must not touch the library", vocabularyIsEmpty())
     }
 
     private suspend fun vocabularyIsEmpty() =
