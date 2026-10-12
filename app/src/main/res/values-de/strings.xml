@@ -45,6 +45,7 @@
     <string name="word_sheet_article">Artikel: %1$s</string>
     <string name="word_sheet_plural">Plural: %1$s</string>
     <string name="word_sheet_verb">Infinitiv: %1$s</string>
+    <string name="word_sheet_dictionary_form">Grundform von „%1$s“ – wird unter diesem Wort gespeichert.</string>
     <string name="word_sheet_meaning">Bedeutung</string>
 
     <!-- History -->

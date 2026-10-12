@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.aus.deutschflow.R
+import com.aus.deutschflow.data.local.entities.germanKey
 import com.aus.deutschflow.service.WordDetails
 import com.aus.deutschflow.ui.theme.Spacing
 
@@ -44,7 +45,9 @@ fun WordDetailsBottomSheet(
     details: WordDetails?,
     onDismiss: () -> Unit,
     onSave: (WordDetails) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The word as it was tapped, when known - see TranscriptViewModel.wordDetailsFor. */
+    tappedWord: String? = null
 ) {
     if (details == null) return
 
@@ -70,6 +73,18 @@ fun WordDetailsBottomSheet(
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center
             )
+
+            // The lookup returns the dictionary form, and that is what Save files. When
+            // it is not the word that was tapped ("gehen" for "ging"), say so, so the
+            // save - which may fold into an entry already under that name - is no surprise.
+            if (tappedWord != null && germanKey(tappedWord) != germanKey(details.word)) {
+                Text(
+                    text = stringResource(R.string.word_sheet_dictionary_form, tappedWord),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
 
             val facts = buildList {
                 if (details.article.isNotBlank() && details.article != "none") {
