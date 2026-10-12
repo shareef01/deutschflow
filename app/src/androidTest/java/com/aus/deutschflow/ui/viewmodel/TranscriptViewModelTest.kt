@@ -10,6 +10,8 @@ import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.service.AIResult
+import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
@@ -247,6 +249,41 @@ class TranscriptViewModelTest {
             gates.getOrPut(word) { CompletableDeferred() }
                 .complete(WordDetailsResult.Failure(message))
         }
+    }
+
+    /**
+     * A failed translation leaves nothing of the previous sentence's analysis behind.
+     * The grammar notes used to survive it - hidden only because the screen happens
+     * not to draw grammar without a translation.
+     */
+    @Test
+    fun aFailedTranslationClearsTheLastGrammarNotes() = runBlocking {
+        var next: AIResult = AIResult.Success(
+            translation = "I see the dog",
+            keywords = listOf("Hund"),
+            example = "",
+            grammarNotes = listOf(GrammarNote("den Hund", "Akkusativ", "direct object"))
+        )
+        val processor = object : VocabularyProcessor(GroqHelper(context)) {
+            override suspend fun processText(text: String, apiKey: String, learnerLevel: String?) = next
+        }
+        val scripted = TranscriptViewModel(
+            speechRecognizerHelper = SpeechRecognizerHelper(context),
+            vocabularyProcessor = processor,
+            vocabularyDao = database.vocabularyDao(),
+            transcriptDao = database.transcriptDao(),
+            preferenceManager = store.preferences,
+            widgetUpdater = WidgetUpdater(context),
+            ttsHelper = TTSHelper(context)
+        )
+
+        scripted.handleUtterance("Ich sehe den Hund")
+        assertEquals(1, scripted.grammarNotes.value.size)
+
+        next = AIResult.Failure("offline")
+        scripted.handleUtterance("Noch ein Satz")
+
+        assertTrue("the old sentence's grammar must go", scripted.grammarNotes.value.isEmpty())
     }
 
     /** The screen's Save reports a completed write, once. */

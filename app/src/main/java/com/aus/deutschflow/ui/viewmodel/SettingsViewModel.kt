@@ -107,6 +107,19 @@ class SettingsViewModel @Inject constructor(
         _message.value = null
     }
 
+    /**
+     * One emission per key that actually reached storage, so the screen clears what the
+     * user typed only once there is nothing left to lose by clearing it.
+     *
+     * The field used to be emptied on the tap, before the save had run. When the
+     * Keystore then refused, the banner said "not saved" over an empty field and the
+     * user had to find and paste the key again. An event rather than [message]: that
+     * already reads "saved" after a first save, so a second identical outcome would not
+     * register as a change.
+     */
+    private val _apiKeySaved = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val apiKeySaved: SharedFlow<Unit> = _apiKeySaved.asSharedFlow()
+
     fun saveApiKey(apiKey: String) {
         // Guarded, with the same message a false return gives: a Keystore that
         // throws instead of returning false is still "the key couldn't be stored".
@@ -114,10 +127,11 @@ class SettingsViewModel @Inject constructor(
             // The Keystore can refuse to encrypt (e.g. the entry was dropped when the
             // lock screen was removed). Saying "saved" then is a lie that surfaces
             // later as a mysterious "no API key" translation failure.
-            _message.value = if (preferenceManager.saveApiKey(apiKey.trim())) {
-                R.string.message_api_key_saved
+            if (preferenceManager.saveApiKey(apiKey.trim())) {
+                _message.value = R.string.message_api_key_saved
+                _apiKeySaved.emit(Unit)
             } else {
-                R.string.message_api_key_not_saved
+                _message.value = R.string.message_api_key_not_saved
             }
         }
     }
