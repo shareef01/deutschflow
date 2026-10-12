@@ -201,6 +201,22 @@ class StudyViewModelTest {
     }
 
     /**
+     * Hard is a correct answer: the scheduler grows its interval, and it banks XP and
+     * keeps the streak like Good. It used to bank nothing, so the honest rating for a
+     * struggle was the one that cost the learner.
+     */
+    @Test
+    fun hardIsACorrectAnswerAndBanksXp() = runBlocking {
+        startSessionOf(1)
+
+        viewModel.submitReview(ReviewQuality.HARD)
+
+        assertTrue(awaitCondition { xp() == StudyViewModel.XP_PER_CARD && !viewModel.isSubmitting.value })
+        assertEquals(1, database.userStatsDao().getUserStatsOnce()?.streak)
+        assertTrue("a correct answer leaves the session", viewModel.studyList.value.isEmpty())
+    }
+
+    /**
      * The point of the scheduler: a word answered well is not offered again the same
      * day. Before the SRS this deliberately went the other way - re-entering the tab
      * re-offered everything - so the change of behaviour is worth pinning down.

@@ -33,7 +33,9 @@ export async function recordReview(
       easeFactor: persisted.easeFactor, reviewCount: persisted.reviewCount,
       lastModifiedAt: persisted.lastModifiedAt,
     });
-    if (!isExtraPractice && quality >= ReviewQuality.GOOD) await rewardXp(db, XP_PER_CARD);
+    // Hard is a correct answer (the scheduler grows its interval), so it earns XP and
+    // keeps the streak like Good and Easy. Mirrors StudyViewModel.submitReview.
+    if (!isExtraPractice && quality !== ReviewQuality.AGAIN) await rewardXp(db, XP_PER_CARD);
     const ratings = { [ReviewQuality.AGAIN]: "AGAIN", [ReviewQuality.HARD]: "HARD",
       [ReviewQuality.GOOD]: "GOOD", [ReviewQuality.EASY]: "EASY" } as const;
     await db.reviewEvents.add({

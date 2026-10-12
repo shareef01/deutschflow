@@ -204,7 +204,11 @@ class StudyViewModel @Inject constructor(
                         reviewCount = schedule.reviewCount,
                         lastModifiedAt = maxOf(fresh.lastModifiedAt, now)
                     )
-                    if (!extraPractice && quality.value >= ReviewQuality.GOOD.value) {
+                    // Hard counts. It is a correct answer - SRSEngine treats it as a
+                    // success and grows the interval - but it used to earn nothing and
+                    // not keep the streak, so the honest rating for a struggle was the
+                    // one that cost the learner, which teaches them to press Good instead.
+                    if (!extraPractice && quality != ReviewQuality.AGAIN) {
                         awardXp(XP_PER_CARD)
                     }
                     database.reviewEventDao().insert(
