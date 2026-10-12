@@ -289,4 +289,28 @@
     <string name="widget_preview_word">die Übung</string>
     <!-- The app always translates into English, so the second line stays English. -->
     <string name="widget_preview_translation">practice</string>
+
+    <!-- Roleplay scenarios, CEFR levels and the widget label (were hardcoded English) -->
+    <string name="settings_cefr_a1">A1 (Anfänger)</string>
+    <string name="settings_cefr_a2">A2 (Grundlagen)</string>
+    <string name="settings_cefr_b1">B1 (Mittelstufe)</string>
+    <string name="settings_cefr_b2">B2 (Gute Mittelstufe)</string>
+    <string name="settings_cefr_c1">C1+ (Fortgeschritten)</string>
+    <string name="scenario_bakery_title">Bestellen in einer Berliner Bäckerei</string>
+    <string name="scenario_bakery_context">Du bist in einer traditionellen Berliner Bäckerei und bestellst Brot und Gebäck.</string>
+    <string name="scenario_cafe_title">Bestellen in einem Wiener Kaffeehaus</string>
+    <string name="scenario_cafe_context">Du sitzt in einem traditionellen Wiener Kaffeehaus.</string>
+    <string name="scenario_supermarket_title">Im Supermarkt nach Produkten fragen</string>
+    <string name="scenario_supermarket_context">Du kaufst in einem deutschen Supermarkt ein und suchst Zutaten.</string>
+    <string name="scenario_train_station_title">Eine Fahrkarte am Bahnhof kaufen</string>
+    <string name="scenario_train_station_context">Du stehst am Fahrkartenschalter im Frankfurter Hauptbahnhof.</string>
+    <string name="scenario_buergeramt_title">Anmeldung beim Bürgeramt</string>
+    <string name="scenario_buergeramt_context">Du hast einen Termin beim Bürgeramt, um deine Wohnung anzumelden.</string>
+    <string name="scenario_doctor_title">Beim Hausarzt</string>
+    <string name="scenario_doctor_context">Du bist mit Beschwerden in einer Hausarztpraxis.</string>
+    <string name="scenario_apartment_title">Wohnungsbesichtigung in München</string>
+    <string name="scenario_apartment_context">Du besichtigst eine Mietwohnung und sprichst mit dem Vermieter.</string>
+    <string name="scenario_job_interview_title">Vorstellungsgespräch für eine Fachstelle</string>
+    <string name="scenario_job_interview_context">Du führst ein erstes Vorstellungsgespräch mit einem deutschen Arbeitgeber.</string>
+    <string name="widget_label">DeutschFlow Wort</string>
 </resources>
