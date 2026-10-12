@@ -454,11 +454,15 @@ private fun StudySessionContent(
 
         Spacer(modifier = Modifier.height(Spacing.sm))
 
-        // Skip Card button
-        TextButton(onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            viewModel.skipCard()
-        }) {
+        // Skip Card button. Inert while a review is being written, for the same reason
+        // the rating buttons are - see StudyViewModel.skipCard.
+        TextButton(
+            enabled = !isSubmitting,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                viewModel.skipCard()
+            }
+        ) {
             Text(
                 text = stringResource(R.string.study_skip),
                 style = MaterialTheme.typography.labelMedium,

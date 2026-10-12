@@ -302,6 +302,29 @@ class StudyViewModelTest {
         assertEquals("nor did it come back", null, database.vocabularyDao().findById(dealt.id))
     }
 
+    /**
+     * A skip that lands while a rating is still being written must not move the deck.
+     *
+     * submitReview raises isSubmitting before it launches, so a skipCard called right
+     * after it always lands inside the write. It used to move the index on top of the
+     * removal, so the deck showed the card *two* past the one just rated.
+     */
+    @Test
+    fun aSkipDuringASubmitDoesNotMoveTheDeck() = runBlocking {
+        startSessionOf(3)
+        val dealt = viewModel.studyList.value
+        val next = dealt[1]
+
+        viewModel.submitReview(ReviewQuality.GOOD)
+        viewModel.skipCard()
+
+        assertTrue(awaitCondition {
+            viewModel.studyList.value.size == 2 && !viewModel.isSubmitting.value
+        })
+        val shown = viewModel.studyList.value[viewModel.currentIndex.value]
+        assertEquals("the card after the rated one should be on screen", next.id, shown.id)
+    }
+
     @Test
     fun anEmptyLibraryBanksNothing() = runBlocking {
         viewModel.startSession()

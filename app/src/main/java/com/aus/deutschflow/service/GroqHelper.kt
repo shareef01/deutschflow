@@ -5,10 +5,13 @@ import androidx.annotation.VisibleForTesting
 import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.coroutineContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Reader
@@ -151,37 +154,8 @@ class GroqHelper @Inject constructor(
         }
     }
 
-    private suspend fun post(body: String, apiKey: String): String {
-        val connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            setRequestProperty("Authorization", "Bearer $apiKey")
-            setRequestProperty("Content-Type", "application/json")
-        }
-
-        val cancelHandle = coroutineContext[Job]?.invokeOnCompletion {
-            connection.disconnect()
-        }
-
-        return try {
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-
-            if (connection.responseCode in 200..299) {
-                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readBounded(MAX_SUCCESS_CHARS) }
-            } else {
-                // The body carries the reason - an expired key, a retired model, a
-                // rate limit - and all of them are worth putting in front of the user.
-                val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)
-                    ?.use { it.readBounded(MAX_ERROR_CHARS) }
-                throw IllegalStateException(errorMessage(connection.responseCode, errBody))
-            }
-        } finally {
-            cancelHandle?.dispose()
-            connection.disconnect()
-        }
-    }
+    private suspend fun post(body: String, apiKey: String): String =
+        postTo(ENDPOINT, body, apiKey, ::errorMessage)
 
     /**
      * Two messages, not one: the instructions are a system message and the user's
@@ -516,6 +490,76 @@ class GroqHelper @Inject constructor(
         const val MODEL_NAME = "openai/gpt-oss-120b"
 
         private const val TIMEOUT_MS = 30_000
+
+        /**
+         * The HTTP round trip, aborted the moment the calling coroutine is cancelled.
+         *
+         * HttpURLConnection blocks the thread, so cancellation can only reach it by
+         * closing the connection from somewhere else. This used to hang that close
+         * on `Job.invokeOnCompletion` - which fires when the job *completes*, and a
+         * job blocked in a socket read cannot complete. So a superseded word lookup,
+         * or a screen that went away, left its request running until the server
+         * answered or the 30-second timeouts ran out, holding a socket and an IO
+         * thread and still spending the user's Groq quota.
+         *
+         * A child coroutine closes it instead. Children are cancelled the instant
+         * their parent is, and its `finally` runs on another IO thread while this
+         * one is still blocked, so the disconnect lands mid-read and the read throws.
+         *
+         * In the companion, with the endpoint and the error wording passed in, so a
+         * JVM test can point it at a local socket that never answers.
+         */
+        @VisibleForTesting
+        internal suspend fun postTo(
+            endpoint: String,
+            body: String,
+            apiKey: String,
+            errorMessage: (Int, String?) -> String,
+            timeoutMs: Int = TIMEOUT_MS
+        ): String = coroutineScope {
+            val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                setRequestProperty("Authorization", "Bearer $apiKey")
+                setRequestProperty("Content-Type", "application/json")
+            }
+
+            // UNDISPATCHED so it is parked on awaitCancellation before the blocking
+            // calls below start; a dispatched start could still be queued behind them.
+            val abortOnCancel = launch(start = CoroutineStart.UNDISPATCHED) {
+                try {
+                    awaitCancellation()
+                } finally {
+                    connection.disconnect()
+                }
+            }
+
+            try {
+                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+
+                if (connection.responseCode in 200..299) {
+                    connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readBounded(MAX_SUCCESS_CHARS) }
+                } else {
+                    // The body carries the reason - an expired key, a retired model, a
+                    // rate limit - and all of them are worth putting in front of the user.
+                    val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)
+                        ?.use { it.readBounded(MAX_ERROR_CHARS) }
+                    throw IllegalStateException(errorMessage(connection.responseCode, errBody))
+                }
+            } catch (e: Exception) {
+                // A read that failed because the abort above closed the socket is a
+                // cancellation, not a network error: say so, rather than handing the
+                // caller a SocketException for a request nobody wants any more.
+                ensureActive()
+                throw e
+            } finally {
+                // Releases coroutineScope, which otherwise waits on this child forever.
+                abortOnCancel.cancel()
+                connection.disconnect()
+            }
+        }
 
         const val MAX_AI_INPUT_CHARS = 4_000
         const val MAX_ROLEPLAY_USER_CHARS = 1_000
