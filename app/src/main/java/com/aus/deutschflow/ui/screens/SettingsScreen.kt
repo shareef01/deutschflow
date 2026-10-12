@@ -59,11 +59,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
     // Granted or denied, the button still has to do something visible: on grant we post
     // the test notification the user asked for, and on denial the existing
-    // "notifications off" message stands in for it.
+    // "notifications off" message stands in for it. The denial branch was missing, so a
+    // refusal - including the instant one Android gives after two - did nothing at all.
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) viewModel.testNotification()
+        if (granted) viewModel.testNotification() else viewModel.onNotificationPermissionDenied()
     }
 
     var apiKeyInput by remember(hasApiKey) { mutableStateOf("") }

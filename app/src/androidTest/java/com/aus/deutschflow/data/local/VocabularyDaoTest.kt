@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -152,5 +153,141 @@ class VocabularyDaoTest {
         assertEquals("der", saved.first().article)
         assertEquals("Der Hund schläft.", saved.first().exampleSentence)
         assertEquals("dog, mistyped", saved.first().englishTranslation)
+    }
+
+    // --- learning data across merge and undo -------------------------------------
+
+    private suspend fun stored(german: String): VocabularyEntity =
+        requireNotNull(dao.findByGermanText(german)) { "$german was never stored" }
+
+    private suspend fun recordReview(vocabularyId: Int) =
+        database.reviewEventDao().insert(
+            ReviewEventEntity(
+                vocabularyId = vocabularyId,
+                rating = "GOOD",
+                scheduledDays = 1,
+                actualDays = 1,
+                reviewedAtTimestamp = System.currentTimeMillis(),
+                isExtraPractice = false
+            )
+        )
+
+    private suspend fun eventIds(): List<Int> =
+        database.reviewEventDao().getAllEvents().first().map { it.vocabularyId }
+
+    /**
+     * Renaming a well-studied card onto a fresh twin used to keep the twin's empty
+     * schedule and leave the studied card's history pointing at a deleted id.
+     */
+    @Test
+    fun renamingAStudiedCardOntoANewOneKeepsItsProgressAndHistory() = runBlocking {
+        dao.save(VocabularyEntity(germanText = "Hund", englishTranslation = "dog"))
+        dao.save(
+            VocabularyEntity(
+                germanText = "Hnud",
+                englishTranslation = "dog",
+                nextReview = 123_456L,
+                interval = 40,
+                easeFactor = 2.7f,
+                reviewCount = 6
+            )
+        )
+        val twin = stored("Hund")
+        val studied = stored("Hnud")
+        recordReview(studied.id)
+        recordReview(studied.id)
+
+        dao.save(studied.copy(germanText = "Hund"))
+
+        val saved = dao.getAllVocabulary().first()
+        assertEquals("the two should be one word", 1, saved.size)
+        val survivor = saved.first()
+        assertEquals("the survivor is the row that owned the name", twin.id, survivor.id)
+        assertEquals("the further-along schedule wins", 6, survivor.reviewCount)
+        assertEquals(40, survivor.interval)
+        assertEquals(2.7f, survivor.easeFactor, 0.0001f)
+        assertEquals(123_456L, survivor.nextReview)
+        assertEquals(
+            "the renamed card's history follows it onto the survivor",
+            listOf(twin.id, twin.id),
+            eventIds()
+        )
+    }
+
+    /** The other way round: renaming a new card onto a studied one must not reset it. */
+    @Test
+    fun renamingANewCardOntoAStudiedOneKeepsTheStudiedSchedule() = runBlocking {
+        dao.save(
+            VocabularyEntity(
+                germanText = "Hund",
+                englishTranslation = "dog",
+                interval = 40,
+                reviewCount = 6
+            )
+        )
+        dao.save(VocabularyEntity(germanText = "Hnud", englishTranslation = "dog"))
+
+        dao.save(stored("Hnud").copy(germanText = "Hund"))
+
+        val survivor = dao.getAllVocabulary().first().single()
+        assertEquals(6, survivor.reviewCount)
+        assertEquals(40, survivor.interval)
+    }
+
+    /**
+     * Undo used to re-save the word under a fresh id, which cut it off from every
+     * review it had ever had. The id is free - the table is AUTOINCREMENT - so it
+     * comes back under its own.
+     */
+    @Test
+    fun undoingADeleteBringsTheWordBackWithItsHistory() = runBlocking {
+        dao.save(
+            VocabularyEntity(
+                germanText = "Übung",
+                englishTranslation = "exercise",
+                interval = 12,
+                reviewCount = 3
+            )
+        )
+        val word = stored("Übung")
+        recordReview(word.id)
+
+        dao.deleteVocabulary(word)
+        dao.restore(word)
+
+        val back = stored("Übung")
+        assertEquals("same id, so the history is attached again", word.id, back.id)
+        assertEquals(12, back.interval)
+        assertEquals(3, back.reviewCount)
+        assertEquals(listOf(word.id), eventIds())
+    }
+
+    /** Undo after the word was typed in again: one word, the progress, and the history. */
+    @Test
+    fun undoingOntoAWordSavedAgainFoldsThemAndMovesTheHistory() = runBlocking {
+        dao.save(
+            VocabularyEntity(
+                germanText = "Übung",
+                englishTranslation = "exercise",
+                interval = 12,
+                reviewCount = 3
+            )
+        )
+        val word = stored("Übung")
+        recordReview(word.id)
+        dao.deleteVocabulary(word)
+
+        // Typed in again before Undo was pressed.
+        dao.save(VocabularyEntity(germanText = "übung", englishTranslation = "practice"))
+        val retyped = stored("Übung")
+
+        dao.restore(word)
+
+        val saved = dao.getAllVocabulary().first()
+        assertEquals("one word, not two", 1, saved.size)
+        assertEquals(retyped.id, saved.first().id)
+        assertEquals("the restored progress is not lost to the fresh entry", 3, saved.first().reviewCount)
+        assertEquals(12, saved.first().interval)
+        assertEquals(listOf(retyped.id), eventIds())
     }
 }

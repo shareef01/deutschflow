@@ -142,15 +142,15 @@ class VocabularyViewModel @Inject constructor(
      * word can carry months of scheduling, a hand-edited translation and AI-fetched
      * grammar, so the protections were exactly inverted.
      *
-     * Through [VocabularyDao.save] with id 0 rather than a bare insert: the word is
-     * unique, and if the user typed the same word again in the seconds before
-     * pressing Undo, a plain insert would throw a constraint violation into a
-     * coroutine. Save folds the two together instead, which is what restoring onto
-     * an occupied name most likely means. The SRS fields ride along on the entity.
+     * Through [VocabularyDao.restore], which brings the word back under its original
+     * id so its review history - left in place by the delete - is attached to it
+     * again. If the user typed the same word again in the seconds before pressing
+     * Undo, restore folds the two together instead, which is what restoring onto an
+     * occupied name most likely means, and moves the history onto the survivor.
      */
     fun restoreVocabulary(vocabulary: VocabularyEntity) {
         launchGuarded(TAG, onError = { _error.value = R.string.library_save_failed }) {
-            vocabularyDao.save(vocabulary.copy(id = 0))
+            vocabularyDao.restore(vocabulary)
             widgetUpdater.refresh()
         }
     }

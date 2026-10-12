@@ -129,6 +129,11 @@ class StudyViewModel @Inject constructor(
 
     /** Re-drills the whole library. Always extra practice, by definition. */
     fun restartSession() {
+        // Arm the kickoff guard, same as ensureSessionStarted does: the deck
+        // below is a session in progress the moment it lands, and a tab switch
+        // during a drill-again sitting must not reshuffle it. A failed load
+        // re-arms in sessionLoadFailed, so the retry path is unaffected.
+        sessionKickoffDone = true
         launchGuarded(TAG, onError = ::sessionLoadFailed) {
             val allList = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty()
             _currentIndex.value = 0
@@ -174,42 +179,55 @@ class StudyViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val now = System.currentTimeMillis()
-                val rescheduled = srsEngine.calculateNextReview(card, quality)
-                val persisted = scheduleFor(card, rescheduled, quality, extraPractice)
-                val updatedPersisted = persisted.copy(
-                    lastModifiedAt = maxOf(persisted.lastModifiedAt, now)
-                )
 
                 // One transaction, so the card's schedule, review event, and the XP it earned commit
                 // together or not at all. Extra practice awards 0 XP to prevent XP farming.
-                database.withTransaction {
-                    val actualDays = elapsedReviewDays(database.reviewEventDao().latestReviewTimestamp(card.id), now)
-                    vocabularyDao.updateVocabulary(updatedPersisted)
+                //
+                // The card is re-read inside it rather than trusted from the deck. The deck
+                // is a set of snapshots from when the sitting began, and it deliberately
+                // survives a trip to the library - so a snapshot written back whole undid
+                // any edit made there in the meantime, and a card deleted there still
+                // banked XP and filed a review against a row that no longer existed.
+                // Null means exactly that: the word is gone, and nothing is written.
+                val persisted = database.withTransaction {
+                    val fresh = vocabularyDao.findById(card.id) ?: return@withTransaction null
+                    val rescheduled = srsEngine.calculateNextReview(fresh, quality)
+                    val schedule = scheduleFor(fresh, rescheduled, quality, extraPractice)
+                    val actualDays = elapsedReviewDays(database.reviewEventDao().latestReviewTimestamp(fresh.id), now)
+                    // The schedule only: the word, its translation and its grammar are
+                    // the library's, and whatever the library holds now is what stays.
+                    vocabularyDao.updateSchedule(
+                        id = fresh.id,
+                        nextReview = schedule.nextReview,
+                        interval = schedule.interval,
+                        easeFactor = schedule.easeFactor,
+                        reviewCount = schedule.reviewCount,
+                        lastModifiedAt = maxOf(fresh.lastModifiedAt, now)
+                    )
                     if (!extraPractice && quality.value >= ReviewQuality.GOOD.value) {
                         awardXp(XP_PER_CARD)
                     }
                     database.reviewEventDao().insert(
                         ReviewEventEntity(
-                            vocabularyId = card.id,
+                            vocabularyId = fresh.id,
                             rating = quality.name,
-                            scheduledDays = card.interval,
+                            scheduledDays = fresh.interval,
                             actualDays = actualDays,
                             reviewedAtTimestamp = now,
                             isExtraPractice = extraPractice
                         )
                     )
+                    schedule
                 }
 
-                _sessionReviewedCount.value++
+                // A deleted card was not reviewed; it just leaves the deck.
+                if (persisted != null) _sessionReviewedCount.value++
 
                 val newList = currentList.toMutableList().apply {
-
-                    if (quality == ReviewQuality.AGAIN) {
-                        removeAt(index)
-                        add(updatedPersisted)
-                    } else {
-                        removeAt(index)
-                    }
+                    removeAt(index)
+                    // Again keeps the card for later in this sitting - as it is now,
+                    // with the library's current text, not the snapshot it was dealt as.
+                    if (quality == ReviewQuality.AGAIN && persisted != null) add(persisted)
                 }
 
                 _studyList.value = newList
