@@ -78,6 +78,19 @@ it("measures actualDays since the latest review, including after metadata edits"
   expect((await db.reviewEvents.orderBy("id").last())?.actualDays).toBe(2);
 });
 
+it("hard is a correct answer and earns XP; again earns none", async () => {
+  const db = fresh();
+  const hardCard = await seed(db, "Haus");
+  await recordReview(db, hardCard, ReviewQuality.HARD, false);
+  expect((await db.userStats.get(1))?.xp).toBe(10);
+  expect((await db.userStats.get(1))?.streak).toBe(1);
+
+  await saveVocabulary(db, { germanText: "Baum", englishTranslation: "tree" });
+  const againCard = (await db.vocabulary.toArray()).find((entry) => entry.germanText === "Baum")!;
+  await recordReview(db, againCard, ReviewQuality.AGAIN, false);
+  expect((await db.userStats.get(1))?.xp).toBe(10);
+});
+
 it("extra practice keeps its schedule, records history, and awards no XP", async () => {
   const db = fresh(), card = await seed(db);
   const scheduled = await recordReview(db, card, ReviewQuality.GOOD, false);
