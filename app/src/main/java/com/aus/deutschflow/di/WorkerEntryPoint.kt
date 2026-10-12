@@ -1,5 +1,6 @@
 package com.aus.deutschflow.di
 
+import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.service.DailyWordNotification
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.EntryPoint
@@ -17,4 +18,5 @@ import dagger.hilt.components.SingletonComponent
 interface WorkerEntryPoint {
     fun dailyWordNotification(): DailyWordNotification
     fun widgetUpdater(): WidgetUpdater
+    fun preferenceManager(): PreferenceManager
 }

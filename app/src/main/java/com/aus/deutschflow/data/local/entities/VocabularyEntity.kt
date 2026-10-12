@@ -76,6 +76,15 @@ fun germanKey(text: String): String = Normalizer.normalize(text, Normalizer.Form
 fun germanMatchKey(text: String): String = germanKey(text).replace("ß", "ss")
 
 /**
+ * The article the word lookup reports for a word that is not a noun.
+ *
+ * A placeholder rather than an article, so it is never stored or merged as one - see
+ * [VocabularyEntity.mergedWith]. Rows written before that rule may still carry it, and
+ * the screens already hide it.
+ */
+const val NO_ARTICLE = "none"
+
+/**
  * Immutable so Compose treats the vocabulary list as skippable when it is handed to a
  * composable unchanged; the DAO only ever swaps whole entities, never mutates one.
  */
@@ -157,7 +166,11 @@ data class VocabularyEntity(
     fun mergedWith(incoming: VocabularyEntity, now: Long = System.currentTimeMillis()): VocabularyEntity = copy(
         englishTranslation = incoming.englishTranslation.ifBlank { englishTranslation },
         exampleSentence = incoming.exampleSentence.ifBlank { exampleSentence },
-        article = incoming.article.ifBlank { article },
+        // "none" is the model's way of saying "not a noun", and it is not a value to
+        // keep: written over a real article it erased the der/die/das the library
+        // already had - interrogating the verb "essen" stripped "das" from "Essen",
+        // which shares its key. It merges as the blank it means.
+        article = incoming.article.takeUnless { it.isBlank() || it == NO_ARTICLE } ?: article,
         plural = incoming.plural.ifBlank { plural },
         conjugation = incoming.conjugation.ifBlank { conjugation },
         synonyms = incoming.synonyms.ifBlank { synonyms },

@@ -68,6 +68,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     }
 
     var apiKeyInput by remember(hasApiKey) { mutableStateOf("") }
+    // Cleared once the key is stored, not on the tap: a save the Keystore refuses
+    // leaves what the user typed in place to try again. See SettingsViewModel.apiKeySaved.
+    LaunchedEffect(viewModel) {
+        viewModel.apiKeySaved.collect { apiKeyInput = "" }
+    }
     var isApiKeyVisible by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -199,7 +204,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             IconButton(onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.saveApiKey(apiKeyInput)
-                                apiKeyInput = ""
                             }) {
                                 Icon(
                                     imageVector = Icons.Default.Save,
@@ -215,7 +219,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 keyboardActions = KeyboardActions(onDone = {
                     if (apiKeyInput.isNotBlank()) {
                         viewModel.saveApiKey(apiKeyInput)
-                        apiKeyInput = ""
                     }
                 })
             )

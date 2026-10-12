@@ -117,6 +117,21 @@ class VocabularyMergeTest {
         assertEquals(4_000L, mergedPast.lastModifiedAt)
     }
 
+    /** The lookup's "not a noun" placeholder must not erase a real article. */
+    @Test
+    fun `a none article never overwrites a real one`() {
+        val noun = word(german = "Essen", english = "food", article = "das")
+        val verb = word(id = 0, german = "essen", english = "to eat", article = "none")
+
+        assertEquals("das", noun.mergedWith(verb).article)
+    }
+
+    @Test
+    fun `a real article still replaces a none left by an older build`() {
+        val stale = word(article = "none")
+        assertEquals("der", stale.mergedWith(word(id = 0, article = "der")).article)
+    }
+
     // --- choosing a schedule: the same ranking MIGRATION_12_13 / 14_15 use -------
 
     private fun scheduled(reviewCount: Int, interval: Int, ease: Float = 2.5f, next: Long = 0) =

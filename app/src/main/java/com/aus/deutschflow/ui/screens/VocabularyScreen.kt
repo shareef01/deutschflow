@@ -52,6 +52,9 @@ import kotlinx.coroutines.delay
 @Composable
 fun VocabularyScreen(
     windowSizeClass: WindowSizeClass,
+    /** A word to open on arrival - the daily notification's or the widget's. */
+    openWordId: Int? = null,
+    onWordOpened: () -> Unit = {},
     viewModel: VocabularyViewModel = hiltViewModel()
 ) {
     val vocabularyList by viewModel.vocabularyList.collectAsStateWithLifecycle()
@@ -67,6 +70,16 @@ fun VocabularyScreen(
     var editingId by rememberSaveable { mutableStateOf<Int?>(null) }
     var selectedId by rememberSaveable { mutableStateOf<Int?>(null) }
     var isAdding by rememberSaveable { mutableStateOf(false) }
+
+    // Taken as the selection and handed back at once, so it opens the word one time
+    // rather than pinning it open. By id: the list may arrive a frame later, and the
+    // detail resolves when it does - or not at all, if the word has since been deleted.
+    LaunchedEffect(openWordId) {
+        if (openWordId != null) {
+            selectedId = openWordId
+            onWordOpened()
+        }
+    }
 
     val selectedItem = vocabularyList.firstOrNull { it.id == selectedId }
     val editingItem = vocabularyList.firstOrNull { it.id == editingId }
