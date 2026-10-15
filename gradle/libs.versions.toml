@@ -4,7 +4,7 @@
 # kotlinx-serialization newer than the Kotlin 2.1 KSP classpath carried, and KSP has
 # switched to KSP2 versioning, which is no longer tied to the Kotlin version.
 agp = "9.4.0"
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 # KSP2. The old "<kotlin>-<ksp>" scheme is gone, and so is ksp.useKSP2=false in
 # gradle.properties, which pinned the build to a KSP1 that no longer ships.
 ksp = "2.3.11"
@@ -34,7 +34,7 @@ glance = "1.1.1"
 datastore = "1.2.1"
 work = "2.11.2"
 concurrentFutures = "1.3.0"
-tracing = "2.0.0"
+tracing = "2.0.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
