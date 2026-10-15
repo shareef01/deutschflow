@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSessionToken,
+  MIN_SESSION_SECRET_BYTES,
   passwordMatches,
   safeRedirectTarget,
+  sessionSecret,
   SESSION_MAX_AGE_SECONDS,
   verifySessionToken,
 } from "@/lib/auth/session";
@@ -15,6 +17,26 @@ import {
 
 const SECRET = "test-site-password";
 const NOW = 1_700_000_000_000;
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("sessionSecret", () => {
+  it("rejects absent and weak signing secrets", () => {
+    vi.stubEnv("SESSION_SECRET", "");
+    expect(sessionSecret()).toBeNull();
+
+    vi.stubEnv("SESSION_SECRET", "a".repeat(MIN_SESSION_SECRET_BYTES - 1));
+    expect(sessionSecret()).toBeNull();
+  });
+
+  it("accepts a secret with at least 32 bytes", () => {
+    const configured = "a".repeat(MIN_SESSION_SECRET_BYTES);
+    vi.stubEnv("SESSION_SECRET", configured);
+    expect(sessionSecret()).toBe(configured);
+  });
+});
 
 describe("verifySessionToken", () => {
   it("admits a token it signed", async () => {

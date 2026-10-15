@@ -21,6 +21,9 @@ export const SESSION_COOKIE = "df_access";
 /** Thirty days, matching the cookie's own lifetime. */
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
+/** HMAC keys need entropy, not merely a non-empty configuration value. */
+export const MIN_SESSION_SECRET_BYTES = 32;
+
 const encoder = new TextEncoder();
 
 /** SITE_PASSWORD, tolerating an env var quoted by the shell or the host UI. */
@@ -30,11 +33,18 @@ export function sitePassword(): string | null {
   return raw.replace(/^["']|["']$/g, "");
 }
 
-/** Independent high-entropy key used only for session authentication. */
+/**
+ * Independent high-entropy key used only for session authentication.
+ *
+ * Refuse weak configuration rather than issuing tokens that are trivial to
+ * forge. Byte length is used so the requirement holds for non-ASCII secrets as
+ * well as the base64 values recommended in the deployment guide.
+ */
 export function sessionSecret(): string | null {
   const raw = process.env.SESSION_SECRET?.trim();
   if (!raw) return null;
-  return raw.replace(/^["']|["']$/g, "");
+  const secret = raw.replace(/^["']|["']$/g, "");
+  return encoder.encode(secret).byteLength >= MIN_SESSION_SECRET_BYTES ? secret : null;
 }
 
 async function key(secret: string): Promise<CryptoKey> {
