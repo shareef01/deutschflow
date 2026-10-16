@@ -164,7 +164,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                             )
                         }
                         Text(
-                            text = selectedScenario.title,
+                            text = stringResource(selectedScenario.titleRes),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -180,12 +180,12 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                                 text = {
                                     Column {
                                         Text(
-                                            text = "${scenario.title} (${scenario.cefrLevel})",
+                                            text = "${stringResource(scenario.titleRes)} (${scenario.cefrLevel})",
                                             fontWeight = if (scenario.id == selectedScenario.id) FontWeight.Bold else FontWeight.Normal,
                                             color = if (scenario.id == selectedScenario.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = scenario.context,
+                                            text = stringResource(scenario.contextRes),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )

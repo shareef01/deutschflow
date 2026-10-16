@@ -40,6 +40,7 @@
     <string name="word_sheet_article">Article: %1$s</string>
     <string name="word_sheet_plural">Plural: %1$s</string>
     <string name="word_sheet_verb">Infinitive: %1$s</string>
+    <string name="word_sheet_dictionary_form">Dictionary form of “%1$s” — saved under this word.</string>
     <string name="word_sheet_meaning">Meaning</string>
 
     <!-- History -->
@@ -202,6 +203,7 @@
     <string name="settings_api_key_placeholder_saved">Key saved (Enter new to replace)</string>
     <string name="settings_api_key_show">Show API Key</string>
     <string name="settings_api_key_hide">Hide API Key</string>
+    <string name="settings_api_key_remove">Remove saved key</string>
     <string name="settings_stat_vocabulary">Vocabulary</string>
     <string name="settings_stat_sessions">Sessions</string>
     <string name="settings_stat_xp">XP Points</string>
@@ -229,6 +231,8 @@
     <string name="message_api_key_not_saved">The key couldn\'t be stored. Try again, or restart the device.</string>
     <string name="message_api_key_migration_failed">Your existing API key could not be moved to encrypted storage. It was not deleted; unlock your device and reopen Settings to retry.</string>
     <string name="message_api_key_unreadable">The stored API key can no longer be decrypted. Enter and save the key again.</string>
+    <string name="message_api_key_removed">API key removed. AI features stay off until you save a key again.</string>
+    <string name="message_api_key_not_removed">The key couldn\'t be removed. Try again.</string>
     <string name="message_clear_failed">Couldn\'t clear your progress. Please try again.</string>
     <string name="message_progress_cleared">All vocabulary, history, and stats have been reset.</string>
     <string name="message_notification_sent">Daily reminder notification sent.</string>
@@ -279,6 +283,7 @@
     <string name="ai_failed">Translation failed: %1$s</string>
     <string name="ai_no_response">No response from AI service.</string>
     <string name="ai_unreadable">Couldn\'t read the response. Try again.</string>
+    <string name="ai_cut_off">The answer was cut off before it finished. Try a shorter sentence.</string>
     <string name="ai_key_rejected">The API key was rejected. Please check it in Settings.</string>
     <string name="ai_rate_limited">Too many requests right now. Try again in a minute.</string>
     <string name="ai_status">The service answered with code %1$d.</string>
@@ -302,8 +307,32 @@
     <!-- Widget -->
     <string name="widget_description">A German word from your library on your home screen.</string>
     <string name="widget_heading">Word of the Day</string>
-    <string name="widget_empty_title">Öffne die App</string>
-    <string name="widget_empty_subtitle">Lerne jetzt Deutsch!</string>
+    <string name="widget_empty_title">Open the app</string>
+    <string name="widget_empty_subtitle">Start learning German!</string>
     <string name="widget_preview_word">die Übung</string>
     <string name="widget_preview_translation">practice</string>
+
+    <!-- Roleplay scenarios, CEFR levels and the widget label (were hardcoded English) -->
+    <string name="settings_cefr_a1">A1 (Beginner)</string>
+    <string name="settings_cefr_a2">A2 (Elementary)</string>
+    <string name="settings_cefr_b1">B1 (Intermediate)</string>
+    <string name="settings_cefr_b2">B2 (Upper Intermediate)</string>
+    <string name="settings_cefr_c1">C1+ (Advanced)</string>
+    <string name="scenario_bakery_title">Ordering at a Berlin Bakery</string>
+    <string name="scenario_bakery_context">You are at a traditional bakery in Berlin ordering bread and pastries.</string>
+    <string name="scenario_cafe_title">Ordering at a Viennese Café</string>
+    <string name="scenario_cafe_context">You are sitting in a traditional coffee house in Vienna.</string>
+    <string name="scenario_supermarket_title">Asking for Items at a Supermarket</string>
+    <string name="scenario_supermarket_context">You are shopping in a German supermarket trying to locate ingredients.</string>
+    <string name="scenario_train_station_title">Buying a Train Ticket at the Station</string>
+    <string name="scenario_train_station_context">You are at the ticket counter at Frankfurt Hauptbahnhof.</string>
+    <string name="scenario_buergeramt_title">Registering at the Bürgeramt</string>
+    <string name="scenario_buergeramt_context">You have an appointment at the citizen\'s office (Bürgeramt) for apartment registration (Anmeldung).</string>
+    <string name="scenario_doctor_title">Visiting a Doctor\'s Clinic</string>
+    <string name="scenario_doctor_context">You have arrived at a general practitioner\'s clinic with health symptoms.</string>
+    <string name="scenario_apartment_title">Apartment Viewing in Munich</string>
+    <string name="scenario_apartment_context">You are viewing an apartment for rent and speaking with the landlord.</string>
+    <string name="scenario_job_interview_title">Job Interview for a Professional Role</string>
+    <string name="scenario_job_interview_context">You are participating in a first-round job interview with a German employer.</string>
+    <string name="widget_label">DeutschFlow Word</string>
 </resources>

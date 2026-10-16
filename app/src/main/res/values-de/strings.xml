@@ -45,6 +45,7 @@
     <string name="word_sheet_article">Artikel: %1$s</string>
     <string name="word_sheet_plural">Plural: %1$s</string>
     <string name="word_sheet_verb">Infinitiv: %1$s</string>
+    <string name="word_sheet_dictionary_form">Grundform von „%1$s“ – wird unter diesem Wort gespeichert.</string>
     <string name="word_sheet_meaning">Bedeutung</string>
 
     <!-- History -->
@@ -199,6 +200,7 @@
     <string name="settings_api_key_placeholder_saved">Schlüssel gespeichert (zum Ersetzen neu eingeben)</string>
     <string name="settings_api_key_show">API-Schlüssel anzeigen</string>
     <string name="settings_api_key_hide">API-Schlüssel verbergen</string>
+    <string name="settings_api_key_remove">Gespeicherten Schlüssel entfernen</string>
     <string name="settings_stat_vocabulary">Wörter</string>
     <string name="settings_stat_sessions">Sitzungen</string>
     <string name="settings_stat_xp">XP-Punkte</string>
@@ -226,6 +228,8 @@
     <string name="message_api_key_not_saved">Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.</string>
     <string name="message_api_key_migration_failed">Dein vorhandener API-Schlüssel konnte nicht in den verschlüsselten Speicher verschoben werden. Er wurde nicht gelöscht; entsperre dein Gerät und öffne die Einstellungen erneut.</string>
     <string name="message_api_key_unreadable">Der gespeicherte API-Schlüssel kann nicht mehr entschlüsselt werden. Gib den Schlüssel erneut ein und speichere ihn.</string>
+    <string name="message_api_key_removed">API-Schlüssel entfernt. KI-Funktionen bleiben aus, bis du wieder einen Schlüssel speicherst.</string>
+    <string name="message_api_key_not_removed">Der Schlüssel konnte nicht entfernt werden. Versuche es erneut.</string>
     <string name="message_clear_failed">Fortschritt konnte nicht gelöscht werden. Bitte versuche es erneut.</string>
     <string name="message_progress_cleared">Bibliothek, Verlauf und Statistiken gelöscht.</string>
     <string name="message_notification_sent">Benachrichtigung gesendet.</string>
@@ -276,6 +280,7 @@
     <string name="ai_failed">Übersetzung fehlgeschlagen: %1$s</string>
     <string name="ai_no_response">keine Antwort von Groq</string>
     <string name="ai_unreadable">Die Antwort war nicht lesbar. Versuche es erneut.</string>
+    <string name="ai_cut_off">Die Antwort wurde abgeschnitten, bevor sie fertig war. Versuche einen kürzeren Satz.</string>
     <string name="ai_key_rejected">Dieser API-Schlüssel wurde abgelehnt. Prüfe ihn in den Einstellungen.</string>
     <string name="ai_rate_limited">Zu viele Anfragen im Moment. Versuche es in einer Minute erneut.</string>
     <string name="ai_status">Der Dienst antwortete mit %1$d.</string>
@@ -304,4 +309,28 @@
     <string name="widget_preview_word">die Übung</string>
     <!-- The app always translates into English, so the second line stays English. -->
     <string name="widget_preview_translation">practice</string>
+
+    <!-- Roleplay scenarios, CEFR levels and the widget label (were hardcoded English) -->
+    <string name="settings_cefr_a1">A1 (Anfänger)</string>
+    <string name="settings_cefr_a2">A2 (Grundlagen)</string>
+    <string name="settings_cefr_b1">B1 (Mittelstufe)</string>
+    <string name="settings_cefr_b2">B2 (Gute Mittelstufe)</string>
+    <string name="settings_cefr_c1">C1+ (Fortgeschritten)</string>
+    <string name="scenario_bakery_title">Bestellen in einer Berliner Bäckerei</string>
+    <string name="scenario_bakery_context">Du bist in einer traditionellen Berliner Bäckerei und bestellst Brot und Gebäck.</string>
+    <string name="scenario_cafe_title">Bestellen in einem Wiener Kaffeehaus</string>
+    <string name="scenario_cafe_context">Du sitzt in einem traditionellen Wiener Kaffeehaus.</string>
+    <string name="scenario_supermarket_title">Im Supermarkt nach Produkten fragen</string>
+    <string name="scenario_supermarket_context">Du kaufst in einem deutschen Supermarkt ein und suchst Zutaten.</string>
+    <string name="scenario_train_station_title">Eine Fahrkarte am Bahnhof kaufen</string>
+    <string name="scenario_train_station_context">Du stehst am Fahrkartenschalter im Frankfurter Hauptbahnhof.</string>
+    <string name="scenario_buergeramt_title">Anmeldung beim Bürgeramt</string>
+    <string name="scenario_buergeramt_context">Du hast einen Termin beim Bürgeramt, um deine Wohnung anzumelden.</string>
+    <string name="scenario_doctor_title">Beim Hausarzt</string>
+    <string name="scenario_doctor_context">Du bist mit Beschwerden in einer Hausarztpraxis.</string>
+    <string name="scenario_apartment_title">Wohnungsbesichtigung in München</string>
+    <string name="scenario_apartment_context">Du besichtigst eine Mietwohnung und sprichst mit dem Vermieter.</string>
+    <string name="scenario_job_interview_title">Vorstellungsgespräch für eine Fachstelle</string>
+    <string name="scenario_job_interview_context">Du führst ein erstes Vorstellungsgespräch mit einem deutschen Arbeitgeber.</string>
+    <string name="widget_label">DeutschFlow Wort</string>
 </resources>

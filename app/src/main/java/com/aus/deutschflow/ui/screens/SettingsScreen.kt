@@ -62,14 +62,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
     // Granted or denied, the button still has to do something visible: on grant we post
     // the test notification the user asked for, and on denial the existing
-    // "notifications off" message stands in for it.
+    // "notifications off" message stands in for it. The denial branch was missing, so a
+    // refusal - including the instant one Android gives after two - did nothing at all.
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) viewModel.testNotification()
+        if (granted) viewModel.testNotification() else viewModel.onNotificationPermissionDenied()
     }
 
     var apiKeyInput by remember(hasApiKey) { mutableStateOf("") }
+    // Cleared once the key is stored, not on the tap: a save the Keystore refuses
+    // leaves what the user typed in place to try again. See SettingsViewModel.apiKeySaved.
+    LaunchedEffect(viewModel) {
+        viewModel.apiKeySaved.collect { apiKeyInput = "" }
+    }
     var isApiKeyVisible by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showExportPassphraseDialog by remember { mutableStateOf(false) }
@@ -119,11 +125,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
     val cefrLevels = listOf(
         stringResource(R.string.settings_cefr_none) to "",
-        "A1 (Beginner)" to "A1",
-        "A2 (Elementary)" to "A2",
-        "B1 (Intermediate)" to "B1",
-        "B2 (Upper Intermediate)" to "B2",
-        "C1+ (Advanced)" to "C1+"
+        stringResource(R.string.settings_cefr_a1) to "A1",
+        stringResource(R.string.settings_cefr_a2) to "A2",
+        stringResource(R.string.settings_cefr_b1) to "B1",
+        stringResource(R.string.settings_cefr_b2) to "B2",
+        stringResource(R.string.settings_cefr_c1) to "C1+"
     )
 
     Column(
@@ -237,7 +243,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                             IconButton(onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.saveApiKey(apiKeyInput)
-                                apiKeyInput = ""
                             }) {
                                 Icon(
                                     imageVector = Icons.Default.Save,
@@ -253,10 +258,26 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 keyboardActions = KeyboardActions(onDone = {
                     if (apiKeyInput.isNotBlank()) {
                         viewModel.saveApiKey(apiKeyInput)
-                        apiKeyInput = ""
                     }
                 })
             )
+
+            // The one way to withdraw the key short of clearing the app's data, which
+            // would take the library with it. Only offered when there is a key to remove.
+            if (hasApiKey) {
+                TextButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.removeApiKey()
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_api_key_remove),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(Spacing.md))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -411,7 +432,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
                 StatGridItem(Modifier.weight(1f), stringResource(R.string.settings_stat_xp), (userStats?.xp ?: 0).toString())
-                val streak = userStats?.streak ?: 0
+                val streak = userStats?.currentStreak() ?: 0
                 StatGridItem(
                     Modifier.weight(1f),
                     stringResource(R.string.settings_stat_streak),

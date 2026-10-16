@@ -1,6 +1,7 @@
 package com.aus.deutschflow.service
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -9,10 +10,15 @@ import androidx.work.WorkerParameters
 import com.aus.deutschflow.di.WorkerEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import com.aus.deutschflow.data.local.PreferenceManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
+
+private const val TAG = "DailyWordWorker"
 
 /**
  * Posts the word of the day, once a day.
@@ -39,6 +45,20 @@ class DailyWordWorker(
         // anything, so without this the home screen could go on showing yesterday's
         // word for hours after the notification announced today's.
         entryPoint.widgetUpdater().refresh()
+
+        // Last, because it can end this run: re-anchoring cancels and re-enqueues the
+        // periodic work, and this run is that work. The schedule only ever re-anchored
+        // on a cold start (MainApp), so after a DST change the word kept arriving an
+        // hour off for as long as the process lived - days, on a phone that rarely
+        // kills it. Checking here as well fixes it from the next day's run onward.
+        // Guarded: a scheduling hiccup must not turn a delivered word into a failed run.
+        try {
+            rescheduleIfZoneChanged(applicationContext, entryPoint.preferenceManager())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not re-anchor the daily word", e)
+        }
         return Result.success()
     }
 
@@ -93,12 +113,18 @@ class DailyWordWorker(
             val current = now.offset.totalSeconds
             if (preferences.dailyWordZoneOffset.first() == current) return false
 
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                UNIQUE_NAME,
-                ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
-                request(now)
-            )
-            preferences.setDailyWordZoneOffset(current)
+            // The move and the record of it go together, uncancellably. Called from the
+            // worker, the re-enqueue cancels the very run making the call, and a
+            // cancellation landing between the two would leave the schedule moved but
+            // the offset unrecorded - so every later run would move it again.
+            withContext(NonCancellable) {
+                WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                    UNIQUE_NAME,
+                    ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
+                    request(now)
+                )
+                preferences.setDailyWordZoneOffset(current)
+            }
             return true
         }
 
@@ -128,7 +154,11 @@ class DailyWordWorker(
 
         private const val UNIQUE_NAME = "daily-word"
 
-        /** Late enough to be awake, early enough to still be part of the day. */
-        private const val HOUR_OF_DAY = 9
+        /**
+         * Late enough to be awake, early enough to still be part of the day. The word
+         * of the day rolls over at this same hour, so the announcement and the change
+         * are one moment - see DailyWord.ROLLOVER_HOUR.
+         */
+        private const val HOUR_OF_DAY = DailyWord.ROLLOVER_HOUR
     }
 }

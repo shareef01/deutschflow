@@ -7,6 +7,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.R
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.KeystoreCipher
+import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.entities.RoleplayMessageEntity
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
@@ -15,10 +17,14 @@ import com.aus.deutschflow.service.DailyWord
 import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.service.DailyWordNotification
 import com.aus.deutschflow.ui.widget.WidgetUpdater
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -45,6 +51,7 @@ class SettingsViewModelTest {
     val store = TestPreferencesRule("settings-viewmodel-test")
 
     private lateinit var database: AppDatabase
+    private lateinit var backupManager: com.aus.deutschflow.data.local.backup.BackupManager
     private lateinit var viewModel: SettingsViewModel
 
 
@@ -54,7 +61,7 @@ class SettingsViewModelTest {
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        val backupManager = com.aus.deutschflow.data.local.backup.BackupManager(
+        backupManager = com.aus.deutschflow.data.local.backup.BackupManager(
             database = database,
             vocabularyDao = database.vocabularyDao(),
             transcriptDao = database.transcriptDao(),
@@ -106,6 +113,65 @@ class SettingsViewModelTest {
                 translation = "Good morning! What would you like?"
             )
         )
+    }
+
+    private fun settingsWith(preferences: PreferenceManager): SettingsViewModel {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        return SettingsViewModel(
+            database = database,
+            vocabularyDao = database.vocabularyDao(),
+            transcriptDao = database.transcriptDao(),
+            userStatsDao = database.userStatsDao(),
+            preferenceManager = preferences,
+            dailyWordNotification = DailyWordNotification(context, DailyWord(database.vocabularyDao())),
+            activityDao = database.activityDao(),
+            roleplayDao = database.roleplayDao(),
+            widgetUpdater = WidgetUpdater(context),
+            backupManager = backupManager
+        )
+    }
+
+    /** A stored key is announced, so the screen can clear what was typed. */
+    @Test
+    fun aStoredKeyIsAnnounced() = runBlocking {
+        val saved = async(start = CoroutineStart.UNDISPATCHED) { viewModel.apiKeySaved.first() }
+
+        viewModel.saveApiKey("gsk_test_key")
+
+        withTimeout(5_000) { saved.await() }
+        assertEquals(R.string.message_api_key_saved, viewModel.message.value)
+    }
+
+    /**
+     * A key the Keystore refuses is not announced, so the screen keeps what the user
+     * typed. The field used to be cleared on the tap, whatever happened next.
+     */
+    @Test
+    fun aRefusedKeyIsNotAnnounced() = runBlocking {
+        val refusing = object : KeystoreCipher() {
+            override fun encrypt(plainText: String): String? = null
+        }
+        val settings = settingsWith(PreferenceManager(store.dataStore, refusing))
+        val saved = async(start = CoroutineStart.UNDISPATCHED) { settings.apiKeySaved.first() }
+
+        settings.saveApiKey("gsk_test_key")
+
+        assertTrue(awaitCondition { settings.message.value == R.string.message_api_key_not_saved })
+        assertTrue("a refused key must not clear the field", saved.isActive)
+        saved.cancel()
+    }
+
+    /** Settings can withdraw the key, and says so; the library is not touched. */
+    @Test
+    fun removingTheKeyWithdrawsItAndLeavesTheLibrary() = runBlocking {
+        seedEverything()
+        assertTrue(store.preferences.saveApiKey("gsk_test_key"))
+
+        viewModel.removeApiKey()
+
+        assertTrue(awaitCondition { viewModel.message.value == R.string.message_api_key_removed })
+        assertEquals(PreferenceManager.ApiKeyState.Missing, store.preferences.apiKeyState.first())
+        assertFalse("removing the key must not touch the library", vocabularyIsEmpty())
     }
 
     private suspend fun vocabularyIsEmpty() =

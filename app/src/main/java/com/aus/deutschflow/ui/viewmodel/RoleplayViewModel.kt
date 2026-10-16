@@ -16,6 +16,7 @@ import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
@@ -148,7 +149,32 @@ class RoleplayViewModel @Inject constructor(
         startSession(scenario.id)
     }
 
+    /**
+     * Which turn may still write to the conversation; bumped by every new turn and by
+     * every new scene.
+     *
+     * A turn runs for as long as the model takes, and the scene can change under it.
+     * The screen disables the picker while a turn is out, but nothing here enforced
+     * it: a reply to the old scene would land in the new one - appended, persisted
+     * under the new scenario and read aloud - and the new scene's opening line was
+     * swallowed by the in-flight guard. A turn that is no longer current writes
+     * nothing and leaves the spinner to whatever replaced it.
+     */
+    private var turnGeneration = 0
+
+    /** The turn in flight, so a new scene can stop it rather than wait it out. */
+    private var turnJob: Job? = null
+
     fun startSession(scenarioId: String) {
+        // A new scene ends everything the old one had going: a sentence half-spoken
+        // into the mic, and a turn still waiting on the model. Abandoned, not delivered
+        // - a sentence meant for the baker is not the first line said to the doctor.
+        cancelListening()
+        turnGeneration++
+        turnJob?.cancel()
+        turnJob = null
+        _isProcessing.value = false
+
         currentScenarioId = scenarioId
         RoleplayScenarioCatalog.SCENARIOS.find { it.id == scenarioId }?.let {
             _selectedScenario.value = it
@@ -178,6 +204,10 @@ class RoleplayViewModel @Inject constructor(
     private suspend fun write(block: suspend () -> Unit) {
         try {
             block()
+        } catch (e: CancellationException) {
+            // A turn stopped by a new scene is not a storage failure, and swallowing
+            // the cancellation would let the stopped turn carry on.
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Could not save the conversation", e)
         }
@@ -278,13 +308,17 @@ class RoleplayViewModel @Inject constructor(
         // process. _error holds prose built from resources by GroqHelper, and no
         // existing string fits an unexpected failure here, so it is log-only; the
         // spinner still clears in finally.
-        launchGuarded(TAG) {
+        val turn = ++turnGeneration
+        turnJob = launchGuarded(TAG) {
             try {
                 val apiKey = preferenceManager.apiKey.first()
                 val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
                     ?: _selectedScenario.value.cefrLevel
-                when (val result =
-                    vocabularyProcessor.startRoleplay(promptScenario(currentScenarioId), history, apiKey, cefr)) {
+                val result =
+                    vocabularyProcessor.startRoleplay(promptScenario(currentScenarioId), history, apiKey, cefr)
+                // Superseded while the model was answering: see turnGeneration.
+                if (turn != turnGeneration) return@launchGuarded
+                when (result) {
                     is GroqHelper.RoleplayResult.Success -> {
                         val reply = ChatMessage(
                             "assistant",
@@ -300,7 +334,7 @@ class RoleplayViewModel @Inject constructor(
                     is GroqHelper.RoleplayResult.Failure -> _error.value = result.message
                 }
             } finally {
-                _isProcessing.value = false
+                if (turn == turnGeneration) _isProcessing.value = false
             }
         }
     }
@@ -321,14 +355,18 @@ class RoleplayViewModel @Inject constructor(
         // Guarded, for the same reason as startOpeningTurn: failures the processor
         // knows about reach _error; a throw from the preference reads or TTS did
         // not, and took the process down. Log-only; the spinner clears in finally.
-        launchGuarded(TAG) {
+        val turn = ++turnGeneration
+        turnJob = launchGuarded(TAG) {
             _messages.value.lastOrNull()?.let { persist(it, _messages.value.size - 1) }
             try {
                 val apiKey = preferenceManager.apiKey.first()
                 val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
                     ?: _selectedScenario.value.cefrLevel
-                when (val result =
-                    vocabularyProcessor.continueRoleplay(trimmed, history, promptScenario(currentScenarioId), apiKey, cefr)) {
+                val result =
+                    vocabularyProcessor.continueRoleplay(trimmed, history, promptScenario(currentScenarioId), apiKey, cefr)
+                // Superseded while the model was answering: see turnGeneration.
+                if (turn != turnGeneration) return@launchGuarded
+                when (result) {
                     is GroqHelper.RoleplayResult.Success -> {
                         val reply = ChatMessage(
                             "assistant",
@@ -344,7 +382,7 @@ class RoleplayViewModel @Inject constructor(
                     is GroqHelper.RoleplayResult.Failure -> _error.value = result.message
                 }
             } finally {
-                _isProcessing.value = false
+                if (turn == turnGeneration) _isProcessing.value = false
             }
         }
     }

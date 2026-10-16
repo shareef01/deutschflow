@@ -117,4 +117,24 @@ describe("login throttle", () => {
     // Locked IP must still be in cooldown at now + 100ms
     expect(delayForNextAttempt(lockedIp, now + 100)).toBeGreaterThan(0);
   });
+
+  it("evicts earliest-expiring lockouts when all tracked entries are actively locked", () => {
+    const now = 3_000_000;
+    // Saturate the map with entries that are ALL actively locked out
+    // Give each distinct failure counts so their nextAllowed values differ
+    for (let i = 0; i < MAX_TRACKED + 100; i++) {
+      // 5 failures -> exponential backoff
+      for (let f = 0; f < 5; f++) {
+        recordFailure(`all-locked-${i}`, now + i);
+      }
+    }
+
+    // Size must be bounded to MAX_TRACKED
+    expect(getTrackedCount()).toBeLessThanOrEqual(MAX_TRACKED);
+
+    // The most recently added entry with a longer future lockout must still be tracked and locked
+    const recentKey = `all-locked-${MAX_TRACKED + 50}`;
+    expect(delayForNextAttempt(recentKey, now + MAX_TRACKED + 50)).toBeGreaterThan(0);
+  });
 });
+

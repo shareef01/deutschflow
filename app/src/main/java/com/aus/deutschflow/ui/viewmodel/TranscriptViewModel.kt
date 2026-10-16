@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.data.local.entities.NO_ARTICLE
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.AIResult
@@ -174,6 +175,17 @@ class TranscriptViewModel @Inject constructor(
     val wordDetails: StateFlow<WordDetails?> = _wordDetails
 
     /**
+     * The chip that was tapped for [wordDetails], as it appeared in the transcript.
+     *
+     * The lookup answers with the dictionary form - "gehen" for a tapped "ging", "Hund"
+     * for "Hunde" - and that form is what Save files, so it can fold into an entry the
+     * library already holds under that name. Kept so the sheet can say so rather than
+     * silently saving a word the user did not tap.
+     */
+    private val _wordDetailsFor = MutableStateFlow<String?>(null)
+    val wordDetailsFor: StateFlow<String?> = _wordDetailsFor
+
+    /**
      * The word whose interrogation is in flight, so the chip that was tapped is the one
      * that shows a spinner.
      *
@@ -238,6 +250,11 @@ class TranscriptViewModel @Inject constructor(
             _translation.value = ""
             _suggestedWords.value = emptyList()
             _example.value = ""
+            // With the rest of the last utterance's analysis. Leaving these behind was
+            // harmless only because the screen happens to hide grammar until a new
+            // translation arrives - a layout change away from showing the previous
+            // sentence's cases under the next one.
+            _grammarNotes.value = emptyList()
             _aiError.value = null
             speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
         }
@@ -306,6 +323,7 @@ class TranscriptViewModel @Inject constructor(
                     _translation.value = ""
                     _suggestedWords.value = emptyList()
                     _example.value = ""
+                    _grammarNotes.value = emptyList()
                     _aiError.value = result.message
                 }
             }
@@ -337,6 +355,41 @@ class TranscriptViewModel @Inject constructor(
         )
         widgetUpdater.refresh()
         return true
+    }
+
+    /**
+     * How a Save the screen asked for turned out, delivered once to whoever is
+     * showing the snackbar.
+     */
+    private val _saveOutcomes = MutableSharedFlow<SaveOutcome>(extraBufferCapacity = 1)
+    val saveOutcomes: SharedFlow<SaveOutcome> = _saveOutcomes.asSharedFlow()
+
+    /** Saves the current utterance, for the screen's Save button. See [launchSave]. */
+    fun saveTranscript(german: String, english: String) {
+        launchSave { saveToVocabulary(german, english) }
+    }
+
+    /** Saves one interrogated word, for the detail sheet's Save. See [launchSave]. */
+    fun saveWord(details: WordDetails) {
+        launchSave { saveWordDetails(details) }
+    }
+
+    /**
+     * Runs a save in this ViewModel's scope and reports how it went.
+     *
+     * The screen used to run these itself, from rememberCoroutineScope. That scope has
+     * no exception handler, so a database that failed the write - a full disk, a
+     * corrupted file - threw straight to the thread's default handler and took the app
+     * down, on the one button whose whole job is to keep what the user just said. And
+     * because the scope dies with the composition, leaving the screen mid-save
+     * cancelled the transaction, which rolled back with nobody told. Here the write
+     * outlives the screen, a failure is reported rather than fatal, and a blank side
+     * is still quietly refused (no outcome at all), exactly as before.
+     */
+    private fun launchSave(write: suspend () -> Boolean) {
+        launchGuarded(TAG, onError = { _saveOutcomes.tryEmit(SaveOutcome.FAILED) }) {
+            if (write()) _saveOutcomes.emit(SaveOutcome.SAVED)
+        }
     }
 
     /**
@@ -377,7 +430,10 @@ class TranscriptViewModel @Inject constructor(
                 val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
                 when (val result =
                     vocabularyProcessor.interrogateWord(trimmed, apiKey, cefr)) {
-                    is WordDetailsResult.Success -> _wordDetails.value = result.details
+                    is WordDetailsResult.Success -> {
+                        _wordDetailsFor.value = trimmed
+                        _wordDetails.value = result.details
+                    }
                     is WordDetailsResult.Failure -> _wordDetailError.value = result.message
                 }
             } finally {
@@ -395,6 +451,7 @@ class TranscriptViewModel @Inject constructor(
     /** Closes the detail sheet and forgets the current word. */
     fun dismissWordDetails() {
         _wordDetails.value = null
+        _wordDetailsFor.value = null
         _wordDetailError.value = null
     }
 
@@ -427,7 +484,8 @@ class TranscriptViewModel @Inject constructor(
                 germanText = details.word,
                 englishTranslation = details.meaning,
                 exampleSentence = details.exampleSentence,
-                article = details.article,
+                // Stored blank, not as "none": see NO_ARTICLE.
+                article = details.article.takeUnless { it == NO_ARTICLE }.orEmpty(),
                 plural = details.plural,
                 conjugation = details.conjugationOrInfinitive,
                 // Comma-joined, the shape LinguisticBox on the detail screen
@@ -449,6 +507,9 @@ class TranscriptViewModel @Inject constructor(
         private const val TAG = "TranscriptViewModel"
     }
 }
+
+/** How a requested save ended. A refused save (a blank side) reports nothing. */
+enum class SaveOutcome { SAVED, FAILED }
 
 /** The states the transcript screen moves through, in the order they occur. */
 enum class RecordingPhase { IDLE, LISTENING, TRANSCRIBING, RESULT }

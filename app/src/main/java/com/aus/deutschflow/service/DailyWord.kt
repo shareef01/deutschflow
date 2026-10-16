@@ -2,8 +2,7 @@ package com.aus.deutschflow.service
 
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
-import kotlinx.coroutines.flow.firstOrNull
-import java.time.LocalDate
+import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,14 +19,36 @@ class DailyWord @Inject constructor(
     private val vocabularyDao: VocabularyDao
 ) {
 
-    suspend fun today(): VocabularyEntity? = select(
-        words = vocabularyDao.getAllVocabulary().firstOrNull().orEmpty(),
-        epochDay = LocalDate.now().toEpochDay()
-    )
+    /**
+     * One row, chosen in SQL by the rule [select] states. It used to load the whole
+     * library to pick one word, on every widget redraw - and the widget is redrawn after
+     * every write to the library.
+     */
+    suspend fun today(now: LocalDateTime = LocalDateTime.now()): VocabularyEntity? =
+        vocabularyDao.wordOfTheDay(wordDay(now))
 
     companion object {
 
         /**
+         * The hour the word of the day changes - the same hour the notification
+         * announces it (DailyWordWorker) and the worker redraws the widget.
+         *
+         * It used to change at midnight. The widget only redraws on that 09:00 run (or
+         * a library write), so from midnight until then it went on showing yesterday's
+         * word while the app had already moved on: "WORD OF THE DAY" was wrong for nine
+         * hours of every day. Rolling over when the word is announced keeps the widget,
+         * the notification and the app on one word without scheduling another job.
+         */
+        const val ROLLOVER_HOUR = 9
+
+        /** Which word-day [now] falls in: one that starts at [ROLLOVER_HOUR], not midnight. */
+        internal fun wordDay(now: LocalDateTime): Long =
+            now.minusHours(ROLLOVER_HOUR.toLong()).toLocalDate().toEpochDay()
+
+        /**
+         * The rule, as a pure function: VocabularyDao.wordOfTheDay applies it in SQL,
+         * and this is what the tests pin it to.
+         *
          * Picks by date rather than at random, so every caller on a given day picks
          * the same word and picks it again on every redraw.
          *

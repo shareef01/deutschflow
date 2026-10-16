@@ -1,12 +1,17 @@
 package com.aus.deutschflow.ui.viewmodel
 
 import android.content.Context
+import android.database.sqlite.SQLiteFullException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.awaitCondition
 import com.aus.deutschflow.TestPreferencesRule
 import com.aus.deutschflow.data.local.AppDatabase
+import com.aus.deutschflow.data.local.dao.VocabularyDao
+import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.service.AIResult
+import com.aus.deutschflow.service.GrammarNote
 import com.aus.deutschflow.service.GroqHelper
 import com.aus.deutschflow.service.SpeechRecognizerHelper
 import com.aus.deutschflow.service.TTSHelper
@@ -15,8 +20,11 @@ import com.aus.deutschflow.service.WordDetails
 import com.aus.deutschflow.service.WordDetailsResult
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -222,11 +230,12 @@ class TranscriptViewModelTest {
 
         fun isWaitingOn(word: String): Boolean = gates[word]?.isCompleted == false
 
-        fun answer(word: String) {
+        /** Answers [word] as the model does for an inflected form: with [dictionaryForm]. */
+        fun answer(word: String, dictionaryForm: String = word) {
             gates.getOrPut(word) { CompletableDeferred() }.complete(
                 WordDetailsResult.Success(
                     WordDetails(
-                        word = word,
+                        word = dictionaryForm,
                         article = "der",
                         plural = "",
                         conjugationOrInfinitive = "",
@@ -241,6 +250,102 @@ class TranscriptViewModelTest {
             gates.getOrPut(word) { CompletableDeferred() }
                 .complete(WordDetailsResult.Failure(message))
         }
+    }
+
+    /**
+     * A failed translation leaves nothing of the previous sentence's analysis behind.
+     * The grammar notes used to survive it - hidden only because the screen happens
+     * not to draw grammar without a translation.
+     */
+    @Test
+    fun aFailedTranslationClearsTheLastGrammarNotes() = runBlocking {
+        var next: AIResult = AIResult.Success(
+            translation = "I see the dog",
+            keywords = listOf("Hund"),
+            example = "",
+            grammarNotes = listOf(GrammarNote("den Hund", "Akkusativ", "direct object"))
+        )
+        val processor = object : VocabularyProcessor(GroqHelper(context)) {
+            override suspend fun processText(text: String, apiKey: String, learnerLevel: String?) = next
+        }
+        val scripted = TranscriptViewModel(
+            speechRecognizerHelper = SpeechRecognizerHelper(context),
+            vocabularyProcessor = processor,
+            vocabularyDao = database.vocabularyDao(),
+            transcriptDao = database.transcriptDao(),
+            preferenceManager = store.preferences,
+            widgetUpdater = WidgetUpdater(context),
+            ttsHelper = TTSHelper(context)
+        )
+
+        scripted.handleUtterance("Ich sehe den Hund")
+        assertEquals(1, scripted.grammarNotes.value.size)
+
+        next = AIResult.Failure("offline")
+        scripted.handleUtterance("Noch ein Satz")
+
+        assertTrue("the old sentence's grammar must go", scripted.grammarNotes.value.isEmpty())
+    }
+
+    /** The screen's Save reports a completed write, once. */
+    @Test
+    fun aRequestedSaveReportsThatItLanded() = runBlocking {
+        val outcome = async(start = CoroutineStart.UNDISPATCHED) { viewModel.saveOutcomes.first() }
+
+        viewModel.saveTranscript("Ich lerne Deutsch", "I am learning German")
+
+        assertEquals(SaveOutcome.SAVED, withTimeout(5_000) { outcome.await() })
+        assertEquals(1, database.vocabularyDao().getAllVocabulary().first().size)
+    }
+
+    /**
+     * A write the database refuses is reported, not fatal. Save used to run in the
+     * screen's own coroutine scope, which has no exception handler, so this exact
+     * failure took the app down.
+     */
+    @Test
+    fun aSaveTheDatabaseRefusesIsReportedNotThrown() = runBlocking {
+        // A full disk, delivered where a real one would surface: from the DAO's write.
+        val fullDisk = object : VocabularyDao by database.vocabularyDao() {
+            override suspend fun save(entry: VocabularyEntity) {
+                throw SQLiteFullException("database or disk is full")
+            }
+        }
+        val failing = TranscriptViewModel(
+            speechRecognizerHelper = SpeechRecognizerHelper(context),
+            vocabularyProcessor = VocabularyProcessor(GroqHelper(context)),
+            vocabularyDao = fullDisk,
+            transcriptDao = database.transcriptDao(),
+            preferenceManager = store.preferences,
+            widgetUpdater = WidgetUpdater(context),
+            ttsHelper = TTSHelper(context)
+        )
+        val outcome = async(start = CoroutineStart.UNDISPATCHED) { failing.saveOutcomes.first() }
+
+        failing.saveTranscript("Ich lerne Deutsch", "I am learning German")
+
+        assertEquals(SaveOutcome.FAILED, withTimeout(5_000) { outcome.await() })
+    }
+
+    /**
+     * The lookup answers with the dictionary form, and Save files that form. The tapped
+     * word is kept beside it, so the sheet can say "dictionary form of ging" instead of
+     * silently saving a word the user never tapped.
+     */
+    @Test
+    fun theTappedWordIsKeptBesideItsDictionaryForm() = runBlocking {
+        val scripted = ScriptedProcessor(context)
+        val lookup = viewModelWith(scripted)
+
+        lookup.interrogateWord("ging")
+        assertTrue(awaitCondition { scripted.isWaitingOn("ging") })
+        scripted.answer("ging", dictionaryForm = "gehen")
+
+        assertTrue(awaitCondition { lookup.wordDetails.first()?.word == "gehen" })
+        assertEquals("ging", lookup.wordDetailsFor.first())
+
+        lookup.dismissWordDetails()
+        assertNull("closing the sheet forgets the tapped word too", lookup.wordDetailsFor.first())
     }
 
     @Test

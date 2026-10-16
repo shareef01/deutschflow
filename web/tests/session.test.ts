@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSessionToken,
   deriveSessionSigningSecret,
+  MIN_SESSION_SECRET_BYTES,
   passwordMatches,
   safeRedirectTarget,
   SESSION_COOKIE,
+  sessionSecret,
   SESSION_MAX_AGE_SECONDS,
   verifySessionToken,
 } from "@/lib/auth/session";
@@ -31,6 +33,26 @@ import { GET as logoutGet, POST as logoutPost } from "@/app/api/logout/route";
 const SECRET = "test-session-secret-high-entropy";
 const PASSWORD = "correct-horse-battery-staple";
 const NOW = 1_700_000_000_000;
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("sessionSecret", () => {
+  it("rejects absent and weak signing secrets", () => {
+    vi.stubEnv("SESSION_SECRET", "");
+    expect(sessionSecret()).toBeNull();
+
+    vi.stubEnv("SESSION_SECRET", "a".repeat(MIN_SESSION_SECRET_BYTES - 1));
+    expect(sessionSecret()).toBeNull();
+  });
+
+  it("accepts a secret with at least 32 bytes", () => {
+    const configured = "a".repeat(MIN_SESSION_SECRET_BYTES);
+    vi.stubEnv("SESSION_SECRET", configured);
+    expect(sessionSecret()).toBe(configured);
+  });
+});
 
 describe("deriveSessionSigningSecret — cryptographic revocation key derivation", () => {
   it("produces deterministic keys for matching inputs", async () => {

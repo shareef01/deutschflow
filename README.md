@@ -202,7 +202,7 @@ Every push and pull request is validated by [GitHub Actions](.github/workflows/b
   - Matching German vocabulary entries merge linguistic metadata without resetting SRS progress.
   - XP never decreases, and activity streaks are deterministically recomputed.
   - Review events merge by stable identity. An existing roleplay conversation is preserved; the backup conversation is restored when no local conversation exists.
-- **Android Backup**: The Room database participates in standard Android OS cloud backup and device-to-device transfer. Keystore-encrypted settings and API keys are deliberately excluded from cloud backup to protect credentials.
+- **Android Backup**: Learning data, transcripts, roleplay conversations, and encrypted settings are excluded from Android OS cloud backup and device-to-device transfer. This keeps sensitive learning content on the device; Android currently has no manual export feature.
 
 ---
 

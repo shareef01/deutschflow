@@ -65,7 +65,7 @@ class DailyWordNotification @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             // Without a content intent the notification does nothing when tapped,
             // and setAutoCancel has nothing to cancel on.
-            .setContentIntent(openAppIntent())
+            .setContentIntent(openWordIntent(vocab.id))
             .setAutoCancel(true)
 
         val notificationManager: NotificationManager =
@@ -74,9 +74,21 @@ class DailyWordNotification @Inject constructor(
         return null
     }
 
-    private fun openAppIntent(): PendingIntent {
+    /**
+     * Opens the word the notification is about, in the library.
+     *
+     * It used to open the app and nothing more, so the tap that followed "Today's word:
+     * Übung" landed on whichever screen was first, and the word had to be found by hand.
+     * SINGLE_TOP so an app that is already open takes the word in onNewIntent rather
+     * than being torn down and rebuilt around it. Still explicit and immutable; the one
+     * request code is right, because the one notification id means there is only ever
+     * one of these live, and FLAG_UPDATE_CURRENT refreshes its word.
+     */
+    private fun openWordIntent(wordId: Int): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_WORD_ID, wordId)
         }
         return PendingIntent.getActivity(
             context,

@@ -5,10 +5,13 @@ import androidx.annotation.VisibleForTesting
 import com.aus.deutschflow.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.coroutineContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Reader
@@ -102,9 +105,9 @@ class GroqHelper @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             try {
-                val content = contentOf(post(requestBody(trimmed, learnerLevel), apiKey))
-                parseResponse(content)
-                    ?: AIResult.Failure(context.getString(R.string.ai_unreadable))
+                val raw = post(requestBody(trimmed, learnerLevel), apiKey)
+                parseResponse(contentOf(raw))
+                    ?: AIResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 // Cancellation is not a translation failure. Swallowing it here would
                 // turn "the screen went away" into a Failure handed to a dead
@@ -138,10 +141,10 @@ class GroqHelper @Inject constructor(
 
         return withContext(Dispatchers.IO) {
             try {
-                val content = contentOf(post(wordRequestBody(trimmed, learnerLevel), apiKey))
-                parseWordDetails(content)
+                val raw = post(wordRequestBody(trimmed, learnerLevel), apiKey)
+                parseWordDetails(contentOf(raw))
                     ?.let { WordDetailsResult.Success(it) }
-                    ?: WordDetailsResult.Failure(context.getString(R.string.ai_unreadable))
+                    ?: WordDetailsResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -151,37 +154,16 @@ class GroqHelper @Inject constructor(
         }
     }
 
-    private suspend fun post(body: String, apiKey: String): String {
-        val connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            setRequestProperty("Authorization", "Bearer $apiKey")
-            setRequestProperty("Content-Type", "application/json")
-        }
+    /**
+     * The message for an answer that could not be read: a specific one when the model
+     * ran out of room, the general one otherwise. See [wasCutOff].
+     */
+    private fun unreadable(rawResponse: String): String = context.getString(
+        if (wasCutOff(rawResponse)) R.string.ai_cut_off else R.string.ai_unreadable
+    )
 
-        val cancelHandle = coroutineContext[Job]?.invokeOnCompletion {
-            connection.disconnect()
-        }
-
-        return try {
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-
-            if (connection.responseCode in 200..299) {
-                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readBounded(MAX_SUCCESS_CHARS) }
-            } else {
-                // The body carries the reason - an expired key, a retired model, a
-                // rate limit - and all of them are worth putting in front of the user.
-                val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)
-                    ?.use { it.readBounded(MAX_ERROR_CHARS) }
-                throw IllegalStateException(errorMessage(connection.responseCode, errBody))
-            }
-        } finally {
-            cancelHandle?.dispose()
-            connection.disconnect()
-        }
-    }
+    private suspend fun post(body: String, apiKey: String): String =
+        postTo(ENDPOINT, body, apiKey, ::errorMessage)
 
     /**
      * Two messages, not one: the instructions are a system message and the user's
@@ -286,10 +268,10 @@ class GroqHelper @Inject constructor(
         return withContext(Dispatchers.IO) {
             try {
                 val body = roleplayOpeningRequestBody(safeScenario, safeHistory, learnerLevel)
-                val content = contentOf(post(body, apiKey))
-                parseRoleplayTurn(content)
+                val raw = post(body, apiKey)
+                parseRoleplayTurn(contentOf(raw))
                     ?.let { (reply, gloss) -> RoleplayResult.Success(reply, gloss) }
-                    ?: RoleplayResult.Failure(context.getString(R.string.ai_unreadable))
+                    ?: RoleplayResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -325,10 +307,10 @@ class GroqHelper @Inject constructor(
         return withContext(Dispatchers.IO) {
             try {
                 val body = roleplayRequestBody(trimmedInput, safeHistory, safeScenario, learnerLevel)
-                val content = contentOf(post(body, apiKey))
-                parseRoleplayTurn(content)
+                val raw = post(body, apiKey)
+                parseRoleplayTurn(contentOf(raw))
                     ?.let { (reply, gloss) -> RoleplayResult.Success(reply, gloss) }
-                    ?: RoleplayResult.Failure(context.getString(R.string.ai_unreadable))
+                    ?: RoleplayResult.Failure(unreadable(raw))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -517,6 +499,76 @@ class GroqHelper @Inject constructor(
 
         private const val TIMEOUT_MS = 30_000
 
+        /**
+         * The HTTP round trip, aborted the moment the calling coroutine is cancelled.
+         *
+         * HttpURLConnection blocks the thread, so cancellation can only reach it by
+         * closing the connection from somewhere else. This used to hang that close
+         * on `Job.invokeOnCompletion` - which fires when the job *completes*, and a
+         * job blocked in a socket read cannot complete. So a superseded word lookup,
+         * or a screen that went away, left its request running until the server
+         * answered or the 30-second timeouts ran out, holding a socket and an IO
+         * thread and still spending the user's Groq quota.
+         *
+         * A child coroutine closes it instead. Children are cancelled the instant
+         * their parent is, and its `finally` runs on another IO thread while this
+         * one is still blocked, so the disconnect lands mid-read and the read throws.
+         *
+         * In the companion, with the endpoint and the error wording passed in, so a
+         * JVM test can point it at a local socket that never answers.
+         */
+        @VisibleForTesting
+        internal suspend fun postTo(
+            endpoint: String,
+            body: String,
+            apiKey: String,
+            errorMessage: (Int, String?) -> String,
+            timeoutMs: Int = TIMEOUT_MS
+        ): String = coroutineScope {
+            val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                setRequestProperty("Authorization", "Bearer $apiKey")
+                setRequestProperty("Content-Type", "application/json")
+            }
+
+            // UNDISPATCHED so it is parked on awaitCancellation before the blocking
+            // calls below start; a dispatched start could still be queued behind them.
+            val abortOnCancel = launch(start = CoroutineStart.UNDISPATCHED) {
+                try {
+                    awaitCancellation()
+                } finally {
+                    connection.disconnect()
+                }
+            }
+
+            try {
+                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+
+                if (connection.responseCode in 200..299) {
+                    connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readBounded(MAX_SUCCESS_CHARS) }
+                } else {
+                    // The body carries the reason - an expired key, a retired model, a
+                    // rate limit - and all of them are worth putting in front of the user.
+                    val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)
+                        ?.use { it.readBounded(MAX_ERROR_CHARS) }
+                    throw IllegalStateException(errorMessage(connection.responseCode, errBody))
+                }
+            } catch (e: Exception) {
+                // A read that failed because the abort above closed the socket is a
+                // cancellation, not a network error: say so, rather than handing the
+                // caller a SocketException for a request nobody wants any more.
+                ensureActive()
+                throw e
+            } finally {
+                // Releases coroutineScope, which otherwise waits on this child forever.
+                abortOnCancel.cancel()
+                connection.disconnect()
+            }
+        }
+
         const val MAX_AI_INPUT_CHARS = 4_000
         const val MAX_ROLEPLAY_USER_CHARS = 1_000
         const val MAX_ROLEPLAY_SCENARIO_CHARS = 500
@@ -643,6 +695,22 @@ class GroqHelper @Inject constructor(
         private const val KEYWORDS_PREFIX = "Keywords:"
         private const val EXAMPLE_PREFIX = "Example:"
         private const val GRAMMAR_PREFIX = "Grammar:"
+
+        /**
+         * Whether the provider stopped the answer at the token limit instead of letting
+         * it finish (`finish_reason: "length"`).
+         *
+         * That answer is truncated JSON, or nothing at all, and it used to surface as
+         * the same "couldn't read the response" as a garbled one - which says try again,
+         * when trying the same long input again will be cut off the same way. Telling
+         * the two apart is what lets the message say to shorten it instead.
+         */
+        internal fun wasCutOff(json: String): Boolean = runCatching {
+            JSONObject(json)
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optString("finish_reason") == "length"
+        }.getOrDefault(false)
 
         /** Pulls the assistant's text out of the OpenAI chat response shape. */
         internal fun contentOf(json: String): String =

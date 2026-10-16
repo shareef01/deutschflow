@@ -184,9 +184,15 @@ class StudyViewModelTest {
         // The ease penalty, not the review count: a seeded card already has
         // reviewCount 0, so waiting on that would be true before the write landed
         // and would let this test pass without the code doing anything.
-        awaitCondition {
-            database.vocabularyDao().findByGermanText(card.germanText)?.easeFactor == 2.3f
-        }
+        //
+        // And the submit finishing, not just the write: the deck is reordered after
+        // the transaction commits, and isSubmitting only drops once it has been. On a
+        // slow emulator the ease could be visible while the deck was still the old
+        // one, and the move-to-the-end assertion below read it too early.
+        assertTrue(awaitCondition {
+            database.vocabularyDao().findByGermanText(card.germanText)?.easeFactor == 2.3f &&
+                !viewModel.isSubmitting.value
+        })
 
         val written = database.vocabularyDao().findByGermanText(card.germanText)
         assertEquals("Again costs ease", 2.3f, written?.easeFactor ?: 0f, 0.0001f)
@@ -198,6 +204,22 @@ class StudyViewModelTest {
             card.germanText,
             viewModel.studyList.value.last().germanText
         )
+    }
+
+    /**
+     * Hard is a correct answer: the scheduler grows its interval, and it banks XP and
+     * keeps the streak like Good. It used to bank nothing, so the honest rating for a
+     * struggle was the one that cost the learner.
+     */
+    @Test
+    fun hardIsACorrectAnswerAndBanksXp() = runBlocking {
+        startSessionOf(1)
+
+        viewModel.submitReview(ReviewQuality.HARD)
+
+        assertTrue(awaitCondition { xp() == StudyViewModel.XP_PER_CARD && !viewModel.isSubmitting.value })
+        assertEquals(1, database.userStatsDao().getUserStatsOnce()?.streak)
+        assertTrue("a correct answer leaves the session", viewModel.studyList.value.isEmpty())
     }
 
     /**
@@ -251,6 +273,78 @@ class StudyViewModelTest {
         assertEquals("one row per day", 1, log.size)
         assertEquals(today, log.first().date)
         assertEquals(3 * StudyViewModel.XP_PER_CARD, log.first().xpGained)
+    }
+
+    /**
+     * The deck is a set of snapshots, and it survives a trip to the library. A review
+     * used to write its snapshot back whole, so a correction made there in the
+     * meantime was silently reverted the moment the card was answered.
+     */
+    @Test
+    fun aReviewKeepsAnEditMadeInTheLibraryMidSession() = runBlocking {
+        startSessionOf(1)
+        val dealt = viewModel.studyList.value.first()
+
+        // The user fixes the word in the library while the sitting is open.
+        database.vocabularyDao().save(dealt.copy(germanText = "Haus", englishTranslation = "house"))
+
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(awaitCondition {
+            database.vocabularyDao().findById(dealt.id)?.reviewCount == 1 && !viewModel.isSubmitting.value
+        })
+
+        val written = database.vocabularyDao().findById(dealt.id)
+        assertEquals("the edit must survive the review", "Haus", written?.germanText)
+        assertEquals("house", written?.englishTranslation)
+        assertEquals("and the review must still land", 1, written?.interval)
+    }
+
+    /**
+     * A card deleted from the library mid-session is not there to review. It used to
+     * bank XP and file a review event against an id no row held any more.
+     */
+    @Test
+    fun aCardDeletedMidSessionBanksNothingAndLeavesNoHistory() = runBlocking {
+        startSessionOf(2)
+        val dealt = viewModel.studyList.value.first()
+
+        database.vocabularyDao().deleteById(dealt.id)
+
+        viewModel.submitReview(ReviewQuality.GOOD)
+        assertTrue(awaitCondition {
+            viewModel.studyList.value.size == 1 && !viewModel.isSubmitting.value
+        })
+
+        assertEquals("no XP for a word that no longer exists", null, xp())
+        assertTrue(
+            "no review event for a deleted word",
+            database.reviewEventDao().getAllEvents().first().isEmpty()
+        )
+        assertEquals("it was not a review", 0, viewModel.sessionReviewedCount.value)
+        assertEquals("nor did it come back", null, database.vocabularyDao().findById(dealt.id))
+    }
+
+    /**
+     * A skip that lands while a rating is still being written must not move the deck.
+     *
+     * submitReview raises isSubmitting before it launches, so a skipCard called right
+     * after it always lands inside the write. It used to move the index on top of the
+     * removal, so the deck showed the card *two* past the one just rated.
+     */
+    @Test
+    fun aSkipDuringASubmitDoesNotMoveTheDeck() = runBlocking {
+        startSessionOf(3)
+        val dealt = viewModel.studyList.value
+        val next = dealt[1]
+
+        viewModel.submitReview(ReviewQuality.GOOD)
+        viewModel.skipCard()
+
+        assertTrue(awaitCondition {
+            viewModel.studyList.value.size == 2 && !viewModel.isSubmitting.value
+        })
+        val shown = viewModel.studyList.value[viewModel.currentIndex.value]
+        assertEquals("the card after the rated one should be on screen", next.id, shown.id)
     }
 
     @Test

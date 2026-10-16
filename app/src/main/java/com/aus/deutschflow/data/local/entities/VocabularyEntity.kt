@@ -76,6 +76,15 @@ fun germanKey(text: String): String = Normalizer.normalize(text, Normalizer.Form
 fun germanMatchKey(text: String): String = germanKey(text).replace("ß", "ss")
 
 /**
+ * The article the word lookup reports for a word that is not a noun.
+ *
+ * A placeholder rather than an article, so it is never stored or merged as one - see
+ * [VocabularyEntity.mergedWith]. Rows written before that rule may still carry it, and
+ * the screens already hide it.
+ */
+const val NO_ARTICLE = "none"
+
+/**
  * Immutable so Compose treats the vocabulary list as skippable when it is handed to a
  * composable unchanged; the DAO only ever swaps whole entities, never mutates one.
  */
@@ -157,18 +166,43 @@ data class VocabularyEntity(
     fun mergedWith(incoming: VocabularyEntity, now: Long = System.currentTimeMillis()): VocabularyEntity = copy(
         englishTranslation = incoming.englishTranslation.ifBlank { englishTranslation },
         exampleSentence = incoming.exampleSentence.ifBlank { exampleSentence },
-        article = incoming.article.ifBlank { article },
+        // "none" is the model's way of saying "not a noun", and it is not a value to
+        // keep: written over a real article it erased the der/die/das the library
+        // already had - interrogating the verb "essen" stripped "das" from "Essen",
+        // which shares its key. It merges as the blank it means.
+        article = incoming.article.takeUnless { it.isBlank() || it == NO_ARTICLE } ?: article,
         plural = incoming.plural.ifBlank { plural },
         conjugation = incoming.conjugation.ifBlank { conjugation },
         synonyms = incoming.synonyms.ifBlank { synonyms },
         antonyms = incoming.antonyms.ifBlank { antonyms },
         timestamp = maxOf(timestamp, incoming.timestamp),
-        // SRS data is usually kept from the existing row unless the incoming one
-        // explicitly has newer progress (which wouldn't happen in the current UI).
+        // The schedule is this row's. Content merges field by field, but a schedule
+        // is four fields that only mean something together; choosing between two of
+        // them is [withFurthestScheduleOf]'s job, not a field-wise blend.
         nextReview = nextReview,
         interval = interval,
         easeFactor = easeFactor,
         reviewCount = reviewCount,
         lastModifiedAt = maxOf(lastModifiedAt, incoming.lastModifiedAt, now)
     )
+
+    /**
+     * This entry with whichever of the two schedules is further along.
+     *
+     * Ranked the way MIGRATION_12_13 and MIGRATION_14_15 rank duplicates - most
+     * successful reviews, then longest interval - and taken as a set so the four SRS
+     * fields stay consistent with each other. A tie keeps this row's. The migrations
+     * already promised that folding two rows together never loses review progress;
+     * the runtime merge used to keep the surviving row's schedule regardless.
+     */
+    fun withFurthestScheduleOf(other: VocabularyEntity): VocabularyEntity {
+        val otherIsFurther = compareValuesBy(other, this, { it.reviewCount }, { it.interval }) > 0
+        if (!otherIsFurther) return this
+        return copy(
+            nextReview = other.nextReview,
+            interval = other.interval,
+            easeFactor = other.easeFactor,
+            reviewCount = other.reviewCount
+        )
+    }
 }
