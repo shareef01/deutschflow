@@ -28,7 +28,8 @@ class SettingsViewModel @Inject constructor(
     private val roleplayDao: RoleplayDao,
     private val preferenceManager: PreferenceManager,
     private val dailyWordNotification: DailyWordNotification,
-    private val widgetUpdater: WidgetUpdater
+    private val widgetUpdater: WidgetUpdater,
+    private val backupManager: com.aus.deutschflow.data.local.backup.BackupManager
 ) : ViewModel() {
 
     val totalVocabulary: StateFlow<Int> = vocabularyDao.countVocabulary()
@@ -174,6 +175,41 @@ class SettingsViewModel @Inject constructor(
         launchGuarded(TAG) {
             _message.value = dailyWordNotification.showNotification()
                 ?: R.string.message_notification_sent
+        }
+    }
+
+    fun exportBackup(outputStream: java.io.OutputStream, passphrase: String? = null) {
+        launchGuarded(TAG, onError = { _message.value = R.string.message_backup_failed }) {
+            val passChars = passphrase?.takeIf { it.isNotBlank() }?.toCharArray()
+            backupManager.exportToStream(outputStream, passChars)
+            _message.value = R.string.message_backup_exported
+        }
+    }
+
+    fun importBackup(
+        inputStream: java.io.InputStream,
+        passphrase: String? = null,
+        onSuccess: (() -> Unit)? = null,
+        onPassphraseNeeded: (() -> Unit)? = null
+    ) {
+        launchGuarded(TAG, onError = { _message.value = R.string.message_backup_import_failed }) {
+            try {
+                val passChars = passphrase?.takeIf { it.isNotBlank() }?.toCharArray()
+                backupManager.importFromStream(inputStream, passChars)
+                widgetUpdater.refresh()
+                _message.value = R.string.message_backup_imported
+                onSuccess?.invoke()
+            } catch (e: com.aus.deutschflow.data.local.backup.BackupException.WrongPassphrase) {
+                _message.value = R.string.message_backup_wrong_passphrase
+                onPassphraseNeeded?.invoke()
+            } catch (e: com.aus.deutschflow.data.local.backup.BackupException.PassphraseRequired) {
+                _message.value = R.string.message_backup_passphrase_required
+                onPassphraseNeeded?.invoke()
+            } catch (e: com.aus.deutschflow.data.local.backup.BackupException.UnsupportedVersion) {
+                _message.value = R.string.message_backup_unsupported_version
+            } catch (e: Exception) {
+                _message.value = R.string.message_backup_import_failed
+            }
         }
     }
 

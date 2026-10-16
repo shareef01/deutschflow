@@ -9,6 +9,12 @@ interface TranscriptDao {
     @Query("SELECT * FROM transcripts ORDER BY timestamp DESC")
     fun getAllTranscripts(): Flow<List<TranscriptEntity>>
 
+    @Query("SELECT * FROM transcripts ORDER BY timestamp DESC")
+    suspend fun getAllTranscriptsList(): List<TranscriptEntity>
+
+    @Query("SELECT * FROM transcripts WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun findByRemoteId(remoteId: String): TranscriptEntity?
+
     /**
      * How many, without reading any of them.
      *

@@ -232,6 +232,24 @@
     <string name="message_notifications_off">Benachrichtigungen sind ausgeschaltet. Aktiviere sie für DeutschFlow in den Systemeinstellungen.</string>
     <string name="message_library_empty">Speichere zuerst ein Wort in deiner Bibliothek — es gibt noch nichts zu senden.</string>
 
+    <!-- Backup and recovery -->
+    <string name="settings_section_backup">Sicherung &amp; Wiederherstellung</string>
+    <string name="settings_backup_desc">Exportieren Sie Ihre Lernbibliothek in eine portable, verschlüsselte oder unverschlüsselte Datei oder stellen Sie Daten wieder her.</string>
+    <string name="settings_export_backup">Backup exportieren</string>
+    <string name="settings_import_backup">Backup importieren</string>
+    <string name="settings_backup_passphrase_title">Backup-Passphrase (Optional)</string>
+    <string name="settings_backup_passphrase_hint">Leer lassen für unverschlüsseltes JSON oder Passphrase zur Verschlüsselung eingeben</string>
+    <string name="settings_backup_passphrase_import_title">Backup-Passphrase eingeben</string>
+    <string name="settings_backup_passphrase_import_hint">Passphrase</string>
+    <string name="settings_backup_passphrase_confirm">Fortfahren</string>
+    <string name="message_backup_exported">Backup erfolgreich exportiert.</string>
+    <string name="message_backup_imported">Backup erfolgreich wiederhergestellt.</string>
+    <string name="message_backup_failed">Backup-Export fehlgeschlagen. Bitte erneut versuchen.</string>
+    <string name="message_backup_import_failed">Backup-Import fehlgeschlagen: ungültige oder beschädigte Datei.</string>
+    <string name="message_backup_wrong_passphrase">Falsche Passphrase für verschlüsseltes Backup.</string>
+    <string name="message_backup_passphrase_required">Eine Passphrase ist erforderlich, um dieses Backup zu entschlüsseln.</string>
+    <string name="message_backup_unsupported_version">Dieses Backup wurde von einer neueren Version von DeutschFlow erstellt.</string>
+
     <!-- Speech recognition -->
     <string name="speech_unavailable">Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>
     <string name="speech_on_device_unavailable">Geräteinterne Spracherkennung ist auf diesem Gerät nicht verfügbar.</string>
