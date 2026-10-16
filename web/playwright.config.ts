@@ -37,11 +37,13 @@ export default defineConfig({
       name: "firefox-smoke",
       testMatch: /(?:compatibility|speech-fallback)\.spec\.ts/,
       use: { browserName: "firefox" },
+      dependencies: ["chromium"],
     },
     {
       name: "webkit-smoke",
       testMatch: /(?:compatibility|speech-fallback)\.spec\.ts/,
       use: { browserName: "webkit" },
+      dependencies: ["chromium"],
     },
   ],
 });
