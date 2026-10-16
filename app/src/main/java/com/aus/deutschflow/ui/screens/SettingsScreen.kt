@@ -11,6 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
@@ -75,6 +78,42 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     }
     var isApiKeyVisible by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showExportPassphraseDialog by remember { mutableStateOf(false) }
+    var showImportPassphraseDialog by remember { mutableStateOf(false) }
+    var exportPassphrase by remember { mutableStateOf("") }
+    var importPassphrase by remember { mutableStateOf("") }
+    var pendingExportUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            pendingExportUri = uri
+            showExportPassphraseDialog = true
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            pendingImportUri = uri
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    viewModel.importBackup(
+                        inputStream = stream,
+                        passphrase = null,
+                        onPassphraseNeeded = {
+                            showImportPassphraseDialog = true
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                // Handled in ViewModel
+            }
+        }
+    }
 
     val haptic = LocalHapticFeedback.current
 
@@ -402,7 +441,58 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             }
         }
 
-        // Section 5: Data & Diagnostics
+        // Section 5: Backup & Recovery
+        SettingsSectionHeader(stringResource(R.string.settings_section_backup))
+        GlassmorphicCard(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(Spacing.lg)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_backup_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(Spacing.md))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                PrimaryActionButton(
+                    text = stringResource(R.string.settings_export_backup),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Upload,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                        exportLauncher.launch("deutschflow-backup-$timestamp.json")
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                SecondaryActionButton(
+                    text = stringResource(R.string.settings_import_backup),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        importLauncher.launch(arrayOf("application/json", "*/*"))
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Section 6: Data & Diagnostics
         SettingsSectionHeader(stringResource(R.string.settings_section_data))
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -509,6 +599,116 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.settings_wipe_cancel))
+                }
+            }
+        )
+    }
+
+    if (showExportPassphraseDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showExportPassphraseDialog = false
+                exportPassphrase = ""
+            },
+            title = { Text(stringResource(R.string.settings_backup_passphrase_title), fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    Text(
+                        text = stringResource(R.string.settings_backup_passphrase_hint),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedTextField(
+                        value = exportPassphrase,
+                        onValueChange = { exportPassphrase = it },
+                        label = { Text(stringResource(R.string.settings_backup_passphrase_import_hint)) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val uri = pendingExportUri
+                        val pass = exportPassphrase.ifBlank { null }
+                        showExportPassphraseDialog = false
+                        exportPassphrase = ""
+                        if (uri != null) {
+                            try {
+                                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                                    viewModel.exportBackup(stream, pass)
+                                }
+                            } catch (e: Exception) {
+                                // Handled in ViewModel
+                            }
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.settings_backup_passphrase_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showExportPassphraseDialog = false
+                    exportPassphrase = ""
+                }) {
+                    Text(stringResource(R.string.settings_wipe_cancel))
+                }
+            }
+        )
+    }
+
+    if (showImportPassphraseDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showImportPassphraseDialog = false
+                importPassphrase = ""
+            },
+            title = { Text(stringResource(R.string.settings_backup_passphrase_import_title), fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    Text(
+                        text = stringResource(R.string.message_backup_passphrase_required),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedTextField(
+                        value = importPassphrase,
+                        onValueChange = { importPassphrase = it },
+                        label = { Text(stringResource(R.string.settings_backup_passphrase_import_hint)) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val uri = pendingImportUri
+                        val pass = importPassphrase
+                        showImportPassphraseDialog = false
+                        importPassphrase = ""
+                        if (uri != null && pass.isNotBlank()) {
+                            try {
+                                context.contentResolver.openInputStream(uri)?.use { stream ->
+                                    viewModel.importBackup(stream, pass)
+                                }
+                            } catch (e: Exception) {
+                                // Handled in ViewModel
+                            }
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.settings_backup_passphrase_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showImportPassphraseDialog = false
+                    importPassphrase = ""
+                }) {
                     Text(stringResource(R.string.settings_wipe_cancel))
                 }
             }

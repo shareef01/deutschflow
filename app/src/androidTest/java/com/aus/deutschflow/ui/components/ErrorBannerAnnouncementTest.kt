@@ -84,26 +84,40 @@ class ErrorBannerAnnouncementTest {
         assertTrue("No error banner node should exist when message is null", initialTextNodes.isEmpty())
 
         // 2. When message appears, the accessibility tree exposes the message and marks it polite
-        scenario.onActivity { state.value = message }
-        instrumentation.waitForIdleSync()
-        Thread.sleep(1_000L) // allow AnimatedVisibility enter animation to settle
+        // Polled, not read once after a fixed sleep. The accessibility tree reaches
+        // UiAutomation asynchronously - after the enter animation, and after the
+        // platform's own accessibility event throttling - so a single read a second
+        // later saw a stale tree whenever the device was busy, and failed on a node
+        // that was there moments afterwards.
+        fun awaitTree(timeoutMs: Long = 10_000L, condition: (AccessibilityNodeInfo?) -> Boolean): Boolean {
+            val deadline = System.currentTimeMillis() + timeoutMs
+            while (System.currentTimeMillis() < deadline) {
+                instrumentation.waitForIdleSync()
+                if (condition(getAppRoot())) return true
+                Thread.sleep(200L)
+            }
+            return false
+        }
 
+        scenario.onActivity { state.value = message }
+
+        assertTrue(
+            "Accessibility node with banner message must exist",
+            awaitTree { root -> findNodes(root) { it.text?.contains(message) == true }.isNotEmpty() }
+        )
         val activeRoot = getAppRoot()
         assertNotNull("Root accessibility node should not be null", activeRoot)
-
-        val textNodes = findNodes(activeRoot) { it.text?.contains(message) == true }
-        assertTrue("Accessibility node with banner message must exist", textNodes.isNotEmpty())
 
         val liveNodes = findNodes(activeRoot) { it.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE }
         assertTrue("Accessibility node with polite live region must exist", liveNodes.isNotEmpty())
 
         // 3. When message is dismissed, the error node exits
         scenario.onActivity { state.value = null }
-        instrumentation.waitForIdleSync()
-        Thread.sleep(1_000L) // allow exit animation to settle
 
-        val finalRoot = getAppRoot()
-        val finalTextNodes = findNodes(finalRoot) { it.text?.contains(message) == true }
-        assertTrue("Error banner node should be removed after dismissal", finalTextNodes.isEmpty())
+        assertTrue(
+            "Error banner node should be removed after dismissal",
+            // A real tree that lacks the node - an unreadable one proves nothing.
+            awaitTree { root -> root != null && findNodes(root) { it.text?.contains(message) == true }.isEmpty() }
+        )
     }
 }

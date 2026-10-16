@@ -4,6 +4,7 @@ import {
   detailFrom,
   parseResponse,
   parseWordDetails,
+  redactSensitiveKey,
   translateAndExtract,
   WORD_SYSTEM_PROMPT,
 } from "@/lib/ai/groq";
@@ -24,6 +25,14 @@ describe("contentOf — the OpenAI chat response shape", () => {
 describe("detailFrom — the provider's own error sentence", () => {
   it("extracts error.message from the body", () => {
     expect(detailFrom('{"error":{"message":"invalid api key"}}')).toBe("invalid api key");
+  });
+
+  it("redacts sensitive Groq keys and Bearer tokens in error messages", () => {
+    const errorJson = JSON.stringify({
+      error: { message: "Invalid API key: gsk_abcdef1234567890abcdef1234567890 provided" },
+    });
+    expect(detailFrom(errorJson)).toBe("Invalid API key: gsk_*** provided");
+    expect(redactSensitiveKey("Error with Bearer secret_token_xyz")).toBe("Error with Bearer ***");
   });
 
   it("returns null when there is none", () => {

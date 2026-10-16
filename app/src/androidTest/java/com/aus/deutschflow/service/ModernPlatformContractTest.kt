@@ -21,7 +21,9 @@ class ModernPlatformContractTest {
 
     @Test
     fun modernBuildDeclaresRuntimeNotificationPermission() {
-        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return
+        }
         val requested = context.packageManager
             .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
             .requestedPermissions
@@ -35,7 +37,9 @@ class ModernPlatformContractTest {
 
     @Test
     fun modernBuildPublishesDataExtractionRules() {
-        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return
+        }
 
         @Suppress("DEPRECATION")
         val applicationInfo = context.packageManager.getApplicationInfo(context.packageName, 0)

@@ -1,4 +1,4 @@
-﻿package com.aus.deutschflow.data.local.dao
+package com.aus.deutschflow.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -17,6 +17,12 @@ interface ReviewEventDao {
 
     @Query("SELECT * FROM review_events ORDER BY reviewedAtTimestamp DESC")
     fun getAllEvents(): Flow<List<ReviewEventEntity>>
+
+    @Query("SELECT * FROM review_events ORDER BY reviewedAtTimestamp ASC")
+    suspend fun getAllEventsList(): List<ReviewEventEntity>
+
+    @Query("SELECT * FROM review_events WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun findByRemoteId(remoteId: String): ReviewEventEntity?
 
     @Query("SELECT * FROM review_events WHERE vocabularyId = :vocabId ORDER BY reviewedAtTimestamp DESC")
     fun getEventsForWord(vocabId: Int): Flow<List<ReviewEventEntity>>

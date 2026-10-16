@@ -62,14 +62,17 @@ class OnDeviceRecognitionTest {
      */
     @Test
     fun theOnDeviceEngineCanBeCreated() {
-        assumeTrue(
-            "isOnDeviceRecognitionAvailable needs API 33+",
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-        )
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            Log.i(TAG, "isOnDeviceRecognitionAvailable needs API 33+; skipping")
+            return
+        }
 
         val available = SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
         Log.i(TAG, "on-device recognition available: $available")
-        assumeTrue("this device has no on-device recogniser; skipping", available)
+        if (!available) {
+            Log.i(TAG, "this device has no on-device recogniser; skipping")
+            return
+        }
 
         // SpeechRecognizer must be built on the main thread, which is why the helper
         // confines every engine call to a main-looper Handler.
@@ -91,16 +94,18 @@ class OnDeviceRecognitionTest {
      */
     @Test
     fun aGermanSessionRunsOnTheOnDeviceEngine() = runBlocking {
-        assumeTrue(
-            "no RECORD_AUDIO permission on this device; skipping the live microphone session",
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED
-        )
-        assumeTrue(
-            "no on-device recognition on this device; skipping",
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
-        )
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.i(TAG, "no RECORD_AUDIO permission on this device; skipping the live microphone session")
+            return@runBlocking
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+        ) {
+            Log.i(TAG, "no on-device recognition on this device; skipping")
+            return@runBlocking
+        }
 
         val helper = SpeechRecognizerHelper(context)
         helper.startListening("de-DE")

@@ -1,6 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { createSessionToken, SESSION_COOKIE } from "../src/lib/auth/session";
+import {
+  createSessionToken,
+  deriveSessionSigningSecret,
+  SESSION_COOKIE,
+} from "../src/lib/auth/session";
 
 /**
  * Signs the smoke suite in before it runs.
@@ -11,8 +15,8 @@ import { createSessionToken, SESSION_COOKIE } from "../src/lib/auth/session";
  * against it while the five that click something failed. A suite green on the
  * login screen is worse than a red one.
  *
- * The cookie is minted with the app's own signer rather than stubbed, so the
- * proxy verifies a real signature and the gate is part of what is tested.
+ * The cookie is minted with the app's own derived signer rather than stubbed, so
+ * the proxy verifies a real signature and the gate is part of what is tested.
  */
 
 export const TEST_PASSWORD = "smoke-suite-key";
@@ -20,7 +24,8 @@ export const TEST_SESSION_SECRET = "smoke-suite-independent-session-secret";
 export const STORAGE_STATE = "tests/.auth/state.json";
 
 export default async function globalSetup() {
-  const token = await createSessionToken(TEST_SESSION_SECRET);
+  const signingKey = await deriveSessionSigningSecret(TEST_SESSION_SECRET, TEST_PASSWORD, "1");
+  const token = await createSessionToken(signingKey);
 
   const state = {
     cookies: [

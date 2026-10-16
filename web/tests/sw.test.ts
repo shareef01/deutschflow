@@ -51,4 +51,66 @@ describe("Service Worker Cache Ownership", () => {
     expect(surviving).toContain("unrelated-app-cache");
     expect(surviving).toContain("google-fonts-cache");
   });
+
+  it("attaches runtime cache writes to event.waitUntil to avoid detached drops", () => {
+    // Verified that void caches.open is no longer used for runtime writes
+    expect(swContent).not.toContain("void caches.open");
+    expect(swContent).toContain("event.waitUntil(");
+  });
+
+  it("safely ignores quota errors during cache write", () => {
+    expect(swContent).toContain("Service worker navigation cache write failed");
+  });
+
+  it("invalidates cached navigation routes on redirect to /login", () => {
+    expect(swContent).toContain('response.redirected && new URL(response.url).pathname === "/login"');
+    expect(swContent).toContain("cache.delete(route)");
+  });
+
+  it("implements explicit purgeAppShellCache helper across all DeutschFlow caches with error propagation", () => {
+    expect(swContent).toContain("async function purgeAppShellCache()");
+    expect(swContent).toContain("key.startsWith(CACHE_PREFIX)");
+    expect(swContent).toContain("await cache.delete(route)");
+    expect(swContent).toContain("throw new Error(errorName);");
+  });
+
+  it("supports PURGE_PROTECTED_CACHE message with accurate success/failure MessageChannel acknowledgement", () => {
+    expect(swContent).toContain('self.addEventListener("message"');
+    expect(swContent).toContain('event.data.type === "PURGE_PROTECTED_CACHE"');
+    expect(swContent).toContain('type: "CACHE_PURGED",');
+    expect(swContent).toContain("success: true,");
+    expect(swContent).toContain("success: false,");
+  });
+
+  it("does NOT intercept /api/logout in fetch listener, ensuring server-side session termination executes cleanly", () => {
+    expect(swContent).not.toContain('url.pathname === "/api/logout"');
+    expect(swContent).toContain('if (url.pathname.startsWith("/api/"))');
+  });
+
+  it("does NOT purge cache or terminate sessions simply when navigating directly to /login", () => {
+    expect(swContent).toContain("Visiting /login directly must NOT terminate sessions in other tabs or purge cache.");
+    expect(swContent).toContain('Offline - Login unavailable');
+  });
+
+  it("identifies protected app routes with query-string variations and enumerates cache requests", () => {
+    expect(swContent).toContain("function isProtectedAppRoute(pathname)");
+    expect(swContent).toContain("const requests = await cache.keys();");
+    expect(swContent).toContain("if (isProtectedAppRoute(reqUrl.pathname))");
+    expect(swContent).toContain("await cache.delete(req);");
+  });
+
+  it("purges cache when server redirects protected navigation to /login due to expired session", () => {
+    expect(swContent).toContain('(response.redirected && new URL(response.url).pathname === "/login")');
+    expect(swContent).toContain("event.waitUntil(purgeAppShellCache()");
+  });
+
+  it("prevents delayed cache writes after logout by comparing requestEpoch against currentSessionEpoch", () => {
+    expect(swContent).toContain("currentSessionEpoch !== requestEpoch");
+    expect(swContent).toContain("isSessionTerminated");
+  });
+
+  it("enforces fail-safe offline protection by rejecting protected cached navigation when logged out", () => {
+    expect(swContent).toContain("isPersistentSessionLoggedOut");
+    expect(swContent).toContain('return new Response("Offline - Content unavailable", {');
+  });
 });

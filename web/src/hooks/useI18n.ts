@@ -26,7 +26,14 @@ export function useI18n() {
 
   const applyLang = useCallback((next: Lang) => {
     setCurrentLang(next);
-    if (typeof document !== "undefined") document.documentElement.lang = next;
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = next;
+      try {
+        localStorage.setItem("deutschflow_lang", next);
+      } catch {
+        // localStorage may be unavailable or blocked in private browsing
+      }
+    }
   }, []);
 
   // Load the persisted choice (or detect from the browser) once.

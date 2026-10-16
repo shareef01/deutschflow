@@ -35,13 +35,15 @@ export default defineConfig({
     { name: "chromium", use: { browserName: "chromium" } },
     {
       name: "firefox-smoke",
-      testMatch: /(?:compatibility|speech-fallback)\.spec\.ts/,
+      testMatch: /(?:compatibility|speech-fallback|logout-flow)\.spec\.ts/,
       use: { browserName: "firefox" },
+      dependencies: ["chromium"],
     },
     {
       name: "webkit-smoke",
-      testMatch: /(?:compatibility|speech-fallback)\.spec\.ts/,
+      testMatch: /(?:compatibility|speech-fallback|logout-flow)\.spec\.ts/,
       use: { browserName: "webkit" },
+      dependencies: ["chromium"],
     },
   ],
 });

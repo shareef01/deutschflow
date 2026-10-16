@@ -16,6 +16,9 @@ interface ActivityDao {
     @Query("SELECT * FROM activity_log WHERE date >= :since ORDER BY date DESC")
     fun getActivitySince(since: String): Flow<List<ActivityEntity>>
 
+    @Query("SELECT * FROM activity_log ORDER BY date ASC")
+    suspend fun getAllActivity(): List<ActivityEntity>
+
     @Query("SELECT * FROM activity_log WHERE date = :date LIMIT 1")
     suspend fun getActivityForDate(date: String): ActivityEntity?
 
