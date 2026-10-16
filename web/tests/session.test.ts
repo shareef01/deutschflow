@@ -1,22 +1,65 @@
 import { describe, expect, it } from "vitest";
 import {
   createSessionToken,
+  deriveSessionSigningSecret,
   passwordMatches,
   safeRedirectTarget,
+  SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   verifySessionToken,
 } from "@/lib/auth/session";
+import { GET as logoutGet, POST as logoutPost } from "@/app/api/logout/route";
 
 /**
- * The gate's whole job is deciding what this cookie admits, so the tamper
- * cases are tested directly: the smoke suite covers the literal "granted"
- * forgery over HTTP; these cover what the verifier itself refuses.
+ * Security & session revocation test suite.
+ *
+ * Covers:
+ * - Valid authentication
+ * - Invalid password
+ * - Modified cookie
+ * - Expired session
+ * - Missing session
+ * - Revoked session
+ * - Password rotation
+ * - Session signing-key rotation
+ * - Global epoch revocation
+ * - Logout cookie clearance
+ * - Multiple concurrent browser sessions
+ * - Protected route redirection safety
  */
 
-const SECRET = "test-site-password";
+const SECRET = "test-session-secret-high-entropy";
+const PASSWORD = "correct-horse-battery-staple";
 const NOW = 1_700_000_000_000;
 
-describe("verifySessionToken", () => {
+describe("deriveSessionSigningSecret — cryptographic revocation key derivation", () => {
+  it("produces deterministic keys for matching inputs", async () => {
+    const key1 = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    const key2 = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    expect(key1).toBe(key2);
+    expect(key1.length).toBeGreaterThan(20);
+  });
+
+  it("changes key when password is rotated", async () => {
+    const keyOriginal = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    const keyNewPassword = await deriveSessionSigningSecret(SECRET, "new-rotated-password", "1");
+    expect(keyNewPassword).not.toBe(keyOriginal);
+  });
+
+  it("changes key when session secret is rotated", async () => {
+    const keyOriginal = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    const keyNewSecret = await deriveSessionSigningSecret("new-rotated-secret", PASSWORD, "1");
+    expect(keyNewSecret).not.toBe(keyOriginal);
+  });
+
+  it("changes key when session epoch is incremented (global revocation)", async () => {
+    const keyEpoch1 = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    const keyEpoch2 = await deriveSessionSigningSecret(SECRET, PASSWORD, "2");
+    expect(keyEpoch2).not.toBe(keyEpoch1);
+  });
+});
+
+describe("verifySessionToken — validation, expiration, and tampering", () => {
   it("admits a token it signed", async () => {
     const token = await createSessionToken(SECRET, NOW);
     expect(await verifySessionToken(token, SECRET, NOW)).toBe(true);
@@ -24,8 +67,6 @@ describe("verifySessionToken", () => {
 
   it("admits it until the expiry and not a millisecond past", async () => {
     const token = await createSessionToken(SECRET, NOW);
-    // The check is `expiresAt <= now`, so the last valid millisecond is the one
-    // before the expiry lands on.
     expect(
       await verifySessionToken(token, SECRET, NOW + SESSION_MAX_AGE_SECONDS * 1000 - 1)
     ).toBe(true);
@@ -51,6 +92,15 @@ describe("verifySessionToken", () => {
     expect(await verifySessionToken(forged, SECRET, NOW)).toBe(false);
   });
 
+  it("refuses a modified cookie with tampered signature bytes", async () => {
+    const token = await createSessionToken(SECRET, NOW);
+    const separator = token.lastIndexOf(".");
+    const sig = token.slice(separator + 1);
+    const tamperedSig = sig.startsWith("a") ? "b" + sig.slice(1) : "a" + sig.slice(1);
+    const tamperedToken = `${token.slice(0, separator)}.${tamperedSig}`;
+    expect(await verifySessionToken(tamperedToken, SECRET, NOW)).toBe(false);
+  });
+
   it("refuses a non-numeric payload", async () => {
     expect(await verifySessionToken("abc.def", SECRET, NOW)).toBe(false);
   });
@@ -59,11 +109,100 @@ describe("verifySessionToken", () => {
     expect(await verifySessionToken("granted", SECRET, NOW)).toBe(false);
   });
 
-  it("refuses anything without a payload.signature shape", async () => {
+  it("refuses missing or malformed tokens", async () => {
     expect(await verifySessionToken(undefined, SECRET, NOW)).toBe(false);
     expect(await verifySessionToken("", SECRET, NOW)).toBe(false);
     expect(await verifySessionToken("nodot", SECRET, NOW)).toBe(false);
     expect(await verifySessionToken(".signature", SECRET, NOW)).toBe(false);
+  });
+});
+
+describe("Session Revocation Scenarios", () => {
+  it("revokes existing sessions immediately upon password rotation", async () => {
+    const activeKeyOldPass = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    const token = await createSessionToken(activeKeyOldPass, NOW);
+
+    // Active session verifies under current password
+    expect(await verifySessionToken(token, activeKeyOldPass, NOW)).toBe(true);
+
+    // Password rotated
+    const activeKeyNewPass = await deriveSessionSigningSecret(SECRET, "brand-new-site-password", "1");
+
+    // Old session token is rejected
+    expect(await verifySessionToken(token, activeKeyNewPass, NOW)).toBe(false);
+  });
+
+  it("revokes existing sessions immediately upon session secret rotation", async () => {
+    const activeKeyOldSecret = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    const token = await createSessionToken(activeKeyOldSecret, NOW);
+
+    expect(await verifySessionToken(token, activeKeyOldSecret, NOW)).toBe(true);
+
+    // Secret rotated
+    const activeKeyNewSecret = await deriveSessionSigningSecret("brand-new-session-secret", PASSWORD, "1");
+    expect(await verifySessionToken(token, activeKeyNewSecret, NOW)).toBe(false);
+  });
+
+  it("revokes all existing sessions globally upon session epoch increment", async () => {
+    const keyEpoch1 = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+    const sessionTokenUser1 = await createSessionToken(keyEpoch1, NOW);
+    const sessionTokenUser2 = await createSessionToken(keyEpoch1, NOW + 5000);
+
+    // Both sessions active
+    expect(await verifySessionToken(sessionTokenUser1, keyEpoch1, NOW)).toBe(true);
+    expect(await verifySessionToken(sessionTokenUser2, keyEpoch1, NOW)).toBe(true);
+
+    // Admin bumps SESSION_EPOCH to 2
+    const keyEpoch2 = await deriveSessionSigningSecret(SECRET, PASSWORD, "2");
+
+    // All prior sessions are revoked globally
+    expect(await verifySessionToken(sessionTokenUser1, keyEpoch2, NOW)).toBe(false);
+    expect(await verifySessionToken(sessionTokenUser2, keyEpoch2, NOW)).toBe(false);
+  });
+
+  it("supports multiple concurrent browser sessions under the same valid epoch", async () => {
+    const signingKey = await deriveSessionSigningSecret(SECRET, PASSWORD, "1");
+
+    const sessionDesktop = await createSessionToken(signingKey, NOW);
+    const sessionMobile = await createSessionToken(signingKey, NOW + 10_000);
+    const sessionTablet = await createSessionToken(signingKey, NOW + 20_000);
+
+    expect(await verifySessionToken(sessionDesktop, signingKey, NOW)).toBe(true);
+    expect(await verifySessionToken(sessionMobile, signingKey, NOW)).toBe(true);
+    expect(await verifySessionToken(sessionTablet, signingKey, NOW)).toBe(true);
+
+    // Epoch bump invalidates all three concurrently
+    const revokedKey = await deriveSessionSigningSecret(SECRET, PASSWORD, "2");
+    expect(await verifySessionToken(sessionDesktop, revokedKey, NOW)).toBe(false);
+    expect(await verifySessionToken(sessionMobile, revokedKey, NOW)).toBe(false);
+    expect(await verifySessionToken(sessionTablet, revokedKey, NOW)).toBe(false);
+  });
+});
+
+describe("Logout Route Handler — explicit cookie clearance", () => {
+  it("POST /api/logout clears session cookie with maxAge 0", async () => {
+    const request = new Request("https://deutschflow.app/api/logout", { method: "POST" });
+    const response = await logoutPost(request);
+
+    expect(response.status).toBe(200);
+    const cookie = response.cookies.get(SESSION_COOKIE);
+    expect(cookie).toBeDefined();
+    expect(cookie?.value).toBe("");
+    expect(cookie?.maxAge).toBe(0);
+    expect(cookie?.httpOnly).toBe(true);
+    expect(cookie?.sameSite).toBe("lax");
+  });
+
+  it("GET /api/logout redirects to /login and clears session cookie", async () => {
+    const request = new Request("https://deutschflow.app/api/logout", { method: "GET" });
+    const response = await logoutGet(request);
+
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+    const cookie = response.cookies.get(SESSION_COOKIE);
+    expect(cookie).toBeDefined();
+    expect(cookie?.value).toBe("");
+    expect(cookie?.maxAge).toBe(0);
   });
 });
 

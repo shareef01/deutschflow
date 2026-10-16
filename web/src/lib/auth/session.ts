@@ -37,6 +37,56 @@ export function sessionSecret(): string | null {
   return raw.replace(/^["']|["']$/g, "");
 }
 
+/**
+ * Global session epoch/version. Incrementing SESSION_EPOCH immediately
+ * invalidates every active session cookie across all clients without needing to
+ * change the site password or session secret.
+ */
+export function sessionEpoch(): string {
+  const raw = process.env.SESSION_EPOCH?.trim();
+  if (!raw) return "1";
+  return raw.replace(/^["']|["']$/g, "");
+}
+
+/**
+ * Derives the active session signing key using HMAC-SHA256 over:
+ * - SESSION_SECRET (master session signing seed)
+ * - SITE_PASSWORD (access password)
+ * - SESSION_EPOCH (explicit revocation version)
+ *
+ * This guarantees:
+ * 1. Rotating SITE_PASSWORD immediately revokes all prior sessions.
+ * 2. Rotating SESSION_SECRET immediately revokes all prior sessions.
+ * 3. Bumping SESSION_EPOCH immediately revokes all prior sessions.
+ */
+export async function deriveSessionSigningSecret(
+  secret: string,
+  password: string,
+  epoch: string = sessionEpoch()
+): Promise<string> {
+  const material = `${secret}:${password}:${epoch}`;
+  const hmacKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", hmacKey, encoder.encode(material));
+  return toBase64Url(signature);
+}
+
+/**
+ * Returns the derived active signing secret combining SESSION_SECRET, SITE_PASSWORD,
+ * and SESSION_EPOCH, or null if unconfigured.
+ */
+export async function getActiveSigningSecret(): Promise<string | null> {
+  const password = sitePassword();
+  const secret = sessionSecret();
+  if (!password || !secret) return null;
+  return deriveSessionSigningSecret(secret, password, sessionEpoch());
+}
+
 async function key(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "raw",

@@ -3,9 +3,9 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   createSessionToken,
+  getActiveSigningSecret,
   passwordMatches,
   safeRedirectTarget,
-  sessionSecret,
   sitePassword,
 } from "@/lib/auth/session";
 import { delayForNextAttempt, recordFailure, recordSuccess } from "@/lib/auth/throttle";
@@ -20,7 +20,7 @@ function callerKey(request: NextRequest): string {
 
 export async function POST(request: NextRequest) {
   const masterPassword = sitePassword();
-  const signingSecret = sessionSecret();
+  const signingSecret = await getActiveSigningSecret();
   if (!masterPassword || !signingSecret) {
     return NextResponse.json(
       { error: "This instance is not fully configured. Set SITE_PASSWORD and SESSION_SECRET, then redeploy." },
