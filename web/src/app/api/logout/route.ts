@@ -13,10 +13,20 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
  * Server-side revocation of all outstanding session tokens across all devices
  * requires incrementing SESSION_EPOCH or rotating SESSION_SECRET / SITE_PASSWORD.
  */
-function clearSessionCookie(response: NextResponse): NextResponse {
+function isHttpsRequest(request?: Request): boolean {
+  if (!request) return false;
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  if (forwardedProto) {
+    return forwardedProto.split(",")[0].trim().toLowerCase() === "https";
+  }
+  return request.url.startsWith("https://");
+}
+
+function clearSessionCookie(response: NextResponse, request?: Request): NextResponse {
+  const isSecure = process.env.NODE_ENV === "production" && isHttpsRequest(request);
   response.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     sameSite: "lax",
     maxAge: 0,
     expires: new Date(0),
@@ -29,11 +39,11 @@ function clearSessionCookie(response: NextResponse): NextResponse {
 export async function POST(request: Request) {
   const url = new URL("/login", request.url);
   const response = NextResponse.json({ success: true, redirect: url.pathname });
-  return clearSessionCookie(response);
+  return clearSessionCookie(response, request);
 }
 
 export async function GET(request: Request) {
   const url = new URL("/login", request.url);
   const response = NextResponse.redirect(url);
-  return clearSessionCookie(response);
+  return clearSessionCookie(response, request);
 }

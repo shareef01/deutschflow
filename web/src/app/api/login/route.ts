@@ -55,11 +55,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const isHttps = forwardedProto
+    ? forwardedProto.split(",")[0].trim().toLowerCase() === "https"
+    : request.url.startsWith("https://");
+  const isSecure = process.env.NODE_ENV === "production" && isHttps;
+
   recordSuccess(caller);
   const response = NextResponse.json({ redirect: target });
   response.cookies.set(SESSION_COOKIE, await createSessionToken(signingSecret), {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     sameSite: "lax",
     maxAge: SESSION_MAX_AGE_SECONDS,
     path: "/",
