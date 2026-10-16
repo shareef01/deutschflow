@@ -74,30 +74,71 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/** Explicitly remove cached private app shell routes upon logout */
+async function purgeAppShellCache() {
+  try {
+    const keys = await caches.keys();
+    for (const key of keys) {
+      if (key.startsWith(CACHE_PREFIX)) {
+        const cache = await caches.open(key);
+        for (const route of APP_SHELL_ROUTES) {
+          await cache.delete(route);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to purge app shell cache:", err);
+  }
+}
+
+self.addEventListener("message", (event) => {
+  if (event.data && (event.data.type === "LOGOUT" || event.data.type === "PURGE_APP_CACHE")) {
+    event.waitUntil(purgeAppShellCache());
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return;
-
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Intercept logout API calls (POST or GET /api/logout) to immediately purge app cache
+  if (url.pathname === "/api/logout") {
+    event.waitUntil(purgeAppShellCache());
+    return;
+  }
+
+  if (request.method !== "GET") return;
 
   // Navigations: network-first, fall back to the cached shell — a cached
   // page of a tab the user has visited, or the Transcript page as the
   // guaranteed entry point.
   if (request.mode === "navigate") {
+    // If navigating directly to /login (e.g. post-logout redirect), purge cached private shell
+    if (url.pathname === "/login") {
+      event.waitUntil(purgeAppShellCache());
+      // Do not cache /login; allow network request through or return 503 if offline
+      event.respondWith(
+        fetch(request).catch(() => {
+          return new Response("Offline - Login unavailable", {
+            status: 503,
+            headers: { "Content-Type": "text/plain" },
+          });
+        })
+      );
+      return;
+    }
+
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // If session expired or logged out, network redirects to /login.
+          // If session expired or logged out, network redirects to /login or returns /login.
           // Invalidate cached private app routes to protect shared devices.
-          if (response.redirected && new URL(response.url).pathname === "/login") {
-            event.waitUntil(
-              caches.open(CACHE_NAME).then(async (cache) => {
-                for (const route of APP_SHELL_ROUTES) {
-                  await cache.delete(route);
-                }
-              }).catch(() => {})
-            );
+          if (
+            (response.redirected && new URL(response.url).pathname === "/login") ||
+            new URL(response.url).pathname === "/login"
+          ) {
+            event.waitUntil(purgeAppShellCache());
             return response;
           }
 
@@ -118,9 +159,19 @@ self.addEventListener("fetch", (event) => {
 
           return response;
         })
-        .catch(() =>
-          caches.match(request).then((cached) => cached ?? caches.match("/transcript"))
-        )
+        .catch(async () => {
+          // If offline: check if request is cached.
+          // Note: If logged out, purgeAppShellCache already removed APP_SHELL_ROUTES,
+          // so caches.match returns undefined and never leaks private pages.
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          const fallback = await caches.match("/transcript");
+          if (fallback) return fallback;
+          return new Response("Offline - Content unavailable", {
+            status: 503,
+            headers: { "Content-Type": "text/plain" },
+          });
+        })
     );
     return;
   }

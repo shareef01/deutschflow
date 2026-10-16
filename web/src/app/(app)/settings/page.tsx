@@ -51,11 +51,57 @@ export default function SettingsPage() {
 
   const onLogout = async () => {
     setIsLoggingOut(true);
+
+    // 1. Explicitly purge private app routes from Cache API across all DeutschFlow caches
+    try {
+      if (typeof window !== "undefined" && "caches" in window) {
+        const cacheKeys = await window.caches.keys();
+        for (const key of cacheKeys) {
+          if (key.startsWith("deutschflow-")) {
+            const cache = await window.caches.open(key);
+            const routes = [
+              "/",
+              "/transcript",
+              "/history",
+              "/vocabulary",
+              "/study",
+              "/practice",
+              "/settings",
+            ];
+            for (const route of routes) {
+              await cache.delete(route);
+            }
+          }
+        }
+      }
+    } catch {
+      // Best-effort Cache API purge
+    }
+
+    // 2. Notify service worker to purge internal caches
+    try {
+      if (typeof navigator !== "undefined" && navigator.serviceWorker?.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "LOGOUT" });
+      }
+    } catch {
+      // Best-effort SW message
+    }
+
+    // 3. Clear auth cookie from client context
+    try {
+      document.cookie = "df_access=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+    } catch {
+      // Best-effort cookie expiration
+    }
+
+    // 4. Request server session termination (gracefully handling network failure / offline mode)
     try {
       await fetch("/api/logout", { method: "POST" });
     } catch {
-      // Proceed with redirection even if network fails
+      // Proceed with redirection even if network fails or server is unreachable
     }
+
+    // 5. Navigate to login
     window.location.href = "/login";
   };
 

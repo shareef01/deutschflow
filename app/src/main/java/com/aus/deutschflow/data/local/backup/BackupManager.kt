@@ -341,7 +341,15 @@ class BackupManager @Inject constructor(
             for (i in 0 until reviewArray.length()) {
                 val row = reviewArray.getJSONObject(i)
                 val originalVocabId = row.getInt("vocabularyId")
-                val targetVocabId = backupIdToPersistedId[originalVocabId] ?: originalVocabId
+                val targetVocabId = backupIdToPersistedId[originalVocabId]
+                // Prevent orphan review events or incorrect cross-assignment to an unrelated target row:
+                // Only link review events whose original vocabulary ID mapped cleanly to an imported/merged target row.
+                if (targetVocabId == null || targetVocabId <= 0) {
+                    continue
+                }
+                if (vocabularyDao.findById(targetVocabId) == null) {
+                    continue
+                }
 
                 val remoteId = row.optString("remoteId").ifBlank { UUID.randomUUID().toString() }
                 val existing = reviewEventDao.findByRemoteId(remoteId)
@@ -507,6 +515,10 @@ class BackupManager @Inject constructor(
                 val reviewArray = backup.optJSONArray("reviewEvents") ?: throw BackupException.InvalidFormat("reviewEvents must be an array.")
                 for (i in 0 until reviewArray.length()) {
                     val row = reviewArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Review event must be an object.")
+                    val vocabId = row.optInt("vocabularyId", -1)
+                    if (vocabId <= 0 || !vocabIds.contains(vocabId)) {
+                        throw BackupException.InvalidFormat("Review event references non-existent or invalid vocabulary ID: $vocabId.")
+                    }
                     val rating = row.optString("rating", "")
                     if (rating !in listOf("AGAIN", "HARD", "GOOD", "EASY")) {
                         throw BackupException.InvalidFormat("Invalid review event rating.")

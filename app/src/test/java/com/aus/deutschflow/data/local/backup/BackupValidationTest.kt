@@ -171,4 +171,64 @@ class BackupValidationTest {
         val brokenStreak = BackupManager.calculateStreakFromDates(dates, today = LocalDate.parse("2026-10-18"))
         assertEquals(0, brokenStreak)
     }
+
+    @Test
+    fun `rejects review event referencing unmapped or non-existent vocabulary ID`() {
+        val vocab = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", 10)
+                put("germanText", "Wasser")
+                put("englishTranslation", "water")
+                put("interval", 0)
+                put("easeFactor", 2.5)
+                put("reviewCount", 0)
+                put("nextReview", 0L)
+            })
+        }
+        val reviews = JSONArray().apply {
+            put(JSONObject().apply {
+                put("vocabularyId", 99) // ID 99 does not exist in vocabulary array
+                put("rating", "GOOD")
+                put("scheduledDays", 1)
+                put("actualDays", 1)
+                put("reviewedAtTimestamp", System.currentTimeMillis())
+                put("remoteId", java.util.UUID.randomUUID().toString())
+            })
+        }
+        val backup = createValidBackupJson(vocabulary = vocab).apply {
+            put("reviewEvents", reviews)
+        }
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupManager.validateBackupJson(backup)
+        }
+    }
+
+    @Test
+    fun `accepts review event referencing existing vocabulary ID`() {
+        val vocab = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", 10)
+                put("germanText", "Wasser")
+                put("englishTranslation", "water")
+                put("interval", 0)
+                put("easeFactor", 2.5)
+                put("reviewCount", 0)
+                put("nextReview", 0L)
+            })
+        }
+        val reviews = JSONArray().apply {
+            put(JSONObject().apply {
+                put("vocabularyId", 10) // Matches vocabulary ID 10
+                put("rating", "GOOD")
+                put("scheduledDays", 1)
+                put("actualDays", 1)
+                put("reviewedAtTimestamp", System.currentTimeMillis())
+                put("remoteId", java.util.UUID.randomUUID().toString())
+            })
+        }
+        val backup = createValidBackupJson(vocabulary = vocab).apply {
+            put("reviewEvents", reviews)
+        }
+        BackupManager.validateBackupJson(backup)
+    }
 }

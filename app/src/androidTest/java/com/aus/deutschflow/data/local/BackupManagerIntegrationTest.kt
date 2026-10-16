@@ -404,4 +404,131 @@ class BackupManagerIntegrationTest {
         assertEquals(1, vocab.size)
         assertEquals("Schule", vocab[0].germanText)
     }
+
+    @Test
+    fun importReviewEvents_withConflictingTargetDatabaseIds_mapsCleanlyAndPreventsCrossAssignment() = runBlocking {
+        // Pre-populate target database with a word that receives target ID 1 ("Apfel")
+        targetDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(
+                germanText = "Apfel",
+                germanTextKey = germanKey("Apfel"),
+                englishTranslation = "apple",
+                timestamp = System.currentTimeMillis() - 50000
+            )
+        )
+        val apple = targetDb.vocabularyDao().findByGermanText("Apfel")
+        assertNotNull(apple)
+        val appleId = apple!!.id
+
+        // Construct a backup where:
+        // Backup vocabulary has "Banane" with backup ID = 1 (conflicts with target ID 1!)
+        // Backup reviewEvents has a review event for backup ID = 1 ("Banane").
+        // In the target database, "Banane" will be assigned target ID 2 (since ID 1 is occupied by "Apfel").
+        // The review event MUST be assigned to target ID 2 ("Banane"), NEVER to target ID 1 ("Apfel")!
+        val reviewRemoteId = UUID.randomUUID().toString()
+        val backupJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", 1) // Backup ID 1
+                    put("germanText", "Banane")
+                    put("englishTranslation", "banana")
+                    put("interval", 2)
+                    put("easeFactor", 2.5f)
+                    put("reviewCount", 1)
+                    put("nextReview", System.currentTimeMillis() + 86400000L)
+                })
+            })
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+            put("reviewEvents", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("vocabularyId", 1) // Belongs to "Banane", backup ID 1
+                    put("rating", "GOOD")
+                    put("scheduledDays", 2)
+                    put("actualDays", 2)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", reviewRemoteId)
+                })
+            })
+        }
+
+        val result = targetBackupManager.importBackup(backupJson.toString(), null)
+        assertEquals(1, result.vocabularyAdded)
+        assertEquals(1, result.reviewEventsAdded)
+
+        // Verify target database:
+        // Apfel has ID 1, Banane has ID 2
+        val persistedApple = targetDb.vocabularyDao().findById(appleId)
+        assertNotNull(persistedApple)
+        assertEquals("Apfel", persistedApple?.germanText)
+
+        val banana = targetDb.vocabularyDao().findByGermanText("Banane")
+        assertNotNull(banana)
+        assertNotEquals(appleId, banana!!.id)
+
+        // The imported review event MUST link to Banane's ID, NOT Apfel's ID!
+        val importedReview = targetDb.reviewEventDao().findByRemoteId(reviewRemoteId)
+        assertNotNull(importedReview)
+        assertEquals(banana.id, importedReview!!.vocabularyId)
+        assertNotEquals(appleId, importedReview.vocabularyId)
+    }
+
+    @Test
+    fun importReviewEvents_withUnmappedReviewEvent_isSafelySkippedAndNeverOrphaned() = runBlocking {
+        // Pre-populate target database with a word that receives target ID 1 ("Apfel")
+        targetDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(
+                germanText = "Apfel",
+                germanTextKey = germanKey("Apfel"),
+                englishTranslation = "apple",
+                timestamp = System.currentTimeMillis() - 50000
+            )
+        )
+        val apple = targetDb.vocabularyDao().findByGermanText("Apfel")
+        assertNotNull(apple)
+        val appleId = apple!!.id
+
+        val reviewRemoteId = UUID.randomUUID().toString()
+        val backupJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", 2)
+                    put("germanText", "Kirsche")
+                    put("englishTranslation", "cherry")
+                    put("interval", 1)
+                    put("easeFactor", 2.5f)
+                    put("reviewCount", 1)
+                    put("nextReview", System.currentTimeMillis() + 86400000L)
+                })
+            })
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+            put("reviewEvents", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("vocabularyId", 2)
+                    put("rating", "GOOD")
+                    put("scheduledDays", 2)
+                    put("actualDays", 2)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", reviewRemoteId)
+                })
+            })
+        }
+
+        val result = targetBackupManager.importBackup(backupJson.toString(), null)
+        assertEquals(1, result.vocabularyAdded)
+        assertEquals(1, result.reviewEventsAdded)
+
+        // Ensure Apfel has no reviews attached to it!
+        val allReviews = targetDb.reviewEventDao().getAllEventsList()
+        for (rev in allReviews) {
+            assertNotEquals("Review event must never be cross-assigned to pre-existing Apfel", appleId, rev.vocabularyId)
+        }
+    }
 }

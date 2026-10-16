@@ -32,6 +32,12 @@ object BackupCrypto {
     const val IV_LENGTH_BYTES = 12
     const val TAG_LENGTH_BITS = 128
 
+    const val MIN_ITERATIONS = 50_000
+    const val MAX_ITERATIONS = 500_000
+    const val MIN_SALT_BYTES = 16
+    const val MAX_SALT_BYTES = 64
+    const val MAX_CIPHERTEXT_BYTES = 10 * 1024 * 1024 // 10 MB
+
     private val secureRandom = SecureRandom()
 
     fun isEncryptedBackup(json: JSONObject): Boolean {
@@ -72,40 +78,72 @@ object BackupCrypto {
             throw BackupException.InvalidFormat("Not an encrypted DeutschFlow backup.")
         }
 
+        if (!encryptedJson.has("version")) {
+            throw BackupException.InvalidFormat("Missing encrypted backup version.")
+        }
         val version = encryptedJson.optInt("version", -1)
-        if (version > ENCRYPTED_VERSION) {
+        if (version <= 0 || version > ENCRYPTED_VERSION) {
             throw BackupException.UnsupportedVersion("Encrypted backup version $version is not supported.")
+        }
+
+        val kdf = encryptedJson.optString("kdf", KDF_ALGORITHM)
+        if (kdf != KDF_ALGORITHM) {
+            throw BackupException.InvalidFormat("Unsupported KDF algorithm: $kdf")
         }
 
         val saltStr = encryptedJson.optString("salt")
         val ivStr = encryptedJson.optString("iv")
         val ciphertextStr = encryptedJson.optString("ciphertext")
-        val iterations = encryptedJson.optInt("iterations", ITERATIONS)
 
-        if (saltStr.isBlank() || ivStr.isBlank() || ciphertextStr.isBlank()) {
+        if (saltStr.isBlank() || ivStr.isBlank() || ciphertextStr.isBlank() || !encryptedJson.has("iterations")) {
             throw BackupException.CorruptedData("Encrypted backup is missing cryptographic fields.")
+        }
+
+        val iterations = encryptedJson.optInt("iterations", -1)
+        if (iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS) {
+            throw BackupException.InvalidFormat(
+                "Invalid PBKDF2 iterations: $iterations (allowed range: $MIN_ITERATIONS..$MAX_ITERATIONS)."
+            )
+        }
+
+        // Reject oversized ciphertext before decoding to prevent DoS/OOM
+        val maxBase64Length = ((MAX_CIPHERTEXT_BYTES + 2) / 3) * 4
+        if (ciphertextStr.length > maxBase64Length) {
+            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB).")
         }
 
         val salt = try {
             Base64.getDecoder().decode(saltStr)
         } catch (e: Exception) {
-            throw BackupException.CorruptedData("Invalid salt encoding.")
+            throw BackupException.CorruptedData("Invalid salt encoding: ${e.message}")
         }
 
         val iv = try {
             Base64.getDecoder().decode(ivStr)
         } catch (e: Exception) {
-            throw BackupException.CorruptedData("Invalid IV encoding.")
+            throw BackupException.CorruptedData("Invalid IV encoding: ${e.message}")
         }
 
         val ciphertext = try {
             Base64.getDecoder().decode(ciphertextStr)
         } catch (e: Exception) {
-            throw BackupException.CorruptedData("Invalid ciphertext encoding.")
+            throw BackupException.CorruptedData("Invalid ciphertext encoding: ${e.message}")
         }
 
-        if (salt.size < 8 || iv.size != IV_LENGTH_BYTES) {
-            throw BackupException.CorruptedData("Invalid cryptographic parameters in encrypted backup.")
+        if (salt.size < MIN_SALT_BYTES || salt.size > MAX_SALT_BYTES) {
+            throw BackupException.CorruptedData("Invalid salt size: ${salt.size} bytes (allowed: $MIN_SALT_BYTES..$MAX_SALT_BYTES).")
+        }
+
+        if (iv.size != IV_LENGTH_BYTES) {
+            throw BackupException.CorruptedData("Invalid IV size: ${iv.size} bytes (expected $IV_LENGTH_BYTES).")
+        }
+
+        if (ciphertext.isEmpty()) {
+            throw BackupException.CorruptedData("Ciphertext is empty.")
+        }
+
+        if (ciphertext.size > MAX_CIPHERTEXT_BYTES) {
+            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB).")
         }
 
         try {

@@ -1,17 +1,31 @@
 /**
  * A brute-force brake on the access gate.
  *
- * The gate's whole strength is the entropy of one shared secret, and until this
- * existed an attacker could submit guesses as fast as the deployment would serve
- * them — a server action is a plain POST with no cost to the caller.
+ * The gate's primary strength is the entropy of one shared secret (SITE_PASSWORD),
+ * and until this existed an attacker could submit guesses as fast as the deployment
+ * would serve them — a server action is a plain POST with no cost to the caller.
  *
- * Deliberately in-memory, and the limits of that are worth stating rather than
- * hiding: serverless instances do not share this map, so an attacker who reaches
- * several instances gets several allowances, and a cold start resets it. It stops
- * naive scripted guessing, which is the realistic threat against a personal
- * instance; it is not a substitute for a high-entropy SITE_PASSWORD, which is the
- * control doing most of the work. A durable counter needs KV or Upstash — a
- * dependency decision, not a code one.
+ * ARCHITECTURAL LIMITATIONS & SECURITY BOUNDARIES:
+ * 1. Process-Local / Serverless Cold Starts:
+ *    This tracker is an in-memory Map scoped to a single Node.js / edge runtime process.
+ *    Serverless instances (e.g. Vercel, AWS Lambda, Cloud Run) do not share memory across
+ *    containers. An attacker distributing requests across multiple container instances
+ *    receives independent quotas, and any cold-start event resets local counters to zero.
+ * 2. IP Rotation / Distributed Botnets:
+ *    Guards key on client identifiers (typically IP addresses). An attacker rotating through
+ *    large proxy pools or residential botnets can distribute attempts without accumulating
+ *    sufficient failures on any single key to trigger progressive cooldown.
+ * 3. All-Locked Eviction Nuance:
+ *    The map is capped at MAX_TRACKED (10,000) entries to prevent memory exhaustion (DoS).
+ *    Under saturation, unlocked/idle keys are evicted first. However, if an adversary
+ *    saturates all 10,000 slots with actively locked keys and continues flooding, the engine
+ *    must evict the earliest-expiring lockouts to avoid unbounded memory growth. This means
+ *    under extreme distributed saturation, an attacker could theoretically cause an active
+ *    lockout to be forgotten before its full cooldown elapses.
+ *
+ * For robust, distributed credential stuffing protection across serverless edges, this
+ * throttle should be backed by a centralized store (e.g., Upstash Redis, Redis KV) or
+ * managed edge firewall rate-limiting (e.g., Cloudflare WAF).
  */
 
 /** Failures allowed before attempts receive an immediate retry response. */

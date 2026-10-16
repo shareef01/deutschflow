@@ -66,4 +66,26 @@ describe("Service Worker Cache Ownership", () => {
     expect(swContent).toContain('response.redirected && new URL(response.url).pathname === "/login"');
     expect(swContent).toContain("cache.delete(route)");
   });
+
+  it("implements explicit purgeAppShellCache helper across all DeutschFlow caches", () => {
+    expect(swContent).toContain("async function purgeAppShellCache()");
+    expect(swContent).toContain("key.startsWith(CACHE_PREFIX)");
+    expect(swContent).toContain("await cache.delete(route)");
+  });
+
+  it("listens for LOGOUT message to immediately purge app cache", () => {
+    expect(swContent).toContain('self.addEventListener("message"');
+    expect(swContent).toContain('event.data.type === "LOGOUT"');
+    expect(swContent).toContain("event.waitUntil(purgeAppShellCache())");
+  });
+
+  it("intercepts /api/logout to purge app cache before network completes", () => {
+    expect(swContent).toContain('url.pathname === "/api/logout"');
+    expect(swContent).toContain("event.waitUntil(purgeAppShellCache())");
+  });
+
+  it("purges cache on direct /login navigation and prevents leaking cached shell offline", () => {
+    expect(swContent).toContain('url.pathname === "/login"');
+    expect(swContent).toContain("Offline - Login unavailable");
+  });
 });

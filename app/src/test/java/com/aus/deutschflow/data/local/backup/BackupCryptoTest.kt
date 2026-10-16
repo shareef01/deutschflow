@@ -1,5 +1,5 @@
 package com.aus.deutschflow.data.local.backup
-
+import java.util.Base64
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -97,6 +97,163 @@ class BackupCryptoTest {
 
         assertThrows(BackupException.CorruptedData::class.java) {
             BackupCrypto.decrypt(invalidBase64, "pass".toCharArray())
+        }
+    }
+
+    @Test
+    fun `decrypt throws UnsupportedVersion for negative or zero version`() {
+        val zeroVersion = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 0,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "iterations": 100000,
+            "salt": "c2FsdHNhbHQxMjM0NTY3OA==",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.UnsupportedVersion::class.java) {
+            BackupCrypto.decrypt(zeroVersion, "pass".toCharArray())
+        }
+    }
+
+    @Test
+    fun `decrypt throws InvalidFormat for unsupported KDF algorithm`() {
+        val untrustedKdf = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "ScryptWithMD5",
+            "iterations": 100000,
+            "salt": "c2FsdHNhbHQxMjM0NTY3OA==",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupCrypto.decrypt(untrustedKdf, "pass".toCharArray())
+        }
+    }
+
+    @Test
+    fun `decrypt throws CorruptedData for missing PBKDF2 iterations`() {
+        val missingIterations = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "salt": "c2FsdHNhbHQxMjM0NTY3OA==",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.CorruptedData::class.java) {
+            BackupCrypto.decrypt(missingIterations, "pass".toCharArray())
+        }
+    }
+
+    @Test
+    fun `decrypt throws InvalidFormat for out of range PBKDF2 iterations`() {
+        // Oversized iterations (DoS attempt)
+        val oversizedIterations = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "iterations": 10000000,
+            "salt": "c2FsdHNhbHQxMjM0NTY3OA==",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupCrypto.decrypt(oversizedIterations, "pass".toCharArray())
+        }
+
+        // Insufficient iterations (weak key derivation)
+        val weakIterations = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "iterations": 1000,
+            "salt": "c2FsdHNhbHQxMjM0NTY3OA==",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupCrypto.decrypt(weakIterations, "pass".toCharArray())
+        }
+    }
+
+    @Test
+    fun `decrypt throws CorruptedData for undersized or oversized salt or invalid IV length`() {
+        // 8 bytes salt is below MIN_SALT_BYTES (16)
+        val shortSalt = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "iterations": 100000,
+            "salt": "c2FsdDEyMw==",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.CorruptedData::class.java) {
+            BackupCrypto.decrypt(shortSalt, "pass".toCharArray())
+        }
+
+        // 65 bytes salt is above MAX_SALT_BYTES (64)
+        val oversizedSaltBytes = ByteArray(65) { 1.toByte() }
+        val oversizedSalt = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "iterations": 100000,
+            "salt": "${Base64.getEncoder().encodeToString(oversizedSaltBytes)}",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.CorruptedData::class.java) {
+            BackupCrypto.decrypt(oversizedSalt, "pass".toCharArray())
+        }
+
+        // 8 bytes IV instead of 12 bytes
+        val shortIv = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "iterations": 100000,
+            "salt": "c2FsdHNhbHQxMjM0NTY3OA==",
+            "iv": "aXZpdml2MTI=",
+            "ciphertext": "Y2lwaGVydGV4dA=="
+        }""")
+        assertThrows(BackupException.CorruptedData::class.java) {
+            BackupCrypto.decrypt(shortIv, "pass".toCharArray())
+        }
+    }
+
+    @Test
+    fun `decrypt throws CorruptedData or CapacityExceeded for empty or oversized ciphertext`() {
+        val emptyCiphertext = JSONObject("""{
+            "format": "deutschflow-library-encrypted",
+            "version": 1,
+            "kdf": "PBKDF2WithHmacSHA256",
+            "iterations": 100000,
+            "salt": "c2FsdHNhbHQxMjM0NTY3OA==",
+            "iv": "aXZpdml2aXZpdg==",
+            "ciphertext": ""
+        }""")
+        assertThrows(BackupException.CorruptedData::class.java) {
+            BackupCrypto.decrypt(emptyCiphertext, "pass".toCharArray())
+        }
+
+        // Oversized ciphertext (> 10MB)
+        val validIv = Base64.getEncoder().encodeToString(ByteArray(12) { 1.toByte() })
+        val validSalt = Base64.getEncoder().encodeToString(ByteArray(16) { 1.toByte() })
+        val hugeCipherBytes = ByteArray(10 * 1024 * 1024 + 1) { 0x42.toByte() }
+        val hugeCiphertext = JSONObject().apply {
+            put("format", "deutschflow-library-encrypted")
+            put("version", 1)
+            put("kdf", "PBKDF2WithHmacSHA256")
+            put("iterations", 100000)
+            put("salt", validSalt)
+            put("iv", validIv)
+            put("ciphertext", Base64.getEncoder().encodeToString(hugeCipherBytes))
+        }
+        assertThrows(BackupException.CapacityExceeded::class.java) {
+            BackupCrypto.decrypt(hugeCiphertext, "pass".toCharArray())
         }
     }
 }
