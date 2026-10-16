@@ -15,6 +15,7 @@ import {
   WarningIcon
 } from "@/components/icons";
 import type { Lang } from "@/lib/i18n";
+import { performLogout } from "@/lib/auth/logout";
 
 export default function SettingsPage() {
   const {
@@ -42,11 +43,29 @@ export default function SettingsPage() {
 
   const { t, lang, changeLang } = useI18n();
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [typedKey, setTypedKey] = useState("");
   const [isKeyVisible, setIsKeyVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const restoreInput = useRef<HTMLInputElement>(null);
+
+  const onLogout = async () => {
+    setIsLoggingOut(true);
+    setMessage(null);
+
+    const result = await performLogout();
+    if (!result.success) {
+      setIsLoggingOut(false);
+      if (result.errorType === "server") {
+        setMessage(t("settings.logoutFailedServer", [String(result.statusCode ?? "error")]));
+      } else {
+        setMessage(t("settings.logoutFailedOffline"));
+      }
+    } else if (!result.privacyCleanupComplete) {
+      console.warn("Logout completed on server, but local cache purge was incomplete:", result.cleanupWarning);
+    }
+  };
 
   const onRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -257,6 +276,26 @@ export default function SettingsPage() {
               <span className="text-label-medium font-bold">{t("settings.storageRequest")}</span>
             </GlassButton>
           )}
+        </div>
+      </div>
+
+      {/* ---- Session ---------------------------------------------------------- */}
+      <SectionHeader title={t("settings.sessionHeader")} />
+      <div className="glass-surface border border-on-surface/5 p-6">
+        <p className="text-body-medium text-on-surface-variant">
+          {t("settings.sessionBody")}
+        </p>
+        <div className="mt-4">
+          <GlassButton
+            type="button"
+            onClick={onLogout}
+            disabled={isLoggingOut}
+            className="w-full sm:w-auto"
+          >
+            <span className="font-bold text-on-surface">
+              {isLoggingOut ? t("settings.loggingOut") : t("settings.logout")}
+            </span>
+          </GlassButton>
         </div>
       </div>
 

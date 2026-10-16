@@ -18,6 +18,9 @@ interface VocabularyDao {
     @Query("SELECT * FROM vocabulary ORDER BY timestamp DESC")
     fun getAllVocabulary(): Flow<List<VocabularyEntity>>
 
+    @Query("SELECT * FROM vocabulary ORDER BY timestamp DESC")
+    suspend fun getAllVocabularyList(): List<VocabularyEntity>
+
     /** How many, without reading any of them. See TranscriptDao.countTranscripts. */
     @Query("SELECT COUNT(*) FROM vocabulary")
     fun countVocabulary(): Flow<Int>

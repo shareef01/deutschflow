@@ -33,6 +33,7 @@ export default [
   {
     ignores: [
       ".next/**",
+      ".vercel/**",
       "node_modules/**",
       "build/**",
       "dist/**",

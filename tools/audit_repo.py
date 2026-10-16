@@ -148,7 +148,10 @@ def audit_design_parity():
     print("\n== 4. Design System Parity & Contrast ==")
     passed = True
 
-    if PALETTE_PY.exists():
+    if not PALETTE_PY.exists():
+        print(f"  FAIL: Mandatory script {PALETTE_PY.name} not found.")
+        passed = False
+    else:
         result = subprocess.run([sys.executable, str(PALETTE_PY)], cwd=ROOT, capture_output=True, text=True)
         if result.returncode != 0:
             print("  FAIL: palette_parity.py failed:")
@@ -157,10 +160,11 @@ def audit_design_parity():
             passed = False
         else:
             print("  PASS: Color palette tokens agree 100% across Android and Web.")
-    else:
-        print("  SKIP: palette_parity.py not found.")
 
-    if CONTRAST_PY.exists():
+    if not CONTRAST_PY.exists():
+        print(f"  FAIL: Mandatory script {CONTRAST_PY.name} not found.")
+        passed = False
+    else:
         result = subprocess.run([sys.executable, str(CONTRAST_PY)], cwd=ROOT, capture_output=True, text=True)
         if result.returncode != 0:
             print("  FAIL: contrast.py failed (WCAG failure detected):")
@@ -169,8 +173,6 @@ def audit_design_parity():
             passed = False
         else:
             print("  PASS: All contrast pairings pass WCAG thresholds in both light and dark themes.")
-    else:
-        print("  SKIP: contrast.py not found.")
 
     return passed
 

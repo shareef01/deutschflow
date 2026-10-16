@@ -5,7 +5,7 @@ import android.content.Intent
 import android.speech.SpeechRecognizer
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.aus.deutschflow.awaitCondition
+import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.Executor
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -53,23 +53,30 @@ class SpeechRecognizerHelperSessionTest {
         return h
     }
 
+    /**
+     * Starts a session and waits for its main-thread work to finish, not just begin.
+     *
+     * startListening advances the generation at the *start* of its posted runnable and
+     * sets isListening = false later in the same runnable (the unavailable seam's early
+     * return). Waiting on the generation alone let the test fire onReadyForSpeech in
+     * between, and the rest of the runnable then overwrote it - a failure that only
+     * showed up when the main thread was slow.
+     */
+    private fun startSession(h: SpeechRecognizerHelper, expectedGeneration: Long) {
+        h.startListening("de-DE")
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        assertEquals("the session should advance the generation", expectedGeneration, h.currentGeneration)
+    }
+
     @Test
     fun staleListenerCallback_doesNotOverwriteLiveSessionState() = runBlocking {
         val h = helper()
 
         // Session A is started (generation 1), then superseded by session B (generation 2).
-        h.startListening("de-DE")
-        assertTrue(
-            "A's session should advance the generation",
-            awaitCondition { h.currentGeneration == 1L }
-        )
+        startSession(h, expectedGeneration = 1L)
         val listenerA = h.buildRecognitionListener(1L)
 
-        h.startListening("de-DE")
-        assertTrue(
-            "B's session should advance the generation",
-            awaitCondition { h.currentGeneration == 2L }
-        )
+        startSession(h, expectedGeneration = 2L)
         val listenerB = h.buildRecognitionListener(2L)
 
         // B's live listener opens the mic for the current session.
@@ -89,8 +96,7 @@ class SpeechRecognizerHelperSessionTest {
     fun liveListenerCallback_isNotRejectedAsStale() = runBlocking {
         val h = helper()
 
-        h.startListening("de-DE")
-        assertTrue(awaitCondition { h.currentGeneration == 1L })
+        startSession(h, expectedGeneration = 1L)
         val listener = h.buildRecognitionListener(1L)
 
         // The current session's own callback is not stale: it must still land.

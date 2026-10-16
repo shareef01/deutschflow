@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { SESSION_COOKIE, sessionSecret, sitePassword, verifySessionToken } from "@/lib/auth/session";
+import { SESSION_COOKIE, getActiveSigningSecret, verifySessionToken } from "@/lib/auth/session";
 
 /**
  * The access gate, run by the network-boundary proxy (Next.js 16 convention; its runtime is nodejs).
@@ -13,6 +13,7 @@ import { SESSION_COOKIE, sessionSecret, sitePassword, verifySessionToken } from 
 const PUBLIC_PATHS = new Set([
   "/login",
   "/api/login",
+  "/api/logout",
   "/manifest.json",
   "/sw.js",
   "/favicon.ico",
@@ -33,16 +34,15 @@ export async function proxy(request: NextRequest) {
 
   if (isPublic(pathname)) return NextResponse.next();
 
-  const password = sitePassword();
-  const secret = sessionSecret();
-  if (!password || !secret) {
+  const signingSecret = await getActiveSigningSecret();
+  if (!signingSecret) {
     // No key configured is a closed door, not an open one — an unconfigured
     // deployment must not be a public one.
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  if (await verifySessionToken(token, secret)) return NextResponse.next();
+  if (await verifySessionToken(token, signingSecret)) return NextResponse.next();
 
   const url = request.nextUrl.clone();
   url.pathname = "/login";

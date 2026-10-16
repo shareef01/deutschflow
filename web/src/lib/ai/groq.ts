@@ -442,11 +442,17 @@ export function contentOf(json: string): string {
   }
 }
 
+export function redactSensitiveKey(text: string): string {
+  return text
+    .replace(/gsk_[A-Za-z0-9_-]+/g, "gsk_***")
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer ***");
+}
+
 export function detailFrom(body: string | null): string | null {
   if (!body) return null;
   try {
     const message = JSON.parse(body)?.error?.message;
-    return typeof message === "string" && message.trim() ? message : null;
+    return typeof message === "string" && message.trim() ? redactSensitiveKey(message) : null;
   } catch {
     return null;
   }

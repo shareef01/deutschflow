@@ -92,16 +92,22 @@ class PracticeAttemptStateTest {
 
     /** Speaks [SPOKEN] at the target and waits for it to be scored. */
     private suspend fun anAttemptIsMade() {
+        // The results flow has no replay, so a delivery made before the ViewModel's
+        // collector is subscribed would be dropped. Wait for the subscription, then
+        // deliver exactly once.
+        //
+        // This used to redeliver until one copy landed. The surplus copies stayed
+        // queued in the delivery bus and could arrive *after* nextSentence() had
+        // cleared the attempt, re-scoring it - so the "scores are gone" assertion
+        // failed whenever a late copy beat it, which under load it sometimes did.
+        assertTrue(
+            "the ViewModel should be listening for utterances",
+            awaitCondition { recognizer.deliveryBus.subscriberCount.value > 0 }
+        )
+        recognizer.deliverUtterance(SPOKEN)
         assertTrue(
             "the utterance should reach the scorer",
-            // The results flow has no replay, so a delivery made before the
-            // ViewModel's collector has reached the main looper would be dropped
-            // rather than queued. Delivering until it lands beats racing it; a repeat
-            // just re-scores the same words.
-            awaitCondition {
-                recognizer.deliverUtterance(SPOKEN)
-                viewModel.wordResults.first().isNotEmpty()
-            }
+            awaitCondition { viewModel.wordResults.first().isNotEmpty() }
         )
     }
 

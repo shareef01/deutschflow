@@ -3,9 +3,9 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   createSessionToken,
+  getActiveSigningSecret,
   passwordMatches,
   safeRedirectTarget,
-  sessionSecret,
   sitePassword,
 } from "@/lib/auth/session";
 import { delayForNextAttempt, recordFailure, recordSuccess } from "@/lib/auth/throttle";
@@ -20,7 +20,7 @@ function callerKey(request: NextRequest): string {
 
 export async function POST(request: NextRequest) {
   const masterPassword = sitePassword();
-  const signingSecret = sessionSecret();
+  const signingSecret = await getActiveSigningSecret();
   if (!masterPassword || !signingSecret) {
     return NextResponse.json(
       { error: "This instance is not fully configured. Set SITE_PASSWORD and SESSION_SECRET, then redeploy." },
@@ -55,11 +55,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const isHttps = forwardedProto
+    ? forwardedProto.split(",")[0].trim().toLowerCase() === "https"
+    : request.url.startsWith("https://");
+  const isSecure = process.env.NODE_ENV === "production" && isHttps;
+
   recordSuccess(caller);
   const response = NextResponse.json({ redirect: target });
   response.cookies.set(SESSION_COOKIE, await createSessionToken(signingSecret), {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     sameSite: "lax",
     maxAge: SESSION_MAX_AGE_SECONDS,
     path: "/",

@@ -220,6 +220,12 @@ export const STRINGS = {
     "settings.storageUnsupported": "Persistent storage is not supported in this browser",
     "settings.storageDescription": "Helps reduce the chance that the browser automatically clears your local data.",
     "settings.storageUsage": "Storage used: {0} MB",
+    "settings.sessionHeader": "Session",
+    "settings.sessionBody": "Sign out of this browser. Your local learning data in IndexedDB remains saved on this device.",
+    "settings.logout": "Log Out",
+    "settings.loggingOut": "Logging out…",
+    "settings.logoutFailedServer": "Logout failed. The server returned an error ({0}). Your session could not be terminated.",
+    "settings.logoutFailedOffline": "Logout failed. You appear to be offline or the server is unreachable. A server connection is required to terminate your session.",
     "settings.backupLast": "Last backup: {0}",
     "settings.backupNever": "Never backed up",
     "settings.backupReminder": "You have {0} saved words without a recent backup. Download a copy to protect your data.",
@@ -480,6 +486,12 @@ export const STRINGS = {
     "settings.storageUnsupported": "Dauerhafter Speicher wird in diesem Browser nicht unterstützt",
     "settings.storageDescription": "Hilft zu verhindern, dass der Browser deine lokalen Daten automatisch löscht.",
     "settings.storageUsage": "Belegter Speicher: {0} MB",
+    "settings.sessionHeader": "Sitzung",
+    "settings.sessionBody": "Melde dich von diesem Browser ab. Deine lokalen Lerndaten in IndexedDB bleiben auf diesem Gerät gespeichert.",
+    "settings.logout": "Abmelden",
+    "settings.loggingOut": "Abmelden…",
+    "settings.logoutFailedServer": "Abmeldung fehlgeschlagen. Der Server meldete einen Fehler ({0}). Deine Sitzung konnte nicht beendet werden.",
+    "settings.logoutFailedOffline": "Abmeldung fehlgeschlagen. Du bist offline oder der Server ist nicht erreichbar. Eine Internetverbindung ist erforderlich, um deine Sitzung zu beenden.",
     "settings.backupLast": "Letzte Sicherung: {0}",
     "settings.backupNever": "Noch nie gesichert",
     "settings.backupReminder": "Du hast {0} Wörter ohne aktuelle Sicherung. Lade eine Kopie herunter, um Datenverlust zu vermeiden.",
@@ -571,6 +583,14 @@ export function getLangSnapshot(): Lang {
 
 /** Resolve the browser's preferred language: German UI when the browser is German. */
 export function detectBrowserLang(): Lang {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("deutschflow_lang");
+      if (saved === "de" || saved === "en") return saved;
+    } catch {
+      // localStorage may be unavailable or blocked in private browsing
+    }
+  }
   if (typeof navigator === "undefined") return "en";
   const preferred = navigator.language?.toLowerCase() ?? "";
   return preferred.startsWith("de") ? "de" : "en";
