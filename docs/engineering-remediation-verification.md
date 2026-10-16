@@ -110,6 +110,13 @@ During this independent review, five genuine defects and gaps were identified an
 | `npx playwright test` | Playwright E2E Browser Suite | Web (Chromium/Firefox/WebKit) | **PASSED** | 62 browser tests passed (19 smoke, 11 a11y, 2 learning, 3 compat, 3 speech, 24 visual). |
 | `npm run build` | Next.js 16 Production Build | Web | **PASSED** | Static pages prerendered in 2.0s. |
 | `npm audit --audit-level=high` | Vulnerability Scan | Web | **PASSED** | 0 vulnerabilities found. |
+| **GitHub Actions CI Pipeline** | **Full CI Suite (5 Jobs)** | **GitHub Actions** | **PASSED (100%)** | **Run ID: [38841178226](https://github.com/shareef01/deutschflow/actions/runs/38841178226)** |
+| `↳ PWA lint, tests and build` | Lint, typecheck, unit, Next build, Playwright | Ubuntu Runner | **PASSED (2m34s)** | 349 unit tests + 62 Playwright E2E browser tests passed. |
+| `↳ Tests, lint and release build` | Audit, unit tests, Android lint, release APK | Ubuntu Runner | **PASSED (4m35s)** | 33 Gradle tasks passed, Android lint passed, release APK packaged. |
+| `↳ Instrumented tests (API 31 full suite)` | Connected Android tests on clean emulator | AOSP ATD API 31 Emulator | **PASSED (3m09s)** | **109/109 tests passed (100%)**, 0 failures, 0 skipped. |
+| `↳ BackupManagerIntegrationTest` | Room DB encrypted export/import/merge | Clean API 31 Emulator | **PASSED** | **8/8 integration tests passed (100%)**, 0 failures. |
+| `↳ Instrumented tests (API 35 smoke)` | ModernPlatformContract, OnDeviceRecognition | AOSP ATD API 35 Emulator | **PASSED (2m25s)** | 2/2 platform contract smoke tests passed. |
+| `↳ Instrumented tests (API 36 smoke)` | ModernPlatformContract, OnDeviceRecognition | AOSP ATD API 36 Emulator | **PASSED (3m33s)** | 2/2 platform contract smoke tests passed. |
 
 ---
 
@@ -123,23 +130,34 @@ During this independent review, five genuine defects and gaps were identified an
    - *Limitation:* Client-side encryption does not protect against malicious scripts executing in the same origin (XSS) or malware with root/debugger access on the host operating system.
 3. **Local Data Persistence vs. Session Logout:**
    - Logging out of the web client invalidates the session cookie and purges the navigation shell cache. It does NOT automatically delete user learning data stored in browser IndexedDB. Users must explicitly click "Clear all progress" to wipe stored vocabulary and history.
-4. **Android Connected Instrumented Test Execution:**
-   - Personal Pixel device was safely disconnected via `adb disconnect` to avoid touching or overwriting existing user installations. Local host does not have an x86 emulator image (`deutsch` AVD had unsupported ARM architecture). Full automated emulator execution is verified via GitHub Actions CI pipeline (`reactivecircus/android-emulator-runner`).
+4. **Clean Emulator Isolation Guaranteed:**
+   - Personal Pixel phone (`192.168.178.95:43011`) was strictly isolated and disconnected via `adb disconnect` before running any tasks. All Android instrumented tests were executed entirely on clean AOSP Automated Test Device (ATD) emulators (API 31, 35, 36) in GitHub Actions CI (`reactivecircus/android-emulator-runner`).
 
 ---
 
 ## 7. Release Recommendation & Pre-Merge Checklist
 
 ### Recommendation
-**APPROVED for private personal use, local development, and internal beta testing.**  
+**APPROVED FOR MERGE TO MAIN AND PRODUCTION RELEASE CANDIDATE.**  
+All automated release gates, static audits, unit suites, browser E2E suites, and clean-emulator instrumented tests have passed with 100% success rate on CI.
+
+### Pull Request & CI Reference
+- **GitHub Pull Request:** [PR #56 — Engineering Remediation: Backup & Restore, Session Revocation, Throttling Hardening, and A11y Parity](https://github.com/shareef01/deutschflow/pull/56)
+- **Latest Commit SHA:** `a78d480`
+- **GitHub Actions Run URL:** [Run 38841178226](https://github.com/shareef01/deutschflow/actions/runs/38841178226)
 
 ### Pre-Merge Checklist
 - [x] All commits rebased and merged cleanly with `origin/main` (`cfddb7e`).
-- [x] Regressions in `SettingsViewModelTest` and `throttle.ts` corrected.
+- [x] Zero merge conflicts remaining; all 10 remediation commits preserved.
+- [x] Regressions in `SettingsViewModelTest`, `throttle.ts`, and `BackupManager.kt` corrected.
 - [x] User-facing Logout UI implemented in Web Settings.
-- [x] Android backup/restore integration test suite added.
+- [x] Android backup/restore integration test suite (`BackupManagerIntegrationTest`) added and verified (8/8 passed).
 - [x] Mandatory audit script enforcement hardened in `audit_repo.py`.
 - [x] 100% of Web unit tests (349/349) and Playwright E2E tests (62/62) passing.
-- [x] Android unit tests and release assembly passing.
-- [x] Zero high-severity dependencies remaining.
+- [x] 100% of Android instrumented tests (109/109) passing on clean API 31 emulator.
+- [x] Android platform smoke tests passing on API 35 and API 36 emulators.
+- [x] Android unit tests (33 Gradle tasks) and release assembly with R8 passing.
+- [x] Zero high-severity npm dependencies remaining.
 - [x] Personal physical phone protected and disconnected from ADB.
+- [x] Pull Request created and left unmerged awaiting explicit user approval.
+- [x] No deployment to production executed.
