@@ -67,7 +67,7 @@ All automated verification gates are passing with 100% success rate:
    - *Fix:* Rewrote `logout-privacy.test.ts` to exercise production `performLogout()` and `purgeProtectedCaches()`. Added real-browser Playwright test `logout-flow.spec.ts` testing multi-tab session synchronization, HTTP 500 error display without session termination, query-string cache purging, static asset preservation, and IndexedDB survival.
 9. **Android Orphan Review-Event Regression Coverage (`BackupManagerIntegrationTest.kt`):**
    - *Problem:* Existing test `importReviewEvents_withUnmappedReviewEvent_isSafelySkippedAndNeverOrphaned` referenced an included vocabulary record, failing to test genuine orphan events.
-   - *Fix:* Renamed existing test to `importReviewEvents_withNewVocabulary_mapsCleanlyToTargetIdWithoutCrossAssignment` and added `importReviewEvents_withGenuineOrphanReviewEvent_isSafelySkippedAndNeverOrphaned` referencing non-existent backup vocabulary IDs. Verified safe skipping without database corruption.
+   - *Fix:* Renamed existing test to `importReviewEvents_withNewVocabulary_mapsCleanlyToTargetIdWithoutCrossAssignment` and added `importReviewEvents_withGenuineOrphanReviewEvent_isRejectedAsInvalidFormatAndNeverPersisted` referencing non-existent backup vocabulary IDs. Verified that the backup format specification enforces referential integrity by rejecting corrupt backups with `BackupException.InvalidFormat`, preventing partial import or orphan creation.
 
 ---
 
@@ -87,7 +87,7 @@ All automated verification gates are passing with 100% success rate:
 | **DEP-01** | High | 3 High-severity npm vulnerabilities in web dependencies | **FIXED AND VERIFIED** | Minimal transitive dependency update via `npm audit fix`. Zero vulnerabilities reported by `npm audit --audit-level=high`. |
 | **SRS-01** | Info | Spaced repetition algorithm cross-platform parity and interval limits | **VERIFIED PARITY** | Both Android (`SRSEngine.MAX_INTERVAL_DAYS = 365`) and Web (`srs.ts MAX_INTERVAL_DAYS = 365`) enforce an identical 365-day interval ceiling. Backup validators on both platforms enforce `interval in 0..365`. |
 | **DATA-02** | Info | German identity key folding (`ß` vs `ss`, umlauts) | **ALREADY FIXED** | Unicode NFC normalization without destructive foldings; `Maße` and `Masse` remain distinct rows. |
-| **DATA-03** | Medium | Android orphan review-event regression coverage and test naming accuracy | **FIXED AND VERIFIED** | Renamed misleading test; added genuine orphan review-event test with non-existent backup vocabulary IDs. Verified safe skipping without cross-assignment. |
+| **DATA-03** | Medium | Android orphan review-event regression coverage and test naming accuracy | **FIXED AND VERIFIED** | Renamed misleading test; added genuine orphan review-event test with non-existent backup vocabulary IDs. Verified rejection as `BackupException.InvalidFormat` without database mutation or cross-assignment. |
 
 ---
 

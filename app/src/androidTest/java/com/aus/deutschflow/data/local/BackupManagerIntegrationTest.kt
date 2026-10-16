@@ -539,7 +539,7 @@ class BackupManagerIntegrationTest {
     }
 
     @Test
-    fun importReviewEvents_withGenuineOrphanReviewEvent_isSafelySkippedAndNeverOrphaned() = runBlocking {
+    fun importReviewEvents_withGenuineOrphanReviewEvent_isRejectedAsInvalidFormatAndNeverPersisted() = runBlocking {
         // Pre-populate target database with a word that receives target ID 1 ("Apfel")
         targetDb.vocabularyDao().insertVocabulary(
             VocabularyEntity(
@@ -595,13 +595,21 @@ class BackupManagerIntegrationTest {
             })
         }
 
-        val result = targetBackupManager.importBackup(backupJson.toString(), null)
-        assertEquals("Kirsche should be added", 1, result.vocabularyAdded)
-        assertEquals("Both orphan review events must be safely skipped", 0, result.reviewEventsAdded)
+        // The backup format specifies REJECTION of backups containing orphan review events
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            runBlocking {
+                targetBackupManager.importBackup(backupJson.toString(), null)
+            }
+        }
 
-        // Ensure target DB has exactly zero review events and Apfel was never cross-assigned
+        // Ensure target DB was not mutated: no review events persisted, Apfel unchanged, and Kirsche not added
         val allReviews = targetDb.reviewEventDao().getAllEventsList()
         assertTrue("No orphan review events may be persisted in target DB", allReviews.isEmpty())
+        val kirsche = targetDb.vocabularyDao().findByGermanText("Kirsche")
+        assertNull("Corrupt backup with orphan review events must not insert vocabulary", kirsche)
+        val remainingApple = targetDb.vocabularyDao().findByGermanText("Apfel")
+        assertNotNull(remainingApple)
+        assertEquals(appleId, remainingApple!!.id)
     }
 
     private fun createPaddedStream(prefix: ByteArray, totalBytes: Long): InputStream {
