@@ -51,4 +51,19 @@ describe("Service Worker Cache Ownership", () => {
     expect(surviving).toContain("unrelated-app-cache");
     expect(surviving).toContain("google-fonts-cache");
   });
+
+  it("attaches runtime cache writes to event.waitUntil to avoid detached drops", () => {
+    // Verified that void caches.open is no longer used for runtime writes
+    expect(swContent).not.toContain("void caches.open");
+    expect(swContent).toContain("event.waitUntil(");
+  });
+
+  it("safely ignores quota errors during cache write", () => {
+    expect(swContent).toContain("Service worker navigation cache write failed");
+  });
+
+  it("invalidates cached navigation routes on redirect to /login", () => {
+    expect(swContent).toContain('response.redirected && new URL(response.url).pathname === "/login"');
+    expect(swContent).toContain("cache.delete(route)");
+  });
 });

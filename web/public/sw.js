@@ -10,16 +10,13 @@
  * here: translations carry the user's own text and the API key is sent by the
  * page, not visible to this worker.
  */
-/**
- * Named for the build that registered this worker — see PwaRegister and
- * next.config.ts. It was the literal "deutschflow-v1" forever, so the activate
- * sweep below never matched anything and every deploy's assets piled up.
- */
+
 const CACHE_PREFIX = "deutschflow-";
 const BUILD = new URL(self.location.href).searchParams.get("v") || "dev";
 const CACHE_NAME = `${CACHE_PREFIX}${BUILD}`;
 
-const APP_SHELL = [
+/** Essential navigation routes for offline shell */
+const APP_SHELL_ROUTES = [
   "/",
   "/transcript",
   "/history",
@@ -27,27 +24,34 @@ const APP_SHELL = [
   "/study",
   "/practice",
   "/settings",
+];
+
+/** Static assets that support offline operation */
+const STATIC_ASSETS = [
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
 ];
+
+const APP_SHELL = [...APP_SHELL_ROUTES, ...STATIC_ASSETS];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then(async (cache) => {
-        // Individually, not addAll. Every shell route is behind the auth gate, so
-        // an expired session redirects them to /login — and Cache.put rejects a
-        // redirected response, which made addAll throw, install fail, and the new
-        // worker never activate, with nothing on screen saying so. A shell entry
-        // that cannot be precached is a worse offline experience, not a broken
-        // install; the fetch handler applies the same redirect rule at line ~68.
+        // Precaches assets individually. Shell routes may be behind the auth gate
+        // during installation; an unauthenticated user redirects to /login.
+        // Handled gracefully so the service worker installs reliably.
         await Promise.allSettled(
           APP_SHELL.map(async (url) => {
-            const response = await fetch(url);
-            if (!response.ok || response.redirected) return;
-            await cache.put(url, response);
+            try {
+              const response = await fetch(url);
+              if (!response.ok || response.redirected) return;
+              await cache.put(url, response);
+            } catch {
+              // Ignore network failures for non-essential precache assets during install
+            }
           })
         );
       })
@@ -78,23 +82,40 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Navigations: network-first, fall back to the cached shell — a cached
-  // transcript of a tab the user has visited, or the Transcript page as the
+  // page of a tab the user has visited, or the Transcript page as the
   // guaranteed entry point.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // A redirect here is the auth gate bouncing an expired session to
-          // /login — `fetch` follows it, so caching the response would store
-          // the login page under the app route that was requested, and an
-          // offline launch would serve the login screen at that route with
-          // nothing on screen saying why. Only final, non-redirected app
-          // responses enter the cache.
-          if (response.redirected || new URL(response.url).pathname === "/login") {
+          // If session expired or logged out, network redirects to /login.
+          // Invalidate cached private app routes to protect shared devices.
+          if (response.redirected && new URL(response.url).pathname === "/login") {
+            event.waitUntil(
+              caches.open(CACHE_NAME).then(async (cache) => {
+                for (const route of APP_SHELL_ROUTES) {
+                  await cache.delete(route);
+                }
+              }).catch(() => {})
+            );
             return response;
           }
+
+          // Do not cache error responses, login page, or unexpected redirects
+          if (!response.ok || response.redirected || new URL(response.url).pathname === "/login") {
+            return response;
+          }
+
+          // Attach cache write to event lifetime via event.waitUntil to prevent detached write drops
           const copy = response.clone();
-          void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          event.waitUntil(
+            caches.open(CACHE_NAME)
+              .then((cache) => cache.put(request, copy))
+              .catch((err) => {
+                console.warn("Service worker navigation cache write failed:", err);
+              })
+          );
+
           return response;
         })
         .catch(() =>
@@ -113,7 +134,12 @@ self.addEventListener("fetch", (event) => {
           .then((response) => {
             if (response.ok) {
               const copy = response.clone();
-              void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+              // Attach cache write to event lifetime to prevent detached write drops
+              event.waitUntil(
+                caches.open(CACHE_NAME)
+                  .then((cache) => cache.put(request, copy))
+                  .catch(() => {})
+              );
             }
             return response;
           })
