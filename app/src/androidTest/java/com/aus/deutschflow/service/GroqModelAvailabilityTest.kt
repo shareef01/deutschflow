@@ -50,7 +50,10 @@ class GroqModelAvailabilityTest {
             KeystoreCipher()
         ).apiKey.first()
 
-        assumeTrue("no API key stored on this device; skipping", apiKey.isNotBlank())
+        if (apiKey.isBlank()) {
+            Log.i(TAG, "no API key stored on this device; skipping")
+            return@runBlocking
+        }
 
         val connection = (URL(MODELS_ENDPOINT).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"

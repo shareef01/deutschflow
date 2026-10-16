@@ -230,7 +230,7 @@ class BackupManager @Inject constructor(
 
             val existing = vocabularyDao.findByKey(incoming.germanTextKey)
             if (existing != null) {
-                val merged = existing.mergedWith(incoming, now)
+                val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(incoming)
                 vocabularyDao.updateVocabulary(merged)
                 if (oldBackupId > 0) backupIdToPersistedId[oldBackupId] = existing.id
                 vocabularyMerged++
