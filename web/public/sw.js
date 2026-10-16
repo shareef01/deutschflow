@@ -114,21 +114,36 @@ async function purgeAppShellCache() {
       }
     }
 
-    // 3. Notify all open client tabs across multiple browser tabs to prevent stale authenticated UI
-    if (self.clients) {
-      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      for (const client of clients) {
-        client.postMessage({ type: "SESSION_TERMINATED" });
-      }
-    }
-  } catch (err) {
+    } catch (err) {
     console.warn("Failed to purge app shell cache:", err);
   }
 }
 
 self.addEventListener("message", (event) => {
-  if (event.data && (event.data.type === "LOGOUT" || event.data.type === "PURGE_APP_CACHE")) {
-    event.waitUntil(purgeAppShellCache());
+  if (
+    event.data &&
+    (event.data.type === "PURGE_PROTECTED_CACHE" ||
+      event.data.type === "PURGE_APP_CACHE" ||
+      event.data.type === "LOGOUT")
+  ) {
+    const port = event.ports && event.ports[0];
+    event.waitUntil(
+      purgeAppShellCache()
+        .then(() => {
+          if (port) {
+            port.postMessage({ type: "CACHE_PURGED", success: true });
+          }
+        })
+        .catch((err) => {
+          if (port) {
+            port.postMessage({
+              type: "CACHE_PURGED",
+              success: false,
+              error: String(err),
+            });
+          }
+        })
+    );
   }
 });
 
@@ -137,9 +152,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Intercept logout API calls (POST or GET /api/logout) to immediately purge app cache
-  if (url.pathname === "/api/logout") {
-    event.waitUntil(purgeAppShellCache());
+  // Authentication and API endpoints (/api/*) must never be intercepted or cached
+  if (url.pathname.startsWith("/api/")) {
     return;
   }
 
@@ -149,10 +163,9 @@ self.addEventListener("fetch", (event) => {
   // page of a tab the user has visited, or the Transcript page as the
   // guaranteed entry point.
   if (request.mode === "navigate") {
-    // If navigating directly to /login (e.g. post-logout redirect), purge cached private shell
+    // Do not cache /login; allow network request through or return 503 if offline.
+    // Visiting /login directly must NOT terminate sessions in other tabs or purge cache.
     if (url.pathname === "/login") {
-      event.waitUntil(purgeAppShellCache());
-      // Do not cache /login; allow network request through or return 503 if offline
       event.respondWith(
         fetch(request).catch(() => {
           return new Response("Offline - Login unavailable", {

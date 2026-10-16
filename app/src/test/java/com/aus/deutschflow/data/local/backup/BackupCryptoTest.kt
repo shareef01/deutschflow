@@ -239,10 +239,10 @@ class BackupCryptoTest {
             BackupCrypto.decrypt(emptyCiphertext, "pass".toCharArray())
         }
 
-        // Oversized ciphertext (> 10MB)
+        // Oversized ciphertext (> MAX_CIPHERTEXT_BYTES)
         val validIv = Base64.getEncoder().encodeToString(ByteArray(12) { 1.toByte() })
         val validSalt = Base64.getEncoder().encodeToString(ByteArray(16) { 1.toByte() })
-        val hugeCipherBytes = ByteArray(10 * 1024 * 1024 + 1) { 0x42.toByte() }
+        val hugeCipherBytes = ByteArray(MAX_CIPHERTEXT_BYTES + 1) { 0x42.toByte() }
         val hugeCiphertext = JSONObject().apply {
             put("format", "deutschflow-library-encrypted")
             put("version", 1)

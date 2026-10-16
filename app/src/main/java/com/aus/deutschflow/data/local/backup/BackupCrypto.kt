@@ -36,7 +36,7 @@ object BackupCrypto {
     const val MAX_ITERATIONS = 500_000
     const val MIN_SALT_BYTES = 16
     const val MAX_SALT_BYTES = 64
-    const val MAX_CIPHERTEXT_BYTES = 10 * 1024 * 1024 // 10 MB
+    const val MAX_CIPHERTEXT_BYTES = com.aus.deutschflow.data.local.backup.MAX_CIPHERTEXT_BYTES
 
     private val secureRandom = SecureRandom()
 
@@ -45,6 +45,11 @@ object BackupCrypto {
     }
 
     fun encrypt(plainText: String, passphrase: CharArray): String {
+        val plainBytes = plainText.toByteArray(Charsets.UTF_8)
+        if (plainBytes.size > MAX_PLAINTEXT_BACKUP_BYTES) {
+            throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (10 MB).")
+        }
+
         val salt = ByteArray(SALT_LENGTH_BYTES).apply { secureRandom.nextBytes(this) }
         val iv = ByteArray(IV_LENGTH_BYTES).apply { secureRandom.nextBytes(this) }
 
@@ -55,7 +60,7 @@ object BackupCrypto {
 
         val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
-        val cipherBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+        val cipherBytes = cipher.doFinal(plainBytes)
 
         return JSONObject().apply {
             put("format", ENCRYPTED_FORMAT)
@@ -107,9 +112,9 @@ object BackupCrypto {
         }
 
         // Reject oversized ciphertext before decoding to prevent DoS/OOM
-        val maxBase64Length = ((MAX_CIPHERTEXT_BYTES + 2) / 3) * 4
+        val maxBase64Length = MAX_BASE64_CIPHERTEXT_LENGTH
         if (ciphertextStr.length > maxBase64Length) {
-            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB).")
+            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB plaintext).")
         }
 
         val salt = try {
@@ -143,7 +148,7 @@ object BackupCrypto {
         }
 
         if (ciphertext.size > MAX_CIPHERTEXT_BYTES) {
-            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB).")
+            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB plaintext).")
         }
 
         try {
@@ -155,6 +160,9 @@ object BackupCrypto {
             val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
             val plainBytes = cipher.doFinal(ciphertext)
+            if (plainBytes.size > MAX_PLAINTEXT_BACKUP_BYTES) {
+                throw BackupException.CapacityExceeded("Decrypted backup exceeds maximum supported plaintext size (10 MB).")
+            }
             return String(plainBytes, Charsets.UTF_8)
         } catch (e: AEADBadTagException) {
             throw BackupException.WrongPassphrase("Incorrect passphrase or corrupted backup.")

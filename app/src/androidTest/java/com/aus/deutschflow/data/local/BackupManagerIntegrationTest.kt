@@ -7,6 +7,10 @@ import com.aus.deutschflow.data.local.backup.BackupException
 import com.aus.deutschflow.data.local.backup.BackupManager
 import com.aus.deutschflow.data.local.backup.CURRENT_BACKUP_VERSION
 import com.aus.deutschflow.data.local.backup.MAX_BACKUP_FILE_BYTES
+import com.aus.deutschflow.data.local.backup.MAX_PLAINTEXT_BACKUP_BYTES
+import com.aus.deutschflow.data.local.backup.MAX_ENCRYPTED_BACKUP_FILE_BYTES
+import com.aus.deutschflow.data.local.backup.MAX_STREAM_READ_BYTES
+import com.aus.deutschflow.data.local.backup.MAX_BASE64_CIPHERTEXT_LENGTH
 import com.aus.deutschflow.data.local.dao.ReviewEventDao
 import com.aus.deutschflow.data.local.entities.*
 import kotlinx.coroutines.runBlocking
@@ -479,7 +483,7 @@ class BackupManagerIntegrationTest {
     }
 
     @Test
-    fun importReviewEvents_withUnmappedReviewEvent_isSafelySkippedAndNeverOrphaned() = runBlocking {
+    fun importReviewEvents_withNewVocabulary_mapsCleanlyToTargetIdWithoutCrossAssignment() = runBlocking {
         // Pre-populate target database with a word that receives target ID 1 ("Apfel")
         targetDb.vocabularyDao().insertVocabulary(
             VocabularyEntity(
@@ -534,6 +538,72 @@ class BackupManagerIntegrationTest {
         }
     }
 
+    @Test
+    fun importReviewEvents_withGenuineOrphanReviewEvent_isSafelySkippedAndNeverOrphaned() = runBlocking {
+        // Pre-populate target database with a word that receives target ID 1 ("Apfel")
+        targetDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(
+                germanText = "Apfel",
+                germanTextKey = germanKey("Apfel"),
+                englishTranslation = "apple",
+                timestamp = System.currentTimeMillis() - 50000
+            )
+        )
+        val apple = targetDb.vocabularyDao().findByGermanText("Apfel")
+        assertNotNull(apple)
+        val appleId = apple!!.id
+
+        val orphanRemoteId1 = UUID.randomUUID().toString()
+        val orphanRemoteId2 = UUID.randomUUID().toString()
+
+        val backupJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", 2)
+                    put("germanText", "Kirsche")
+                    put("englishTranslation", "cherry")
+                    put("interval", 1)
+                    put("easeFactor", 2.5f)
+                    put("reviewCount", 1)
+                    put("nextReview", System.currentTimeMillis() + 86400000L)
+                })
+            })
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+            put("reviewEvents", org.json.JSONArray().apply {
+                // Orphan 1: references ID 99999 which does NOT exist in backup vocabulary
+                put(JSONObject().apply {
+                    put("vocabularyId", 99999)
+                    put("rating", "GOOD")
+                    put("scheduledDays", 2)
+                    put("actualDays", 2)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", orphanRemoteId1)
+                })
+                // Orphan 2: references ID 1 (matches targetDb's Apfel ID 1, but is NOT in the backup vocabulary)
+                put(JSONObject().apply {
+                    put("vocabularyId", 1)
+                    put("rating", "HARD")
+                    put("scheduledDays", 1)
+                    put("actualDays", 1)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", orphanRemoteId2)
+                })
+            })
+        }
+
+        val result = targetBackupManager.importBackup(backupJson.toString(), null)
+        assertEquals("Kirsche should be added", 1, result.vocabularyAdded)
+        assertEquals("Both orphan review events must be safely skipped", 0, result.reviewEventsAdded)
+
+        // Ensure target DB has exactly zero review events and Apfel was never cross-assigned
+        val allReviews = targetDb.reviewEventDao().getAllEventsList()
+        assertTrue("No orphan review events may be persisted in target DB", allReviews.isEmpty())
+    }
+
     private fun createPaddedStream(prefix: ByteArray, totalBytes: Long): InputStream {
         return object : InputStream() {
             private var bytesRead: Long = 0
@@ -567,9 +637,9 @@ class BackupManagerIntegrationTest {
     }
 
     @Test
-    fun importFromStream_withExactLimit_isReadAndProcessedWithoutCapacityException() {
+    fun importFromStream_withExactPlaintextLimit_isReadAndProcessedWithoutCapacityException() {
         runBlocking {
-            // Build a valid minimal backup and pad with spaces to exactly MAX_BACKUP_FILE_BYTES
+            // Build a valid minimal backup and pad with spaces to exactly MAX_PLAINTEXT_BACKUP_BYTES (10 MiB)
             val baseJson = JSONObject().apply {
                 put("format", "deutschflow-library")
                 put("version", CURRENT_BACKUP_VERSION)
@@ -581,15 +651,37 @@ class BackupManagerIntegrationTest {
             }.toString()
 
             val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
-            val stream = createPaddedStream(baseBytes, MAX_BACKUP_FILE_BYTES.toLong())
+            val stream = createPaddedStream(baseBytes, MAX_PLAINTEXT_BACKUP_BYTES.toLong())
 
-            val result = targetBackupManager.importFromStream(stream)
+            val result = targetBackupManager.importFromStream(stream, null)
             assertNotNull(result)
         }
     }
 
     @Test
-    fun importFromStream_withOneByteOverLimit_throwsCapacityExceededWithoutExhaustingMemory() {
+    fun importFromStream_withExactEncryptedStreamLimit_isReadAndProcessedWithoutCapacityException() {
+        runBlocking {
+            // Build a valid encrypted backup envelope and pad with spaces to exactly MAX_STREAM_READ_BYTES (15 MiB)
+            sourceDb.vocabularyDao().insertVocabulary(
+                VocabularyEntity(
+                    germanText = "Grenze",
+                    germanTextKey = germanKey("Grenze"),
+                    englishTranslation = "boundary, border",
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            val encryptedEnvelope = sourceBackupManager.exportBackup(testPassphrase)
+            val baseBytes = encryptedEnvelope.toByteArray(Charsets.UTF_8)
+            val stream = createPaddedStream(baseBytes, MAX_STREAM_READ_BYTES.toLong())
+
+            val result = targetBackupManager.importFromStream(stream, testPassphrase)
+            assertNotNull(result)
+            assertEquals(1, result.vocabularyAdded)
+        }
+    }
+
+    @Test
+    fun importFromStream_withOneByteOverStreamLimit_throwsCapacityExceededWithoutExhaustingMemory() {
         runBlocking {
             val baseJson = JSONObject().apply {
                 put("format", "deutschflow-library")
@@ -601,11 +693,38 @@ class BackupManagerIntegrationTest {
             }.toString()
 
             val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
-            val stream = createPaddedStream(baseBytes, MAX_BACKUP_FILE_BYTES.toLong() + 1L)
+            // One byte over MAX_STREAM_READ_BYTES (15 MiB + 1 byte)
+            val stream = createPaddedStream(baseBytes, MAX_STREAM_READ_BYTES.toLong() + 1L)
 
             assertThrows(BackupException.CapacityExceeded::class.java) {
                 runBlocking {
                     targetBackupManager.importFromStream(stream)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun importBackup_unencryptedPlaintextOneByteOverLimit_throwsCapacityExceeded() {
+        runBlocking {
+            // Unencrypted plaintext exceeding MAX_PLAINTEXT_BACKUP_BYTES (10 MiB) must be rejected
+            val baseJson = JSONObject().apply {
+                put("format", "deutschflow-library")
+                put("version", CURRENT_BACKUP_VERSION)
+                put("vocabulary", org.json.JSONArray())
+                put("transcripts", org.json.JSONArray())
+                put("userStats", org.json.JSONArray())
+                put("activityLog", org.json.JSONArray())
+            }.toString()
+
+            val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
+            // Stream of MAX_PLAINTEXT_BACKUP_BYTES + 1L is within stream read limit (15 MiB),
+            // but importBackup validates unencrypted payload <= MAX_PLAINTEXT_BACKUP_BYTES (10 MiB)
+            val stream = createPaddedStream(baseBytes, MAX_PLAINTEXT_BACKUP_BYTES.toLong() + 1L)
+
+            assertThrows(BackupException.CapacityExceeded::class.java) {
+                runBlocking {
+                    targetBackupManager.importFromStream(stream, null)
                 }
             }
         }
@@ -918,5 +1037,197 @@ class BackupManagerIntegrationTest {
 
         val reviewsAfterRollback = targetDb.reviewEventDao().getAllEventsList()
         assertEquals(0, reviewsAfterRollback.size)
+    }
+
+    @Test
+    fun roundTrip_smallPlaintextBackup_preservesAllData() = runBlocking {
+        val now = System.currentTimeMillis()
+        val vocabDao = sourceDb.vocabularyDao()
+
+        vocabDao.insertVocabulary(
+            VocabularyEntity(
+                germanText = "einfach",
+                germanTextKey = germanKey("einfach"),
+                englishTranslation = "simple",
+                timestamp = now,
+                interval = 3,
+                easeFactor = 2.5f,
+                reviewCount = 2,
+                nextReview = now + 86400000L * 3
+            )
+        )
+
+        val unencrypted = sourceBackupManager.exportBackup(passphrase = null)
+        val result = targetBackupManager.importBackup(unencrypted, passphrase = null)
+
+        assertEquals(1, result.vocabularyAdded)
+        val targetItem = targetDb.vocabularyDao().findByGermanText("einfach")
+        assertNotNull(targetItem)
+        assertEquals(3, targetItem!!.interval)
+    }
+
+    @Test
+    fun roundTrip_encryptedBackup_near7MiB_preservesAllData() = runBlocking {
+        val now = System.currentTimeMillis()
+        val vocabDao = sourceDb.vocabularyDao()
+        val transcriptDao = sourceDb.transcriptDao()
+        val reviewDao = sourceDb.reviewEventDao()
+
+        val vocab = VocabularyEntity(
+            germanText = "großartig",
+            germanTextKey = germanKey("großartig"),
+            englishTranslation = "magnificent, great",
+            timestamp = now - 50000,
+            interval = 10,
+            easeFactor = 2.6f,
+            reviewCount = 4,
+            nextReview = now + 86400000L * 10
+        )
+        vocabDao.insertVocabulary(vocab)
+        val persistedVocab = vocabDao.findByGermanText("großartig")!!
+
+        val revRemoteId = UUID.randomUUID().toString()
+        reviewDao.insert(
+            ReviewEventEntity(
+                vocabularyId = persistedVocab.id,
+                rating = "GOOD",
+                scheduledDays = 10,
+                actualDays = 10,
+                reviewedAtTimestamp = now - 1000,
+                isExtraPractice = false,
+                remoteId = revRemoteId
+            )
+        )
+
+        // Build ~7 MiB of data using 70 transcripts referencing shared string
+        val sharedText = "Deutsches Übungsmaterial für DeutschFlow. ".repeat(2500) // ~105 KB
+        for (i in 0 until 70) {
+            transcriptDao.insertTranscript(
+                TranscriptEntity(
+                    fullText = "Lektion $i: $sharedText",
+                    translation = "Lesson $i translation.",
+                    analysisJson = "{\"lesson\": $i}",
+                    timestamp = now - (i * 1000L),
+                    remoteId = UUID.randomUUID().toString()
+                )
+            )
+        }
+
+        val outStream = ByteArrayOutputStream()
+        sourceBackupManager.exportToStream(outStream, testPassphrase)
+        val encryptedBytes = outStream.toByteArray()
+        assertTrue("Encrypted backup should be >= 7 MiB", encryptedBytes.size >= 7 * 1024 * 1024)
+
+        val inStream = ByteArrayInputStream(encryptedBytes)
+        val result = targetBackupManager.importFromStream(inStream, testPassphrase)
+
+        assertEquals(1, result.vocabularyAdded)
+        assertEquals(70, result.transcriptsAdded)
+        assertEquals(1, result.reviewEventsAdded)
+
+        val targetVocab = targetDb.vocabularyDao().findByGermanText("großartig")
+        assertNotNull(targetVocab)
+        assertEquals(10, targetVocab!!.interval)
+
+        val targetReviews = targetDb.reviewEventDao().getAllEventsList()
+        assertEquals(1, targetReviews.size)
+        assertEquals(targetVocab.id, targetReviews[0].vocabularyId)
+    }
+
+    @Test
+    fun roundTrip_encryptedBackup_near8MiB_preservesAllData() = runBlocking {
+        // Plaintext near 8 MiB previously failed because AES-GCM + Base64 expanded it
+        // to ~10.7 MiB, exceeding the legacy 10 MiB stream limit.
+        val now = System.currentTimeMillis()
+        val vocabDao = sourceDb.vocabularyDao()
+        val transcriptDao = sourceDb.transcriptDao()
+
+        vocabDao.insertVocabulary(
+            VocabularyEntity(
+                germanText = "Erfolg",
+                germanTextKey = germanKey("Erfolg"),
+                englishTranslation = "success",
+                timestamp = now - 20000,
+                interval = 21,
+                easeFactor = 2.7f,
+                reviewCount = 5,
+                nextReview = now + 86400000L * 21
+            )
+        )
+
+        val sharedText = "Deutsches Übungsmaterial für DeutschFlow. ".repeat(2500) // ~105 KB
+        for (i in 0 until 80) { // 80 * 105 KB = ~8.4 MB plaintext
+            transcriptDao.insertTranscript(
+                TranscriptEntity(
+                    fullText = "Kapitel $i: $sharedText",
+                    translation = "Chapter $i translation.",
+                    analysisJson = "{\"chapter\": $i}",
+                    timestamp = now - (i * 500L),
+                    remoteId = UUID.randomUUID().toString()
+                )
+            )
+        }
+
+        val outStream = ByteArrayOutputStream()
+        sourceBackupManager.exportToStream(outStream, testPassphrase)
+        val encryptedBytes = outStream.toByteArray()
+        // Encrypted envelope must exceed 10 MiB to prove the fix works!
+        assertTrue(
+            "Encrypted envelope for ~8.4 MiB plaintext must exceed 10 MiB (actual: ${encryptedBytes.size} bytes)",
+            encryptedBytes.size > 10 * 1024 * 1024
+        )
+        assertTrue(
+            "Encrypted envelope must be within 15 MiB limit",
+            encryptedBytes.size <= MAX_ENCRYPTED_BACKUP_FILE_BYTES
+        )
+
+        val inStream = ByteArrayInputStream(encryptedBytes)
+        val result = targetBackupManager.importFromStream(inStream, testPassphrase)
+
+        assertEquals(1, result.vocabularyAdded)
+        assertEquals(80, result.transcriptsAdded)
+
+        val targetVocab = targetDb.vocabularyDao().findByGermanText("Erfolg")
+        assertNotNull(targetVocab)
+        assertEquals(21, targetVocab!!.interval)
+        assertEquals(80, targetDb.transcriptDao().getAllTranscriptsList().size)
+    }
+
+    @Test
+    fun importBackup_withMalformedBase64Ciphertext_throwsCorruptedData() = runBlocking {
+        sourceDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(germanText = "Kugelschreiber", germanTextKey = "kugelschreiber", englishTranslation = "ballpoint pen")
+        )
+        val encrypted = sourceBackupManager.exportBackup(testPassphrase)
+        val json = JSONObject(encrypted)
+        json.put("ciphertext", "###NOT_VALID_BASE64_DATA???%%%&&&")
+
+        try {
+            targetBackupManager.importBackup(json.toString(), testPassphrase)
+            fail("Expected CorruptedData or InvalidFormat")
+        } catch (e: BackupException) {
+            assertTrue(e is BackupException.CorruptedData || e is BackupException.InvalidFormat)
+        }
+    }
+
+    @Test
+    fun importBackup_withTamperedCiphertextAuthTag_throwsCorruptedDataOrWrongPassphrase() = runBlocking {
+        sourceDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(germanText = "Feder", germanTextKey = "feder", englishTranslation = "feather")
+        )
+        val encrypted = sourceBackupManager.exportBackup(testPassphrase)
+        val json = JSONObject(encrypted)
+        val rawBase64 = json.getString("ciphertext")
+        val decoded = android.util.Base64.decode(rawBase64, android.util.Base64.DEFAULT)
+        // Invert the last byte (part of the 16-byte GCM authentication tag)
+        decoded[decoded.size - 1] = (decoded[decoded.size - 1].toInt() xor 0xFF).toByte()
+        json.put("ciphertext", android.util.Base64.encodeToString(decoded, android.util.Base64.NO_WRAP))
+
+        try {
+            targetBackupManager.importBackup(json.toString(), testPassphrase)
+            fail("Expected authentication tag verification failure")
+        } catch (e: BackupException) {
+            assertTrue(e is BackupException.CorruptedData || e is BackupException.WrongPassphrase)
+        }
     }
 }

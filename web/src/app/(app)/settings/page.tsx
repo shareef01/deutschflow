@@ -15,6 +15,7 @@ import {
   WarningIcon
 } from "@/components/icons";
 import type { Lang } from "@/lib/i18n";
+import { performLogout } from "@/lib/auth/logout";
 
 export default function SettingsPage() {
   const {
@@ -53,75 +54,15 @@ export default function SettingsPage() {
     setIsLoggingOut(true);
     setMessage(null);
 
-    // 1. Verify server session termination first (HttpOnly cookie can only be cleared by server)
-    try {
-      const res = await fetch("/api/logout", {
-        method: "POST",
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) {
-        setIsLoggingOut(false);
-        setMessage(t("settings.logoutFailedServer", [String(res.status)]));
-        return;
-      }
-    } catch {
+    const result = await performLogout();
+    if (!result.success) {
       setIsLoggingOut(false);
-      setMessage(t("settings.logoutFailedOffline"));
-      return;
-    }
-
-    // 2. Server session verified terminated. Purge Cache API across all DeutschFlow caches
-    try {
-      if (typeof window !== "undefined" && "caches" in window) {
-        const cacheKeys = await window.caches.keys();
-        for (const key of cacheKeys) {
-          if (key.startsWith("deutschflow-")) {
-            const cache = await window.caches.open(key);
-            const requests = await cache.keys();
-            for (const req of requests) {
-              const reqUrl = new URL(req.url);
-              // Match any protected navigation route with or without query strings
-              if (
-                !reqUrl.pathname.startsWith("/_next/") &&
-                !reqUrl.pathname.startsWith("/icons/") &&
-                reqUrl.pathname !== "/favicon.ico" &&
-                reqUrl.pathname !== "/manifest.json" &&
-                reqUrl.pathname !== "/sw.js" &&
-                reqUrl.pathname !== "/login" &&
-                !reqUrl.pathname.startsWith("/api/")
-              ) {
-                await cache.delete(req);
-              }
-            }
-          }
-        }
+      if (result.errorType === "server") {
+        setMessage(t("settings.logoutFailedServer", [String(result.statusCode ?? "error")]));
+      } else {
+        setMessage(t("settings.logoutFailedOffline"));
       }
-    } catch {
-      // Best-effort Cache API purge
     }
-
-    // 3. Notify service worker to purge internal caches and inform clients
-    try {
-      if (typeof navigator !== "undefined" && navigator.serviceWorker?.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: "LOGOUT" });
-      }
-    } catch {
-      // Best-effort SW message
-    }
-
-    // 4. Notify all other open tabs to prevent stale authenticated UI
-    try {
-      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-        const authChannel = new BroadcastChannel("deutschflow_auth");
-        authChannel.postMessage({ type: "LOGOUT" });
-        authChannel.close();
-      }
-    } catch {
-      // Best-effort cross-tab broadcast
-    }
-
-    // 5. Navigate to login
-    window.location.href = "/login";
   };
 
   const onRestore = (event: React.ChangeEvent<HTMLInputElement>) => {

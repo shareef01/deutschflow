@@ -73,20 +73,20 @@ describe("Service Worker Cache Ownership", () => {
     expect(swContent).toContain("await cache.delete(route)");
   });
 
-  it("listens for LOGOUT message to immediately purge app cache", () => {
+  it("supports PURGE_PROTECTED_CACHE message with MessageChannel acknowledgement", () => {
     expect(swContent).toContain('self.addEventListener("message"');
-    expect(swContent).toContain('event.data.type === "LOGOUT"');
-    expect(swContent).toContain("event.waitUntil(purgeAppShellCache())");
+    expect(swContent).toContain('event.data.type === "PURGE_PROTECTED_CACHE"');
+    expect(swContent).toContain("port.postMessage({ type: \"CACHE_PURGED\", success: true })");
   });
 
-  it("intercepts /api/logout to purge app cache before network completes", () => {
-    expect(swContent).toContain('url.pathname === "/api/logout"');
-    expect(swContent).toContain("event.waitUntil(purgeAppShellCache())");
+  it("does NOT intercept /api/logout in fetch listener, ensuring server-side session termination executes cleanly", () => {
+    expect(swContent).not.toContain('url.pathname === "/api/logout"');
+    expect(swContent).toContain('if (url.pathname.startsWith("/api/"))');
   });
 
-  it("purges cache on direct /login navigation and prevents leaking cached shell offline", () => {
-    expect(swContent).toContain('url.pathname === "/login"');
-    expect(swContent).toContain("Offline - Login unavailable");
+  it("does NOT purge cache or terminate sessions simply when navigating directly to /login", () => {
+    expect(swContent).toContain("Visiting /login directly must NOT terminate sessions in other tabs or purge cache.");
+    expect(swContent).toContain('Offline - Login unavailable');
   });
 
   it("identifies protected app routes with query-string variations and enumerates cache requests", () => {
@@ -96,8 +96,8 @@ describe("Service Worker Cache Ownership", () => {
     expect(swContent).toContain("await cache.delete(req);");
   });
 
-  it("notifies all open client tabs with SESSION_TERMINATED to eliminate stale UI", () => {
-    expect(swContent).toContain('self.clients.matchAll({ type: "window", includeUncontrolled: true })');
-    expect(swContent).toContain('client.postMessage({ type: "SESSION_TERMINATED" })');
+  it("purges cache when server redirects protected navigation to /login due to expired session", () => {
+    expect(swContent).toContain('(response.redirected && new URL(response.url).pathname === "/login")');
+    expect(swContent).toContain("event.waitUntil(purgeAppShellCache())");
   });
 });

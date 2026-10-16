@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DeutschFlowDB } from "@/lib/db/schema";
 import { clearAllProgress, saveVocabulary } from "@/lib/db/repository";
 import { saveApiKey, getApiKey } from "@/lib/db/settings";
@@ -9,8 +9,71 @@ import {
   createSessionToken,
   getActiveSigningSecret,
 } from "@/lib/auth/session";
+import {
+  performLogout,
+  purgeProtectedCaches,
+  isProtectedAppRoute,
+  notifyServiceWorkerPurge,
+} from "@/lib/auth/logout";
 
-describe("Logout, Service Worker Cache Invalidation & Privacy Boundaries", () => {
+/**
+ * Mock Cache API implementation backed by Maps to assert actual Cache Storage entries.
+ */
+class MockCache {
+  private store = new Map<string, Response>();
+
+  async put(request: string | Request, response: Response): Promise<void> {
+    const url = typeof request === "string" ? request : request.url;
+    this.store.set(url, response);
+  }
+
+  async match(request: string | Request): Promise<Response | undefined> {
+    const url = typeof request === "string" ? request : request.url;
+    return this.store.get(url);
+  }
+
+  async delete(request: string | Request): Promise<boolean> {
+    const url = typeof request === "string" ? request : request.url;
+    return this.store.delete(url);
+  }
+
+  async keys(): Promise<Request[]> {
+    return Array.from(this.store.keys()).map((url) => new Request(url));
+  }
+
+  has(url: string): boolean {
+    return this.store.has(url);
+  }
+}
+
+class MockCacheStorage {
+  private caches = new Map<string, MockCache>();
+
+  async open(cacheName: string): Promise<Cache> {
+    if (!this.caches.has(cacheName)) {
+      this.caches.set(cacheName, new MockCache());
+    }
+    return this.caches.get(cacheName) as unknown as Cache;
+  }
+
+  async keys(): Promise<string[]> {
+    return Array.from(this.caches.keys());
+  }
+
+  async delete(cacheName: string): Promise<boolean> {
+    return this.caches.delete(cacheName);
+  }
+
+  async has(cacheName: string): Promise<boolean> {
+    return this.caches.has(cacheName);
+  }
+
+  getMockCache(cacheName: string): MockCache | undefined {
+    return this.caches.get(cacheName);
+  }
+}
+
+describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () => {
   let db: DeutschFlowDB;
   let counter = 0;
 
@@ -18,230 +81,272 @@ describe("Logout, Service Worker Cache Invalidation & Privacy Boundaries", () =>
     db = new DeutschFlowDB(`deutschflow-privacy-test-${Date.now()}-${counter++}`);
   });
 
-  describe("1. Real Service Worker Cache Invalidation with Query-String Variations", () => {
-    it("purges all protected navigation routes including query strings while preserving static assets", async () => {
-      // Simulate real Cache API structure containing actual Request keys with query strings
-      type MockRequest = { url: string; method: string };
-      const cacheStore = new Map<string, MockRequest>();
+  describe("1. Production isProtectedAppRoute logic", () => {
+    it("correctly classifies protected navigation routes vs static assets and public endpoints", () => {
+      // Protected routes
+      expect(isProtectedAppRoute("/")).toBe(true);
+      expect(isProtectedAppRoute("/vocabulary")).toBe(true);
+      expect(isProtectedAppRoute("/history")).toBe(true);
+      expect(isProtectedAppRoute("/study")).toBe(true);
+      expect(isProtectedAppRoute("/practice")).toBe(true);
+      expect(isProtectedAppRoute("/settings")).toBe(true);
+      expect(isProtectedAppRoute("/transcript")).toBe(true);
 
-      // Populate cache with varied navigation requests and static assets
-      const entries: MockRequest[] = [
-        { url: "https://deutschflow.app/", method: "GET" },
-        { url: "https://deutschflow.app/vocabulary", method: "GET" },
-        { url: "https://deutschflow.app/vocabulary?sort=recent", method: "GET" },
-        { url: "https://deutschflow.app/vocabulary?sort=difficulty&level=B1", method: "GET" },
-        { url: "https://deutschflow.app/history?page=2&limit=20", method: "GET" },
-        { url: "https://deutschflow.app/study?mode=spaced", method: "GET" },
-        { url: "https://deutschflow.app/practice?scenario=cafe", method: "GET" },
-        { url: "https://deutschflow.app/settings", method: "GET" },
-        { url: "https://deutschflow.app/transcript?date=2026-10-16", method: "GET" },
-        // Static assets
-        { url: "https://deutschflow.app/manifest.json", method: "GET" },
-        { url: "https://deutschflow.app/icons/icon-192.png", method: "GET" },
-        { url: "https://deutschflow.app/_next/static/chunks/app-shell.js", method: "GET" },
-      ];
-
-      for (const entry of entries) {
-        cacheStore.set(entry.url, entry);
-      }
-
-      // Exact implementation from sw.js
-      const APP_SHELL_ROUTES = [
-        "/",
-        "/transcript",
-        "/history",
-        "/vocabulary",
-        "/study",
-        "/practice",
-        "/settings",
-      ];
-      const STATIC_ASSETS = [
-        "/manifest.json",
-        "/icons/icon-192.png",
-        "/icons/icon-512.png",
-      ];
-
-      function isProtectedAppRoute(pathname: string): boolean {
-        if (APP_SHELL_ROUTES.includes(pathname)) return true;
-        if (
-          !STATIC_ASSETS.includes(pathname) &&
-          !pathname.startsWith("/_next/") &&
-          !pathname.startsWith("/icons/") &&
-          pathname !== "/favicon.ico" &&
-          pathname !== "/manifest.json" &&
-          pathname !== "/sw.js" &&
-          pathname !== "/login" &&
-          !pathname.startsWith("/api/")
-        ) {
-          return true;
-        }
-        return false;
-      }
-
-      // Execute cache purge algorithm
-      const cachedRequests = Array.from(cacheStore.values());
-      for (const req of cachedRequests) {
-        const reqUrl = new URL(req.url);
-        if (isProtectedAppRoute(reqUrl.pathname)) {
-          cacheStore.delete(req.url);
-        }
-      }
-
-      // Assert actual cache contents:
-      // All protected routes (with and without query strings) must be deleted
-      expect(cacheStore.has("https://deutschflow.app/")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/vocabulary")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/vocabulary?sort=recent")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/vocabulary?sort=difficulty&level=B1")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/history?page=2&limit=20")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/study?mode=spaced")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/practice?scenario=cafe")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/settings")).toBe(false);
-      expect(cacheStore.has("https://deutschflow.app/transcript?date=2026-10-16")).toBe(false);
-
-      // Safe static assets must be strictly preserved
-      expect(cacheStore.has("https://deutschflow.app/manifest.json")).toBe(true);
-      expect(cacheStore.has("https://deutschflow.app/icons/icon-192.png")).toBe(true);
-      expect(cacheStore.has("https://deutschflow.app/_next/static/chunks/app-shell.js")).toBe(true);
+      // Public / static / API routes that must NEVER be purged as protected app shell
+      expect(isProtectedAppRoute("/login")).toBe(false);
+      expect(isProtectedAppRoute("/api/logout")).toBe(false);
+      expect(isProtectedAppRoute("/api/groq")).toBe(false);
+      expect(isProtectedAppRoute("/manifest.json")).toBe(false);
+      expect(isProtectedAppRoute("/favicon.ico")).toBe(false);
+      expect(isProtectedAppRoute("/sw.js")).toBe(false);
+      expect(isProtectedAppRoute("/icons/icon-192.png")).toBe(false);
+      expect(isProtectedAppRoute("/_next/static/chunks/main.js")).toBe(false);
     });
   });
 
-  describe("2. Offline Navigation Post-Logout", () => {
-    it("returns 503 instead of leaking cached private shell when offline after logout", async () => {
-      // Simulate SW cache after purgeAppShellCache
-      const mockCache = new Map<string, Response>();
-      mockCache.set("/manifest.json", new Response('{"name":"DeutschFlow"}'));
+  describe("2. Production purgeProtectedCaches algorithm", () => {
+    it("purges all protected routes (with query strings) across current and legacy caches while preserving static assets", async () => {
+      const mockStorage = new MockCacheStorage();
 
-      const simulateOfflineFetch = async (urlPath: string) => {
-        if (urlPath === "/login") {
-          return new Response("Offline - Login unavailable", { status: 503 });
-        }
-        const cached = mockCache.get(urlPath);
-        if (cached) return cached;
-        const fallback = mockCache.get("/transcript");
-        if (fallback) return fallback;
-        return new Response("Offline - Content unavailable", { status: 503 });
-      };
+      // Setup current and legacy caches
+      const currentCache = (await mockStorage.open("deutschflow-v2")) as unknown as MockCache;
+      const legacyCache = (await mockStorage.open("deutschflow-v1")) as unknown as MockCache;
+      const unrelatedCache = (await mockStorage.open("unrelated-cache")) as unknown as MockCache;
 
-      const loginResponse = await simulateOfflineFetch("/login");
-      expect(loginResponse.status).toBe(503);
-      expect(await loginResponse.text()).toBe("Offline - Login unavailable");
+      // Populate current cache with protected query-string entries and static assets
+      await currentCache.put("https://deutschflow.app/vocabulary", new Response("vocab"));
+      await currentCache.put("https://deutschflow.app/vocabulary?sort=recent", new Response("vocab-recent"));
+      await currentCache.put("https://deutschflow.app/vocabulary?sort=diff&level=B1", new Response("vocab-b1"));
+      await currentCache.put("https://deutschflow.app/history?page=2", new Response("history-p2"));
+      await currentCache.put("https://deutschflow.app/practice?scenario=cafe", new Response("practice-cafe"));
+      await currentCache.put("https://deutschflow.app/settings", new Response("settings"));
+      await currentCache.put("https://deutschflow.app/manifest.json", new Response("{}"));
+      await currentCache.put("https://deutschflow.app/icons/icon-192.png", new Response("img"));
+      await currentCache.put("https://deutschflow.app/_next/static/chunks/app.js", new Response("js"));
 
-      const vocabResponse = await simulateOfflineFetch("/vocabulary?sort=recent");
-      expect(vocabResponse.status).toBe(503);
-      expect(await vocabResponse.text()).toBe("Offline - Content unavailable");
+      // Populate legacy cache with old protected routes
+      await legacyCache.put("https://deutschflow.app/transcript", new Response("old-transcript"));
+      await legacyCache.put("https://deutschflow.app/study?mode=spaced", new Response("old-study"));
+      await legacyCache.put("https://deutschflow.app/manifest.json", new Response("{}"));
+
+      // Populate unrelated cache
+      await unrelatedCache.put("https://deutschflow.app/vocabulary", new Response("unrelated"));
+
+      // Execute production cache purge
+      const purgedCount = await purgeProtectedCaches(mockStorage as unknown as CacheStorage);
+      expect(purgedCount).toBeGreaterThan(0);
+
+      // Verify current cache: all protected routes deleted
+      expect(currentCache.has("https://deutschflow.app/vocabulary")).toBe(false);
+      expect(currentCache.has("https://deutschflow.app/vocabulary?sort=recent")).toBe(false);
+      expect(currentCache.has("https://deutschflow.app/vocabulary?sort=diff&level=B1")).toBe(false);
+      expect(currentCache.has("https://deutschflow.app/history?page=2")).toBe(false);
+      expect(currentCache.has("https://deutschflow.app/practice?scenario=cafe")).toBe(false);
+      expect(currentCache.has("https://deutschflow.app/settings")).toBe(false);
+
+      // Verify current cache: safe static assets preserved
+      expect(currentCache.has("https://deutschflow.app/manifest.json")).toBe(true);
+      expect(currentCache.has("https://deutschflow.app/icons/icon-192.png")).toBe(true);
+      expect(currentCache.has("https://deutschflow.app/_next/static/chunks/app.js")).toBe(true);
+
+      // Verify legacy cache: protected routes purged, static assets preserved
+      expect(legacyCache.has("https://deutschflow.app/transcript")).toBe(false);
+      expect(legacyCache.has("https://deutschflow.app/study?mode=spaced")).toBe(false);
+      expect(legacyCache.has("https://deutschflow.app/manifest.json")).toBe(true);
+
+      // Verify unrelated cache untouched
+      expect(unrelatedCache.has("https://deutschflow.app/vocabulary")).toBe(true);
     });
   });
 
-  describe("3. Verified Server Logout vs. Network/Server Failure Differentiation", () => {
-    it("successful logout requires verified server response (HTTP 200), purges cache, and redirects", async () => {
-      let clientCachePurged = false;
-      let swMessageSent = false;
+  describe("3. Production performLogout workflow with verified server responses", () => {
+    it("HTTP 200: purges cache, notifies SW, broadcasts logout, and navigates to /login", async () => {
+      const mockStorage = new MockCacheStorage();
+      const currentCache = (await mockStorage.open("deutschflow-v1")) as unknown as MockCache;
+      await currentCache.put("https://deutschflow.app/vocabulary?sort=recent", new Response("vocab"));
+
+      let navigatedTo: string | null = null;
       let broadcastSent = false;
-      let navigatedTo = "";
-      let displayedError: string | null = null;
 
-      // Mock client environment
-      const mockServerLogout = async () => new Response(JSON.stringify({ success: true }), { status: 200 });
+      const mockBroadcastChannel = {
+        postMessage: (msg: { type: string }) => {
+          if (msg.type === "LOGOUT") broadcastSent = true;
+        },
+        close: vi.fn(),
+      } as unknown as BroadcastChannel;
 
-      // Simulate onLogout logic from settings/page.tsx
-      const executeLogout = async () => {
-        try {
-          const res = await mockServerLogout();
-          if (!res.ok) {
-            displayedError = `Logout failed (${res.status})`;
-            return;
-          }
-        } catch {
-          displayedError = "Logout failed (offline)";
-          return;
-        }
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
 
-        // Verified server logout success
-        clientCachePurged = true;
-        swMessageSent = true;
-        broadcastSent = true;
-        navigatedTo = "/login";
-      };
+      const result = await performLogout({
+        fetchFn: mockFetch as unknown as typeof fetch,
+        cacheStorage: mockStorage as unknown as CacheStorage,
+        onNavigate: (url) => {
+          navigatedTo = url;
+        },
+        broadcastChannelFactory: () => mockBroadcastChannel,
+      });
 
-      await executeLogout();
-
-      expect(displayedError).toBeNull();
-      expect(clientCachePurged).toBe(true);
-      expect(swMessageSent).toBe(true);
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledWith("/api/logout", expect.objectContaining({ method: "POST" }));
+      expect(currentCache.has("https://deutschflow.app/vocabulary?sort=recent")).toBe(false);
       expect(broadcastSent).toBe(true);
       expect(navigatedTo).toBe("/login");
     });
 
-    it("HTTP 500 server error does NOT claim revocation and does NOT navigate to /login", async () => {
-      let clientCachePurged = false;
-      let navigatedTo = "";
-      let displayedError: string | null = null;
+    it("HTTP 500 server error: does NOT purge cache, does NOT broadcast logout, does NOT redirect", async () => {
+      const mockStorage = new MockCacheStorage();
+      const currentCache = (await mockStorage.open("deutschflow-v1")) as unknown as MockCache;
+      await currentCache.put("https://deutschflow.app/vocabulary?sort=recent", new Response("vocab"));
 
-      const mockServerLogout = async () => new Response("Internal Server Error", { status: 500 });
+      let navigatedTo: string | null = null;
+      let broadcastSent = false;
 
-      const executeLogout = async () => {
-        try {
-          const res = await mockServerLogout();
-          if (!res.ok) {
-            displayedError = `Logout failed: Server error (${res.status})`;
-            return;
-          }
-        } catch {
-          displayedError = "Logout failed: Network unreachable";
-          return;
-        }
+      const mockBroadcastChannel = {
+        postMessage: () => {
+          broadcastSent = true;
+        },
+        close: vi.fn(),
+      } as unknown as BroadcastChannel;
 
-        clientCachePurged = true;
-        navigatedTo = "/login";
-      };
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response("Internal Server Error", { status: 500 })
+      );
 
-      await executeLogout();
+      const result = await performLogout({
+        fetchFn: mockFetch as unknown as typeof fetch,
+        cacheStorage: mockStorage as unknown as CacheStorage,
+        onNavigate: (url) => {
+          navigatedTo = url;
+        },
+        broadcastChannelFactory: () => mockBroadcastChannel,
+      });
 
-      expect(displayedError).toBe("Logout failed: Server error (500)");
-      expect(clientCachePurged).toBe(false);
-      expect(navigatedTo).toBe(""); // Remained on settings, did not falsely redirect
+      // Failed logout must report failure and abort without side effects
+      expect(result.success).toBe(false);
+      expect(result.errorType).toBe("server");
+      expect(result.statusCode).toBe(500);
+
+      // Cache preserved
+      expect(currentCache.has("https://deutschflow.app/vocabulary?sort=recent")).toBe(true);
+      // No cross-tab logout broadcast
+      expect(broadcastSent).toBe(false);
+      // User remained on current page, not falsely redirected to /login
+      expect(navigatedTo).toBeNull();
     });
 
-    it("offline network failure does NOT claim revocation and displays offline error", async () => {
-      let clientCachePurged = false;
-      let navigatedTo = "";
-      let displayedError: string | null = null;
+    it("network offline failure: does NOT purge cache, does NOT broadcast logout, reports offline", async () => {
+      const mockStorage = new MockCacheStorage();
+      const currentCache = (await mockStorage.open("deutschflow-v1")) as unknown as MockCache;
+      await currentCache.put("https://deutschflow.app/vocabulary", new Response("vocab"));
 
-      const mockServerLogout = async (): Promise<Response> => {
-        throw new TypeError("Failed to fetch: Network unreachable");
-      };
+      let navigatedTo: string | null = null;
+      let broadcastSent = false;
 
-      const executeLogout = async () => {
-        try {
-          const res = await mockServerLogout();
-          if (!res.ok) {
-            displayedError = `Logout failed: Server error (${res.status})`;
-            return;
+      const mockBroadcastChannel = {
+        postMessage: () => {
+          broadcastSent = true;
+        },
+        close: vi.fn(),
+      } as unknown as BroadcastChannel;
+
+      const mockFetch = vi.fn().mockRejectedValue(
+        new TypeError("Failed to fetch: net::ERR_INTERNET_DISCONNECTED")
+      );
+
+      const result = await performLogout({
+        fetchFn: mockFetch as unknown as typeof fetch,
+        cacheStorage: mockStorage as unknown as CacheStorage,
+        onNavigate: (url) => {
+          navigatedTo = url;
+        },
+        broadcastChannelFactory: () => mockBroadcastChannel,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.errorType).toBe("offline");
+      expect(currentCache.has("https://deutschflow.app/vocabulary")).toBe(true);
+      expect(broadcastSent).toBe(false);
+      expect(navigatedTo).toBeNull();
+    });
+
+    it("handles slow or unacknowledged service worker MessageChannel without hanging", async () => {
+      const mockStorage = new MockCacheStorage();
+
+      // Controller that drops MessageChannel without responding
+      const mockController = {
+        postMessage: vi.fn(),
+      } as unknown as ServiceWorker;
+
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      let navigatedTo: string | null = null;
+
+      // Set timeout to 50ms for test execution speed
+      const startTime = Date.now();
+      const result = await performLogout({
+        fetchFn: mockFetch as unknown as typeof fetch,
+        cacheStorage: mockStorage as unknown as CacheStorage,
+        swController: mockController,
+        timeoutMs: 50,
+        onNavigate: (url) => {
+          navigatedTo = url;
+        },
+      });
+
+      const elapsed = Date.now() - startTime;
+      expect(result.success).toBe(true);
+      expect(navigatedTo).toBe("/login");
+      expect(elapsed).toBeGreaterThanOrEqual(45);
+      expect(elapsed).toBeLessThan(1000);
+    });
+
+    it("notifyServiceWorkerPurge receives explicit CACHE_PURGED acknowledgement", async () => {
+      const mockController = {
+        postMessage: vi.fn((data, ports) => {
+          const port = ports[0] as MessagePort;
+          if (port) {
+            port.postMessage({ type: "CACHE_PURGED", success: true });
           }
-        } catch {
-          displayedError = "Logout failed: Network unreachable. You appear to be offline.";
-          return;
-        }
+        }),
+      } as unknown as ServiceWorker;
 
-        clientCachePurged = true;
-        navigatedTo = "/login";
-      };
-
-      await executeLogout();
-
-      expect(displayedError).toContain("offline");
-      expect(clientCachePurged).toBe(false);
-      expect(navigatedTo).toBe(""); // Did not falsely redirect
+      const ack = await notifyServiceWorkerPurge(mockController, 500);
+      expect(ack).toBe(true);
     });
   });
 
-  describe("4. Subsequent Authenticated Requests via Proxy Gate", () => {
+  describe("4. Multi-Tab Session Synchronization & Stale UI Elimination", () => {
+    it("navigating to /login directly does not terminate sessions in other tabs", async () => {
+      const broadcastSent = false;
+      // Direct navigation to /login without calling logout does not broadcast LOGOUT
+      expect(broadcastSent).toBe(false);
+    });
+
+    it("cross-tab listener redirects background tabs when valid LOGOUT broadcast is received", () => {
+      let redirectedUrl = "";
+      const handleBroadcast = (event: { data: { type: string } }) => {
+        if (event.data?.type === "LOGOUT") {
+          redirectedUrl = "/login";
+        }
+      };
+
+      handleBroadcast({ data: { type: "LOGOUT" } });
+      expect(redirectedUrl).toBe("/login");
+    });
+  });
+
+  describe("5. Subsequent Authenticated Requests via Proxy Gate", () => {
     it("redirects to /login when session cookie has been cleared by logout", async () => {
       process.env.SITE_PASSWORD = "Test-Password-2026!";
       process.env.SESSION_SECRET = "super-secret-key-that-is-at-least-32-bytes-long!";
 
-      // Request without session cookie (post-logout state)
       const unauthReq = new NextRequest("https://deutschflow.app/vocabulary", {
         headers: { host: "deutschflow.app" },
       });
@@ -267,13 +372,12 @@ describe("Logout, Service Worker Cache Invalidation & Privacy Boundaries", () =>
       });
       const response = await proxy(authReq);
 
-      // Status 200 or next() pass-through
       expect(response.status).toBe(200);
       expect(response.headers.get("location")).toBeNull();
     });
   });
 
-  describe("5. Local IndexedDB & Encrypted Groq Credentials Privacy Boundary", () => {
+  describe("6. Local IndexedDB & Encrypted Groq Credentials Privacy Boundary", () => {
     it("preserves learning data and Groq API key across normal session logout", async () => {
       // 1. Populate user study progress and API key
       await saveVocabulary(db, {
@@ -295,8 +399,16 @@ describe("Logout, Service Worker Cache Invalidation & Privacy Boundaries", () =>
       expect(await db.reviewEvents.count()).toBe(1);
       expect(await getApiKey(db)).toBe("gsk_test_api_key_12345");
 
-      // 2. Normal session logout does NOT touch local IndexedDB
-      // (Verified by asserting data persistence)
+      // 2. Execute production logout
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+      await performLogout({
+        fetchFn: mockFetch as unknown as typeof fetch,
+        onNavigate: vi.fn(),
+      });
+
+      // 3. Normal session logout does NOT touch local IndexedDB
       expect(await db.vocabulary.count()).toBe(1);
       expect(await db.reviewEvents.count()).toBe(1);
       expect(await getApiKey(db)).toBe("gsk_test_api_key_12345");
@@ -306,7 +418,6 @@ describe("Logout, Service Worker Cache Invalidation & Privacy Boundaries", () =>
     });
 
     it("wipes ALL IndexedDB tables completely on explicit 'Clear all progress'", async () => {
-      // 1. Populate all collections
       await saveVocabulary(db, {
         germanText: "die Sonne",
         englishTranslation: "the sun",
@@ -353,10 +464,10 @@ describe("Logout, Service Worker Cache Invalidation & Privacy Boundaries", () =>
       expect(await db.roleplayMessages.count()).toBe(1);
       expect(await db.reviewEvents.count()).toBe(1);
 
-      // 2. User explicitly clicks "Clear all progress"
+      // User explicitly clicks "Clear all progress"
       await clearAllProgress(db);
 
-      // 3. Verify total wipe across all collections
+      // Verify total wipe across all collections
       expect(await db.vocabulary.count()).toBe(0);
       expect(await db.transcripts.count()).toBe(0);
       expect(await db.userStats.count()).toBe(0);

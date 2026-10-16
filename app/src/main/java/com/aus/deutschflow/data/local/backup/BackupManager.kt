@@ -139,6 +139,9 @@ class BackupManager @Inject constructor(
         validateBackupJson(backupObj)
 
         val plainJson = backupObj.toString(2)
+        if (plainJson.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
+            throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (10 MB).")
+        }
         return if (passphrase != null && passphrase.isNotEmpty()) {
             BackupCrypto.encrypt(plainJson, passphrase)
         } else {
@@ -152,7 +155,7 @@ class BackupManager @Inject constructor(
     }
 
     suspend fun importFromStream(inputStream: InputStream, passphrase: CharArray? = null): BackupImportResult {
-        val maxBytes = MAX_BACKUP_FILE_BYTES
+        val maxBytes = MAX_STREAM_READ_BYTES
         val buffer = ByteArray(8192)
         val out = ByteArrayOutputStream()
         var totalBytes = 0
@@ -162,7 +165,7 @@ class BackupManager @Inject constructor(
             if (bytesRead == -1) break
             totalBytes += bytesRead
             if (totalBytes > maxBytes) {
-                throw BackupException.CapacityExceeded("Backup exceeds 10 MB size limit.")
+                throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (15 MB).")
             }
             out.write(buffer, 0, bytesRead)
         }
@@ -189,11 +192,8 @@ class BackupManager @Inject constructor(
         if (content.isBlank()) {
             throw BackupException.InvalidFormat("Backup content is empty.")
         }
-        if (content.length > MAX_BACKUP_FILE_BYTES) {
-            throw BackupException.CapacityExceeded("Backup exceeds 10 MB size limit.")
-        }
-        if (content.toByteArray(Charsets.UTF_8).size > MAX_BACKUP_FILE_BYTES) {
-            throw BackupException.CapacityExceeded("Backup exceeds 10 MB size limit.")
+        if (content.length > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
+            throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (15 MB).")
         }
 
         val rawObj = try {
@@ -204,12 +204,19 @@ class BackupManager @Inject constructor(
 
         val backupObj = if (BackupCrypto.isEncryptedBackup(rawObj)) {
             val decryptedPlain = BackupCrypto.decrypt(rawObj, passphrase)
+            if (decryptedPlain.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
+                throw BackupException.CapacityExceeded("Decrypted backup exceeds 10 MB limit.")
+            }
             try {
                 JSONObject(decryptedPlain)
             } catch (e: Exception) {
                 throw BackupException.CorruptedData("Decrypted backup is not valid JSON.")
             }
         } else {
+            // Unencrypted plaintext backup: must strictly not exceed MAX_PLAINTEXT_BACKUP_BYTES (10 MiB)
+            if (content.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
+                throw BackupException.CapacityExceeded("Plaintext backup exceeds 10 MB size limit.")
+            }
             rawObj
         }
 
