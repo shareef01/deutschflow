@@ -534,121 +534,153 @@ class BackupManagerIntegrationTest {
         }
     }
 
-    @Test
-    fun importFromStream_withExactLimit_isReadAndProcessedWithoutCapacityException() = runBlocking {
-        // Build a valid minimal backup and pad with spaces to exactly MAX_BACKUP_FILE_BYTES
-        val baseJson = JSONObject().apply {
-            put("format", "deutschflow-library")
-            put("version", CURRENT_BACKUP_VERSION)
-            put("vocabulary", org.json.JSONArray())
-            put("transcripts", org.json.JSONArray())
-            put("userStats", org.json.JSONArray())
-            put("activityLog", org.json.JSONArray())
-            put("reviewEvents", org.json.JSONArray())
-        }.toString()
-
-        val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
-        assertTrue(baseBytes.size < MAX_BACKUP_FILE_BYTES)
-
-        val exactLimitBytes = ByteArray(MAX_BACKUP_FILE_BYTES)
-        System.arraycopy(baseBytes, 0, exactLimitBytes, 0, baseBytes.size)
-        // Pad the remainder with ASCII spaces (valid trailing whitespace in JSON)
-        for (i in baseBytes.size until MAX_BACKUP_FILE_BYTES) {
-            exactLimitBytes[i] = ' '.code.toByte()
-        }
-        assertEquals(MAX_BACKUP_FILE_BYTES, exactLimitBytes.size)
-
-        val result = targetBackupManager.importFromStream(ByteArrayInputStream(exactLimitBytes))
-        assertNotNull(result)
-    }
-
-    @Test
-    fun importFromStream_withOneByteOverLimit_throwsCapacityExceededWithoutExhaustingMemory() = runBlocking {
-        val baseJson = JSONObject().apply {
-            put("format", "deutschflow-library")
-            put("version", CURRENT_BACKUP_VERSION)
-            put("vocabulary", org.json.JSONArray())
-            put("transcripts", org.json.JSONArray())
-            put("userStats", org.json.JSONArray())
-            put("activityLog", org.json.JSONArray())
-        }.toString()
-
-        val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
-        val overLimitBytes = ByteArray(MAX_BACKUP_FILE_BYTES + 1)
-        System.arraycopy(baseBytes, 0, overLimitBytes, 0, baseBytes.size)
-        for (i in baseBytes.size until overLimitBytes.size) {
-            overLimitBytes[i] = ' '.code.toByte()
-        }
-
-        assertThrows(BackupException.CapacityExceeded::class.java) {
-            runBlocking {
-                targetBackupManager.importFromStream(ByteArrayInputStream(overLimitBytes))
-            }
-        }
-    }
-
-    @Test
-    fun importFromStream_withVeryLargeStreamingInput_abortsEarlyWithoutCrashingOrOOM() = runBlocking {
-        // Stream generator that delivers 50 MB of data without allocating a 50 MB buffer
-        val hugeStream = object : InputStream() {
-            private var bytesEmitted = 0
-            private val maxEmit = 50 * 1024 * 1024
+    private fun createPaddedStream(prefix: ByteArray, totalBytes: Long): InputStream {
+        return object : InputStream() {
+            private var bytesRead: Long = 0
 
             override fun read(): Int {
-                if (bytesEmitted++ < maxEmit) return ' '.code
-                return -1
+                if (bytesRead >= totalBytes) return -1
+                val b = if (bytesRead < prefix.size) {
+                    prefix[bytesRead.toInt()].toInt() and 0xFF
+                } else {
+                    ' '.code
+                }
+                bytesRead++
+                return b
             }
 
             override fun read(b: ByteArray, off: Int, len: Int): Int {
-                if (bytesEmitted >= maxEmit) return -1
-                val toRead = minOf(len, maxEmit - bytesEmitted)
-                for (i in 0 until toRead) {
-                    b[off + i] = ' '.code.toByte()
+                if (bytesRead >= totalBytes) return -1
+                val available = minOf(len.toLong(), totalBytes - bytesRead).toInt()
+                for (i in 0 until available) {
+                    val idx = bytesRead + i
+                    b[off + i] = if (idx < prefix.size) {
+                        prefix[idx.toInt()]
+                    } else {
+                        ' '.code.toByte()
+                    }
                 }
-                bytesEmitted += toRead
-                return toRead
-            }
-        }
-
-        assertThrows(BackupException.CapacityExceeded::class.java) {
-            runBlocking {
-                targetBackupManager.importFromStream(hugeStream)
+                bytesRead += available
+                return available
             }
         }
     }
 
     @Test
-    fun importFromStream_withTruncatedStream_throwsInvalidFormat() = runBlocking {
-        val truncatedJson = "{\"format\": \"deutschflow-library\", \"version\": 2, \"vocabulary\": ["
-        val stream = ByteArrayInputStream(truncatedJson.toByteArray(Charsets.UTF_8))
+    fun importFromStream_withExactLimit_isReadAndProcessedWithoutCapacityException() {
+        runBlocking {
+            // Build a valid minimal backup and pad with spaces to exactly MAX_BACKUP_FILE_BYTES
+            val baseJson = JSONObject().apply {
+                put("format", "deutschflow-library")
+                put("version", CURRENT_BACKUP_VERSION)
+                put("vocabulary", org.json.JSONArray())
+                put("transcripts", org.json.JSONArray())
+                put("userStats", org.json.JSONArray())
+                put("activityLog", org.json.JSONArray())
+                put("reviewEvents", org.json.JSONArray())
+            }.toString()
 
-        assertThrows(BackupException.InvalidFormat::class.java) {
-            runBlocking {
-                targetBackupManager.importFromStream(stream)
+            val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
+            val stream = createPaddedStream(baseBytes, MAX_BACKUP_FILE_BYTES.toLong())
+
+            val result = targetBackupManager.importFromStream(stream)
+            assertNotNull(result)
+        }
+    }
+
+    @Test
+    fun importFromStream_withOneByteOverLimit_throwsCapacityExceededWithoutExhaustingMemory() {
+        runBlocking {
+            val baseJson = JSONObject().apply {
+                put("format", "deutschflow-library")
+                put("version", CURRENT_BACKUP_VERSION)
+                put("vocabulary", org.json.JSONArray())
+                put("transcripts", org.json.JSONArray())
+                put("userStats", org.json.JSONArray())
+                put("activityLog", org.json.JSONArray())
+            }.toString()
+
+            val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
+            val stream = createPaddedStream(baseBytes, MAX_BACKUP_FILE_BYTES.toLong() + 1L)
+
+            assertThrows(BackupException.CapacityExceeded::class.java) {
+                runBlocking {
+                    targetBackupManager.importFromStream(stream)
+                }
             }
         }
     }
 
     @Test
-    fun importFromStream_withMalformedUtf8_throwsInvalidFormat() = runBlocking {
-        // Byte sequence containing invalid UTF-8 (e.g. 0xFE, 0xFF)
-        val malformedUtf8 = byteArrayOf(0x7B, 0x22, 0x66, 0x6F, 0x72, 0x6D, 0x61, 0x74, 0x22, 0x3A, 0xFE.toByte(), 0xFF.toByte(), 0x7D)
-        val stream = ByteArrayInputStream(malformedUtf8)
+    fun importFromStream_withVeryLargeStreamingInput_abortsEarlyWithoutCrashingOrOOM() {
+        runBlocking {
+            // Stream generator that delivers 50 MB of data without allocating a 50 MB buffer
+            val hugeStream = object : InputStream() {
+                private var bytesEmitted = 0
+                private val maxEmit = 50 * 1024 * 1024
 
-        assertThrows(BackupException.InvalidFormat::class.java) {
-            runBlocking {
-                targetBackupManager.importFromStream(stream)
+                override fun read(): Int {
+                    if (bytesEmitted++ < maxEmit) return ' '.code
+                    return -1
+                }
+
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    if (bytesEmitted >= maxEmit) return -1
+                    val toRead = minOf(len, maxEmit - bytesEmitted)
+                    for (i in 0 until toRead) {
+                        b[off + i] = ' '.code.toByte()
+                    }
+                    bytesEmitted += toRead
+                    return toRead
+                }
+            }
+
+            assertThrows(BackupException.CapacityExceeded::class.java) {
+                runBlocking {
+                    targetBackupManager.importFromStream(hugeStream)
+                }
             }
         }
     }
 
     @Test
-    fun importFromStream_withEmptyStream_throwsInvalidFormat() = runBlocking {
-        val emptyStream = ByteArrayInputStream(ByteArray(0))
+    fun importFromStream_withTruncatedStream_throwsInvalidFormat() {
+        runBlocking {
+            val truncatedJson = "{\"format\": \"deutschflow-library\", \"version\": 2, \"vocabulary\": ["
+            val stream = ByteArrayInputStream(truncatedJson.toByteArray(Charsets.UTF_8))
 
-        assertThrows(BackupException.InvalidFormat::class.java) {
-            runBlocking {
-                targetBackupManager.importFromStream(emptyStream)
+            assertThrows(BackupException.InvalidFormat::class.java) {
+                runBlocking {
+                    targetBackupManager.importFromStream(stream)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun importFromStream_withMalformedUtf8_throwsInvalidFormat() {
+        runBlocking {
+            // Byte sequence containing invalid UTF-8 (e.g. 0xFE, 0xFF)
+            val malformedUtf8 = byteArrayOf(0x7B, 0x22, 0x66, 0x6F, 0x72, 0x6D, 0x61, 0x74, 0x22, 0x3A, 0xFE.toByte(), 0xFF.toByte(), 0x7D)
+            val stream = ByteArrayInputStream(malformedUtf8)
+
+            assertThrows(BackupException.InvalidFormat::class.java) {
+                runBlocking {
+                    targetBackupManager.importFromStream(stream)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun importFromStream_withEmptyStream_throwsInvalidFormat() {
+        runBlocking {
+            val emptyStream = ByteArrayInputStream(ByteArray(0))
+
+            assertThrows(BackupException.InvalidFormat::class.java) {
+                runBlocking {
+                    targetBackupManager.importFromStream(emptyStream)
+                }
             }
         }
     }
