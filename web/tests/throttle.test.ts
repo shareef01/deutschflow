@@ -97,5 +97,24 @@ describe("login throttle", () => {
 
     // Active map size is bounded
     expect(getTrackedCount()).toBeLessThanOrEqual(MAX_TRACKED);
+
+    // CRITICAL: Attacker must STILL be locked out; eviction must not have freed them!
+    expect(delayForNextAttempt(attackerIp, now + 10)).toBeGreaterThan(0);
+  });
+
+  it("adversarial flood of unthrottled keys purges unlocked keys first, retaining active lockouts", () => {
+    const now = 2_000_000;
+    const lockedIp = "locked-target";
+    // 6 failures -> locked out for several seconds
+    for (let i = 0; i < 6; i++) recordFailure(lockedIp, now);
+    expect(delayForNextAttempt(lockedIp, now)).toBeGreaterThan(0);
+
+    // Adversary attempts to clear lockout by flooding dummy keys (1 failure each, 0 cooldown)
+    for (let i = 0; i < MAX_TRACKED + 500; i++) {
+      recordFailure(`dummy-${i}`, now + 1);
+    }
+
+    // Locked IP must still be in cooldown at now + 100ms
+    expect(delayForNextAttempt(lockedIp, now + 100)).toBeGreaterThan(0);
   });
 });

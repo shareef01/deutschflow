@@ -54,6 +54,15 @@ class SettingsViewModelTest {
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
+        val backupManager = com.aus.deutschflow.data.local.backup.BackupManager(
+            database = database,
+            vocabularyDao = database.vocabularyDao(),
+            transcriptDao = database.transcriptDao(),
+            userStatsDao = database.userStatsDao(),
+            activityDao = database.activityDao(),
+            roleplayDao = database.roleplayDao(),
+            reviewEventDao = database.reviewEventDao()
+        )
 
         viewModel = SettingsViewModel(
             database = database,
@@ -67,7 +76,8 @@ class SettingsViewModelTest {
             ),
             activityDao = database.activityDao(),
             roleplayDao = database.roleplayDao(),
-            widgetUpdater = WidgetUpdater(context)
+            widgetUpdater = WidgetUpdater(context),
+            backupManager = backupManager
         )
     }
 

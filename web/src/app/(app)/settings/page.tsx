@@ -42,11 +42,22 @@ export default function SettingsPage() {
 
   const { t, lang, changeLang } = useI18n();
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [typedKey, setTypedKey] = useState("");
   const [isKeyVisible, setIsKeyVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const restoreInput = useRef<HTMLInputElement>(null);
+
+  const onLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } catch {
+      // Proceed with redirection even if network fails
+    }
+    window.location.href = "/login";
+  };
 
   const onRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -257,6 +268,26 @@ export default function SettingsPage() {
               <span className="text-label-medium font-bold">{t("settings.storageRequest")}</span>
             </GlassButton>
           )}
+        </div>
+      </div>
+
+      {/* ---- Session ---------------------------------------------------------- */}
+      <SectionHeader title={t("settings.sessionHeader")} />
+      <div className="glass-surface border border-on-surface/5 p-6">
+        <p className="text-body-medium text-on-surface-variant">
+          {t("settings.sessionBody")}
+        </p>
+        <div className="mt-4">
+          <GlassButton
+            type="button"
+            onClick={onLogout}
+            disabled={isLoggingOut}
+            className="w-full sm:w-auto"
+          >
+            <span className="font-bold text-on-surface">
+              {isLoggingOut ? t("settings.loggingOut") : t("settings.logout")}
+            </span>
+          </GlassButton>
         </div>
       </div>
 

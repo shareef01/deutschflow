@@ -42,16 +42,44 @@ function normalizeKey(key: unknown): string {
 
 function prune(now: number): void {
   for (const [key, entry] of attempts) {
-    if (now - entry.last > WINDOW_MS) attempts.delete(key);
+    if (now - entry.last > WINDOW_MS && entry.nextAllowed <= now) {
+      attempts.delete(key);
+    }
   }
-  // LRU eviction: evict oldest 20% entries instead of full clear(),
-  // which would otherwise allow an attacker to wipe everyone's throttling
-  // by flooding with distinct fake keys.
+
+  // Eviction under saturation: Never evict an actively locked-out caller
+  // just because an attacker is flooding with dummy identifiers.
   if (attempts.size > MAX_TRACKED) {
-    const toRemove = attempts.size - Math.floor(MAX_TRACKED * 0.8);
-    const sorted = Array.from(attempts.entries()).sort((a, b) => a[1].last - b[1].last);
-    for (let i = 0; i < toRemove && i < sorted.length; i++) {
-      attempts.delete(sorted[i][0]);
+    const targetSize = Math.floor(MAX_TRACKED * 0.8);
+    const needed = attempts.size - targetSize;
+
+    const unlocked: [string, Attempts][] = [];
+    const locked: [string, Attempts][] = [];
+
+    for (const item of attempts.entries()) {
+      if (item[1].nextAllowed > now) {
+        locked.push(item);
+      } else {
+        unlocked.push(item);
+      }
+    }
+
+    // Evict oldest unlocked/cooldown-free entries first
+    unlocked.sort((a, b) => a[1].last - b[1].last);
+    let removed = 0;
+    for (let i = 0; i < unlocked.length && removed < needed; i++) {
+      attempts.delete(unlocked[i][0]);
+      removed++;
+    }
+
+    // Only if all entries in the entire map are actively locked out,
+    // evict the lockouts expiring soonest.
+    if (removed < needed) {
+      locked.sort((a, b) => a[1].nextAllowed - b[1].nextAllowed);
+      for (let i = 0; i < locked.length && removed < needed; i++) {
+        attempts.delete(locked[i][0]);
+        removed++;
+      }
     }
   }
 }
