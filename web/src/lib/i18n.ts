@@ -575,7 +575,9 @@ export function detectBrowserLang(): Lang {
     try {
       const saved = localStorage.getItem("deutschflow_lang");
       if (saved === "de" || saved === "en") return saved;
-    } catch {}
+    } catch {
+      // localStorage may be unavailable or blocked in private browsing
+    }
   }
   if (typeof navigator === "undefined") return "en";
   const preferred = navigator.language?.toLowerCase() ?? "";

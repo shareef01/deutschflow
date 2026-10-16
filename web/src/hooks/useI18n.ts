@@ -30,7 +30,9 @@ export function useI18n() {
       document.documentElement.lang = next;
       try {
         localStorage.setItem("deutschflow_lang", next);
-      } catch {}
+      } catch {
+        // localStorage may be unavailable or blocked in private browsing
+      }
     }
   }, []);
 

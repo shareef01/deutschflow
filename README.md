@@ -67,8 +67,8 @@ deutschflow/
 
 ### Web Architecture
 - **Framework & Libraries**: Next.js 16 (App Router), React 19, TypeScript 5.8, Tailwind CSS 4.
-- **Persistence**: IndexedDB via Dexie 4 (schema version 8) supporting additive merge and JSON backup portability.
-- **Authentication**: Zero-external-dependency access gate via `src/proxy.ts` (Next.js 16) with timing-safe HMAC-SHA256 session tokens.
+- **Persistence**: IndexedDB via Dexie 4 (schema version 9) supporting additive merge and JSON backup portability.
+- **Authentication**: Zero-external-dependency access gate via `src/proxy.ts` (Next.js 16) with timing-safe HMAC-SHA256 session tokens, session revocation key derivation, and global epoch invalidation.
 - **Security & Audio**: AES-GCM encryption with non-extractable WebCrypto keys; Web Speech API with automatic local voice preference (`voice.localService === true`).
 - **Testing**: Vitest for unit/contract tests; Playwright for cross-browser (Chromium, Firefox, WebKit) and visual regression testing.
 
