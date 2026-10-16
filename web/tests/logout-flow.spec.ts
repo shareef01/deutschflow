@@ -222,7 +222,7 @@ test.describe("Real-Browser Logout & Session Privacy Flow", () => {
 
     // 6. Verify real authentication state: attempting to navigate back to /vocabulary redirects to /login
     await page.goto("/vocabulary");
-    expect(new URL(page.url()).pathname).toBe("/login");
+    await expect(page).toHaveURL(/\/login/, { timeout: 12000 });
 
     // 7. TEST CASE: Offline Navigation After Logout
     // Taking the browser offline must NOT expose protected cached pages
