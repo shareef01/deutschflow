@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   delayForNextAttempt,
+  getTrackedCount,
+  MAX_TRACKED,
   recordFailure,
   recordSuccess,
   resetThrottle,
@@ -64,5 +66,36 @@ describe("login throttle", () => {
     for (let i = 0; i < 10; i++) recordFailure("1.2.3.4");
     recordSuccess("1.2.3.4");
     expect(delayForNextAttempt("1.2.3.4")).toBe(0);
+  });
+
+  it("normalizes malformed and empty keys safely", () => {
+    recordFailure("");
+    recordFailure("   ");
+    expect(delayForNextAttempt("")).toBe(0); // 2 failures on "unknown"
+    recordFailure("");
+    // 3rd failure on "unknown" triggers cooldown
+    expect(delayForNextAttempt("")).toBeGreaterThan(0);
+    expect(delayForNextAttempt("unknown")).toBeGreaterThan(0);
+  });
+
+  it("handles excessively long keys without breaking", () => {
+    const longKey = "a".repeat(1000);
+    for (let i = 0; i < 4; i++) recordFailure(longKey);
+    expect(delayForNextAttempt(longKey)).toBeGreaterThan(0);
+  });
+
+  it("evicts oldest entries without wiping active throttled attackers on key flood", () => {
+    const now = 1_000_000;
+    const attackerIp = "bad-actor-ip";
+    for (let i = 0; i < 5; i++) recordFailure(attackerIp, now);
+    expect(delayForNextAttempt(attackerIp, now)).toBeGreaterThan(0);
+
+    // Flood with distinct keys newer than attackerIp
+    for (let i = 0; i < 10_005; i++) {
+      recordFailure(`fake-ip-${i}`, now + 10);
+    }
+
+    // Active map size is bounded
+    expect(getTrackedCount()).toBeLessThanOrEqual(MAX_TRACKED);
   });
 });

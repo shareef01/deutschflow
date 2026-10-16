@@ -33,13 +33,27 @@ interface Attempts {
 const attempts = new Map<string, Attempts>();
 
 /** Bounded so a flood of distinct keys cannot grow the map without limit. */
-const MAX_TRACKED = 10_000;
+export const MAX_TRACKED = 10_000;
+
+function normalizeKey(key: unknown): string {
+  if (typeof key !== "string" || !key.trim()) return "unknown";
+  return key.trim().slice(0, 128);
+}
 
 function prune(now: number): void {
   for (const [key, entry] of attempts) {
     if (now - entry.last > WINDOW_MS) attempts.delete(key);
   }
-  if (attempts.size > MAX_TRACKED) attempts.clear();
+  // LRU eviction: evict oldest 20% entries instead of full clear(),
+  // which would otherwise allow an attacker to wipe everyone's throttling
+  // by flooding with distinct fake keys.
+  if (attempts.size > MAX_TRACKED) {
+    const toRemove = attempts.size - Math.floor(MAX_TRACKED * 0.8);
+    const sorted = Array.from(attempts.entries()).sort((a, b) => a[1].last - b[1].last);
+    for (let i = 0; i < toRemove && i < sorted.length; i++) {
+      attempts.delete(sorted[i][0]);
+    }
+  }
 }
 
 /**
@@ -47,14 +61,16 @@ function prune(now: number): void {
  *
  * @returns milliseconds until another attempt is accepted, or 0 within the allowance.
  */
-export function delayForNextAttempt(key: string, now: number = Date.now()): number {
+export function delayForNextAttempt(rawKey: string, now: number = Date.now()): number {
+  const key = normalizeKey(rawKey);
   prune(now);
   const entry = attempts.get(key);
   if (!entry || now - entry.last > WINDOW_MS) return 0;
   return Math.max(0, entry.nextAllowed - now);
 }
 
-export function recordFailure(key: string, now: number = Date.now()): void {
+export function recordFailure(rawKey: string, now: number = Date.now()): void {
+  const key = normalizeKey(rawKey);
   prune(now);
   const entry = attempts.get(key);
   const count = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
@@ -65,8 +81,14 @@ export function recordFailure(key: string, now: number = Date.now()): void {
 }
 
 /** A correct password clears the record: the caller has proved who they are. */
-export function recordSuccess(key: string): void {
+export function recordSuccess(rawKey: string): void {
+  const key = normalizeKey(rawKey);
   attempts.delete(key);
+}
+
+/** Returns the number of currently tracked rate-limiting entries. */
+export function getTrackedCount(): number {
+  return attempts.size;
 }
 
 /** Test seam — the map is module state and would otherwise leak between cases. */
