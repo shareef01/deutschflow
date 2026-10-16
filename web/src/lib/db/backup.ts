@@ -22,6 +22,37 @@ import { foldGermanKey } from "./schema";
 /** Bumped only if the shape changes in a way an older import cannot read. */
 export const BACKUP_VERSION = 2;
 
+export const ENCRYPTED_BACKUP_FORMAT = "deutschflow-library-encrypted";
+export const ENCRYPTED_BACKUP_VERSION = 1;
+export const KDF_ALGORITHM = "PBKDF2WithHmacSHA256";
+export const ITERATIONS = 100_000;
+export const MIN_ITERATIONS = 50_000;
+export const MAX_ITERATIONS = 500_000;
+export const SALT_LENGTH_BYTES = 16;
+export const MIN_SALT_BYTES = 16;
+export const MAX_SALT_BYTES = 64;
+export const IV_LENGTH_BYTES = 12;
+export const TAG_LENGTH_BITS = 128;
+
+export const MAX_PLAINTEXT_BACKUP_BYTES = 10 * 1024 * 1024; // 10 MiB
+export const MAX_BACKUP_FILE_BYTES = MAX_PLAINTEXT_BACKUP_BYTES;
+export const MAX_CIPHERTEXT_BYTES = MAX_PLAINTEXT_BACKUP_BYTES + 16;
+export const MAX_BASE64_CIPHERTEXT_LENGTH = Math.floor((MAX_CIPHERTEXT_BYTES + 2) / 3) * 4;
+export const MAX_ENCRYPTED_BACKUP_FILE_BYTES = 15 * 1024 * 1024; // 15 MiB
+
+export const MAX_TEXT_FIELD_LENGTH = 200_000;
+export const MAX_SHORT_TEXT_FIELD_LENGTH = 10_000;
+
+export interface EncryptedBackupEnvelope {
+  format: "deutschflow-library-encrypted";
+  version: number;
+  kdf: "PBKDF2WithHmacSHA256";
+  iterations: number;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+}
+
 export interface LibraryBackup {
   format: "deutschflow-library";
   version: number;
@@ -63,10 +94,17 @@ export async function exportLibrary(db: DeutschFlowDB): Promise<LibraryBackup> {
   });
 }
 
+export async function exportEncryptedLibrary(db: DeutschFlowDB, passphrase: string): Promise<string> {
+  const backup = await exportLibrary(db);
+  const plainJson = JSON.stringify(backup, null, 2);
+  return encryptBackup(plainJson, passphrase);
+}
+
 export interface ImportResult {
   vocabularyAdded: number;
   vocabularyMerged: number;
   transcriptsAdded: number;
+  reviewEventsAdded?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,7 +133,6 @@ function num(value: unknown, fallback: number): number {
  * existing row keeps its own, because the schedule on this device reflects reviews
  * this device actually saw.
  */
-export const MAX_BACKUP_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // The schema has exactly one aggregate stats row (id = 1). Accepting extras would
 // make the selected row depend on input ordering while silently discarding data.
@@ -226,7 +263,14 @@ export function calculateStreakFromDates(dates: string[], today = new Date()): n
 /**
  * Why a restore failed, in a form the caller can translate.
  */
-export type ImportFailure = "invalid" | "newer" | "storage" | "capacity";
+export type ImportFailure =
+  | "invalid"
+  | "newer"
+  | "storage"
+  | "capacity"
+  | "wrong_passphrase"
+  | "passphrase_required"
+  | "corrupted";
 
 export class ImportError extends Error {
   constructor(readonly reason: ImportFailure, message: string) {
@@ -410,19 +454,47 @@ function validateStrings(row: Record<string, unknown>, fields: string[]): void {
   }
 }
 
-export async function importLibrary(db: DeutschFlowDB, backup: unknown): Promise<ImportResult> {
-  validateBackup(backup);
+export async function importLibrary(
+  db: DeutschFlowDB,
+  backup: unknown,
+  passphrase?: string
+): Promise<ImportResult> {
+  let parsedBackup: unknown = backup;
+
+  if (typeof backup === "string") {
+    const trimmed = backup.trim();
+    if (!trimmed.startsWith("{")) {
+      throw new ImportError("invalid", "That file is not a DeutschFlow library export.");
+    }
+    try {
+      parsedBackup = JSON.parse(trimmed);
+    } catch {
+      throw new ImportError("invalid", "Malformed JSON payload.");
+    }
+  }
+
+  if (isEncryptedBackup(parsedBackup)) {
+    const decryptedPlain = await decryptBackup(parsedBackup, passphrase);
+    try {
+      parsedBackup = JSON.parse(decryptedPlain);
+    } catch {
+      throw new ImportError("corrupted", "Decrypted backup is not valid JSON.");
+    }
+  }
+
+  validateBackup(parsedBackup);
   const result: ImportResult = {
     vocabularyAdded: 0,
     vocabularyMerged: 0,
     transcriptsAdded: 0,
+    reviewEventsAdded: 0,
   };
 
   try {
     await db.transaction(
       "rw",
       [db.vocabulary, db.transcripts, db.userStats, db.activityLog, db.reviewEvents, db.roleplayMessages],
-      () => applyImport(db, backup, result)
+      () => applyImport(db, parsedBackup as LibraryBackup, result)
     );
   } catch (err) {
     if (err instanceof ImportError) throw err;
@@ -662,3 +734,228 @@ export async function requestPersistentStorage(): Promise<boolean> {
     return false;
   }
 }
+
+export function toBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
+  }
+  let binary = "";
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export function fromBase64(base64: string): Uint8Array {
+  const trimmed = base64.trim();
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed) || trimmed.length % 4 !== 0) {
+    throw new Error("Invalid base64 encoding");
+  }
+  if (typeof Buffer !== "undefined") {
+    const buf = Buffer.from(trimmed, "base64");
+    const arr = new Uint8Array(buf.length);
+    arr.set(buf);
+    return arr;
+  }
+  const binary = atob(trimmed);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function isEncryptedBackup(json: unknown): json is EncryptedBackupEnvelope {
+  return isRecord(json) && json.format === ENCRYPTED_BACKUP_FORMAT;
+}
+
+export async function encryptBackup(plainJson: string, passphrase: string): Promise<string> {
+  if (!passphrase || !passphrase.length) {
+    throw new ImportError("passphrase_required", "Passphrase is required to encrypt backup.");
+  }
+  const plainBytes = new TextEncoder().encode(plainJson);
+  if (plainBytes.byteLength > MAX_PLAINTEXT_BACKUP_BYTES) {
+    throw new ImportError("capacity", "Plaintext backup exceeds maximum supported size (10 MB).");
+  }
+
+  const salt = new Uint8Array(SALT_LENGTH_BYTES);
+  const iv = new Uint8Array(IV_LENGTH_BYTES);
+  crypto.getRandomValues(salt);
+  crypto.getRandomValues(iv);
+
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  const derivedKey = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: ITERATIONS,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+
+  const cipherBuffer = await crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv,
+      tagLength: TAG_LENGTH_BITS,
+    },
+    derivedKey,
+    plainBytes
+  );
+
+  const envelope: EncryptedBackupEnvelope = {
+    format: ENCRYPTED_BACKUP_FORMAT,
+    version: ENCRYPTED_BACKUP_VERSION,
+    kdf: KDF_ALGORITHM,
+    iterations: ITERATIONS,
+    salt: toBase64(salt),
+    iv: toBase64(iv),
+    ciphertext: toBase64(new Uint8Array(cipherBuffer)),
+  };
+
+  return JSON.stringify(envelope, null, 2);
+}
+
+export async function decryptBackup(
+  encryptedJson: unknown,
+  passphrase?: string | null
+): Promise<string> {
+  if (!passphrase || !passphrase.length) {
+    throw new ImportError("passphrase_required", "Passphrase is required for encrypted backup.");
+  }
+
+  if (!isRecord(encryptedJson) || encryptedJson.format !== ENCRYPTED_BACKUP_FORMAT) {
+    throw new ImportError("invalid", "Not an encrypted DeutschFlow backup.");
+  }
+
+  if (typeof encryptedJson.version !== "number" || !Number.isInteger(encryptedJson.version)) {
+    throw new ImportError("invalid", "Missing or invalid encrypted backup version.");
+  }
+
+  if (encryptedJson.version <= 0 || encryptedJson.version > ENCRYPTED_BACKUP_VERSION) {
+    throw new ImportError("newer", `Encrypted backup version ${encryptedJson.version} is not supported.`);
+  }
+
+  const kdf = encryptedJson.kdf ?? KDF_ALGORITHM;
+  if (kdf !== KDF_ALGORITHM) {
+    throw new ImportError("invalid", `Unsupported KDF algorithm: ${kdf}`);
+  }
+
+  const saltStr = str(encryptedJson.salt).trim();
+  const ivStr = str(encryptedJson.iv).trim();
+  const ciphertextStr = str(encryptedJson.ciphertext).trim();
+
+  if (!saltStr || !ivStr || !ciphertextStr || encryptedJson.iterations === undefined) {
+    throw new ImportError("corrupted", "Encrypted backup is missing cryptographic fields.");
+  }
+
+  const iterations = encryptedJson.iterations;
+  if (
+    typeof iterations !== "number" ||
+    !Number.isInteger(iterations) ||
+    iterations < MIN_ITERATIONS ||
+    iterations > MAX_ITERATIONS
+  ) {
+    throw new ImportError(
+      "invalid",
+      `Invalid PBKDF2 iterations: ${iterations} (allowed range: ${MIN_ITERATIONS}..${MAX_ITERATIONS}).`
+    );
+  }
+
+  if (ciphertextStr.length > MAX_BASE64_CIPHERTEXT_LENGTH) {
+    throw new ImportError("capacity", "Ciphertext exceeds maximum supported size (10 MB plaintext).");
+  }
+
+  let salt: Uint8Array;
+  let iv: Uint8Array;
+  let ciphertext: Uint8Array;
+
+  try {
+    salt = fromBase64(saltStr);
+  } catch {
+    throw new ImportError("corrupted", "Invalid salt encoding.");
+  }
+
+  try {
+    iv = fromBase64(ivStr);
+  } catch {
+    throw new ImportError("corrupted", "Invalid IV encoding.");
+  }
+
+  try {
+    ciphertext = fromBase64(ciphertextStr);
+  } catch {
+    throw new ImportError("corrupted", "Invalid ciphertext encoding.");
+  }
+
+  if (salt.byteLength < MIN_SALT_BYTES || salt.byteLength > MAX_SALT_BYTES) {
+    throw new ImportError("corrupted", `Invalid salt size: ${salt.byteLength} bytes.`);
+  }
+
+  if (iv.byteLength !== IV_LENGTH_BYTES) {
+    throw new ImportError("corrupted", `Invalid IV size: ${iv.byteLength} bytes (expected ${IV_LENGTH_BYTES}).`);
+  }
+
+  if (ciphertext.byteLength === 0) {
+    throw new ImportError("corrupted", "Ciphertext is empty.");
+  }
+
+  if (ciphertext.byteLength > MAX_CIPHERTEXT_BYTES) {
+    throw new ImportError("capacity", "Ciphertext exceeds maximum supported size (10 MB plaintext).");
+  }
+
+  try {
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(passphrase),
+      "PBKDF2",
+      false,
+      ["deriveKey"]
+    );
+
+    const derivedKey = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: salt as BufferSource,
+        iterations,
+        hash: "SHA-256",
+      },
+      baseKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+
+    const plainBuffer = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: iv as BufferSource,
+        tagLength: TAG_LENGTH_BITS,
+      },
+      derivedKey,
+      ciphertext as BufferSource
+    );
+
+    if (plainBuffer.byteLength > MAX_PLAINTEXT_BACKUP_BYTES) {
+      throw new ImportError("capacity", "Decrypted backup exceeds maximum supported plaintext size (10 MB).");
+    }
+
+    return new TextDecoder().decode(plainBuffer);
+  } catch (err) {
+    if (err instanceof ImportError) throw err;
+    throw new ImportError("wrong_passphrase", "Incorrect passphrase or corrupted backup.");
+  }
+}
+

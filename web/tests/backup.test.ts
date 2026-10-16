@@ -1,7 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "fake-indexeddb/auto";
 import { DeutschFlowDB } from "@/lib/db/schema";
-import { deterministicTranscriptId, exportLibrary, importLibrary, validateBackup, MAX_BACKUP_FILE_BYTES } from "@/lib/db/backup";
+import {
+  deterministicTranscriptId,
+  exportLibrary,
+  exportEncryptedLibrary,
+  importLibrary,
+  validateBackup,
+  encryptBackup,
+  decryptBackup,
+  isEncryptedBackup,
+  ENCRYPTED_BACKUP_FORMAT,
+  ENCRYPTED_BACKUP_VERSION,
+  ImportError,
+  MAX_BACKUP_FILE_BYTES,
+} from "@/lib/db/backup";
 import { saveVocabulary, insertTranscript, rewardXp } from "@/lib/db/repository";
 
 /**
@@ -492,4 +505,168 @@ describe("exportLibrary / importLibrary", () => {
       expect(id1).toBe(id2);
     });
   });
+
+  describe("encrypted backup & crypto parity with Android BackupCrypto", () => {
+    const validPlainPayload = JSON.stringify({
+      format: "deutschflow-library",
+      version: 2,
+      exportedAt: "2026-10-17T00:00:00.000Z",
+      vocabulary: [
+        {
+          id: 1,
+          germanText: "der Schlüssel",
+          englishTranslation: "the key",
+          timestamp: 1000,
+        },
+      ],
+      transcripts: [],
+      userStats: [{ id: 1, xp: 50, streak: 3, lastActivityTimestamp: 1000 }],
+      activityLog: [{ date: "2026-10-17", xpGained: 50, timestamp: 1000 }],
+    });
+
+    it("encrypts and decrypts with valid passphrase", async () => {
+      const passphrase = "correct-horse-battery-staple";
+      const encryptedJsonStr = await encryptBackup(validPlainPayload, passphrase);
+      const envelope = JSON.parse(encryptedJsonStr);
+
+      expect(isEncryptedBackup(envelope)).toBe(true);
+      expect(envelope.format).toBe(ENCRYPTED_BACKUP_FORMAT);
+      expect(envelope.version).toBe(ENCRYPTED_BACKUP_VERSION);
+      expect(envelope.kdf).toBe("PBKDF2WithHmacSHA256");
+      expect(envelope.iterations).toBe(100_000);
+      expect(typeof envelope.salt).toBe("string");
+      expect(typeof envelope.iv).toBe("string");
+      expect(typeof envelope.ciphertext).toBe("string");
+
+      const decrypted = await decryptBackup(envelope, passphrase);
+      expect(decrypted).toBe(validPlainPayload);
+    });
+
+    it("throws wrong_passphrase when passphrase is wrong", async () => {
+      const encryptedJsonStr = await encryptBackup(validPlainPayload, "secret-pass");
+      const envelope = JSON.parse(encryptedJsonStr);
+
+      await expect(decryptBackup(envelope, "wrong-pass")).rejects.toThrow(ImportError);
+      try {
+        await decryptBackup(envelope, "wrong-pass");
+      } catch (e) {
+        expect(e).toBeInstanceOf(ImportError);
+        expect((e as ImportError).reason).toBe("wrong_passphrase");
+      }
+    });
+
+    it("throws passphrase_required when passphrase is null, undefined, or empty", async () => {
+      const encryptedJsonStr = await encryptBackup(validPlainPayload, "secret");
+      const envelope = JSON.parse(encryptedJsonStr);
+
+      await expect(decryptBackup(envelope, "")).rejects.toThrow(ImportError);
+      await expect(decryptBackup(envelope, null)).rejects.toThrow(ImportError);
+      await expect(decryptBackup(envelope, undefined)).rejects.toThrow(ImportError);
+    });
+
+    it("throws invalid for unencrypted payload passed to decryptBackup", async () => {
+      const plainObj = { format: "deutschflow-library", version: 2 };
+      expect(isEncryptedBackup(plainObj)).toBe(false);
+      await expect(decryptBackup(plainObj, "secret")).rejects.toThrow(/Not an encrypted/);
+    });
+
+    it("throws newer for unsupported version (> 1)", async () => {
+      const futureEnvelope = {
+        format: ENCRYPTED_BACKUP_FORMAT,
+        version: 999,
+        salt: "c2FsdHNhbHQxMjM0NTY3OA==",
+        iv: "aXZpdml2aXZpdg==",
+        ciphertext: "Y2lwaGVydGV4dA==",
+      };
+      await expect(decryptBackup(futureEnvelope, "secret")).rejects.toThrow(/not supported/);
+    });
+
+    it("throws corrupted for tampered ciphertext (auth tag mismatch)", async () => {
+      const encryptedJsonStr = await encryptBackup(validPlainPayload, "secret-key");
+      const envelope = JSON.parse(encryptedJsonStr);
+
+      // Tamper with the base64 ciphertext
+      const tamperedBytes = Buffer.from(envelope.ciphertext, "base64");
+      tamperedBytes[0] ^= 0xff; // Flip bits
+      envelope.ciphertext = tamperedBytes.toString("base64");
+
+      await expect(decryptBackup(envelope, "secret-key")).rejects.toThrow(ImportError);
+    });
+
+    it("throws corrupted for invalid salt size or invalid IV size", async () => {
+      const shortSalt = {
+        format: ENCRYPTED_BACKUP_FORMAT,
+        version: 1,
+        iterations: 100_000,
+        salt: Buffer.from("tooshort").toString("base64"), // 8 bytes < 16 bytes
+        iv: Buffer.from("123456789012").toString("base64"),
+        ciphertext: "Y2lwaGVydGV4dA==",
+      };
+      await expect(decryptBackup(shortSalt, "secret")).rejects.toThrow(/salt/i);
+
+      const badIv = {
+        format: ENCRYPTED_BACKUP_FORMAT,
+        version: 1,
+        iterations: 100_000,
+        salt: Buffer.from("1234567890123456").toString("base64"),
+        iv: Buffer.from("bad_length").toString("base64"), // 10 bytes != 12 bytes
+        ciphertext: "Y2lwaGVydGV4dA==",
+      };
+      await expect(decryptBackup(badIv, "secret")).rejects.toThrow(/IV/i);
+    });
+
+    it("throws invalid for out-of-range iterations", async () => {
+      const lowIterations = {
+        format: ENCRYPTED_BACKUP_FORMAT,
+        version: 1,
+        iterations: 1_000, // < 50,000
+        salt: Buffer.from("1234567890123456").toString("base64"),
+        iv: Buffer.from("123456789012").toString("base64"),
+        ciphertext: "Y2lwaGVydGV4dA==",
+      };
+      await expect(decryptBackup(lowIterations, "secret")).rejects.toThrow(/iterations/i);
+
+      const highIterations = {
+        format: ENCRYPTED_BACKUP_FORMAT,
+        version: 1,
+        iterations: 1_000_000, // > 500,000
+        salt: Buffer.from("1234567890123456").toString("base64"),
+        iv: Buffer.from("123456789012").toString("base64"),
+        ciphertext: "Y2lwaGVydGV4dA==",
+      };
+      await expect(decryptBackup(highIterations, "secret")).rejects.toThrow(/iterations/i);
+    });
+
+    it("full round trip: exportEncryptedLibrary -> importLibrary with passphrase", async () => {
+      await saveVocabulary(db, { germanText: "die Freiheit", englishTranslation: "freedom" });
+      await insertTranscript(db, "Wir lernen Deutsch zusammen.");
+      await rewardXp(db, 30);
+
+      const passphrase = "deutschflow-secure-phrase-2026";
+      const encryptedJson = await exportEncryptedLibrary(db, passphrase);
+
+      const targetDb = new DeutschFlowDB(`backup-test-${n++}`);
+      await targetDb.open();
+
+      // Attempting to restore without passphrase must fail with passphrase_required
+      await expect(importLibrary(targetDb, encryptedJson)).rejects.toThrow(ImportError);
+
+      // Attempting to restore with wrong passphrase must fail with wrong_passphrase
+      await expect(importLibrary(targetDb, encryptedJson, "incorrect-pass")).rejects.toThrow(ImportError);
+      expect(await targetDb.vocabulary.count()).toBe(0);
+
+      // Restoring with correct passphrase succeeds
+      const result = await importLibrary(targetDb, encryptedJson, passphrase);
+      expect(result.vocabularyAdded).toBe(1);
+      expect(result.transcriptsAdded).toBe(1);
+
+      const savedWord = (await targetDb.vocabulary.toArray())[0];
+      expect(savedWord.germanText).toBe("die Freiheit");
+      expect(savedWord.englishTranslation).toBe("freedom");
+
+      const stats = await targetDb.userStats.get(1);
+      expect(stats?.xp).toBe(30);
+    });
+  });
 });
+

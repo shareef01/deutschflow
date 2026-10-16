@@ -1,0 +1,171 @@
+# DeutschFlow Backup & Recovery Format Specification
+
+This document defines the data structures, cryptographic envelopes, validation rules, collision resolutions, and compatibility guarantees for DeutschFlow learning library backups across Android and Web PWA clients.
+
+---
+
+## 1. Overview & Architectural Principles
+
+DeutschFlow is a local-first German learning application. User data is stored on-device in:
+- **Android**: Room SQLite database (`deutschflow-db`) and Jetpack DataStore.
+- **Web PWA**: IndexedDB via Dexie (`deutschflow-pwa`).
+
+To respect user privacy, operating-system-level automatic cloud backups are explicitly excluded via `app/src/main/res/xml/data_extraction_rules.xml`. Recovery is user-controlled via manual, portable, and optional password-encrypted backup archives.
+
+### Invariants
+1. **Zero Credential Export**: API keys (Groq), Keystore keys, session cookies, and authentication tokens are **never** exported into backup files.
+2. **Stable Identity Preservation**: Primary keys (`id`), stable remote UUIDs (`remoteId`), and modification timestamps (`lastModifiedAt`) are preserved or deterministically reconciled.
+3. **No Unintended History Loss**: Review events (`reviewEvents`) are preserved even if parent vocabulary entries are deleted.
+4. **Collision Safety**: German text matching uses canonical folding (`foldGermanKey` / `germanKey`), preventing duplicate entries while distinguishing linguistic pairs (e.g., *Maße* vs *Masse*).
+
+---
+
+## 2. Format Specifications
+
+DeutschFlow supports two top-level backup envelopes:
+1. **Plaintext JSON**: `deutschflow-library` (Versions 1 and 2).
+2. **Encrypted Authenticated Envelope**: `deutschflow-library-encrypted` (Version 1).
+
+### 2.1 Plaintext Archive (`deutschflow-library`)
+
+```json
+{
+  "format": "deutschflow-library",
+  "version": 2,
+  "exportedAt": "2026-10-17T00:00:00.000Z",
+  "vocabulary": [ ... ],
+  "transcripts": [ ... ],
+  "userStats": [ ... ],
+  "activityLog": [ ... ],
+  "reviewEvents": [ ... ],
+  "roleplayMessages": [ ... ]
+}
+```
+
+#### Collections Schema:
+- **`vocabulary`**:
+  - `id`: number (optional, local primary key)
+  - `germanText`: string (required, max 200 chars)
+  - `germanTextKey`: string (derived fold)
+  - `englishTranslation`: string (required, max 2000 chars)
+  - `timestamp`: number (epoch ms)
+  - `exampleSentence`: string (max 2000 chars)
+  - `article`: `"der" | "die" | "das" | "none"`
+  - `plural`: string (max 200 chars)
+  - `conjugation`: string (max 200 chars)
+  - `synonyms`: string
+  - `antonyms`: string
+  - `nextReview`: number (epoch ms, 0 if due immediately)
+  - `interval`: number (days, max 365)
+  - `easeFactor`: number (1.3 to 3.0, default 2.5)
+  - `reviewCount`: number (non-negative integer)
+  - `remoteId`: string (UUID v4)
+  - `lastModifiedAt`: number (epoch ms)
+
+- **`transcripts`**:
+  - `id`: number (optional)
+  - `fullText`: string (max 10,000 chars)
+  - `timestamp`: number (epoch ms)
+  - `translation`: string (optional, max 10,000 chars)
+  - `analysisJson`: string (optional JSON payload)
+  - `remoteId`: string (UUID v4)
+  - `lastModifiedAt`: number (epoch ms)
+
+- **`userStats`**:
+  - `id`: 1 (singleton row)
+  - `xp`: number (non-negative integer)
+  - `streak`: number (non-negative integer)
+  - `lastActivityTimestamp`: number (epoch ms)
+
+- **`activityLog`**:
+  - `date`: string (`YYYY-MM-DD` calendar date)
+  - `xpGained`: number (non-negative integer)
+  - `timestamp`: number (epoch ms)
+
+- **`reviewEvents`** (Introduced in v2):
+  - `id`: number (optional)
+  - `vocabularyId`: number (foreign key to vocabulary `id`, or `0` for preserved history of deleted words)
+  - `rating`: `"AGAIN" | "HARD" | "GOOD" | "EASY"`
+  - `scheduledDays`: number
+  - `actualDays`: number
+  - `reviewedAtTimestamp`: number (epoch ms)
+  - `isExtraPractice`: boolean
+  - `remoteId`: string (UUID v4)
+
+- **`roleplayMessages`** (Introduced in v2):
+  - `position`: number (turn sequence index)
+  - `scenario`: string
+  - `role`: `"user" | "assistant"`
+  - `content`: string
+  - `translation`: string (optional)
+  - `timestamp`: number (epoch ms)
+
+---
+
+### 2.2 Encrypted Authenticated Archive (`deutschflow-library-encrypted`)
+
+Encrypted backups wrap the plaintext JSON representation using standard, authenticated symmetric encryption. Both Web (WebCrypto) and Android (Java Cryptography Architecture) share the exact parameter specification.
+
+```json
+{
+  "format": "deutschflow-library-encrypted",
+  "version": 1,
+  "kdf": "PBKDF2-HMAC-SHA256",
+  "iterations": 100000,
+  "salt": "<base64-encoded 16 bytes>",
+  "iv": "<base64-encoded 12 bytes>",
+  "ciphertext": "<base64-encoded AES-256-GCM ciphertext + 128-bit auth tag>"
+}
+```
+
+#### Cryptographic Parameters:
+| Parameter | Value | Rationale |
+| :--- | :--- | :--- |
+| **Cipher** | `AES-256-GCM` | Authenticated encryption prevents tampering and truncation attacks. |
+| **Key Derivation (KDF)** | `PBKDF2-HMAC-SHA256` | Universally supported across Android JCA and WebCrypto. |
+| **KDF Iterations** | `100,000` | OWASP recommended minimum for PBKDF2 without browser thread lockup. |
+| **Salt Length** | 16 bytes (128 bits) | Cryptographically secure random bytes generated per export. |
+| **IV / Nonce Length** | 12 bytes (96 bits) | Standard GCM nonce length; fresh random nonce generated per export. |
+| **Authentication Tag** | 128 bits (16 bytes) | Standard full-strength GCM tag appended to ciphertext. |
+
+---
+
+## 3. Data Integrity & Collision Resolution
+
+When importing a backup into an existing library, records are merged transactionally:
+
+### 3.1 Vocabulary Merging
+1. **Canonical Key Match**: Look up existing card by `germanTextKey = foldGermanKey(incoming.germanText)`.
+2. **Same Word Edit Collision**: If editing an existing word to collide with another word, all associated `reviewEvents` pointing to the deleted key are automatically remapped to the surviving record.
+3. **SRS Progress Retention (`withFurthestScheduleOf`)**:
+   - The card with higher `reviewCount` retains its learning progress.
+   - If review counts tie, the card with longer `interval` wins.
+   - Ease factor and next review dates are preserved from the advanced card.
+4. **Metadata Merging**: Non-empty fields (example sentences, article, plural, synonyms) from the newer `lastModifiedAt` record are preserved.
+
+### 3.2 Review Event Integrity
+- Review event records retain their stable `remoteId`. Duplicate imports do not insert redundant events.
+- If an imported review event belongs to a vocabulary card that was deleted or missing, its `vocabularyId` is safely mapped to `0` rather than pointing to an unrelated local record.
+
+### 3.3 Activity Log & Streak Calculation
+- Activity entries for each `YYYY-MM-DD` date take `Math.max(existing.xpGained, incoming.xpGained)`.
+- Streaks are re-calculated deterministically from contiguous active calendar dates (`xpGained > 0`).
+
+---
+
+## 4. Size Limits & Capacity Bounds
+
+To protect memory and prevent DoS / zip-bomb vectors:
+- **Plaintext JSON export**: Maximum `10 MiB` (`10,485,760` bytes).
+- **Encrypted Base64 envelope**: Maximum `15 MiB` (`15,728,640` bytes).
+- **Maximum Salt Size**: `64` bytes.
+- **Maximum Ciphertext Base64**: `14,000,000` characters.
+- **Iterations Range**: `10,000` to `1,000,000`.
+
+---
+
+## 5. Compatibility & Versioning Guarantees
+
+- **Backward Compatibility**: Current implementations fully accept `version: 1` archives (upgrading them with default values for new tables) and `version: 2` archives.
+- **Forward Compatibility**: Backups with `version > 2` (or encrypted `version > 1`) are rejected with explicit, user-friendly `unsupported_version` messages without modifying local storage.
+- **Cross-Platform Interoperability**: Plaintext and encrypted backups adhere to the shared contract fixture in `app/src/test/resources/cross-platform-contract.json`. Both platforms can export and restore each other's data collections.

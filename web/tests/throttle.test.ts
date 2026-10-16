@@ -2,11 +2,20 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   delayForNextAttempt,
   getTrackedCount,
+  getThrottleDelay,
   MAX_TRACKED,
   recordFailure,
   recordSuccess,
+  recordThrottleFailure,
+  recordThrottleSuccess,
   resetThrottle,
+  setCustomThrottleBackend,
+  type ThrottleBackend,
+  type Attempts,
+  UpstashRedisThrottleBackend,
+  InMemoryThrottleBackend,
 } from "@/lib/auth/throttle";
+import { extractCallerKey } from "@/app/api/login/route";
 
 /**
  * The gate's strength is one shared secret, and until this existed the number of
@@ -138,3 +147,78 @@ describe("login throttle", () => {
   });
 });
 
+describe("distributed rate limiting & client spoofing defense", () => {
+  it("enforces rate limits across multiple simulated serverless instances sharing a store", async () => {
+    // Shared mock distributed store
+    const sharedMap = new Map<string, Attempts>();
+    const sharedStore: ThrottleBackend = {
+      async get(key: string, now: number) {
+        const item = sharedMap.get(key);
+        if (!item || now - item.last > 15 * 60 * 1000) return null;
+        return item;
+      },
+      async set(key: string, entry: Attempts) {
+        sharedMap.set(key, entry);
+      },
+      async delete(key: string) {
+        sharedMap.delete(key);
+      },
+    };
+
+    setCustomThrottleBackend(sharedStore);
+
+    const clientIp = "198.51.100.42";
+    const now = 10_000_000;
+
+    // Instance 1 records 2 failures
+    await recordThrottleFailure(clientIp, now);
+    await recordThrottleFailure(clientIp, now + 100);
+    expect(await getThrottleDelay(clientIp, now + 200)).toBe(0);
+
+    // Instance 2 receives 3rd failure from same clientIp
+    await recordThrottleFailure(clientIp, now + 300);
+
+    // Instance 3 now detects the progressive cooldown (1000ms from 3rd failure)
+    const delayInstance3 = await getThrottleDelay(clientIp, now + 400);
+    expect(delayInstance3).toBeGreaterThan(0);
+    expect(delayInstance3).toBeLessThanOrEqual(1000);
+
+    // Instance 4 receives successful login -> clears key across all instances
+    await recordThrottleSuccess(clientIp);
+    expect(await getThrottleDelay(clientIp, now + 500)).toBe(0);
+  });
+
+  it("falls back cleanly to in-memory throttle when distributed store is unavailable", async () => {
+    const brokenStore = new UpstashRedisThrottleBackend(
+      "https://invalid-nonexistent-domain.nowhere",
+      "mock-token",
+      new InMemoryThrottleBackend(),
+      50 // fast timeout
+    );
+
+    setCustomThrottleBackend(brokenStore);
+
+    const ip = "203.0.113.1";
+    const now = 20_000_000;
+
+    // Recording failures should not crash; it should fall back to memory store
+    for (let i = 0; i < 3; i++) {
+      await recordThrottleFailure(ip, now);
+    }
+
+    // Cooldown should still be enforced locally by fallback store!
+    const delay = await getThrottleDelay(ip, now);
+    expect(delay).toBeGreaterThan(0);
+  });
+
+  it("prevents client IP spoofing by ignoring x-forwarded-for when not running behind Vercel", () => {
+    const headers = new Headers();
+    headers.set("x-forwarded-for", "1.2.3.4, 5.6.7.8");
+
+    // Outside Vercel (e.g. self-hosted Node without trusted reverse proxy config), x-forwarded-for is untrusted
+    expect(extractCallerKey(headers, false)).toBe("unknown");
+
+    // Behind trusted Vercel proxy, the first IP is verified by Vercel edge
+    expect(extractCallerKey(headers, true)).toBe("1.2.3.4");
+  });
+});

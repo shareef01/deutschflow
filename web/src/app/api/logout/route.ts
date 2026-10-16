@@ -22,6 +22,18 @@ function isHttpsRequest(request?: Request): boolean {
   return request.url.startsWith("https://");
 }
 
+export function isAllowedOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+    return originUrl.origin === requestUrl.origin;
+  } catch {
+    return false;
+  }
+}
+
 function clearSessionCookie(response: NextResponse, request?: Request): NextResponse {
   const isSecure = process.env.NODE_ENV === "production" && isHttpsRequest(request);
   response.cookies.set(SESSION_COOKIE, "", {
@@ -37,6 +49,9 @@ function clearSessionCookie(response: NextResponse, request?: Request): NextResp
 }
 
 export async function POST(request: Request) {
+  if (!isAllowedOrigin(request)) {
+    return NextResponse.json({ error: "Forbidden: cross-origin logout request" }, { status: 403 });
+  }
   const url = new URL("/login", request.url);
   const response = NextResponse.json({ success: true, redirect: url.pathname });
   return clearSessionCookie(response, request);

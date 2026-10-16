@@ -34,6 +34,7 @@ export default function SettingsPage() {
     clearAllProgress,
     downloadBackup,
     restoreBackup,
+    checkIfEncrypted,
     isPersisted,
     isPersistenceSupported,
     requestPersistence,
@@ -48,6 +49,16 @@ export default function SettingsPage() {
   const [isKeyVisible, setIsKeyVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportPass, setExportPass] = useState("");
+  const [exportPassConfirm, setExportPassConfirm] = useState("");
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
+  const [importPass, setImportPass] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
+
   const restoreInput = useRef<HTMLInputElement>(null);
 
   const onLogout = async () => {
@@ -67,10 +78,52 @@ export default function SettingsPage() {
     }
   };
 
-  const onRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) void restoreBackup(file).then((result) => setMessage(t(result)));
+    if (!file) return;
+
+    const isEncrypted = await checkIfEncrypted(file);
+    if (isEncrypted) {
+      setPendingRestoreFile(file);
+      setImportPass("");
+      setImportError(null);
+    } else {
+      const result = await restoreBackup(file);
+      setMessage(t(result));
+    }
+  };
+
+  const onConfirmExport = async () => {
+    if (!exportPass) {
+      setExportError(t("settings.backupPasswordRequired"));
+      return;
+    }
+    if (exportPass !== exportPassConfirm) {
+      setExportError(t("settings.backupPasswordMismatch"));
+      return;
+    }
+    setShowExportModal(false);
+    const result = await downloadBackup(exportPass);
+    setMessage(t(result));
+    setExportPass("");
+    setExportPassConfirm("");
+    setExportError(null);
+  };
+
+  const onConfirmImport = async () => {
+    if (!pendingRestoreFile) return;
+    if (!importPass) {
+      setImportError(t("settings.backupPasswordRequired"));
+      return;
+    }
+    const result = await restoreBackup(pendingRestoreFile, importPass);
+    if (result === "settings.backupIncorrectPassword") {
+      setImportError(t("settings.backupIncorrectPassword"));
+    } else {
+      setPendingRestoreFile(null);
+      setMessage(t(result));
+    }
   };
 
   const onSaveKey = () => {
@@ -135,18 +188,40 @@ export default function SettingsPage() {
 
       <div className="glass-surface border border-on-surface/5 p-6">
         <p className="text-body-medium text-on-surface-variant">{t("settings.backupBody")}</p>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-4 flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <GlassButton
+              className="h-12 flex-1"
+              glow="azure"
+              onClick={() => {
+                setExportPass("");
+                setExportPassConfirm("");
+                setExportError(null);
+                setShowExportModal(true);
+              }}
+            >
+              <span className="font-bold">{t("settings.backupExportEncrypted")}</span>
+            </GlassButton>
+            <GlassButton
+              className="h-12 flex-1"
+              onClick={() => restoreInput.current?.click()}
+            >
+              <span className="font-bold">{t("settings.backupImport")}</span>
+            </GlassButton>
+          </div>
           <GlassButton
-            className="h-12 flex-1"
+            className="h-10 w-full"
             onClick={() => void downloadBackup().then((result) => setMessage(t(result)))}
           >
-            <span className="font-bold">{t("settings.backupDownload")}</span>
-          </GlassButton>
-          <GlassButton className="h-12 flex-1" onClick={() => restoreInput.current?.click()}>
-            <span className="font-bold">{t("settings.backupRestore")}</span>
+            <span className="text-label-medium text-on-surface-variant hover:text-on-surface">
+              {t("settings.backupExportUnencrypted")}
+            </span>
           </GlassButton>
         </div>
         <p className="mt-3 text-label-small text-on-surface-variant">
+          {t("settings.backupEncryptedWarning")}
+        </p>
+        <p className="mt-2 text-label-small text-on-surface-variant">
           {lastBackupTime
             ? t("settings.backupLast", [new Date(lastBackupTime).toLocaleDateString()])
             : t("settings.backupNever")}
@@ -155,7 +230,7 @@ export default function SettingsPage() {
           ref={restoreInput}
           type="file"
           accept="application/json,.json"
-          aria-label={t("settings.backupRestore")}
+          aria-label={t("settings.backupImport")}
           className="hidden"
           onChange={onRestore}
         />
@@ -329,6 +404,82 @@ export default function SettingsPage() {
           }
         >
           <p className="text-body-medium text-on-surface-variant pt-2">{t("settings.wipeBody")}</p>
+        </ModalDialog>
+      )}
+
+      {showExportModal && (
+        <ModalDialog
+          title={t("settings.backupExportEncrypted")}
+          onDismiss={() => {
+            setShowExportModal(false);
+            setExportError(null);
+          }}
+          actions={
+            <>
+              <GlassButton onClick={() => setShowExportModal(false)}>
+                {t("action.cancel")}
+              </GlassButton>
+              <GlassButton glow="deep" onClick={onConfirmExport}>
+                {t("action.save")}
+              </GlassButton>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4 pt-2">
+            <GlassTextField
+              label={t("settings.backupPassword")}
+              type="password"
+              value={exportPass}
+              onChange={(e) => setExportPass(e.target.value)}
+              autoComplete="new-password"
+            />
+            <GlassTextField
+              label={t("settings.backupConfirmPassword")}
+              type="password"
+              value={exportPassConfirm}
+              onChange={(e) => setExportPassConfirm(e.target.value)}
+              autoComplete="new-password"
+            />
+            {exportError && (
+              <p className="text-body-small text-error">{exportError}</p>
+            )}
+          </div>
+        </ModalDialog>
+      )}
+
+      {pendingRestoreFile != null && (
+        <ModalDialog
+          title={t("settings.backupImport")}
+          onDismiss={() => {
+            setPendingRestoreFile(null);
+            setImportError(null);
+          }}
+          actions={
+            <>
+              <GlassButton onClick={() => setPendingRestoreFile(null)}>
+                {t("action.cancel")}
+              </GlassButton>
+              <GlassButton glow="deep" onClick={onConfirmImport}>
+                {t("action.ok")}
+              </GlassButton>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4 pt-2">
+            <p className="text-body-medium text-on-surface-variant">
+              {t("settings.backupPasswordRequired")}
+            </p>
+            <GlassTextField
+              label={t("settings.backupPassword")}
+              type="password"
+              value={importPass}
+              onChange={(e) => setImportPass(e.target.value)}
+              autoComplete="current-password"
+            />
+            {importError && (
+              <p className="text-body-small text-error">{importError}</p>
+            )}
+          </div>
         </ModalDialog>
       )}
 

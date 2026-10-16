@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   SESSION_COOKIE,
-  SESSION_MAX_AGE_SECONDS,
   createSessionToken,
   getActiveSigningSecret,
+  getSessionMaxAgeSeconds,
   passwordMatches,
   safeRedirectTarget,
   sitePassword,
 } from "@/lib/auth/session";
-import { delayForNextAttempt, recordFailure, recordSuccess } from "@/lib/auth/throttle";
+import {
+  getThrottleDelay,
+  recordThrottleFailure,
+  recordThrottleSuccess,
+} from "@/lib/auth/throttle";
 
-function callerKey(request: NextRequest): string {
-  // Vercel replaces this header at its trusted boundary. On direct-to-Node
+export function extractCallerKey(headers: Headers, isVercel: boolean = process.env.VERCEL === "1"): string {
+  // Vercel replaces this header at its trusted edge boundary. On direct-to-Node
   // hosting it is caller-controlled, so do not trust it: use one shared bucket.
-  if (process.env.VERCEL !== "1") return "unknown";
-  const forwarded = request.headers.get("x-forwarded-for");
+  if (!isVercel) return "unknown";
+  const forwarded = headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() || "unknown";
 }
 
@@ -33,8 +37,8 @@ export async function POST(request: NextRequest) {
     ? String(formData.get("password")).trim()
     : "";
   const target = safeRedirectTarget(formData.get("from"));
-  const caller = callerKey(request);
-  const retryAfterMs = delayForNextAttempt(caller);
+  const caller = extractCallerKey(request.headers);
+  const retryAfterMs = await getThrottleDelay(caller);
 
   if (retryAfterMs > 0) {
     const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
@@ -48,7 +52,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!(await passwordMatches(password, masterPassword))) {
-    recordFailure(caller);
+    await recordThrottleFailure(caller);
     return NextResponse.json(
       { error: "That key doesn't match. Check for stray spaces and try again." },
       { status: 401 }
@@ -61,13 +65,14 @@ export async function POST(request: NextRequest) {
     : request.url.startsWith("https://");
   const isSecure = process.env.NODE_ENV === "production" && isHttps;
 
-  recordSuccess(caller);
+  await recordThrottleSuccess(caller);
+  const maxAge = getSessionMaxAgeSeconds();
   const response = NextResponse.json({ redirect: target });
-  response.cookies.set(SESSION_COOKIE, await createSessionToken(signingSecret), {
+  response.cookies.set(SESSION_COOKIE, await createSessionToken(signingSecret, Date.now(), maxAge), {
     httpOnly: true,
     secure: isSecure,
     sameSite: "lax",
-    maxAge: SESSION_MAX_AGE_SECONDS,
+    maxAge,
     path: "/",
   });
   return response;

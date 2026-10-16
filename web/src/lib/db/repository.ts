@@ -21,14 +21,39 @@ export type VocabularyInput = {
   synonyms?: string;
   antonyms?: string;
   lastModifiedAt?: number;
+  nextReview?: number;
+  interval?: number;
+  easeFactor?: number;
+  reviewCount?: number;
+  remoteId?: string;
 };
+
+export function withFurthestScheduleOf(
+  survivor: VocabularyEntry,
+  other: Pick<VocabularyEntry, "reviewCount" | "interval" | "easeFactor" | "nextReview">
+): VocabularyEntry {
+  // Ranked the way Android's withFurthestScheduleOf and migrations rank duplicates:
+  // most successful reviews, then longest interval.
+  const otherIsFurther =
+    other.reviewCount > survivor.reviewCount ||
+    (other.reviewCount === survivor.reviewCount && other.interval > survivor.interval);
+
+  if (!otherIsFurther) return survivor;
+  return {
+    ...survivor,
+    nextReview: other.nextReview,
+    interval: other.interval,
+    easeFactor: other.easeFactor,
+    reviewCount: other.reviewCount,
+  };
+}
 
 export function mergedWith(existing: VocabularyEntry, incoming: VocabularyInput, now = Date.now()): VocabularyEntry {
   return {
     ...existing,
     englishTranslation: incoming.englishTranslation || existing.englishTranslation,
     exampleSentence: incoming.exampleSentence || existing.exampleSentence,
-    article: incoming.article || existing.article,
+    article: incoming.article && incoming.article !== "none" ? incoming.article : existing.article,
     plural: incoming.plural || existing.plural,
     conjugation: incoming.conjugation || existing.conjugation,
     synonyms: incoming.synonyms || existing.synonyms,
@@ -66,7 +91,7 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
 
   const now = Date.now();
 
-  await db.transaction("rw", db.vocabulary, async () => {
+  await db.transaction("rw", [db.vocabulary, db.reviewEvents], async () => {
     /**
      * The row this save is editing, if it is an edit at all.
      *
@@ -83,22 +108,22 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
       germanText: input.germanText,
       germanTextKey: foldGermanKey(input.germanText),
       englishTranslation: input.englishTranslation,
-      timestamp: input.timestamp ?? now,
-      exampleSentence: input.exampleSentence ?? "",
-      article: input.article ?? "",
-      plural: input.plural ?? "",
-      conjugation: input.conjugation ?? "",
-      synonyms: input.synonyms ?? "",
-      antonyms: input.antonyms ?? "",
+      timestamp: input.timestamp ?? editing?.timestamp ?? now,
+      exampleSentence: input.exampleSentence ?? editing?.exampleSentence ?? "",
+      article: input.article ?? editing?.article ?? "",
+      plural: input.plural ?? editing?.plural ?? "",
+      conjugation: input.conjugation ?? editing?.conjugation ?? "",
+      synonyms: input.synonyms ?? editing?.synonyms ?? "",
+      antonyms: input.antonyms ?? editing?.antonyms ?? "",
 
-      nextReview: editing?.nextReview ?? NEW_CARD_SCHEDULE.nextReview,
-      interval: editing?.interval ?? NEW_CARD_SCHEDULE.interval,
-      easeFactor: editing?.easeFactor ?? NEW_CARD_SCHEDULE.easeFactor,
-      reviewCount: editing?.reviewCount ?? NEW_CARD_SCHEDULE.reviewCount,
+      nextReview: input.nextReview ?? editing?.nextReview ?? NEW_CARD_SCHEDULE.nextReview,
+      interval: input.interval ?? editing?.interval ?? NEW_CARD_SCHEDULE.interval,
+      easeFactor: input.easeFactor ?? editing?.easeFactor ?? NEW_CARD_SCHEDULE.easeFactor,
+      reviewCount: input.reviewCount ?? editing?.reviewCount ?? NEW_CARD_SCHEDULE.reviewCount,
 
       // `||`, not `??`: rows migrated from before the sync columns carry an
       // empty string, which needs a real id just as much as a missing one.
-      remoteId: editing?.remoteId || crypto.randomUUID(),
+      remoteId: input.remoteId || editing?.remoteId || crypto.randomUUID(),
       lastModifiedAt: Math.max(editing?.lastModifiedAt ?? 0, input.lastModifiedAt ?? 0, now),
     };
 
@@ -120,10 +145,95 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
       return;
     }
 
+    // Another row owns the word. Fold into it and let the newcomer go - which
+    // for a save is a row that never existed, and for a rename is the row being
+    // renamed onto its existing twin.
+    //
+    // A rename takes its learning with it: the survivor keeps whichever of the
+    // two schedules is further along, and the departing row's review history
+    // is moved onto the survivor before the row is deleted. Keeping the
+    // survivor's schedule unconditionally threw away months of progress
+    // whenever the renamed card was the one being studied.
     if (entry.id !== undefined) {
+      const departingEvents = await db.reviewEvents.where("vocabularyId").equals(entry.id).toArray();
+      const existingEvents = await db.reviewEvents.where("vocabularyId").equals(existing.id!).toArray();
+      const existingRemoteIds = new Set(existingEvents.map((e) => e.remoteId.toLowerCase()));
+
+      for (const event of departingEvents) {
+        if (existingRemoteIds.has(event.remoteId.toLowerCase())) {
+          if (event.id !== undefined) await db.reviewEvents.delete(event.id);
+        } else {
+          if (event.id !== undefined) {
+            await db.reviewEvents.update(event.id, { vocabularyId: existing.id! });
+            existingRemoteIds.add(event.remoteId.toLowerCase());
+          }
+        }
+      }
+
       await db.vocabulary.delete(entry.id);
     }
-    await db.vocabulary.put(mergedWith(existing, entry, now));
+
+    const mergedContent = mergedWith(existing, entry, now);
+    const finalEntry = withFurthestScheduleOf(mergedContent, entry);
+    finalEntry.remoteId = existing.remoteId || entry.remoteId || crypto.randomUUID();
+
+    await db.vocabulary.put(finalEntry);
+  });
+}
+
+/**
+ * Puts a deleted word back, for the library's Undo.
+ * Under its original id when that is possible, which keeps its review history attached.
+ * If the word was saved again in the meantime, the two are folded together.
+ */
+export async function restoreVocabulary(db: DeutschFlowDB, entry: VocabularyEntry): Promise<void> {
+  const now = Date.now();
+  const key = foldGermanKey(entry.germanText);
+
+  await db.transaction("rw", [db.vocabulary, db.reviewEvents], async () => {
+    const occupant = await db.vocabulary.where("germanTextKey").equals(key).first();
+
+    if (!occupant) {
+      if (entry.id !== undefined) {
+        const idOccupant = await db.vocabulary.get(entry.id);
+        if (!idOccupant) {
+          await db.vocabulary.put({
+            ...entry,
+            germanTextKey: key,
+            lastModifiedAt: Math.max(entry.lastModifiedAt || 0, now),
+          });
+          return;
+        }
+      }
+      const { id: _, ...withoutId } = entry;
+      const newId = (await db.vocabulary.add({
+        ...withoutId,
+        germanTextKey: key,
+        lastModifiedAt: Math.max(entry.lastModifiedAt || 0, now),
+      })) as number;
+
+      if (entry.id !== undefined) {
+        await db.reviewEvents.where("vocabularyId").equals(entry.id).modify({ vocabularyId: newId });
+      }
+    } else {
+      const merged = withFurthestScheduleOf(mergedWith(occupant, entry, now), entry);
+      await db.vocabulary.put(merged);
+      if (entry.id !== undefined && occupant.id !== undefined && entry.id !== occupant.id) {
+        const departingEvents = await db.reviewEvents.where("vocabularyId").equals(entry.id).toArray();
+        const existingEvents = await db.reviewEvents.where("vocabularyId").equals(occupant.id).toArray();
+        const existingRemoteIds = new Set(existingEvents.map((e) => e.remoteId.toLowerCase()));
+        for (const event of departingEvents) {
+          if (existingRemoteIds.has(event.remoteId.toLowerCase())) {
+            if (event.id !== undefined) await db.reviewEvents.delete(event.id);
+          } else {
+            if (event.id !== undefined) {
+              await db.reviewEvents.update(event.id, { vocabularyId: occupant.id });
+              existingRemoteIds.add(event.remoteId.toLowerCase());
+            }
+          }
+        }
+      }
+    }
   });
 }
 

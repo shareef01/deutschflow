@@ -9,8 +9,8 @@ import {
 import { db } from "@/lib/db";
 import {
   deleteVocabulary as deleteVocabularyRow,
-  findByGermanText,
   observeVocabulary,
+  restoreVocabulary as restoreVocabularyRow,
   saveVocabulary,
 } from "@/lib/db/repository";
 import { generateExample } from "@/lib/ai/processor";
@@ -111,26 +111,7 @@ export function useVocabulary() {
    */
   const restoreVocabulary = async (entry: VocabularyEntry): Promise<boolean> => {
     try {
-      await saveVocabulary(db, {
-        germanText: entry.germanText,
-        englishTranslation: entry.englishTranslation,
-        timestamp: entry.timestamp,
-        exampleSentence: entry.exampleSentence,
-        article: entry.article,
-        plural: entry.plural,
-        conjugation: entry.conjugation,
-        synonyms: entry.synonyms,
-        antonyms: entry.antonyms,
-      });
-      const restored = await findByGermanText(db, entry.germanText);
-      if (restored?.id !== undefined) {
-        await db.vocabulary.update(restored.id, {
-          nextReview: entry.nextReview,
-          interval: entry.interval,
-          easeFactor: entry.easeFactor,
-          reviewCount: entry.reviewCount,
-        });
-      }
+      await restoreVocabularyRow(db, entry);
       setError(null);
       return true;
     } catch {

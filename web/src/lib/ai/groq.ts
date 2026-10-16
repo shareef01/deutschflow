@@ -30,8 +30,44 @@ export type RoleplayResult =
   | { kind: "failure"; message: string };
 
 export const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-export const GROQ_MODEL = "openai/gpt-oss-120b";
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
+export const SUPPORTED_GROQ_MODELS = [
+  "openai/gpt-oss-120b",
+  "llama-3.3-70b-versatile",
+  "mixtral-8x7b-32768",
+] as const;
+
+export function getActiveGroqModel(): string {
+  const envModel = process.env.GROQ_MODEL?.trim();
+  if (envModel && (SUPPORTED_GROQ_MODELS as readonly string[]).includes(envModel)) {
+    return envModel;
+  }
+  return DEFAULT_GROQ_MODEL;
+}
+
+export const GROQ_MODEL = getActiveGroqModel();
 const TIMEOUT_MS = 30_000;
+const MAX_POST_RETRIES = 2;
+const RETRY_BACKOFF_MS = [300, 600];
+
+function isRetryableStatus(status: number): boolean {
+  return status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true }
+    );
+  });
+}
 
 /**
  * Matching cross-platform constants for AI request & response boundaries.
@@ -137,41 +173,63 @@ export const AI_MESSAGES: Record<
 };
 
 async function post(body: string, apiKey: string, externalSignal?: AbortSignal): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  const onAbort = () => controller.abort();
-  if (externalSignal) {
-    if (externalSignal.aborted) {
-      controller.abort();
-    } else {
+  let attempt = 0;
+  while (true) {
+    if (externalSignal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const onAbort = () => controller.abort();
+    if (externalSignal) {
       externalSignal.addEventListener("abort", onAbort, { once: true });
     }
-  }
-  try {
-    const response = await fetch(GROQ_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body,
-      signal: controller.signal,
-    });
+    try {
+      const response = await fetch(GROQ_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body,
+        signal: controller.signal,
+      });
 
-    if (response.ok) return await response.text();
+      if (response.ok) return await response.text();
 
-    const detail = detailFrom(await response.text());
-    throw new Error(
-      detail ??
+      // Check if safely retryable
+      if (attempt < MAX_POST_RETRIES && isRetryableStatus(response.status) && !externalSignal?.aborted) {
+        attempt++;
+        await sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 500, externalSignal);
+        continue;
+      }
+
+      const detail = detailFrom(await response.text());
+      const rawMsg = detail ??
         (response.status === 401
           ? t(AI_MESSAGES.keyRejected)
           : response.status === 429
             ? t(AI_MESSAGES.rateLimited)
-            : t("ai.status", [response.status]))
-    );
-  } finally {
-    clearTimeout(timeout);
-    if (externalSignal) externalSignal.removeEventListener("abort", onAbort);
+            : t("ai.status", [response.status]));
+      throw new Error(redactSensitiveKey(rawMsg));
+    } catch (err) {
+      if (externalSignal?.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+        throw err;
+      }
+      if (
+        attempt < MAX_POST_RETRIES &&
+        !(err instanceof Error && err.message.includes(t(AI_MESSAGES.keyRejected)))
+      ) {
+        attempt++;
+        await sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 500, externalSignal);
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+      if (externalSignal) externalSignal.removeEventListener("abort", onAbort);
+    }
   }
 }
 
