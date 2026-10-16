@@ -106,12 +106,16 @@ describe("Logout, Service Worker Cache Invalidation & Privacy Boundaries", () =>
       // Mock window.caches
       const mockCaches = {
         keys: async () => ["deutschflow-dev"],
-        open: async () => ({
-          delete: async () => {
-            clientCachePurged = true;
-            return true;
-          },
-        }),
+        open: async (...args: unknown[]) => {
+          void args;
+          return {
+            delete: async (...delArgs: unknown[]) => {
+              void delArgs;
+              clientCachePurged = true;
+              return true;
+            },
+          };
+        },
       };
 
       // Mock service worker controller
