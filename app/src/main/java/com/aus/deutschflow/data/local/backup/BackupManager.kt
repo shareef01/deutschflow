@@ -6,8 +6,12 @@ import com.aus.deutschflow.data.local.dao.*
 import com.aus.deutschflow.data.local.entities.*
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -148,11 +152,46 @@ class BackupManager @Inject constructor(
     }
 
     suspend fun importFromStream(inputStream: InputStream, passphrase: CharArray? = null): BackupImportResult {
-        val content = inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val maxBytes = MAX_BACKUP_FILE_BYTES
+        val buffer = ByteArray(8192)
+        val out = ByteArrayOutputStream()
+        var totalBytes = 0
+
+        while (true) {
+            val bytesRead = inputStream.read(buffer)
+            if (bytesRead == -1) break
+            totalBytes += bytesRead
+            if (totalBytes > maxBytes) {
+                throw BackupException.CapacityExceeded("Backup exceeds 10 MB size limit.")
+            }
+            out.write(buffer, 0, bytesRead)
+        }
+
+        if (totalBytes == 0) {
+            throw BackupException.InvalidFormat("Backup file is empty.")
+        }
+
+        val rawBytes = out.toByteArray()
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+
+        val content = try {
+            decoder.decode(ByteBuffer.wrap(rawBytes)).toString()
+        } catch (e: CharacterCodingException) {
+            throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${e.message}")
+        }
+
         return importBackup(content, passphrase)
     }
 
     suspend fun importBackup(content: String, passphrase: CharArray? = null): BackupImportResult {
+        if (content.isBlank()) {
+            throw BackupException.InvalidFormat("Backup content is empty.")
+        }
+        if (content.length > MAX_BACKUP_FILE_BYTES) {
+            throw BackupException.CapacityExceeded("Backup exceeds 10 MB size limit.")
+        }
         if (content.toByteArray(Charsets.UTF_8).size > MAX_BACKUP_FILE_BYTES) {
             throw BackupException.CapacityExceeded("Backup exceeds 10 MB size limit.")
         }

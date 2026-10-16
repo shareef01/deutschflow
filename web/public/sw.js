@@ -74,16 +74,51 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-/** Explicitly remove cached private app shell routes upon logout */
+/** Check whether a pathname represents a private/protected application route */
+function isProtectedAppRoute(pathname) {
+  if (APP_SHELL_ROUTES.includes(pathname)) return true;
+  if (
+    !STATIC_ASSETS.includes(pathname) &&
+    !pathname.startsWith("/_next/") &&
+    !pathname.startsWith("/icons/") &&
+    pathname !== "/favicon.ico" &&
+    pathname !== "/manifest.json" &&
+    pathname !== "/sw.js" &&
+    pathname !== "/login" &&
+    !pathname.startsWith("/api/")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Explicitly remove cached private app shell and navigation routes upon logout */
 async function purgeAppShellCache() {
   try {
     const keys = await caches.keys();
     for (const key of keys) {
       if (key.startsWith(CACHE_PREFIX)) {
         const cache = await caches.open(key);
+        // 1. Purge static route names directly
         for (const route of APP_SHELL_ROUTES) {
           await cache.delete(route);
         }
+        // 2. Enumerate all cached requests to purge query-string variations (e.g. /vocabulary?sort=recent)
+        const requests = await cache.keys();
+        for (const req of requests) {
+          const reqUrl = new URL(req.url);
+          if (isProtectedAppRoute(reqUrl.pathname)) {
+            await cache.delete(req);
+          }
+        }
+      }
+    }
+
+    // 3. Notify all open client tabs across multiple browser tabs to prevent stale authenticated UI
+    if (self.clients) {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clients) {
+        client.postMessage({ type: "SESSION_TERMINATED" });
       }
     }
   } catch (err) {

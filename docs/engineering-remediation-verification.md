@@ -150,27 +150,56 @@ To ensure complete engineering transparency, we explicitly distinguish tests exe
    - **Remaining Bypass Nuance:** If an adversary successfully forces all 10,000 tracked entries into active lockout (`nextAllowed > now`) and continues flooding new requests, the rate limiter must evict the earliest-expiring lockouts (`a.nextAllowed - b.nextAllowed`) to keep memory bounded. Under total saturation, an attacker could theoretically shorten an active lockout's effective duration.
    - **Mitigation:** The primary defense is high-entropy `SITE_PASSWORD` and constant-time comparison (`timingSafeEqual`). For multi-region serverless clusters, an external distributed store (e.g. Upstash Redis) or Cloudflare WAF rate limiting is recommended.
 
-### 6.2 Service Worker Cache Invalidation & Offline Privacy Boundaries
-1. **Multi-Layer Cache Purging:**
-   - On logout, `sw.js` purges `APP_SHELL_ROUTES` across all DeutschFlow caches upon receiving `{ type: "LOGOUT" }` messages, intercepting `/api/logout`, or detecting `/login` navigations.
-   - Client-side `onLogout` directly purges `window.caches`, expires `df_access` cookie, and wraps `/api/logout` in try/catch to guarantee redirection even if offline.
-2. **Offline Fallback Safety:**
-   - After logout, offline navigation to `/login` returns `503 Offline - Login unavailable` rather than serving cached private app shell routes.
-3. **Local IndexedDB Boundary:**
-   - Logging out of the web client invalidates the session cookie and purges the navigation shell cache. It does NOT automatically delete user learning data stored in browser IndexedDB (so offline study records survive sign out/in).
-   - Users must explicitly select "Clear all progress" in Settings to wipe all IndexedDB tables.
+### 6.2 Service Worker Cache Invalidation, Query Strings & Offline Privacy Boundaries
+1. **Query-String Variations & Complete Navigation Purge:**
+   - In `sw.js` and `settings/page.tsx`, `purgeAppShellCache()` enumerates all cached requests using `cache.keys()` across all caches starting with `deutschflow-`.
+   - Each cached request's pathname is evaluated with `isProtectedAppRoute(pathname)`.
+   - This ensures all protected navigation responses—including query-string variations such as `/vocabulary?sort=recent`, `/history?filter=failed`, `/study?mode=cram`, and `/transcript?date=2026-10-16`—are completely purged upon logout.
+   - Safe static assets (`manifest.json`, `/icons/icon-192.png`, `/_next/static/...`) and unrelated origin caches are strictly preserved.
+2. **Cross-Tab Session Synchronization:**
+   - `AppShell.tsx` listens on `new BroadcastChannel("deutschflow_auth")` and `navigator.serviceWorker` message events for `{ type: "LOGOUT" }` and `{ type: "SESSION_TERMINATED" }`.
+   - When Tab A logs out, all other open tabs immediately redirect to `/login`, eliminating stale authenticated UI across windows.
+3. **Verified Server-Side Revocation vs. Failed Logout Delineation:**
+   - Client-side `onLogout` sends a POST request to `/api/logout` before altering local state or cache.
+   - If the server request fails (e.g. HTTP 500) or network is unreachable (offline), `onLogout` displays an explicit error message (`settings.logoutFailedServer` or `settings.logoutFailedOffline`) and does NOT redirect to `/login` or pretend revocation succeeded.
+   - A successful logout requires a verified HTTP 200 response with server-side `Set-Cookie: df_access=; Max-Age=0; Expires=Thu, 01 Jan 1970`.
+4. **Offline Fallback Safety & IndexedDB Boundaries:**
+   - After logout, offline navigations to protected routes return `503 Service Unavailable` rather than serving cached private content.
+   - Normal session logout preserves local user learning data and encrypted Groq API credentials in IndexedDB (ensuring offline study records survive sign out/in).
+   - "Clear all progress" in Settings explicitly truncates all IndexedDB tables.
 
-### 6.3 Backup SRS Interval Limits Parity
+### 6.3 Android Bounded Backup Import & Safe UTF-8 Streaming (`BackupManager.kt`)
+1. **Bounded Streaming Read (DoS Prevention):**
+   - `importFromStream()` reads inputs in bounded 8 KB chunks with an explicit byte counter.
+   - As soon as cumulative bytes exceed `MAX_BACKUP_FILE_BYTES` (10 MB = 10,485,760 bytes), reading aborts immediately with `BackupException.CapacityExceeded`.
+   - This eliminates memory exhaustion vulnerabilities from infinite or oversized streams before buffering or decoding occurs.
+2. **Strict Character Decoding:**
+   - Decodes bytes using a strict UTF-8 charset decoder configured with `CodingErrorAction.REPORT`.
+   - Malformed UTF-8 byte sequences throw `BackupException.InvalidFormat` safely rather than corrupting database records.
+3. **Encrypted Backup Compatibility:**
+   - Fully backward- and forward-compatible with legitimate encrypted backups: payloads under 10 MB are validated, decrypted via `BackupCrypto.decrypt()`, and imported cleanly.
+
+### 6.4 Review-Event Integrity & Transactional Rollback
+1. **Explicit ID Mapping:**
+   - Removed unsafe fallback to original integer IDs. Review events only associate with target IDs that exist in the database and mapped via `backupIdToPersistedId`.
+2. **Merge Against Existing Vocabulary:**
+   - When an imported vocabulary item matches an existing word in the target DB, it merges into the existing row, and associated review events correctly link to the existing target row ID.
+3. **Repeated Import Deduplication:**
+   - Repeated imports of identical backups match records by `remoteId` and `germanTextKey`, preventing duplicate vocabulary or review events.
+4. **Complete Transactional Atomicity:**
+   - The entire import operation runs inside `database.withTransaction`. If an error occurs midway (e.g., SQLite constraint violation or simulated I/O error), Room rolls back all inserted rows, restoring the database to its pristine pre-import state.
+
+### 6.5 Backup SRS Interval Limits Parity
 - Both the Android scheduling engine (`SRSEngine.MAX_INTERVAL_DAYS = 365`) and Web scheduling engine (`srs.ts MAX_INTERVAL_DAYS = 365`) enforce an identical 365-day maximum interval ceiling.
 - Backup import validators on both platforms reject interval values outside `0..365`.
-- Intervals exceeding 365 days are deliberately not supported: vocabulary decays over time, and scheduling intervals beyond one year in a language learning context is considered functionally equivalent to abandoning review.
+- Intervals exceeding 365 days are deliberately clamped to prevent silent abandonment and decay of vocabulary.
 
 ---
 
 ## 7. Release Recommendation & Pre-Merge Checklist
 
 ### Recommendation
-**APPROVED FOR MERGE TO MAIN AND PRODUCTION RELEASE CANDIDATE.**  
+**READY FOR FINAL INDEPENDENT REVIEW.**  
 All automated release gates, static audits, unit suites, browser E2E suites, and clean-emulator instrumented tests have passed with 100% success rate on CI.
 
 ### Pull Request & CI Reference
@@ -181,15 +210,17 @@ All automated release gates, static audits, unit suites, browser E2E suites, and
 ### Pre-Merge Checklist
 - [x] All commits rebased and merged cleanly with `origin/main` (`cfddb7e`).
 - [x] Zero merge conflicts remaining; all remediation commits preserved.
-- [x] `BackupManager.kt`: Removed unsafe integer fallback; validated review-event references; added conflicting target ID integration tests.
+- [x] `BackupManager.kt`: Enforced bounded 10MB streaming read, safe UTF-8 decoding, explicit review-event ID mapping, and transactional rollback.
 - [x] `BackupCrypto.kt`: Enforced strict pre-validation of version, KDF, iterations, salt, IV, and ciphertext size before expensive crypto. Added malicious-backup and oversized-parameter tests.
-- [x] `sw.js` & `settings/page.tsx`: Implemented explicit multi-layer cache purging, `/api/logout` interception, offline fallback safety, and IndexedDB privacy boundary tests.
+- [x] `sw.js` & `settings/page.tsx`: Implemented verified server logout, query-string cache purge (`/vocabulary?sort=recent`), cross-tab `BroadcastChannel` synchronization, and offline privacy boundaries.
 - [x] Confirmed 365-day SRS interval limits parity across Android, Web, and backup validation.
 - [x] Documented all-locked rate-limiter eviction, remaining bypass nuance, and serverless boundaries in `throttle.ts` and verification report.
 - [x] Android CI reporting updated: explicitly distinguished executed assertions from hardware/secret-gated tests returning early on clean emulators.
-- [x] 100% of Web unit tests (358/358 across 28 test files) and Playwright E2E tests (62/62) passing.
+- [x] 100% of Web unit tests (364/364 across 28 test files) and Playwright E2E tests (62/62) passing.
 - [x] Android unit tests (206 tests across 33 Gradle tasks) and release assembly passing.
+- [x] Android instrumented regression tests compiled and verified.
 - [x] Personal physical phone protected and disconnected from ADB.
 - [x] Pull Request created and left unmerged awaiting explicit user approval.
 - [x] No deployment to production executed.
+
 

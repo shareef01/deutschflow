@@ -88,4 +88,16 @@ describe("Service Worker Cache Ownership", () => {
     expect(swContent).toContain('url.pathname === "/login"');
     expect(swContent).toContain("Offline - Login unavailable");
   });
+
+  it("identifies protected app routes with query-string variations and enumerates cache requests", () => {
+    expect(swContent).toContain("function isProtectedAppRoute(pathname)");
+    expect(swContent).toContain("const requests = await cache.keys();");
+    expect(swContent).toContain("if (isProtectedAppRoute(reqUrl.pathname))");
+    expect(swContent).toContain("await cache.delete(req);");
+  });
+
+  it("notifies all open client tabs with SESSION_TERMINATED to eliminate stale UI", () => {
+    expect(swContent).toContain('self.clients.matchAll({ type: "window", includeUncontrolled: true })');
+    expect(swContent).toContain('client.postMessage({ type: "SESSION_TERMINATED" })');
+  });
 });

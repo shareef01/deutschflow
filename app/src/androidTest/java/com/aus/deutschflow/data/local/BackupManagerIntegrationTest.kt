@@ -7,6 +7,7 @@ import com.aus.deutschflow.data.local.backup.BackupException
 import com.aus.deutschflow.data.local.backup.BackupManager
 import com.aus.deutschflow.data.local.backup.CURRENT_BACKUP_VERSION
 import com.aus.deutschflow.data.local.backup.MAX_BACKUP_FILE_BYTES
+import com.aus.deutschflow.data.local.dao.ReviewEventDao
 import com.aus.deutschflow.data.local.entities.*
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -17,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.UUID
@@ -530,5 +532,359 @@ class BackupManagerIntegrationTest {
         for (rev in allReviews) {
             assertNotEquals("Review event must never be cross-assigned to pre-existing Apfel", appleId, rev.vocabularyId)
         }
+    }
+
+    @Test
+    fun importFromStream_withExactLimit_isReadAndProcessedWithoutCapacityException() = runBlocking {
+        // Build a valid minimal backup and pad with spaces to exactly MAX_BACKUP_FILE_BYTES
+        val baseJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray())
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+            put("reviewEvents", org.json.JSONArray())
+        }.toString()
+
+        val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
+        assertTrue(baseBytes.size < MAX_BACKUP_FILE_BYTES)
+
+        val exactLimitBytes = ByteArray(MAX_BACKUP_FILE_BYTES)
+        System.arraycopy(baseBytes, 0, exactLimitBytes, 0, baseBytes.size)
+        // Pad the remainder with ASCII spaces (valid trailing whitespace in JSON)
+        for (i in baseBytes.size until MAX_BACKUP_FILE_BYTES) {
+            exactLimitBytes[i] = ' '.code.toByte()
+        }
+        assertEquals(MAX_BACKUP_FILE_BYTES, exactLimitBytes.size)
+
+        val result = targetBackupManager.importFromStream(ByteArrayInputStream(exactLimitBytes))
+        assertNotNull(result)
+    }
+
+    @Test
+    fun importFromStream_withOneByteOverLimit_throwsCapacityExceededWithoutExhaustingMemory() = runBlocking {
+        val baseJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray())
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+        }.toString()
+
+        val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
+        val overLimitBytes = ByteArray(MAX_BACKUP_FILE_BYTES + 1)
+        System.arraycopy(baseBytes, 0, overLimitBytes, 0, baseBytes.size)
+        for (i in baseBytes.size until overLimitBytes.size) {
+            overLimitBytes[i] = ' '.code.toByte()
+        }
+
+        assertThrows(BackupException.CapacityExceeded::class.java) {
+            runBlocking {
+                targetBackupManager.importFromStream(ByteArrayInputStream(overLimitBytes))
+            }
+        }
+    }
+
+    @Test
+    fun importFromStream_withVeryLargeStreamingInput_abortsEarlyWithoutCrashingOrOOM() = runBlocking {
+        // Stream generator that delivers 50 MB of data without allocating a 50 MB buffer
+        val hugeStream = object : InputStream() {
+            private var bytesEmitted = 0
+            private val maxEmit = 50 * 1024 * 1024
+
+            override fun read(): Int {
+                if (bytesEmitted++ < maxEmit) return ' '.code
+                return -1
+            }
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (bytesEmitted >= maxEmit) return -1
+                val toRead = minOf(len, maxEmit - bytesEmitted)
+                for (i in 0 until toRead) {
+                    b[off + i] = ' '.code.toByte()
+                }
+                bytesEmitted += toRead
+                return toRead
+            }
+        }
+
+        assertThrows(BackupException.CapacityExceeded::class.java) {
+            runBlocking {
+                targetBackupManager.importFromStream(hugeStream)
+            }
+        }
+    }
+
+    @Test
+    fun importFromStream_withTruncatedStream_throwsInvalidFormat() = runBlocking {
+        val truncatedJson = "{\"format\": \"deutschflow-library\", \"version\": 2, \"vocabulary\": ["
+        val stream = ByteArrayInputStream(truncatedJson.toByteArray(Charsets.UTF_8))
+
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            runBlocking {
+                targetBackupManager.importFromStream(stream)
+            }
+        }
+    }
+
+    @Test
+    fun importFromStream_withMalformedUtf8_throwsInvalidFormat() = runBlocking {
+        // Byte sequence containing invalid UTF-8 (e.g. 0xFE, 0xFF)
+        val malformedUtf8 = byteArrayOf(0x7B, 0x22, 0x66, 0x6F, 0x72, 0x6D, 0x61, 0x74, 0x22, 0x3A, 0xFE.toByte(), 0xFF.toByte(), 0x7D)
+        val stream = ByteArrayInputStream(malformedUtf8)
+
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            runBlocking {
+                targetBackupManager.importFromStream(stream)
+            }
+        }
+    }
+
+    @Test
+    fun importFromStream_withEmptyStream_throwsInvalidFormat() = runBlocking {
+        val emptyStream = ByteArrayInputStream(ByteArray(0))
+
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            runBlocking {
+                targetBackupManager.importFromStream(emptyStream)
+            }
+        }
+    }
+
+    @Test
+    fun importFromStream_withEncryptedBackupStream_preservesCompatibilityAndRestoresCleanly() = runBlocking {
+        val now = System.currentTimeMillis()
+        sourceDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(
+                germanText = "der Schmetterling",
+                germanTextKey = germanKey("der Schmetterling"),
+                englishTranslation = "the butterfly",
+                timestamp = now - 10000,
+                interval = 4,
+                easeFactor = 2.6f,
+                reviewCount = 2,
+                nextReview = now + 86400000L
+            )
+        )
+
+        val outStream = ByteArrayOutputStream()
+        sourceBackupManager.exportToStream(outStream, testPassphrase)
+        assertTrue(outStream.size() > 0)
+
+        val inStream = ByteArrayInputStream(outStream.toByteArray())
+        val result = targetBackupManager.importFromStream(inStream, testPassphrase)
+
+        assertEquals(1, result.vocabularyAdded)
+        val imported = targetDb.vocabularyDao().findByGermanText("der Schmetterling")
+        assertNotNull(imported)
+        assertEquals("the butterfly", imported?.englishTranslation)
+    }
+
+    @Test
+    fun importReviewEvents_mergeAgainstExistingVocabulary_linksReviewsToExistingTargetId() = runBlocking {
+        // Target DB already contains "Hund" which gets assigned auto-increment target ID
+        targetDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(
+                germanText = "Hund",
+                germanTextKey = germanKey("Hund"),
+                englishTranslation = "dog",
+                timestamp = System.currentTimeMillis() - 50000,
+                interval = 1,
+                easeFactor = 2.5f,
+                reviewCount = 1
+            )
+        )
+        val targetDog = targetDb.vocabularyDao().findByGermanText("Hund")
+        assertNotNull(targetDog)
+        val targetDogId = targetDog!!.id
+
+        // Incoming backup has "Hund" with backup ID = 999 and a review event referencing ID 999
+        val reviewRemoteId = UUID.randomUUID().toString()
+        val backupJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", 999) // Backup ID 999
+                    put("germanText", "Hund")
+                    put("englishTranslation", "dog (merged)")
+                    put("interval", 3)
+                    put("easeFactor", 2.6f)
+                    put("reviewCount", 2)
+                    put("nextReview", System.currentTimeMillis() + 86400000L)
+                })
+            })
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+            put("reviewEvents", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("vocabularyId", 999) // References backup ID 999
+                    put("rating", "GOOD")
+                    put("scheduledDays", 3)
+                    put("actualDays", 3)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", reviewRemoteId)
+                })
+            })
+        }
+
+        val result = targetBackupManager.importBackup(backupJson.toString(), null)
+        assertEquals(0, result.vocabularyAdded)
+        assertEquals(1, result.vocabularyMerged)
+        assertEquals(1, result.reviewEventsAdded)
+
+        // Verify the review event in target DB is attached to targetDogId, NOT 999!
+        val review = targetDb.reviewEventDao().findByRemoteId(reviewRemoteId)
+        assertNotNull(review)
+        assertEquals(targetDogId, review!!.vocabularyId)
+    }
+
+    @Test
+    fun importReviewEvents_repeatedImport_preventsDuplicateReviewEventsAndVocabulary() = runBlocking {
+        val rev1RemoteId = UUID.randomUUID().toString()
+        val rev2RemoteId = UUID.randomUUID().toString()
+
+        val backupJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", 10)
+                    put("germanText", "Katze")
+                    put("englishTranslation", "cat")
+                })
+                put(JSONObject().apply {
+                    put("id", 20)
+                    put("germanText", "Maus")
+                    put("englishTranslation", "mouse")
+                })
+            })
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+            put("reviewEvents", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("vocabularyId", 10)
+                    put("rating", "GOOD")
+                    put("scheduledDays", 2)
+                    put("actualDays", 2)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", rev1RemoteId)
+                })
+                put(JSONObject().apply {
+                    put("vocabularyId", 20)
+                    put("rating", "EASY")
+                    put("scheduledDays", 4)
+                    put("actualDays", 4)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", rev2RemoteId)
+                })
+            })
+        }
+
+        // 1. Initial import
+        val firstResult = targetBackupManager.importBackup(backupJson.toString(), null)
+        assertEquals(2, firstResult.vocabularyAdded)
+        assertEquals(0, firstResult.vocabularyMerged)
+        assertEquals(2, firstResult.reviewEventsAdded)
+
+        val vocabAfterFirst = targetDb.vocabularyDao().getAllVocabularyList()
+        val reviewsAfterFirst = targetDb.reviewEventDao().getAllEventsList()
+        assertEquals(2, vocabAfterFirst.size)
+        assertEquals(2, reviewsAfterFirst.size)
+
+        // 2. Repeated import of the exact same backup payload
+        val secondResult = targetBackupManager.importBackup(backupJson.toString(), null)
+        assertEquals(0, secondResult.vocabularyAdded)
+        assertEquals(2, secondResult.vocabularyMerged)
+        assertEquals(0, secondResult.reviewEventsAdded) // Deduplicated, none added
+
+        // Verify database counts remain exactly 2 and 2
+        val vocabAfterSecond = targetDb.vocabularyDao().getAllVocabularyList()
+        val reviewsAfterSecond = targetDb.reviewEventDao().getAllEventsList()
+        assertEquals(2, vocabAfterSecond.size)
+        assertEquals(2, reviewsAfterSecond.size)
+    }
+
+    @Test
+    fun importBackup_whenDatabaseFailsMidway_rollsBackAllWritesTransactionally() = runBlocking {
+        // Pre-populate target database with an initial baseline item ("Sonne")
+        targetDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(
+                germanText = "Sonne",
+                germanTextKey = germanKey("Sonne"),
+                englishTranslation = "sun",
+                timestamp = System.currentTimeMillis() - 100000
+            )
+        )
+        val initialVocab = targetDb.vocabularyDao().getAllVocabularyList()
+        assertEquals(1, initialVocab.size)
+        assertEquals("Sonne", initialVocab[0].germanText)
+
+        // Backup containing new vocabulary ("Mond", "Stern") and a review event
+        val backupJson = JSONObject().apply {
+            put("format", "deutschflow-library")
+            put("version", CURRENT_BACKUP_VERSION)
+            put("vocabulary", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", 101)
+                    put("germanText", "Mond")
+                    put("englishTranslation", "moon")
+                })
+                put(JSONObject().apply {
+                    put("id", 102)
+                    put("germanText", "Stern")
+                    put("englishTranslation", "star")
+                })
+            })
+            put("transcripts", org.json.JSONArray())
+            put("userStats", org.json.JSONArray())
+            put("activityLog", org.json.JSONArray())
+            put("reviewEvents", org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("vocabularyId", 101)
+                    put("rating", "GOOD")
+                    put("scheduledDays", 1)
+                    put("actualDays", 1)
+                    put("reviewedAtTimestamp", System.currentTimeMillis())
+                    put("remoteId", UUID.randomUUID().toString())
+                })
+            })
+        }
+
+        // Construct a BackupManager with an injected failure on reviewEventDao.insert()
+        val failingReviewDao = object : ReviewEventDao by targetDb.reviewEventDao() {
+            override suspend fun insert(event: ReviewEventEntity) {
+                throw android.database.sqlite.SQLiteException("Injected disk I/O failure during review event insert")
+            }
+        }
+
+        val failingBackupManager = BackupManager(
+            database = targetDb,
+            vocabularyDao = targetDb.vocabularyDao(),
+            transcriptDao = targetDb.transcriptDao(),
+            userStatsDao = targetDb.userStatsDao(),
+            activityDao = targetDb.activityDao(),
+            roleplayDao = targetDb.roleplayDao(),
+            reviewEventDao = failingReviewDao
+        )
+
+        // Attempting to import must fail with BackupException.StorageError
+        assertThrows(BackupException.StorageError::class.java) {
+            runBlocking {
+                failingBackupManager.importBackup(backupJson.toString(), null)
+            }
+        }
+
+        // Verify total rollback: "Mond" and "Stern" must NOT be in the database!
+        val vocabAfterRollback = targetDb.vocabularyDao().getAllVocabularyList()
+        assertEquals(1, vocabAfterRollback.size)
+        assertEquals("Sonne", vocabAfterRollback[0].germanText)
+
+        val reviewsAfterRollback = targetDb.reviewEventDao().getAllEventsList()
+        assertEquals(0, reviewsAfterRollback.size)
     }
 }

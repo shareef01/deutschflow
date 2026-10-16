@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { isUpgradeBlocked, subscribeUpgradeBlocked } from "@/lib/db";
@@ -28,6 +28,40 @@ export function AppShell({ children }: { children: ReactNode }) {
     isUpgradeBlocked,
     () => false
   );
+
+  useEffect(() => {
+    // 1. Cross-tab session listener via BroadcastChannel
+    let authChannel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        authChannel = new BroadcastChannel("deutschflow_auth");
+        authChannel.onmessage = (event) => {
+          if (event.data?.type === "LOGOUT") {
+            window.location.href = "/login";
+          }
+        };
+      } catch {
+        // BroadcastChannel may be restricted in some environments
+      }
+    }
+
+    // 2. Service worker session listener
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === "SESSION_TERMINATED") {
+        window.location.href = "/login";
+      }
+    };
+    if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener("message", handleSwMessage);
+    }
+
+    return () => {
+      authChannel?.close();
+      if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+        navigator.serviceWorker.removeEventListener("message", handleSwMessage);
+      }
+    };
+  }, []);
 
   const currentTab = tabForRoute(pathname);
   const isOnSettings = pathname === SETTINGS_ROUTE;
