@@ -571,6 +571,12 @@ export function getLangSnapshot(): Lang {
 
 /** Resolve the browser's preferred language: German UI when the browser is German. */
 export function detectBrowserLang(): Lang {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("deutschflow_lang");
+      if (saved === "de" || saved === "en") return saved;
+    } catch {}
+  }
   if (typeof navigator === "undefined") return "en";
   const preferred = navigator.language?.toLowerCase() ?? "";
   return preferred.startsWith("de") ? "de" : "en";
