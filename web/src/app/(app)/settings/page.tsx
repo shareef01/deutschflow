@@ -62,6 +62,8 @@ export default function SettingsPage() {
       } else {
         setMessage(t("settings.logoutFailedOffline"));
       }
+    } else if (!result.privacyCleanupComplete) {
+      console.warn("Logout completed on server, but local cache purge was incomplete:", result.cleanupWarning);
     }
   };
 

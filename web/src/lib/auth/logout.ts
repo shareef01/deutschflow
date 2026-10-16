@@ -50,14 +50,71 @@ export function isProtectedAppRoute(pathname: string): boolean {
  * and deletes all protected navigation requests, including URLs with query strings
  * (e.g. /vocabulary?sort=recent). Safe static assets and build chunks are preserved.
  */
+export interface PurgeResult {
+  success: boolean;
+  purgedCount: number;
+  error?: string;
+}
+
+export interface SwPurgeResult {
+  success: boolean;
+  swStatus: "acknowledged" | "timeout" | "no_controller" | "error";
+  purgedCount?: number;
+  error?: string;
+}
+
+const SESSION_DB_NAME = "deutschflow-session";
+const SESSION_STORE_NAME = "auth";
+
+/**
+ * Persists session state to a dedicated IndexedDB store.
+ * Operates independently of Cache Storage so the logged-out state survives
+ * service worker restarts even if Cache Storage deletion fails.
+ */
+export async function setPersistentSessionLoggedOut(loggedOut: boolean): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(SESSION_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(SESSION_STORE_NAME)) {
+          req.result.createObjectStore(SESSION_STORE_NAME);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(SESSION_STORE_NAME, "readwrite");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore(SESSION_STORE_NAME).put({ loggedOut, updatedAt: Date.now() }, "state");
+    });
+  } catch (err) {
+    console.warn("Failed to set persistent session state from window context:", err);
+  }
+}
+
+/**
+ * Enumerates all active Cache Storage instances starting with 'deutschflow-'
+ * and deletes all protected navigation requests, including URLs with query strings
+ * (e.g. /vocabulary?sort=recent). Safe static assets and build chunks are preserved.
+ *
+ * Accurately reports whether all required deletions succeeded or if any errors occurred.
+ */
 export async function purgeProtectedCaches(
   storage?: CacheStorage
-): Promise<number> {
+): Promise<PurgeResult> {
   const cacheStorage =
     storage ?? (typeof window !== "undefined" && "caches" in window ? window.caches : null);
-  if (!cacheStorage) return 0;
+  if (!cacheStorage) {
+    return { success: false, purgedCount: 0, error: "CacheStorageUnavailable" };
+  }
 
   let purgedCount = 0;
+  let caughtError: string | undefined;
+
   try {
     const keys = await cacheStorage.keys();
     for (const key of keys) {
@@ -65,24 +122,40 @@ export async function purgeProtectedCaches(
         const cache = await cacheStorage.open(key);
         // 1. Purge static route names directly
         for (const route of APP_SHELL_ROUTES) {
-          const deleted = await cache.delete(route);
-          if (deleted) purgedCount++;
+          try {
+            const deleted = await cache.delete(route);
+            if (deleted) purgedCount++;
+          } catch (err) {
+            caughtError = err instanceof Error ? err.name : "CacheDeleteError";
+          }
         }
         // 2. Enumerate all cached requests to purge query-string variations
-        const requests = await cache.keys();
-        for (const req of requests) {
-          const reqUrl = new URL(req.url);
-          if (isProtectedAppRoute(reqUrl.pathname)) {
-            const deleted = await cache.delete(req);
-            if (deleted) purgedCount++;
+        try {
+          const requests = await cache.keys();
+          for (const req of requests) {
+            const reqUrl = new URL(req.url);
+            if (isProtectedAppRoute(reqUrl.pathname)) {
+              try {
+                const deleted = await cache.delete(req);
+                if (deleted) purgedCount++;
+              } catch (err) {
+                caughtError = err instanceof Error ? err.name : "CacheDeleteError";
+              }
+            }
           }
+        } catch (err) {
+          caughtError = err instanceof Error ? err.name : "CacheKeysError";
         }
       }
     }
   } catch (err) {
-    console.warn("Failed to purge protected caches:", err);
+    caughtError = err instanceof Error ? err.name : "CacheStorageKeysError";
   }
-  return purgedCount;
+
+  if (caughtError) {
+    return { success: false, purgedCount, error: caughtError };
+  }
+  return { success: true, purgedCount };
 }
 
 /**
@@ -93,7 +166,7 @@ export async function purgeProtectedCaches(
 export async function notifyServiceWorkerPurge(
   controller?: ServiceWorker | null,
   timeoutMs = 1000
-): Promise<boolean> {
+): Promise<SwPurgeResult> {
   const swController =
     controller !== undefined
       ? controller
@@ -102,7 +175,7 @@ export async function notifyServiceWorkerPurge(
       : null;
 
   if (!swController || typeof MessageChannel === "undefined") {
-    return false;
+    return { success: false, swStatus: "no_controller" };
   }
 
   return new Promise((resolve) => {
@@ -113,7 +186,11 @@ export async function notifyServiceWorkerPurge(
       if (!settled) {
         settled = true;
         channel.port1.close();
-        resolve(false);
+        resolve({
+          success: false,
+          swStatus: "timeout",
+          error: "ServiceWorkerTimeout",
+        });
       }
     }, timeoutMs);
 
@@ -122,7 +199,13 @@ export async function notifyServiceWorkerPurge(
         settled = true;
         clearTimeout(timer);
         channel.port1.close();
-        resolve(event.data.success !== false);
+        const success = event.data.success === true;
+        resolve({
+          success,
+          swStatus: success ? "acknowledged" : "error",
+          purgedCount: event.data.purgedCount,
+          error: event.data.error,
+        });
       }
     };
 
@@ -131,11 +214,15 @@ export async function notifyServiceWorkerPurge(
         { type: "PURGE_PROTECTED_CACHE" },
         [channel.port2]
       );
-    } catch {
+    } catch (err) {
       if (!settled) {
         settled = true;
         clearTimeout(timer);
-        resolve(false);
+        resolve({
+          success: false,
+          swStatus: "error",
+          error: err instanceof Error ? err.name : "MessagePostError",
+        });
       }
     }
   });
@@ -143,6 +230,12 @@ export async function notifyServiceWorkerPurge(
 
 export interface LogoutResult {
   success: boolean;
+  serverSuccess: boolean;
+  cachePurgeSuccess: boolean;
+  swPurgeSuccess: boolean;
+  privacyCleanupComplete: boolean;
+  purgedCount: number;
+  cleanupWarning?: string;
   errorType?: "server" | "offline";
   statusCode?: number;
   errorMessage?: string;
@@ -188,6 +281,11 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
   } catch (err) {
     return {
       success: false,
+      serverSuccess: false,
+      cachePurgeSuccess: false,
+      swPurgeSuccess: false,
+      privacyCleanupComplete: false,
+      purgedCount: 0,
       errorType: "offline",
       errorMessage: err instanceof Error ? err.message : "Network offline",
     };
@@ -196,19 +294,32 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
   if (!response.ok) {
     return {
       success: false,
+      serverSuccess: false,
+      cachePurgeSuccess: false,
+      swPurgeSuccess: false,
+      privacyCleanupComplete: false,
+      purgedCount: 0,
       errorType: "server",
       statusCode: response.status,
       errorMessage: `Server returned HTTP ${response.status}`,
     };
   }
 
-  // Step 2: Purge Cache API for all protected navigation routes
-  await purgeProtectedCaches(options.cacheStorage);
+  // Step 2: Server session verified terminated. Mark persistent logged-out state in window context
+  await setPersistentSessionLoggedOut(true);
 
-  // Step 3: Notify Service Worker with MessageChannel acknowledgement
-  await notifyServiceWorkerPurge(options.swController, options.timeoutMs ?? 1000);
+  // Step 3: Purge Cache API for all protected navigation routes
+  const cachePurgeResult = await purgeProtectedCaches(options.cacheStorage);
 
-  // Step 4: Broadcast session termination to other tabs
+  // Step 4: Notify Service Worker with MessageChannel acknowledgement
+  const swPurgeResult = await notifyServiceWorkerPurge(options.swController, options.timeoutMs ?? 1000);
+
+  // Determine overall privacy cleanup completeness
+  const privacyCleanupComplete = cachePurgeResult.success && swPurgeResult.success;
+  const cleanupWarning = !privacyCleanupComplete ? "Local cache purge incomplete" : undefined;
+  const totalPurgedCount = cachePurgeResult.purgedCount + (swPurgeResult.purgedCount ?? 0);
+
+  // Step 5: Broadcast session termination to other tabs
   try {
     if (options.broadcastChannelFactory) {
       const channel = options.broadcastChannelFactory(AUTH_BROADCAST_CHANNEL);
@@ -223,8 +334,16 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
     console.warn("Failed to broadcast logout to other tabs:", err);
   }
 
-  // Step 5: Navigate initiating tab to /login
+  // Step 6: Navigate initiating tab to /login
   onNavigate("/login");
 
-  return { success: true };
+  return {
+    success: true,
+    serverSuccess: true,
+    cachePurgeSuccess: cachePurgeResult.success,
+    swPurgeSuccess: swPurgeResult.success,
+    privacyCleanupComplete,
+    purgedCount: totalPurgedCount,
+    cleanupWarning,
+  };
 }

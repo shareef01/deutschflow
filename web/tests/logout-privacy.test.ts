@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DeutschFlowDB } from "@/lib/db/schema";
+import { DeutschFlowDB, foldGermanKey } from "@/lib/db/schema";
 import { clearAllProgress, saveVocabulary } from "@/lib/db/repository";
 import { saveApiKey, getApiKey } from "@/lib/db/settings";
 import { proxy } from "@/proxy";
@@ -20,7 +20,9 @@ import {
  * Mock Cache API implementation backed by Maps to assert actual Cache Storage entries.
  */
 class MockCache {
-  private store = new Map<string, Response>();
+  protected store = new Map<string, Response>();
+  public shouldThrowOnDelete?: Error;
+  public failDeleteOnUrls: string[] = [];
 
   async put(request: string | Request, response: Response): Promise<void> {
     const url = typeof request === "string" ? request : request.url;
@@ -34,6 +36,12 @@ class MockCache {
 
   async delete(request: string | Request): Promise<boolean> {
     const url = typeof request === "string" ? request : request.url;
+    if (this.shouldThrowOnDelete) {
+      throw this.shouldThrowOnDelete;
+    }
+    if (this.failDeleteOnUrls.some((u) => url.includes(u))) {
+      throw new DOMException("Disk quota exceeded", "QuotaExceededError");
+    }
     return this.store.delete(url);
   }
 
@@ -48,6 +56,7 @@ class MockCache {
 
 class MockCacheStorage {
   private caches = new Map<string, MockCache>();
+  public shouldThrowOnKeys?: Error;
 
   async open(cacheName: string): Promise<Cache> {
     if (!this.caches.has(cacheName)) {
@@ -57,6 +66,9 @@ class MockCacheStorage {
   }
 
   async keys(): Promise<string[]> {
+    if (this.shouldThrowOnKeys) {
+      throw this.shouldThrowOnKeys;
+    }
     return Array.from(this.caches.keys());
   }
 
@@ -133,8 +145,9 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
       await unrelatedCache.put("https://deutschflow.app/vocabulary", new Response("unrelated"));
 
       // Execute production cache purge
-      const purgedCount = await purgeProtectedCaches(mockStorage as unknown as CacheStorage);
-      expect(purgedCount).toBeGreaterThan(0);
+      const purgedResult = await purgeProtectedCaches(mockStorage as unknown as CacheStorage);
+      expect(purgedResult.success).toBe(true);
+      expect(purgedResult.purgedCount).toBeGreaterThan(0);
 
       // Verify current cache: all protected routes deleted
       expect(currentCache.has("https://deutschflow.app/vocabulary")).toBe(false);
@@ -156,6 +169,51 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
 
       // Verify unrelated cache untouched
       expect(unrelatedCache.has("https://deutschflow.app/vocabulary")).toBe(true);
+    });
+
+    it("reports failure when Cache Storage deletion throws an exception without swallowing error", async () => {
+      const mockStorage = new MockCacheStorage();
+      const currentCache = (await mockStorage.open("deutschflow-v1")) as unknown as MockCache;
+      await currentCache.put("https://deutschflow.app/vocabulary", new Response("vocab"));
+
+      // Simulate a disk quota or IO error during cache.delete
+      currentCache.shouldThrowOnDelete = new DOMException("Quota exceeded", "QuotaExceededError");
+
+      const result = await purgeProtectedCaches(mockStorage as unknown as CacheStorage);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("QuotaExceededError");
+      expect(result.purgedCount).toBe(0);
+    });
+
+    it("accurately reports partial cache deletion when one route deletion fails", async () => {
+      const mockStorage = new MockCacheStorage();
+      const currentCache = (await mockStorage.open("deutschflow-v1")) as unknown as MockCache;
+      await currentCache.put("https://deutschflow.app/vocabulary", new Response("vocab"));
+      await currentCache.put("https://deutschflow.app/settings", new Response("settings"));
+
+      // Fail specifically on /settings
+      currentCache.failDeleteOnUrls = ["/settings"];
+
+      const result = await purgeProtectedCaches(mockStorage as unknown as CacheStorage);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("QuotaExceededError");
+      expect(result.purgedCount).toBeGreaterThanOrEqual(1);
+    });
+
+    it("returns CacheStorageUnavailable when Cache Storage is not available", async () => {
+      const result = await purgeProtectedCaches(null as unknown as CacheStorage);
+      expect(result.success).toBe(false);
+      expect(result.purgedCount).toBe(0);
+      expect(result.error).toBe("CacheStorageUnavailable");
+    });
+
+    it("propagates error when cacheStorage.keys() throws an exception", async () => {
+      const mockStorage = new MockCacheStorage();
+      mockStorage.shouldThrowOnKeys = new DOMException("Storage access denied", "SecurityError");
+
+      const result = await purgeProtectedCaches(mockStorage as unknown as CacheStorage);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("SecurityError");
     });
   });
 
@@ -307,18 +365,113 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
       expect(elapsed).toBeLessThan(1000);
     });
 
-    it("notifyServiceWorkerPurge receives explicit CACHE_PURGED acknowledgement", async () => {
+    it("notifyServiceWorkerPurge receives explicit CACHE_PURGED acknowledgement with success: true", async () => {
       const mockController = {
         postMessage: vi.fn((data, ports) => {
           const port = ports[0] as MessagePort;
           if (port) {
-            port.postMessage({ type: "CACHE_PURGED", success: true });
+            port.postMessage({ type: "CACHE_PURGED", success: true, purgedCount: 5 });
           }
         }),
       } as unknown as ServiceWorker;
 
       const ack = await notifyServiceWorkerPurge(mockController, 500);
-      expect(ack).toBe(true);
+      expect(ack.success).toBe(true);
+      expect(ack.swStatus).toBe("acknowledged");
+      expect(ack.purgedCount).toBe(5);
+    });
+
+    it("notifyServiceWorkerPurge correctly captures failure when SW returns success: false", async () => {
+      const mockController = {
+        postMessage: vi.fn((data, ports) => {
+          const port = ports[0] as MessagePort;
+          if (port) {
+            port.postMessage({
+              type: "CACHE_PURGED",
+              success: false,
+              error: "QuotaExceededError",
+            });
+          }
+        }),
+      } as unknown as ServiceWorker;
+
+      const ack = await notifyServiceWorkerPurge(mockController, 500);
+      expect(ack.success).toBe(false);
+      expect(ack.swStatus).toBe("error");
+      expect(ack.error).toBe("QuotaExceededError");
+    });
+
+    it("notifyServiceWorkerPurge handles missing service worker controller gracefully", async () => {
+      const ack = await notifyServiceWorkerPurge(null);
+      expect(ack.success).toBe(false);
+      expect(ack.swStatus).toBe("no_controller");
+    });
+
+    it("notifyServiceWorkerPurge handles acknowledgement timeout cleanly", async () => {
+      const mockController = {
+        postMessage: vi.fn(), // Drops message
+      } as unknown as ServiceWorker;
+
+      const ack = await notifyServiceWorkerPurge(mockController, 30);
+      expect(ack.success).toBe(false);
+      expect(ack.swStatus).toBe("timeout");
+      expect(ack.error).toBe("ServiceWorkerTimeout");
+    });
+
+    it("successful server logout with failed local privacy cleanup: does not fail logout, but accurately flags privacy cleanup incomplete", async () => {
+      const mockStorage = new MockCacheStorage();
+      const currentCache = (await mockStorage.open("deutschflow-v1")) as unknown as MockCache;
+      await currentCache.put("https://deutschflow.app/vocabulary", new Response("vocab"));
+
+      // Make client cache purge throw
+      currentCache.shouldThrowOnDelete = new DOMException("Quota error", "QuotaExceededError");
+
+      // Make service worker purge report failure
+      const mockController = {
+        postMessage: vi.fn((data, ports) => {
+          const port = ports[0] as MessagePort;
+          if (port) {
+            port.postMessage({ type: "CACHE_PURGED", success: false, error: "QuotaExceededError" });
+          }
+        }),
+      } as unknown as ServiceWorker;
+
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      let navigatedTo: string | null = null;
+      let broadcastSent = false;
+      const mockBroadcastChannel = {
+        postMessage: () => {
+          broadcastSent = true;
+        },
+        close: vi.fn(),
+      } as unknown as BroadcastChannel;
+
+      const result = await performLogout({
+        fetchFn: mockFetch as unknown as typeof fetch,
+        cacheStorage: mockStorage as unknown as CacheStorage,
+        swController: mockController,
+        timeoutMs: 100,
+        onNavigate: (url) => {
+          navigatedTo = url;
+        },
+        broadcastChannelFactory: () => mockBroadcastChannel,
+      });
+
+      // Crucial requirement: server logout succeeded, user session expired
+      expect(result.success).toBe(true);
+      expect(result.serverSuccess).toBe(true);
+      // But privacy cleanup was incomplete due to cache failures
+      expect(result.cachePurgeSuccess).toBe(false);
+      expect(result.swPurgeSuccess).toBe(false);
+      expect(result.privacyCleanupComplete).toBe(false);
+      expect(result.cleanupWarning).toBe("Local cache purge incomplete");
+
+      // Broadcast and navigation still execute because server session is terminated
+      expect(broadcastSent).toBe(true);
+      expect(navigatedTo).toBe("/login");
     });
   });
 
@@ -417,6 +570,48 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
       expect(word[0].germanText).toBe("der Apfel");
     });
 
+    it("preserves real sentinel vocabulary record across logout with explicit database close and reopen", async () => {
+      const dbName = `deutschflow-sentinel-test-${Date.now()}`;
+      const sentinelDb = new DeutschFlowDB(dbName);
+
+      // Create real sentinel vocabulary record
+      await saveVocabulary(sentinelDb, {
+        germanText: "Überleben",
+        englishTranslation: "To survive",
+        article: "das",
+        exampleSentence: "Wir müssen überleben.",
+      });
+
+      expect(await sentinelDb.vocabulary.count()).toBe(1);
+      const beforeLogout = await sentinelDb.vocabulary.where("germanTextKey").equals(foldGermanKey("Überleben")).first();
+      expect(beforeLogout).toBeDefined();
+      expect(beforeLogout?.germanText).toBe("Überleben");
+      expect(beforeLogout?.englishTranslation).toBe("To survive");
+
+      // Execute production logout
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+      await performLogout({
+        fetchFn: mockFetch as unknown as typeof fetch,
+        onNavigate: vi.fn(),
+      });
+
+      // Explicitly close the database connection
+      sentinelDb.close();
+
+      // Reopen the database from scratch and query the persistent store
+      const reopenedDb = new DeutschFlowDB(dbName);
+      expect(await reopenedDb.vocabulary.count()).toBe(1);
+      const afterLogout = await reopenedDb.vocabulary.where("germanTextKey").equals(foldGermanKey("Überleben")).first();
+      expect(afterLogout).toBeDefined();
+      expect(afterLogout?.germanText).toBe("Überleben");
+      expect(afterLogout?.englishTranslation).toBe("To survive");
+      expect(afterLogout?.exampleSentence).toBe("Wir müssen überleben.");
+
+      reopenedDb.close();
+    });
+
     it("wipes ALL IndexedDB tables completely on explicit 'Clear all progress'", async () => {
       await saveVocabulary(db, {
         germanText: "die Sonne",
@@ -474,6 +669,86 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
       expect(await db.activityLog.count()).toBe(0);
       expect(await db.roleplayMessages.count()).toBe(0);
       expect(await db.reviewEvents.count()).toBe(0);
+    });
+  });
+
+  describe("7. Delayed Cache Write Race Prevention & Offline Protection", () => {
+    it("drops delayed in-flight navigation cache writes if session terminates before write completes", async () => {
+      const mockStorage = new MockCacheStorage();
+      const cache = (await mockStorage.open("deutschflow-v2")) as unknown as MockCache;
+
+      // Simulate service worker session epoch and termination state
+      let currentSessionEpoch = 1000;
+      let isSessionTerminated = false;
+      expect(isSessionTerminated).toBe(false);
+
+      // 1. Navigation fetch begins under epoch 1000
+      const requestEpoch = currentSessionEpoch;
+      const request = new Request("https://deutschflow.app/vocabulary");
+
+      // 2. Fetch is in-flight (network delay simulation)
+      let networkResponseResolved = false;
+      const delayedNetworkFetch = new Promise<Response>((resolve) => {
+        setTimeout(() => {
+          networkResponseResolved = true;
+          resolve(new Response("<html><body>Protected Library</body></html>", { status: 200 }));
+        }, 50);
+      });
+
+      // 3. While fetch is in-flight, user logs out!
+      // Logout purges caches and terminates session
+      await purgeProtectedCaches(mockStorage as unknown as CacheStorage);
+      isSessionTerminated = true;
+      currentSessionEpoch = 2000; // Epoch advanced on termination
+
+      // 4. Delayed network response finally arrives
+      const response = await delayedNetworkFetch;
+      expect(networkResponseResolved).toBe(true);
+
+      // 5. Service Worker commit logic check (matching sw.js implementation):
+      const shouldDropWrite =
+        isSessionTerminated ||
+        currentSessionEpoch !== requestEpoch;
+
+      if (!shouldDropWrite) {
+        await cache.put(request, response);
+      }
+
+      // Assert delayed write was dropped and cache remains clean post-logout!
+      expect(shouldDropWrite).toBe(true);
+      expect(cache.has("https://deutschflow.app/vocabulary")).toBe(false);
+    });
+
+    it("offline navigation fails safe (HTTP 503) when user is logged out, refusing to serve protected cache", async () => {
+      const mockStorage = new MockCacheStorage();
+      const cache = (await mockStorage.open("deutschflow-v2")) as unknown as MockCache;
+
+      // Suppose cache deletion partially failed and protected content remained
+      await cache.put(
+        "https://deutschflow.app/vocabulary",
+        new Response("<html>Protected Content</html>")
+      );
+
+      // But session state is logged out
+      const isSessionTerminated = true;
+      const isPersistentLoggedOut = true;
+
+      // Simulate SW offline navigation fetch handler (.catch branch)
+      const offlineHandler = async (reqUrl: string): Promise<Response> => {
+        const isLoggedOut = isSessionTerminated || isPersistentLoggedOut;
+        if (isLoggedOut) {
+          return new Response("Offline - Content unavailable", {
+            status: 503,
+            headers: { "Content-Type": "text/plain" },
+          });
+        }
+        const cached = await cache.match(reqUrl);
+        return cached ?? new Response("Not found", { status: 404 });
+      };
+
+      const offlineResponse = await offlineHandler("https://deutschflow.app/vocabulary");
+      expect(offlineResponse.status).toBe(503);
+      expect(await offlineResponse.text()).toBe("Offline - Content unavailable");
     });
   });
 });

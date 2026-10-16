@@ -74,6 +74,56 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+const SESSION_DB_NAME = "deutschflow-session";
+const SESSION_STORE_NAME = "auth";
+
+let currentSessionEpoch = Date.now();
+let isSessionTerminated = false;
+
+function openSessionDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      return reject(new Error("IndexedDBUnavailable"));
+    }
+    const req = indexedDB.open(SESSION_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(SESSION_STORE_NAME)) {
+        req.result.createObjectStore(SESSION_STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function setPersistentSessionLoggedOut(loggedOut) {
+  try {
+    const db = await openSessionDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SESSION_STORE_NAME, "readwrite");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore(SESSION_STORE_NAME).put({ loggedOut, updatedAt: Date.now() }, "state");
+    });
+  } catch (err) {
+    console.warn("Failed to update persistent session state:", err);
+  }
+}
+
+async function isPersistentSessionLoggedOut() {
+  try {
+    const db = await openSessionDb();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(SESSION_STORE_NAME, "readonly");
+      const req = tx.objectStore(SESSION_STORE_NAME).get("state");
+      req.onsuccess = () => resolve(req.result?.loggedOut === true);
+      req.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
 /** Check whether a pathname represents a private/protected application route */
 function isProtectedAppRoute(pathname) {
   if (APP_SHELL_ROUTES.includes(pathname)) return true;
@@ -94,6 +144,13 @@ function isProtectedAppRoute(pathname) {
 
 /** Explicitly remove cached private app shell and navigation routes upon logout */
 async function purgeAppShellCache() {
+  currentSessionEpoch = Date.now();
+  isSessionTerminated = true;
+  await setPersistentSessionLoggedOut(true);
+
+  let caughtError = null;
+  let purgedCount = 0;
+
   try {
     const keys = await caches.keys();
     for (const key of keys) {
@@ -101,22 +158,43 @@ async function purgeAppShellCache() {
         const cache = await caches.open(key);
         // 1. Purge static route names directly
         for (const route of APP_SHELL_ROUTES) {
-          await cache.delete(route);
+          try {
+            const deleted = await cache.delete(route);
+            if (deleted) purgedCount++;
+          } catch (err) {
+            caughtError = err;
+          }
         }
         // 2. Enumerate all cached requests to purge query-string variations (e.g. /vocabulary?sort=recent)
-        const requests = await cache.keys();
-        for (const req of requests) {
-          const reqUrl = new URL(req.url);
-          if (isProtectedAppRoute(reqUrl.pathname)) {
-            await cache.delete(req);
+        try {
+          const requests = await cache.keys();
+          for (const req of requests) {
+            const reqUrl = new URL(req.url);
+            if (isProtectedAppRoute(reqUrl.pathname)) {
+              try {
+                const deleted = await cache.delete(req);
+                if (deleted) purgedCount++;
+              } catch (err) {
+                caughtError = err;
+              }
+            }
           }
+        } catch (err) {
+          caughtError = err;
         }
       }
     }
-
-    } catch (err) {
-    console.warn("Failed to purge app shell cache:", err);
+  } catch (err) {
+    caughtError = err;
   }
+
+  if (caughtError) {
+    console.warn("Failed to purge app shell cache completely:", caughtError);
+    const errorName = caughtError instanceof Error ? caughtError.name : "CachePurgeError";
+    throw new Error(errorName);
+  }
+
+  return { success: true, purgedCount };
 }
 
 self.addEventListener("message", (event) => {
@@ -129,9 +207,13 @@ self.addEventListener("message", (event) => {
     const port = event.ports && event.ports[0];
     event.waitUntil(
       purgeAppShellCache()
-        .then(() => {
+        .then((result) => {
           if (port) {
-            port.postMessage({ type: "CACHE_PURGED", success: true });
+            port.postMessage({
+              type: "CACHE_PURGED",
+              success: true,
+              purgedCount: result.purgedCount,
+            });
           }
         })
         .catch((err) => {
@@ -139,11 +221,15 @@ self.addEventListener("message", (event) => {
             port.postMessage({
               type: "CACHE_PURGED",
               success: false,
-              error: String(err),
+              error: err instanceof Error ? err.message : "CachePurgeError",
             });
           }
         })
     );
+  } else if (event.data && event.data.type === "SESSION_ESTABLISHED") {
+    currentSessionEpoch = Date.now();
+    isSessionTerminated = false;
+    event.waitUntil(setPersistentSessionLoggedOut(false));
   }
 });
 
@@ -177,16 +263,18 @@ self.addEventListener("fetch", (event) => {
       return;
     }
 
+    const requestEpoch = currentSessionEpoch;
+
     event.respondWith(
       fetch(request)
-        .then((response) => {
+        .then(async (response) => {
           // If session expired or logged out, network redirects to /login or returns /login.
           // Invalidate cached private app routes to protect shared devices.
           if (
             (response.redirected && new URL(response.url).pathname === "/login") ||
             new URL(response.url).pathname === "/login"
           ) {
-            event.waitUntil(purgeAppShellCache());
+            event.waitUntil(purgeAppShellCache().catch(() => {}));
             return response;
           }
 
@@ -195,11 +283,36 @@ self.addEventListener("fetch", (event) => {
             return response;
           }
 
+          // Race check: If session terminated or epoch changed during in-flight fetch,
+          // do NOT write to cache! This prevents late writes after logout from reintroducing protected content.
+          const isLoggedOut =
+            isSessionTerminated ||
+            currentSessionEpoch !== requestEpoch ||
+            (await isPersistentSessionLoggedOut());
+
+          if (isLoggedOut) {
+            return response;
+          }
+
+          // User successfully accessed protected route online: session is confirmed active
+          isSessionTerminated = false;
+          event.waitUntil(setPersistentSessionLoggedOut(false));
+
           // Attach cache write to event lifetime via event.waitUntil to prevent detached write drops
           const copy = response.clone();
           event.waitUntil(
             caches.open(CACHE_NAME)
-              .then((cache) => cache.put(request, copy))
+              .then(async (cache) => {
+                // Double check before committing write to cache
+                if (
+                  isSessionTerminated ||
+                  currentSessionEpoch !== requestEpoch ||
+                  (await isPersistentSessionLoggedOut())
+                ) {
+                  return;
+                }
+                await cache.put(request, copy);
+              })
               .catch((err) => {
                 console.warn("Service worker navigation cache write failed:", err);
               })
@@ -208,9 +321,17 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(async () => {
+          // Fail-safe protection: if session is terminated or marked logged out,
+          // NEVER serve protected cached navigation to a logged-out user!
+          const isLoggedOut = isSessionTerminated || (await isPersistentSessionLoggedOut());
+          if (isLoggedOut) {
+            return new Response("Offline - Content unavailable", {
+              status: 503,
+              headers: { "Content-Type": "text/plain" },
+            });
+          }
+
           // If offline: check if request is cached.
-          // Note: If logged out, purgeAppShellCache already removed APP_SHELL_ROUTES,
-          // so caches.match returns undefined and never leaks private pages.
           const cached = await caches.match(request);
           if (cached) return cached;
           const fallback = await caches.match("/transcript");

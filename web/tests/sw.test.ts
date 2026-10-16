@@ -67,16 +67,19 @@ describe("Service Worker Cache Ownership", () => {
     expect(swContent).toContain("cache.delete(route)");
   });
 
-  it("implements explicit purgeAppShellCache helper across all DeutschFlow caches", () => {
+  it("implements explicit purgeAppShellCache helper across all DeutschFlow caches with error propagation", () => {
     expect(swContent).toContain("async function purgeAppShellCache()");
     expect(swContent).toContain("key.startsWith(CACHE_PREFIX)");
     expect(swContent).toContain("await cache.delete(route)");
+    expect(swContent).toContain("throw new Error(errorName);");
   });
 
-  it("supports PURGE_PROTECTED_CACHE message with MessageChannel acknowledgement", () => {
+  it("supports PURGE_PROTECTED_CACHE message with accurate success/failure MessageChannel acknowledgement", () => {
     expect(swContent).toContain('self.addEventListener("message"');
     expect(swContent).toContain('event.data.type === "PURGE_PROTECTED_CACHE"');
-    expect(swContent).toContain("port.postMessage({ type: \"CACHE_PURGED\", success: true })");
+    expect(swContent).toContain('type: "CACHE_PURGED",');
+    expect(swContent).toContain("success: true,");
+    expect(swContent).toContain("success: false,");
   });
 
   it("does NOT intercept /api/logout in fetch listener, ensuring server-side session termination executes cleanly", () => {
@@ -98,6 +101,16 @@ describe("Service Worker Cache Ownership", () => {
 
   it("purges cache when server redirects protected navigation to /login due to expired session", () => {
     expect(swContent).toContain('(response.redirected && new URL(response.url).pathname === "/login")');
-    expect(swContent).toContain("event.waitUntil(purgeAppShellCache())");
+    expect(swContent).toContain("event.waitUntil(purgeAppShellCache()");
+  });
+
+  it("prevents delayed cache writes after logout by comparing requestEpoch against currentSessionEpoch", () => {
+    expect(swContent).toContain("currentSessionEpoch !== requestEpoch");
+    expect(swContent).toContain("isSessionTerminated");
+  });
+
+  it("enforces fail-safe offline protection by rejecting protected cached navigation when logged out", () => {
+    expect(swContent).toContain("isPersistentSessionLoggedOut");
+    expect(swContent).toContain('return new Response("Offline - Content unavailable", {');
   });
 });
