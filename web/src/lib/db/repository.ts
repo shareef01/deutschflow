@@ -296,11 +296,36 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
       }
 
       await db.vocabulary.delete(entry.id);
+
+      const departingMaxReview = departingEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0);
+      const existingMaxReview = existingEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0);
+      const otherLastStudiedAt = Math.max(entry.lastStudiedAt || 0, departingMaxReview);
+      const survivorLastStudiedAt = Math.max(existing.lastStudiedAt || 0, existingMaxReview);
+
+      const mergedContent = mergedWith(existing, entry, now);
+      const finalEntry = withFurthestScheduleOf(mergedContent, entry, now, {
+        survivorLastStudiedAt,
+        otherLastStudiedAt,
+      });
+      finalEntry.remoteId = existing.remoteId || entry.remoteId || crypto.randomUUID();
+      finalEntry.lastStudiedAt = finalEntry.lastStudiedAt || Math.max(survivorLastStudiedAt, otherLastStudiedAt) || undefined;
+
+      await db.vocabulary.put(finalEntry);
+      return;
     }
 
+    const existingEvents = await db.reviewEvents.where("vocabularyId").equals(existing.id!).toArray();
+    const existingMaxReview = existingEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0);
+    const survivorLastStudiedAt = Math.max(existing.lastStudiedAt || 0, existingMaxReview);
+    const otherLastStudiedAt = entry.lastStudiedAt || 0;
+
     const mergedContent = mergedWith(existing, entry, now);
-    const finalEntry = withFurthestScheduleOf(mergedContent, entry);
+    const finalEntry = withFurthestScheduleOf(mergedContent, entry, now, {
+      survivorLastStudiedAt,
+      otherLastStudiedAt,
+    });
     finalEntry.remoteId = existing.remoteId || entry.remoteId || crypto.randomUUID();
+    finalEntry.lastStudiedAt = finalEntry.lastStudiedAt || Math.max(survivorLastStudiedAt, otherLastStudiedAt) || undefined;
 
     await db.vocabulary.put(finalEntry);
   });
@@ -315,8 +340,22 @@ export async function restoreVocabulary(db: DeutschFlowDB, entry: VocabularyEntr
   const now = Date.now();
   const key = foldGermanKey(entry.germanText);
 
-  await db.transaction("rw", [db.vocabulary, db.reviewEvents], async () => {
+  await db.transaction("rw", [db.vocabulary, db.reviewEvents, db.settings], async () => {
     const occupant = await db.vocabulary.where("germanTextKey").equals(key).first();
+    const historySetting = entry.remoteId
+      ? await db.settings.get(`deletion_history:${entry.remoteId.toLowerCase()}`)
+      : undefined;
+    let savedEventRemoteIds: Set<string> | undefined;
+    if (historySetting?.value) {
+      try {
+        const parsed = JSON.parse(historySetting.value);
+        if (Array.isArray(parsed.eventRemoteIds)) {
+          savedEventRemoteIds = new Set(parsed.eventRemoteIds.map((id: string) => String(id).toLowerCase()));
+        }
+      } catch {
+        // ignore malformed history
+      }
+    }
 
     if (!occupant) {
       if (entry.id !== undefined) {
@@ -327,6 +366,9 @@ export async function restoreVocabulary(db: DeutschFlowDB, entry: VocabularyEntr
             germanTextKey: key,
             lastModifiedAt: Math.max(entry.lastModifiedAt || 0, now),
           });
+          if (entry.remoteId) {
+            await db.settings.delete(`deletion_history:${entry.remoteId.toLowerCase()}`);
+          }
           return;
         }
       }
@@ -338,16 +380,54 @@ export async function restoreVocabulary(db: DeutschFlowDB, entry: VocabularyEntr
       })) as number;
 
       if (entry.id !== undefined) {
-        await db.reviewEvents.where("vocabularyId").equals(entry.id).modify({ vocabularyId: newId });
+        if (savedEventRemoteIds && savedEventRemoteIds.size > 0) {
+          const events = await db.reviewEvents.where("vocabularyId").equals(entry.id).toArray();
+          for (const ev of events) {
+            if (ev.id !== undefined && savedEventRemoteIds.has(ev.remoteId.toLowerCase())) {
+              await db.reviewEvents.update(ev.id, { vocabularyId: newId });
+            }
+          }
+        } else {
+          const idOccupant = await db.vocabulary.get(entry.id);
+          if (!idOccupant || idOccupant.remoteId.toLowerCase() === entry.remoteId.toLowerCase()) {
+            await db.reviewEvents.where("vocabularyId").equals(entry.id).modify({ vocabularyId: newId });
+          }
+        }
+      }
+
+      if (entry.remoteId) {
+        await db.settings.delete(`deletion_history:${entry.remoteId.toLowerCase()}`);
       }
     } else {
-      const merged = withFurthestScheduleOf(mergedWith(occupant, entry, now), entry);
+      const occupantEvents = occupant.id !== undefined ? await db.reviewEvents.where("vocabularyId").equals(occupant.id).toArray() : [];
+      const entryEvents = entry.id !== undefined ? await db.reviewEvents.where("vocabularyId").equals(entry.id).toArray() : [];
+
+      const survivorLastStudiedAt = Math.max(
+        occupant.lastStudiedAt || 0,
+        occupantEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0)
+      );
+      const otherLastStudiedAt = Math.max(
+        entry.lastStudiedAt || 0,
+        entryEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0)
+      );
+
+      const merged = withFurthestScheduleOf(mergedWith(occupant, entry, now), entry, now, {
+        survivorLastStudiedAt,
+        otherLastStudiedAt,
+      });
+      merged.lastStudiedAt = merged.lastStudiedAt || Math.max(survivorLastStudiedAt, otherLastStudiedAt) || undefined;
       await db.vocabulary.put(merged);
+
       if (entry.id !== undefined && occupant.id !== undefined && entry.id !== occupant.id) {
-        const departingEvents = await db.reviewEvents.where("vocabularyId").equals(entry.id).toArray();
-        const existingEvents = await db.reviewEvents.where("vocabularyId").equals(occupant.id).toArray();
-        const existingRemoteIds = new Set(existingEvents.map((e) => e.remoteId.toLowerCase()));
+        const idOccupant = await db.vocabulary.get(entry.id);
+        const isIdReused = idOccupant && idOccupant.remoteId.toLowerCase() !== entry.remoteId.toLowerCase();
+
+        const departingEvents = entryEvents;
+        const existingRemoteIds = new Set(occupantEvents.map((e) => e.remoteId.toLowerCase()));
         for (const event of departingEvents) {
+          if (isIdReused && (!savedEventRemoteIds || !savedEventRemoteIds.has(event.remoteId.toLowerCase()))) {
+            continue; // Skip review events belonging to the new occupant
+          }
           if (existingRemoteIds.has(event.remoteId.toLowerCase())) {
             if (event.id !== undefined) await db.reviewEvents.delete(event.id);
           } else {
@@ -357,6 +437,10 @@ export async function restoreVocabulary(db: DeutschFlowDB, entry: VocabularyEntr
             }
           }
         }
+      }
+
+      if (entry.remoteId) {
+        await db.settings.delete(`deletion_history:${entry.remoteId.toLowerCase()}`);
       }
     }
   });
@@ -444,7 +528,24 @@ export async function restoreTranscript(db: DeutschFlowDB, transcript: Transcrip
 }
 
 export async function deleteVocabulary(db: DeutschFlowDB, entry: VocabularyEntry): Promise<void> {
-  if (entry.id !== undefined) await db.vocabulary.delete(entry.id);
+  if (entry.id !== undefined) {
+    await db.transaction("rw", [db.vocabulary, db.reviewEvents, db.settings], async () => {
+      const events = await db.reviewEvents.where("vocabularyId").equals(entry.id!).toArray();
+      const eventRemoteIds = events.map((e) => e.remoteId.toLowerCase());
+      if (entry.remoteId) {
+        await db.settings.put({
+          key: `deletion_history:${entry.remoteId.toLowerCase()}`,
+          value: JSON.stringify({
+            originalId: entry.id,
+            remoteId: entry.remoteId,
+            eventRemoteIds,
+            timestamp: Date.now(),
+          }),
+        });
+      }
+      await db.vocabulary.delete(entry.id!);
+    });
+  }
 }
 
 /* ---------------------------------------------------------------------------

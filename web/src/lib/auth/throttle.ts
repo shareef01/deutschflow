@@ -246,6 +246,28 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     }
   }
 
+  private validateMultiExecResponse(data: unknown, expectedCount = 3): { result?: unknown; error?: string }[] {
+    if (!Array.isArray(data)) {
+      if (data && typeof data === "object" && "error" in data) {
+        throw new Error(`Upstash error: ${(data as { error: string }).error}`);
+      }
+      throw new Error("Malformed Upstash response: expected array");
+    }
+    if (data.length !== expectedCount) {
+      throw new Error(`Malformed Upstash response: expected ${expectedCount} results, got ${data.length}`);
+    }
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      if (!item || typeof item !== "object") {
+        throw new Error(`Malformed Upstash command result at index ${i}`);
+      }
+      if ((item as { error?: string }).error) {
+        throw new Error(`Upstash command error at index ${i}: ${(item as { error?: string }).error}`);
+      }
+    }
+    return data as { result?: unknown; error?: string }[];
+  }
+
   async get(rawKey: string, now: number): Promise<Attempts | null> {
     const k = this.key(rawKey);
     const countKey = `${k}:count`;
@@ -261,16 +283,8 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
         ]),
       });
       if (!res.ok) throw new Error(`Upstash /multi-exec returned HTTP ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data)) {
-        if (data && typeof data === "object" && "error" in data) {
-          throw new Error(`Upstash error: ${(data as { error: string }).error}`);
-        }
-        throw new Error("Malformed Upstash response: expected array");
-      }
-      if (data[0]?.error || data[1]?.error) {
-        throw new Error(`Upstash command error: ${data[0]?.error || data[1]?.error}`);
-      }
+      const rawData = await res.json();
+      const data = this.validateMultiExecResponse(rawData, 3);
       const rawCount = data[0]?.result;
       const rawLast = data[1]?.result;
       const rawNextAllowed = data[2]?.result;
@@ -541,16 +555,8 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
         ]),
       });
       if (!res.ok) throw new Error(`Upstash set returned HTTP ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data)) {
-        if (data && typeof data === "object" && "error" in data) {
-          throw new Error(`Upstash error: ${(data as { error: string }).error}`);
-        }
-        throw new Error("Malformed Upstash response: expected array");
-      }
-      if (data[0]?.error || data[1]?.error) {
-        throw new Error(`Upstash command error: ${data[0]?.error || data[1]?.error}`);
-      }
+      const rawData = await res.json();
+      this.validateMultiExecResponse(rawData, 3);
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
@@ -574,16 +580,8 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
         ]),
       });
       if (!res.ok) throw new Error(`Upstash delete returned HTTP ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data)) {
-        if (data && typeof data === "object" && "error" in data) {
-          throw new Error(`Upstash error: ${(data as { error: string }).error}`);
-        }
-        throw new Error("Malformed Upstash response: expected array");
-      }
-      if (data[0]?.error || data[1]?.error) {
-        throw new Error(`Upstash command error: ${data[0]?.error || data[1]?.error}`);
-      }
+      const rawData = await res.json();
+      this.validateMultiExecResponse(rawData, 3);
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);

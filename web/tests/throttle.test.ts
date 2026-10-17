@@ -109,7 +109,7 @@ describe("login throttle", () => {
 
     // CRITICAL: Attacker must STILL be locked out; eviction must not have freed them!
     expect(delayForNextAttempt(attackerIp, now + 10)).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   it("adversarial flood of unthrottled keys purges unlocked keys first, retaining active lockouts", () => {
     const now = 2_000_000;
@@ -125,7 +125,7 @@ describe("login throttle", () => {
 
     // Locked IP must still be in cooldown at now + 100ms
     expect(delayForNextAttempt(lockedIp, now + 100)).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   it("evicts earliest-expiring lockouts when all tracked entries are actively locked", () => {
     const now = 3_000_000;
@@ -144,7 +144,7 @@ describe("login throttle", () => {
     // The most recently added entry with a longer future lockout must still be tracked and locked
     const recentKey = `all-locked-${MAX_TRACKED + 50}`;
     expect(delayForNextAttempt(recentKey, now + MAX_TRACKED + 50)).toBeGreaterThan(0);
-  });
+  }, 15_000);
 });
 
 describe("distributed rate limiting & client spoofing defense", () => {

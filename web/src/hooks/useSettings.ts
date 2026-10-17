@@ -102,9 +102,9 @@ export function useSettings() {
   const downloadBackup = useCallback(async (passphrase?: string): Promise<TKey> => {
     try {
       let content: string;
-      const pass = passphrase?.trim();
-      if (pass) {
-        content = await exportEncryptedLibrary(db, pass);
+      const isEncrypted = typeof passphrase === "string" && passphrase.length > 0;
+      if (isEncrypted) {
+        content = await exportEncryptedLibrary(db, passphrase);
       } else {
         const backup = await exportLibrary(db);
         content = JSON.stringify(backup, null, 2);
@@ -116,7 +116,7 @@ export function useSettings() {
       const anchor = document.createElement("a");
       anchor.href = url;
       const datePart = new Date().toISOString().slice(0, 10);
-      anchor.download = pass
+      anchor.download = isEncrypted
         ? `deutschflow-encrypted-${datePart}.json`
         : `deutschflow-${datePart}.json`;
       anchor.click();
@@ -126,7 +126,7 @@ export function useSettings() {
         localStorage.setItem("deutschflow_last_backup", String(now));
       }
       setLastBackupTime(now);
-      return pass ? "settings.backupCreated" : "settings.backupDownloaded";
+      return isEncrypted ? "settings.backupCreated" : "settings.backupDownloaded";
     } catch (error) {
       return error instanceof ImportError && error.reason === "capacity"
         ? "settings.backupCapacity" : "settings.backupFailed";

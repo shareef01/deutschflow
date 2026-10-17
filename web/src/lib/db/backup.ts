@@ -33,9 +33,9 @@ export const BACKUP_VERSION = 2;
 export const ENCRYPTED_BACKUP_FORMAT = "deutschflow-library-encrypted";
 export const ENCRYPTED_BACKUP_VERSION = 1;
 export const KDF_ALGORITHM = "PBKDF2WithHmacSHA256";
-export const ITERATIONS = 100_000;
+export const ITERATIONS = 210_000;
 export const MIN_ITERATIONS = 50_000;
-export const MAX_ITERATIONS = 500_000;
+export const MAX_ITERATIONS = 1_000_000;
 export const SALT_LENGTH_BYTES = 16;
 export const MIN_SALT_BYTES = 16;
 export const MAX_SALT_BYTES = 64;
@@ -320,6 +320,9 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
   }
 
   // Pre-validate all records before touching storage
+  const ids = new Set<number>();
+  const vocabKeys = new Set<string>();
+  const vocabRemoteIds = new Set<string>();
   for (const row of backup.vocabulary) {
     if (!isRecord(row)) {
       throw new ImportError("invalid", "Vocabulary entry must be an object.");
@@ -328,6 +331,25 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     const englishTranslation = str(row.englishTranslation).trim();
     if (!germanText || !englishTranslation) {
       throw new ImportError("invalid", "Vocabulary text and translation are required.");
+    }
+    const key = foldGermanKey(germanText);
+    if (vocabKeys.has(key)) {
+      throw new ImportError("invalid", `Duplicate canonical vocabulary key in backup: "${germanText}".`);
+    }
+    vocabKeys.add(key);
+
+    if (row.id !== undefined) {
+      if (!Number.isSafeInteger(row.id) || (row.id as number) <= 0 || ids.has(row.id as number)) {
+        throw new ImportError("invalid", "Invalid or duplicate vocabulary id.");
+      }
+      ids.add(row.id as number);
+    }
+    if (typeof row.remoteId === "string" && row.remoteId.trim()) {
+      const rId = row.remoteId.trim().toLowerCase();
+      if (vocabRemoteIds.has(rId)) {
+        throw new ImportError("invalid", `Duplicate vocabulary remoteId in backup: "${row.remoteId}".`);
+      }
+      vocabRemoteIds.add(rId);
     }
     validateStrings(row, ["germanText", "englishTranslation", "exampleSentence", "article", "plural",
       "conjugation", "synonyms", "antonyms"]);
@@ -362,6 +384,8 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     }
   }
 
+  const transcriptRemoteIds = new Set<string>();
+  const transcriptContents = new Set<string>();
   for (const row of backup.transcripts) {
     if (!isRecord(row)) {
       throw new ImportError("invalid", "Transcript entry must be an object.");
@@ -369,6 +393,20 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     const fullText = str(row.fullText);
     if (!fullText.trim()) {
       throw new ImportError("invalid", "Transcript text is required.");
+    }
+    const ts = num(row.timestamp, 0);
+    const contentKey = `${fullText.trim()}:${ts}`;
+    if (transcriptContents.has(contentKey)) {
+      throw new ImportError("invalid", "Duplicate transcript content in backup.");
+    }
+    transcriptContents.add(contentKey);
+
+    if (typeof row.remoteId === "string" && row.remoteId.trim()) {
+      const rId = row.remoteId.trim().toLowerCase();
+      if (transcriptRemoteIds.has(rId)) {
+        throw new ImportError("invalid", `Duplicate transcript remoteId in backup: "${row.remoteId}".`);
+      }
+      transcriptRemoteIds.add(rId);
     }
     validateStrings(row, ["fullText", "translation", "analysisJson"]);
     if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
@@ -418,20 +456,18 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
       throw new ImportError("invalid", `${collection} must be an array.`);
     }
   }
-  const ids = new Set<number>();
-  for (const row of backup.vocabulary) {
-    if (isRecord(row) && row.id !== undefined) {
-      if (!Number.isSafeInteger(row.id) || (row.id as number) <= 0 || ids.has(row.id as number)) {
-        throw new ImportError("invalid", "Invalid or duplicate vocabulary id.");
-      }
-      ids.add(row.id as number);
-    }
-  }
+
+  const reviewRemoteIds = new Set<string>();
   for (const row of (backup.reviewEvents ?? []) as unknown[]) {
     if (!isRecord(row) || !["AGAIN", "HARD", "GOOD", "EASY"].includes(str(row.rating)) ||
       typeof row.isExtraPractice !== "boolean" || !UUID_REGEX.test(str(row.remoteId))) {
       throw new ImportError("invalid", "Invalid review event.");
     }
+    const rId = str(row.remoteId).toLowerCase();
+    if (reviewRemoteIds.has(rId)) {
+      throw new ImportError("invalid", `Duplicate review event remoteId in backup: "${row.remoteId}".`);
+    }
+    reviewRemoteIds.add(rId);
     if (row.vocabularyId !== null && row.vocabularyId !== undefined) {
       if (!Number.isSafeInteger(row.vocabularyId) || (row.vocabularyId as number) < 0) {
         throw new ImportError("invalid", "Invalid review vocabularyId.");
@@ -536,6 +572,29 @@ async function applyImport(
   const vocabulary = Array.isArray(backup.vocabulary) ? backup.vocabulary : [];
   const vocabularyIds = new Map<number, number>();
 
+  // Pre-index latest reviewedAtTimestamp per vocabulary ID from incoming review events
+  const incomingMaxReviewByVocabId = new Map<number, number>();
+  for (const event of backup.reviewEvents ?? []) {
+    if (isRecord(event) && typeof event.vocabularyId === "number" && typeof event.reviewedAtTimestamp === "number") {
+      const cur = incomingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
+      if (event.reviewedAtTimestamp > cur) {
+        incomingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
+      }
+    }
+  }
+
+  // Pre-index latest reviewedAtTimestamp per vocabulary ID from existing review events
+  const existingReviewEvents = await db.reviewEvents.toArray();
+  const existingMaxReviewByVocabId = new Map<number, number>();
+  for (const event of existingReviewEvents) {
+    if (typeof event.vocabularyId === "number" && typeof event.reviewedAtTimestamp === "number") {
+      const cur = existingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
+      if (event.reviewedAtTimestamp > cur) {
+        existingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
+      }
+    }
+  }
+
   // Pre-load all existing vocabulary into an in-memory index for fast O(1) matching
   const existingVocab = await db.vocabulary.toArray();
   const existingByKey = new Map<string, VocabularyEntry>();
@@ -556,11 +615,17 @@ async function applyImport(
     const key = foldGermanKey(germanText);
     const incomingRemoteId = sanitizeRemoteId(row.remoteId);
     const incomingLastModifiedAt = num(row.lastModifiedAt, num(row.timestamp, 0));
+    const incomingOriginalId = typeof row.id === "number" ? row.id : undefined;
+    const incomingMaxReview = incomingOriginalId !== undefined ? (incomingMaxReviewByVocabId.get(incomingOriginalId) ?? 0) : 0;
+    const incomingLastStudiedAt = Math.max(num(row.lastStudiedAt, 0), incomingMaxReview);
 
     const existing = existingByKey.get(key);
 
     if (existing) {
       result.vocabularyMerged++;
+      const existingMaxReview = existing.id !== undefined ? (existingMaxReviewByVocabId.get(existing.id) ?? 0) : 0;
+      const existingLastStudiedAt = Math.max(existing.lastStudiedAt || 0, existingMaxReview);
+
       const incomingIsNewer = incomingLastModifiedAt > (existing.lastModifiedAt || 0);
 
       const incomingSchedule = {
@@ -569,8 +634,12 @@ async function applyImport(
         easeFactor: num(row.easeFactor, 2.5),
         reviewCount: num(row.reviewCount, 0),
         lastModifiedAt: incomingLastModifiedAt,
+        lastStudiedAt: incomingLastStudiedAt || undefined,
       };
-      const scheduleWinner = withFurthestScheduleOf(existing, incomingSchedule);
+      const scheduleWinner = withFurthestScheduleOf(existing, incomingSchedule, Date.now(), {
+        survivorLastStudiedAt: existingLastStudiedAt,
+        otherLastStudiedAt: incomingLastStudiedAt,
+      });
 
       const merged: VocabularyEntry = {
         ...existing,
@@ -601,6 +670,7 @@ async function applyImport(
         timestamp: Math.max(existing.timestamp, num(row.timestamp, 0)),
         remoteId: existing.remoteId || incomingRemoteId,
         lastModifiedAt: Math.max(existing.lastModifiedAt || 0, incomingLastModifiedAt),
+        lastStudiedAt: scheduleWinner.lastStudiedAt || Math.max(existingLastStudiedAt, incomingLastStudiedAt) || undefined,
         nextReview: scheduleWinner.nextReview,
         interval: scheduleWinner.interval,
         easeFactor: scheduleWinner.easeFactor,
@@ -630,6 +700,7 @@ async function applyImport(
         reviewCount: num(row.reviewCount, 0),
         remoteId: incomingRemoteId,
         lastModifiedAt: incomingLastModifiedAt,
+        lastStudiedAt: incomingLastStudiedAt || undefined,
       };
       vocabToAdd.push(entry);
       vocabToAddOriginalIds.push(typeof row.id === "number" ? row.id : undefined);

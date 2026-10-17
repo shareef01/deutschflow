@@ -172,6 +172,15 @@ export const AI_MESSAGES: Record<
   rateLimited: "ai.rateLimited",
 };
 
+export class GroqHttpError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "GroqHttpError";
+    this.status = status;
+  }
+}
+
 async function post(body: string, apiKey: string, externalSignal?: AbortSignal): Promise<string> {
   let attempt = 0;
   while (true) {
@@ -198,7 +207,7 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
 
       if (response.ok) return await response.text();
 
-      // Check if safely retryable
+      // Check if safely retryable server errors (500, 502, 503, 504)
       if (attempt < MAX_POST_RETRIES && isRetryableStatus(response.status) && !externalSignal?.aborted) {
         attempt++;
         await sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 500, externalSignal);
@@ -212,15 +221,18 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
           : response.status === 429
             ? t(AI_MESSAGES.rateLimited)
             : t("ai.status", [response.status]));
-      throw new Error(redactSensitiveKey(rawMsg));
+      // Provider rejections (400, 401, 403, 404, unqualified 429, etc.) must fail fast without retrying
+      throw new GroqHttpError(response.status, redactSensitiveKey(rawMsg));
     } catch (err) {
       if (externalSignal?.aborted || (err instanceof DOMException && err.name === "AbortError")) {
         throw err;
       }
-      if (
-        attempt < MAX_POST_RETRIES &&
-        !(err instanceof Error && err.message.includes(t(AI_MESSAGES.keyRejected)))
-      ) {
+      // Never retry non-retryable provider rejections
+      if (err instanceof GroqHttpError) {
+        throw err;
+      }
+      // Only retry transient network errors (e.g. TypeError from fetch network interruption)
+      if (attempt < MAX_POST_RETRIES) {
         attempt++;
         await sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 500, externalSignal);
         continue;

@@ -112,7 +112,7 @@ Encrypted backups wrap the plaintext JSON representation using standard, authent
   "format": "deutschflow-library-encrypted",
   "version": 1,
   "kdf": "PBKDF2-HMAC-SHA256",
-  "iterations": 100000,
+  "iterations": 210000,
   "salt": "<base64-encoded 16 bytes>",
   "iv": "<base64-encoded 12 bytes>",
   "ciphertext": "<base64-encoded AES-256-GCM ciphertext + 128-bit auth tag>"
@@ -124,7 +124,7 @@ Encrypted backups wrap the plaintext JSON representation using standard, authent
 | :--- | :--- | :--- |
 | **Cipher** | `AES-256-GCM` | Authenticated encryption prevents tampering and truncation attacks. |
 | **Key Derivation (KDF)** | `PBKDF2-HMAC-SHA256` | Universally supported across Android JCA and WebCrypto. |
-| **KDF Iterations** | `100,000` | OWASP recommended minimum for PBKDF2 without browser thread lockup. |
+| **KDF Iterations** | `210,000` | Strengthened OWASP work factor for PBKDF2-HMAC-SHA256. Decryption range `50,000` to `1,000,000` preserves full backward compatibility with existing `100,000`-iteration backups. |
 | **Salt Length** | 16 bytes (128 bits) | Cryptographically secure random bytes generated per export. |
 | **IV / Nonce Length** | 12 bytes (96 bits) | Standard GCM nonce length; fresh random nonce generated per export. |
 | **Authentication Tag** | 128 bits (16 bytes) | Standard full-strength GCM tag appended to ciphertext. |
@@ -135,17 +135,19 @@ Encrypted backups wrap the plaintext JSON representation using standard, authent
 
 When importing a backup into an existing library, records are merged transactionally:
 
-### 3.1 Vocabulary Merging
+### 3.1 Vocabulary Merging & Deletion Isolation
 1. **Canonical Key Match**: Look up existing card by `germanTextKey = foldGermanKey(incoming.germanText)`.
-2. **Same Word Edit Collision**: If editing an existing word to collide with another word, all associated `reviewEvents` pointing to the deleted key are automatically remapped to the surviving record.
-3. **Pedagogical SRS Progress Retention (`withFurthestScheduleOf`)**:
+2. **Same Word Edit Collision**: If editing an existing word to collide with another word, all associated `reviewEvents` pointing to the departing key are preserved and merged onto the surviving schedule. The departing card's actual review event recency and study timestamp are factored into `withFurthestScheduleOf` so newer lapses are never erased.
+3. **Undo Review Event Isolation**: When a deleted card is restored, an explicit deletion history map (`deletion_history:${remoteId}` in `db.settings`) tracks which review events originally belonged to it. If its former numeric primary key has since been assigned to an unrelated card, a new primary key is allocated and only the card's original review events are reassociated, preventing review-event theft.
+4. **Pedagogical SRS Progress Retention (`withFurthestScheduleOf`)**:
    - **Unreviewed vs Studied**: If one card has been studied (`reviewCount > 0` or `interval > 0`) and the other is unreviewed (`reviewCount == 0 && interval == 0`), the studied card schedule is preserved. Content edits on unreviewed cards never erase accumulated study progress.
    - **Recency of Study (Anti-Lapse-Erasure)**: Learning event recency is determined strictly by dedicated `lastStudiedAt` or maximum associated review-event timestamps, **decoupled from `lastModifiedAt`**. Because `lastModifiedAt` mutates during typographical fixes, translations, or imports, it cannot establish learning sequence. A recent failure (`interval = 0`, card lapsed) is never erased by an older high interval, even if the mature card underwent later typographical edits.
    - **Safety in Favor of Recall (Tied Timestamps)**: If study timestamps are tied or unavailable:
      * A card that is due or lapsed (`nextReview <= now || interval == 0`) takes precedence over a card scheduled for the future to prevent burying urgent reviews.
      * If both cards are scheduled for the future, the sooner due date (`smaller nextReview`) wins to ensure earlier reinforcement.
      * If both are due or intervals tie, the conservative ease factor (`smaller easeFactor`) and review count are preserved.
-4. **Metadata Merging**: Non-empty fields (example sentences, article, plural, synonyms) from the newer `lastModifiedAt` record are preserved.
+5. **Metadata Merging**: Non-empty fields (example sentences, article, plural, synonyms) from the newer `lastModifiedAt` record are preserved.
+6. **Batch Deduplication Validation**: Backups undergo pre-import rejection if they contain duplicate canonical vocabulary keys (`germanTextKey`), duplicate transcript remote IDs, duplicate transcript content (`${fullText}:${ts}`), or duplicate review event remote IDs. Any duplicate triggers an immediate validation failure and full transactional rollback.
 
 ### 3.2 Review Event Integrity & Elimination of Fake ID 0
 - Review event records retain their stable `remoteId`. Duplicate imports do not insert redundant events.
@@ -168,7 +170,7 @@ To protect memory and prevent DoS / zip-bomb vectors while accommodating large l
 - **Documented Capacity Improvement**: The increase from 10 MiB to 50 MiB represents a 5x capacity improvement enabled by memory-efficient batching and array-based chunking. It mitigates previous truncation risks for typical personal libraries while preserving a safety ceiling against memory exhaustion in resource-constrained environments (e.g. mobile browsers and low-memory Android devices).
 - **Maximum Salt Size**: `64` bytes.
 - **Maximum Ciphertext Base64**: `68,000,000` characters.
-- **Iterations Range**: `10,000` to `1,000,000`.
+- **Iterations Range**: `50,000` to `1,000,000` (default: `210,000`).
 - **Bounded Batch Processing**: Both Web (Dexie/IndexedDB) and Android (Room/SQLite) process large imports and exports in bounded chunks of 500 items to avoid V8 heap exhaustion and SQLite cursor window limits.
 
 ---

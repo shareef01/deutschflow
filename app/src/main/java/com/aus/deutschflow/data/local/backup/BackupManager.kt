@@ -297,7 +297,9 @@ class BackupManager @Inject constructor(
             val existing = vocabularyDao.findByKey(incoming.germanTextKey)
             if (existing != null) {
                 val thisLastStudied = reviewEventDao.latestReviewTimestamp(existing.id) ?: 0L
-                val otherLastStudied = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
+                val incomingReviewTimestamp = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
+                val incomingStudyField = row.optLong("lastStudiedAt", 0L)
+                val otherLastStudied = maxOf(incomingStudyField, incomingReviewTimestamp)
                 val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(
                     other = incoming,
                     now = now,
@@ -538,12 +540,26 @@ class BackupManager @Inject constructor(
             // Validate vocabulary
             val vocabArray = backup.getJSONArray("vocabulary")
             val vocabIds = mutableSetOf<Int>()
+            val vocabKeys = mutableSetOf<String>()
+            val vocabRemoteIds = mutableSetOf<String>()
             for (i in 0 until vocabArray.length()) {
                 val row = vocabArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Vocabulary item must be an object.")
                 val germanText = row.optString("germanText", "").trim()
                 val translation = row.optString("englishTranslation", "").trim()
                 if (germanText.isEmpty() || translation.isEmpty()) {
                     throw BackupException.InvalidFormat("Vocabulary text and translation are required.")
+                }
+                val key = germanKey(germanText)
+                if (vocabKeys.contains(key)) {
+                    throw BackupException.InvalidFormat("Duplicate vocabulary canonical key in backup.")
+                }
+                vocabKeys.add(key)
+                val remoteId = row.optString("remoteId", "").trim()
+                if (remoteId.isNotEmpty()) {
+                    if (vocabRemoteIds.contains(remoteId)) {
+                        throw BackupException.InvalidFormat("Duplicate vocabulary remoteId in backup.")
+                    }
+                    vocabRemoteIds.add(remoteId)
                 }
                 val id = row.optInt("id", 0)
                 if (id > 0) {
@@ -569,12 +585,26 @@ class BackupManager @Inject constructor(
 
             // Validate transcripts
             val transcriptsArray = backup.getJSONArray("transcripts")
+            val transcriptRemoteIds = mutableSetOf<String>()
+            val transcriptContent = mutableSetOf<String>()
             for (i in 0 until transcriptsArray.length()) {
                 val row = transcriptsArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Transcript item must be an object.")
                 val fullText = row.optString("fullText", "").trim()
                 if (fullText.isEmpty()) throw BackupException.InvalidFormat("Transcript text is required.")
                 val ts = row.optLong("timestamp", 0L)
                 if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid transcript timestamp.")
+                val remoteId = row.optString("remoteId", "").trim()
+                if (remoteId.isNotEmpty()) {
+                    if (transcriptRemoteIds.contains(remoteId)) {
+                        throw BackupException.InvalidFormat("Duplicate transcript remoteId in backup.")
+                    }
+                    transcriptRemoteIds.add(remoteId)
+                }
+                val contentKey = "$fullText:$ts"
+                if (transcriptContent.contains(contentKey)) {
+                    throw BackupException.InvalidFormat("Duplicate transcript content in backup.")
+                }
+                transcriptContent.add(contentKey)
             }
 
             // Validate userStats
@@ -605,6 +635,7 @@ class BackupManager @Inject constructor(
             // Validate reviewEvents
             if (backup.has("reviewEvents")) {
                 val reviewArray = backup.optJSONArray("reviewEvents") ?: throw BackupException.InvalidFormat("reviewEvents must be an array.")
+                val reviewRemoteIds = mutableSetOf<String>()
                 for (i in 0 until reviewArray.length()) {
                     val row = reviewArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Review event must be an object.")
                     val hasVocab = row.has("vocabularyId") && !row.isNull("vocabularyId")
@@ -625,6 +656,10 @@ class BackupManager @Inject constructor(
                     if (sched < 0 || sched > 365) throw BackupException.InvalidFormat("Invalid review scheduled days.")
                     if (actual < 0 || reviewedAt < 0 || reviewedAt > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid review timestamp.")
                     if (!UUID_REGEX.matches(remoteId)) throw BackupException.InvalidFormat("Invalid review event remoteId UUID.")
+                    if (reviewRemoteIds.contains(remoteId)) {
+                        throw BackupException.InvalidFormat("Duplicate review event remoteId in backup.")
+                    }
+                    reviewRemoteIds.add(remoteId)
                 }
             }
 

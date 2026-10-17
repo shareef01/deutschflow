@@ -26,14 +26,14 @@ object BackupCrypto {
     const val ENCRYPTED_VERSION = 1
     const val KDF_ALGORITHM = "PBKDF2WithHmacSHA256"
     const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
-    const val ITERATIONS = 100_000
+    const val ITERATIONS = 210_000
     const val KEY_LENGTH_BITS = 256
     const val SALT_LENGTH_BYTES = 16
     const val IV_LENGTH_BYTES = 12
     const val TAG_LENGTH_BITS = 128
 
     const val MIN_ITERATIONS = 50_000
-    const val MAX_ITERATIONS = 500_000
+    const val MAX_ITERATIONS = 1_000_000
     const val MIN_SALT_BYTES = 16
     const val MAX_SALT_BYTES = 64
     const val MAX_CIPHERTEXT_BYTES = com.aus.deutschflow.data.local.backup.MAX_CIPHERTEXT_BYTES

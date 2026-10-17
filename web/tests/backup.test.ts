@@ -146,10 +146,10 @@ describe("exportLibrary / importLibrary", () => {
   });
 
   it("uses a total byte budget rather than rejecting a long-lived library by row count", async () => {
-    const oversizedVocab = new Array(10_001).fill({
-      germanText: "Wort",
-      englishTranslation: "word",
-    });
+    const oversizedVocab = Array.from({ length: 10_001 }, (_, i) => ({
+      germanText: `Wort ${i}`,
+      englishTranslation: `word ${i}`,
+    }));
     const backup = {
       format: "deutschflow-library",
       version: 1,
@@ -533,7 +533,7 @@ describe("exportLibrary / importLibrary", () => {
       expect(envelope.format).toBe(ENCRYPTED_BACKUP_FORMAT);
       expect(envelope.version).toBe(ENCRYPTED_BACKUP_VERSION);
       expect(envelope.kdf).toBe("PBKDF2WithHmacSHA256");
-      expect(envelope.iterations).toBe(100_000);
+      expect(envelope.iterations).toBe(210_000);
       expect(typeof envelope.salt).toBe("string");
       expect(typeof envelope.iv).toBe("string");
       expect(typeof envelope.ciphertext).toBe("string");
@@ -629,7 +629,7 @@ describe("exportLibrary / importLibrary", () => {
       const highIterations = {
         format: ENCRYPTED_BACKUP_FORMAT,
         version: 1,
-        iterations: 1_000_000, // > 500,000
+        iterations: 2_000_000, // > 1,000,000
         salt: Buffer.from("1234567890123456").toString("base64"),
         iv: Buffer.from("123456789012").toString("base64"),
         ciphertext: "Y2lwaGVydGV4dA==",
