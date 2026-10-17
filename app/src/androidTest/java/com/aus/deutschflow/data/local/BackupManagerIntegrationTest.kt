@@ -250,7 +250,19 @@ class BackupManagerIntegrationTest {
                 interval = 3,
                 easeFactor = 2.5f,
                 reviewCount = 2,
-                nextReview = now + 86400000L
+                nextReview = now + 86400000L * 3
+            )
+        )
+        val persistedHaus = vocabDao.findByGermanText("Haus")!!
+        sourceDb.reviewEventDao().insert(
+            ReviewEventEntity(
+                vocabularyId = persistedHaus.id,
+                rating = "GOOD",
+                scheduledDays = 3,
+                actualDays = 3,
+                reviewedAtTimestamp = now,
+                isExtraPractice = false,
+                remoteId = UUID.randomUUID().toString()
             )
         )
 
@@ -266,7 +278,7 @@ class BackupManagerIntegrationTest {
                 interval = 1,
                 easeFactor = 2.5f,
                 reviewCount = 1,
-                nextReview = (now - 50000) + 86400000L * 1
+                nextReview = now + 86400000L * 3
             )
         )
 
