@@ -242,6 +242,20 @@ class BackupManager @Inject constructor(
 
         val backupIdToPersistedId = mutableMapOf<Int, Int>()
 
+        // Pre-index latest incoming review timestamp per vocabulary id to compare actual study recency
+        val incomingLatestReviewByVocabId = mutableMapOf<Int, Long>()
+        if (backup.has("reviewEvents")) {
+            val revArr = backup.getJSONArray("reviewEvents")
+            for (i in 0 until revArr.length()) {
+                val r = revArr.getJSONObject(i)
+                val vId = r.optInt("vocabularyId", 0)
+                val ts = r.optLong("reviewedAtTimestamp", 0L)
+                if (vId > 0 && ts > 0L) {
+                    incomingLatestReviewByVocabId[vId] = maxOf(incomingLatestReviewByVocabId[vId] ?: 0L, ts)
+                }
+            }
+        }
+
         // 1. Vocabulary
         val vocabArray = backup.getJSONArray("vocabulary")
         for (i in 0 until vocabArray.length()) {
@@ -276,7 +290,14 @@ class BackupManager @Inject constructor(
 
             val existing = vocabularyDao.findByKey(incoming.germanTextKey)
             if (existing != null) {
-                val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(incoming)
+                val thisLastStudied = reviewEventDao.latestReviewTimestamp(existing.id) ?: 0L
+                val otherLastStudied = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
+                val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(
+                    other = incoming,
+                    now = now,
+                    thisLastStudiedAt = thisLastStudied,
+                    otherLastStudiedAt = otherLastStudied
+                )
                 vocabularyDao.updateVocabulary(merged)
                 if (oldBackupId > 0) backupIdToPersistedId[oldBackupId] = existing.id
                 vocabularyMerged++
@@ -386,15 +407,15 @@ class BackupManager @Inject constructor(
             val reviewArray = backup.getJSONArray("reviewEvents")
             for (i in 0 until reviewArray.length()) {
                 val row = reviewArray.getJSONObject(i)
-                val originalVocabId = row.getInt("vocabularyId")
-                val targetVocabId = backupIdToPersistedId[originalVocabId]
-                // Prevent orphan review events or incorrect cross-assignment to an unrelated target row:
-                // Only link review events whose original vocabulary ID mapped cleanly to an imported/merged target row.
-                if (targetVocabId == null || targetVocabId <= 0) {
-                    continue
+                val originalVocabId = row.optInt("vocabularyId", 0)
+                var targetVocabId: Int? = if (originalVocabId > 0) backupIdToPersistedId[originalVocabId] else null
+                if (targetVocabId != null && vocabularyDao.findById(targetVocabId) == null) {
+                    targetVocabId = null
                 }
-                if (vocabularyDao.findById(targetVocabId) == null) {
-                    continue
+                if (targetVocabId == null || targetVocabId <= 0) {
+                    // Do not silently discard valid review events!
+                    // Link orphaned/unresolvable review events to an explicit archived deleted vocabulary entity.
+                    targetVocabId = getOrCreateArchivedVocabularyId()
                 }
 
                 val remoteId = row.optString("remoteId").ifBlank { UUID.randomUUID().toString() }
@@ -423,6 +444,26 @@ class BackupManager @Inject constructor(
             transcriptsAdded = transcriptsAdded,
             reviewEventsAdded = reviewEventsAdded
         )
+    }
+
+    private suspend fun getOrCreateArchivedVocabularyId(): Int {
+        val archivedKey = "__archived_deleted__"
+        val existing = vocabularyDao.findByKey(archivedKey)
+        if (existing != null) return existing.id
+        val archived = VocabularyEntity(
+            id = 0,
+            germanText = "[Gelöscht]",
+            germanTextKey = archivedKey,
+            englishTranslation = "[Archived / Deleted Word]",
+            timestamp = 0L,
+            nextReview = Long.MAX_VALUE, // never appears in due review decks
+            interval = 0,
+            reviewCount = 0,
+            remoteId = "00000000-0000-4000-8000-000000000000",
+            lastModifiedAt = 0L
+        )
+        vocabularyDao.insertVocabulary(archived)
+        return vocabularyDao.findByKey(archivedKey)?.id ?: 0
     }
 
     companion object {
@@ -561,9 +602,12 @@ class BackupManager @Inject constructor(
                 val reviewArray = backup.optJSONArray("reviewEvents") ?: throw BackupException.InvalidFormat("reviewEvents must be an array.")
                 for (i in 0 until reviewArray.length()) {
                     val row = reviewArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Review event must be an object.")
-                    val vocabId = row.optInt("vocabularyId", -1)
-                    if (vocabId <= 0 || !vocabIds.contains(vocabId)) {
-                        throw BackupException.InvalidFormat("Review event references non-existent or invalid vocabulary ID: $vocabId.")
+                    val hasVocab = row.has("vocabularyId") && !row.isNull("vocabularyId")
+                    if (hasVocab) {
+                        val vocabId = row.optInt("vocabularyId", -1)
+                        if (vocabId < 0) {
+                            throw BackupException.InvalidFormat("Invalid review event vocabulary ID: $vocabId.")
+                        }
                     }
                     val rating = row.optString("rating", "")
                     if (rating !in listOf("AGAIN", "HARD", "GOOD", "EASY")) {

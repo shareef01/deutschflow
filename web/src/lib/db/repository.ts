@@ -68,8 +68,12 @@ export function isUnreviewedSchedule(
 export function withFurthestScheduleOf(
   survivor: VocabularyEntry,
   other: Pick<VocabularyEntry, "reviewCount" | "interval" | "easeFactor" | "nextReview"> &
-    Partial<Pick<VocabularyEntry, "lastModifiedAt">>,
-  now: number = Date.now()
+    Partial<Pick<VocabularyEntry, "lastModifiedAt" | "lastStudiedAt">>,
+  now: number = Date.now(),
+  options?: {
+    survivorLastStudiedAt?: number;
+    otherLastStudiedAt?: number;
+  }
 ): VocabularyEntry {
   const survivorUnreviewed = isUnreviewedSchedule(survivor);
   const otherUnreviewed = isUnreviewedSchedule(other);
@@ -82,6 +86,7 @@ export function withFurthestScheduleOf(
       interval: other.interval,
       easeFactor: other.easeFactor,
       reviewCount: other.reviewCount,
+      lastStudiedAt: other.lastStudiedAt ?? options?.otherLastStudiedAt ?? survivor.lastStudiedAt,
     };
   }
   if (!survivorUnreviewed && otherUnreviewed) {
@@ -91,26 +96,31 @@ export function withFurthestScheduleOf(
     return survivor;
   }
 
-  // 2. Both have study history. Compare recency (lastModifiedAt)
-  const survivorMod = survivor.lastModifiedAt ?? 0;
-  const otherMod = other.lastModifiedAt ?? 0;
+  // 2. Both have study history: compare dedicated study timestamps (actual review event time or lastStudiedAt)
+  // Decoupled from lastModifiedAt, which changes during typographical, translation, or content edits.
+  const survivorStudied = options?.survivorLastStudiedAt ?? survivor.lastStudiedAt ?? 0;
+  const otherStudied = options?.otherLastStudiedAt ?? other.lastStudiedAt ?? 0;
 
-  if (otherMod > survivorMod) {
-    // Other was reviewed or updated strictly after survivor
-    return {
-      ...survivor,
-      nextReview: other.nextReview,
-      interval: other.interval,
-      easeFactor: other.easeFactor,
-      reviewCount: other.reviewCount,
-    };
-  }
-  if (survivorMod > otherMod) {
-    // Survivor was reviewed or updated strictly after other
-    return survivor;
+  if (otherStudied > 0 || survivorStudied > 0) {
+    if (otherStudied > survivorStudied) {
+      // Other was reviewed strictly after survivor
+      return {
+        ...survivor,
+        nextReview: other.nextReview,
+        interval: other.interval,
+        easeFactor: other.easeFactor,
+        reviewCount: other.reviewCount,
+        lastStudiedAt: otherStudied,
+      };
+    }
+    if (survivorStudied > otherStudied) {
+      // Survivor was reviewed strictly after other
+      return survivor;
+    }
   }
 
-  // 3. Timestamps are identical: Apply Safety-in-Favor-of-Recall
+  // 3. Timestamps are identical or unavailable: Apply Safety-in-Favor-of-Recall
+  // A due or lapsed card takes priority over a future schedule to protect against memory decay.
   const survivorIsDueOrLapsed = survivor.nextReview <= now || survivor.interval === 0;
   const otherIsDueOrLapsed = other.nextReview <= now || other.interval === 0;
 
@@ -122,6 +132,7 @@ export function withFurthestScheduleOf(
       interval: other.interval,
       easeFactor: other.easeFactor,
       reviewCount: other.reviewCount,
+      lastStudiedAt: otherStudied || survivorStudied || undefined,
     };
   }
   if (survivorIsDueOrLapsed && !otherIsDueOrLapsed) {
@@ -138,6 +149,7 @@ export function withFurthestScheduleOf(
         interval: other.interval,
         easeFactor: other.easeFactor,
         reviewCount: other.reviewCount,
+        lastStudiedAt: otherStudied || survivorStudied || undefined,
       };
     }
     if (survivor.nextReview < other.nextReview) {
@@ -157,6 +169,7 @@ export function withFurthestScheduleOf(
     interval: other.interval,
     easeFactor: other.easeFactor,
     reviewCount: other.reviewCount,
+    lastStudiedAt: otherStudied || survivorStudied || undefined,
   };
 }
 

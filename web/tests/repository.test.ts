@@ -425,6 +425,7 @@ describe("withFurthestScheduleOf — pedagogical SRS merge policy", () => {
       nextReview: 200_000,
       easeFactor: 2.6,
       lastModifiedAt: 1000,
+      lastStudiedAt: 1000,
     };
     // Learner failed the card today (T2 = 5000, quality AGAIN -> interval 0, nextReview 0, ease penalty)
     const recentLapse = {
@@ -434,6 +435,7 @@ describe("withFurthestScheduleOf — pedagogical SRS merge policy", () => {
       nextReview: 0,
       easeFactor: 2.4,
       lastModifiedAt: 5000,
+      lastStudiedAt: 5000,
     };
 
     const merged = withFurthestScheduleOf(matureSurvivor, recentLapse, 5000);
@@ -453,6 +455,7 @@ describe("withFurthestScheduleOf — pedagogical SRS merge policy", () => {
       nextReview: 0,
       easeFactor: 2.3,
       lastModifiedAt: 1000,
+      lastStudiedAt: 1000,
     };
     // Learner restudied and mastered the card today (T2 = 5000)
     const remastered = {
@@ -462,6 +465,7 @@ describe("withFurthestScheduleOf — pedagogical SRS merge policy", () => {
       nextReview: 300_000,
       easeFactor: 2.5,
       lastModifiedAt: 5000,
+      lastStudiedAt: 5000,
     };
 
     const merged = withFurthestScheduleOf(lapsedSurvivor, remastered, 5000);
@@ -469,6 +473,37 @@ describe("withFurthestScheduleOf — pedagogical SRS merge policy", () => {
     expect(merged.interval).toBe(15);
     expect(merged.nextReview).toBe(300_000);
     expect(merged.easeFactor).toBe(2.5);
+  });
+
+  it("preserves recent lapse even when content was edited after the lapse", () => {
+    // Survivor was mastered at T=1000, but edited for typos at T=9000
+    const matureSurvivorEdited = {
+      ...baseEntry,
+      reviewCount: 5,
+      interval: 30,
+      nextReview: 200_000,
+      easeFactor: 2.6,
+      lastModifiedAt: 9000,
+      lastStudiedAt: 1000,
+    };
+    // Card lapsed at T=2000
+    const recentLapse = {
+      ...baseEntry,
+      reviewCount: 0,
+      interval: 0,
+      nextReview: 0,
+      easeFactor: 2.4,
+      lastModifiedAt: 2000,
+      lastStudiedAt: 2000,
+    };
+
+    // Study timestamps (1000 vs 2000) determine that recentLapse is the newer learning event,
+    // ignoring lastModifiedAt (9000) from typographical edits.
+    const merged = withFurthestScheduleOf(matureSurvivorEdited, recentLapse, 5000);
+    expect(merged.reviewCount).toBe(0);
+    expect(merged.interval).toBe(0);
+    expect(merged.nextReview).toBe(0);
+    expect(merged.easeFactor).toBe(2.4);
   });
 
   it("favors due/lapsed card when timestamps are tied to avoid burying review", () => {
@@ -540,5 +575,59 @@ describe("withFurthestScheduleOf — pedagogical SRS merge policy", () => {
     expect(merged.reviewCount).toBe(5);
     expect(merged.interval).toBe(30);
     expect(merged.nextReview).toBe(200_000);
+  });
+
+  it("preserves a recent lapse when incoming card had a content edit after the lapse", () => {
+    // Survivor had a lapse at T=5000
+    const lapsedSurvivor = {
+      ...baseEntry,
+      reviewCount: 0,
+      interval: 0,
+      nextReview: 0,
+      easeFactor: 2.4,
+      lastModifiedAt: 5000,
+      lastStudiedAt: 5000,
+    };
+    // Other was mastered earlier at T=1000, but content (typo) was edited at T=9000
+    const editedMastered = {
+      ...baseEntry,
+      reviewCount: 5,
+      interval: 30,
+      nextReview: 200_000,
+      easeFactor: 2.6,
+      lastModifiedAt: 9000, // Typo fixed at 9000
+      lastStudiedAt: 1000,  // But last studied at 1000
+    };
+
+    const merged = withFurthestScheduleOf(lapsedSurvivor, editedMastered, 9000);
+    // The lapse at 5000 is more recent than study at 1000; content edit at 9000 must NOT erase it
+    expect(merged.reviewCount).toBe(0);
+    expect(merged.interval).toBe(0);
+    expect(merged.nextReview).toBe(0);
+    expect(merged.easeFactor).toBe(2.4);
+  });
+
+  it("preserves a recent lapse even without study timestamps when content was edited later", () => {
+    const lapsedSurvivor = {
+      ...baseEntry,
+      reviewCount: 0,
+      interval: 0,
+      nextReview: 0,
+      easeFactor: 2.4,
+      lastModifiedAt: 5000,
+    };
+    const editedMastered = {
+      ...baseEntry,
+      reviewCount: 5,
+      interval: 30,
+      nextReview: 200_000,
+      easeFactor: 2.6,
+      lastModifiedAt: 9000,
+    };
+
+    const merged = withFurthestScheduleOf(lapsedSurvivor, editedMastered, 9000);
+    expect(merged.reviewCount).toBe(0);
+    expect(merged.interval).toBe(0);
+    expect(merged.nextReview).toBe(0);
   });
 });

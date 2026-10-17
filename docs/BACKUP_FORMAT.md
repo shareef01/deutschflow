@@ -60,7 +60,8 @@ DeutschFlow supports two top-level backup envelopes:
   - `easeFactor`: number (1.3 to 3.0, default 2.5)
   - `reviewCount`: number (non-negative integer)
   - `remoteId`: string (UUID v4)
-  - `lastModifiedAt`: number (epoch ms)
+  - `lastModifiedAt`: number (epoch ms, updated on content edits or imports)
+  - `lastStudiedAt`: number (epoch ms, optional, dedicated timestamp of latest study event)
 
 - **`transcripts`**:
   - `id`: number (optional)
@@ -84,7 +85,7 @@ DeutschFlow supports two top-level backup envelopes:
 
 - **`reviewEvents`** (Introduced in v2):
   - `id`: number (optional)
-  - `vocabularyId`: number (foreign key to vocabulary `id`, or `0` for preserved history of deleted words)
+  - `vocabularyId`: number | null (foreign key to vocabulary `id`, or `null` for preserved history of deleted or unmapped words)
   - `rating`: `"AGAIN" | "HARD" | "GOOD" | "EASY"`
   - `scheduledDays`: number
   - `actualDays`: number
@@ -139,16 +140,19 @@ When importing a backup into an existing library, records are merged transaction
 2. **Same Word Edit Collision**: If editing an existing word to collide with another word, all associated `reviewEvents` pointing to the deleted key are automatically remapped to the surviving record.
 3. **Pedagogical SRS Progress Retention (`withFurthestScheduleOf`)**:
    - **Unreviewed vs Studied**: If one card has been studied (`reviewCount > 0` or `interval > 0`) and the other is unreviewed (`reviewCount == 0 && interval == 0`), the studied card schedule is preserved. Content edits on unreviewed cards never erase accumulated study progress.
-   - **Recency of Study (Anti-Lapse-Erasure)**: When both cards have study history or modification timestamps differ, the card with the more recent `lastModifiedAt` wins. A recent failure (`interval = 0`, card lapsed) is never erased by an older high interval or review count; the learner forgot the item and must review it.
-   - **Safety in Favor of Recall (Tied Timestamps)**: If timestamps are tied:
+   - **Recency of Study (Anti-Lapse-Erasure)**: Learning event recency is determined strictly by dedicated `lastStudiedAt` or maximum associated review-event timestamps, **decoupled from `lastModifiedAt`**. Because `lastModifiedAt` mutates during typographical fixes, translations, or imports, it cannot establish learning sequence. A recent failure (`interval = 0`, card lapsed) is never erased by an older high interval, even if the mature card underwent later typographical edits.
+   - **Safety in Favor of Recall (Tied Timestamps)**: If study timestamps are tied or unavailable:
      * A card that is due or lapsed (`nextReview <= now || interval == 0`) takes precedence over a card scheduled for the future to prevent burying urgent reviews.
      * If both cards are scheduled for the future, the sooner due date (`smaller nextReview`) wins to ensure earlier reinforcement.
      * If both are due or intervals tie, the conservative ease factor (`smaller easeFactor`) and review count are preserved.
 4. **Metadata Merging**: Non-empty fields (example sentences, article, plural, synonyms) from the newer `lastModifiedAt` record are preserved.
 
-### 3.2 Review Event Integrity
+### 3.2 Review Event Integrity & Elimination of Fake ID 0
 - Review event records retain their stable `remoteId`. Duplicate imports do not insert redundant events.
-- If an imported review event belongs to a vocabulary card that was deleted or missing, its `vocabularyId` is safely mapped to `0` rather than pointing to an unrelated local record.
+- **Elimination of Fake ID 0**:
+  - Web: Review events support validated nullable references (`vocabularyId: number | null`). Unlinked review events explicitly store `null`. Version 10 schema migration migrates legacy `0` records to `null`.
+  - Android: Review events referencing unmapped or deleted vocabulary are safely linked to an explicit, isolated archived entity (`[Gelöscht]`, key `__archived_deleted__`).
+  - No valid review events are discarded, and no misleading foreign-key references are created.
 
 ### 3.3 Activity Log & Streak Calculation
 - Activity entries for each `YYYY-MM-DD` date take `Math.max(existing.xpGained, incoming.xpGained)`.
@@ -156,11 +160,12 @@ When importing a backup into an existing library, records are merged transaction
 
 ---
 
-## 4. Size Limits & Capacity Bounds
+## 4. Size Limits & Capacity Bounds (Documented Capacity Improvement)
 
 To protect memory and prevent DoS / zip-bomb vectors while accommodating large libraries (exceeding 20 MiB):
 - **Plaintext JSON export**: Maximum `50 MiB` (`52,428,800` bytes).
 - **Encrypted Base64 envelope**: Maximum `70 MiB` (`73,400,320` bytes).
+- **Documented Capacity Improvement**: The increase from 10 MiB to 50 MiB represents a 5x capacity improvement enabled by memory-efficient batching and array-based chunking. It mitigates previous truncation risks for typical personal libraries while preserving a safety ceiling against memory exhaustion in resource-constrained environments (e.g. mobile browsers and low-memory Android devices).
 - **Maximum Salt Size**: `64` bytes.
 - **Maximum Ciphertext Base64**: `68,000,000` characters.
 - **Iterations Range**: `10,000` to `1,000,000`.
@@ -172,4 +177,4 @@ To protect memory and prevent DoS / zip-bomb vectors while accommodating large l
 
 - **Backward Compatibility**: Current implementations fully accept `version: 1` archives (upgrading them with default values for new tables) and `version: 2` archives.
 - **Forward Compatibility**: Backups with `version > 2` (or encrypted `version > 1`) are rejected with explicit, user-friendly `unsupported_version` messages without modifying local storage.
-- **Cross-Platform Interoperability**: Plaintext and encrypted backups adhere to the shared contract fixture in `app/src/test/resources/cross-platform-contract.json`. Both platforms can export and restore each other's data collections.
+- **Cross-Platform Interoperability**: Plaintext and encrypted backups adhere to the shared contract fixtures. Both platforms can export and restore each other's data collections, including German special characters, nullable review event references, and study event timestamps.

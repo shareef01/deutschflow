@@ -122,4 +122,34 @@ class CrossPlatformBackupTest {
         assertEquals(350, stats.getInt("xp"))
         assertEquals(8, stats.getInt("streak"))
     }
+
+    @Test
+    fun `accepts nullable and unresolvable vocabularyId in reviewEvents without throwing InvalidFormat`() {
+        val backupWithNullable = JSONObject(vectors.getJSONObject("webPlaintext").toString()).apply {
+            val revEvents = getJSONArray("reviewEvents")
+            revEvents.put(JSONObject().apply {
+                put("vocabularyId", JSONObject.NULL) // Nullable reference from Web
+                put("rating", "AGAIN")
+                put("scheduledDays", 0)
+                put("actualDays", 0)
+                put("reviewedAtTimestamp", 1729123200000L)
+                put("isExtraPractice", false)
+                put("remoteId", "f1111111-1111-4111-8111-111111111111")
+            })
+            revEvents.put(JSONObject().apply {
+                put("vocabularyId", 9999) // Unresolvable legacy/orphaned ID
+                put("rating", "HARD")
+                put("scheduledDays", 1)
+                put("actualDays", 1)
+                put("reviewedAtTimestamp", 1729123200000L)
+                put("isExtraPractice", false)
+                put("remoteId", "f2222222-2222-4222-8222-222222222222")
+            })
+        }
+
+        // Must validate successfully without throwing InvalidFormat
+        BackupManager.validateBackupJson(backupWithNullable)
+        val events = backupWithNullable.getJSONArray("reviewEvents")
+        assertEquals(4, events.length())
+    }
 }

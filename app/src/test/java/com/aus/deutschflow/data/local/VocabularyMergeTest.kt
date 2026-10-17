@@ -185,7 +185,12 @@ class VocabularyMergeTest {
         val recentLapse = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
             .copy(lastModifiedAt = 5000L)
 
-        val merged = matureSurvivor.withFurthestScheduleOf(recentLapse, now = 5000L)
+        val merged = matureSurvivor.withFurthestScheduleOf(
+            recentLapse,
+            now = 5000L,
+            thisLastStudiedAt = 1000L,
+            otherLastStudiedAt = 5000L
+        )
         assertEquals(0, merged.reviewCount)
         assertEquals(0, merged.interval)
         assertEquals(0L, merged.nextReview)
@@ -199,11 +204,39 @@ class VocabularyMergeTest {
         val remastered = scheduled(reviewCount = 4, interval = 15, ease = 2.5f, next = 300_000L)
             .copy(lastModifiedAt = 5000L)
 
-        val merged = lapsedSurvivor.withFurthestScheduleOf(remastered, now = 5000L)
+        val merged = lapsedSurvivor.withFurthestScheduleOf(
+            remastered,
+            now = 5000L,
+            thisLastStudiedAt = 1000L,
+            otherLastStudiedAt = 5000L
+        )
         assertEquals(4, merged.reviewCount)
         assertEquals(15, merged.interval)
         assertEquals(300_000L, merged.nextReview)
         assertEquals(2.5f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `preserves recent lapse even when content was edited after the lapse`() {
+        // Survivor was mastered at T=1000, then had typo/content edited at T=9000
+        val matureSurvivorEdited = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 9000L)
+        // Card lapsed at T=2000
+        val recentLapse = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 2000L)
+
+        // Study timestamps (1000 vs 2000) determine that the lapse is the latest learning event,
+        // ignoring lastModifiedAt (9000) from typographical edits.
+        val merged = matureSurvivorEdited.withFurthestScheduleOf(
+            recentLapse,
+            now = 5000L,
+            thisLastStudiedAt = 1000L,
+            otherLastStudiedAt = 2000L
+        )
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.4f, merged.easeFactor, 0.0001f)
     }
 
     @Test
@@ -242,5 +275,45 @@ class VocabularyMergeTest {
         assertEquals(5, merged.reviewCount)
         assertEquals(30, merged.interval)
         assertEquals(200_000L, merged.nextReview)
+    }
+
+    @Test
+    fun `preserves recent lapse when incoming card had a content edit after the lapse`() {
+        val lapsedSurvivor = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 5000L)
+        val editedMastered = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 9000L) // Content edited after the lapse
+
+        // Using actual study event timestamps: lapse occurred at 5000L, mature review was at 1000L
+        val merged = lapsedSurvivor.withFurthestScheduleOf(
+            other = editedMastered,
+            now = 9000L,
+            thisLastStudiedAt = 5000L,
+            otherLastStudiedAt = 1000L
+        )
+
+        // The recent failure must be preserved and NOT postponed into the future
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.4f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `preserves recent lapse even without study timestamps when content was edited later`() {
+        // Without explicit review event timestamps, Safety-in-Favor-of-Recall prevents postponing lapsed cards
+        val lapsedSurvivor = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 5000L)
+        val editedMastered = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 9000L)
+
+        val merged = lapsedSurvivor.withFurthestScheduleOf(
+            other = editedMastered,
+            now = 9000L
+        )
+
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
     }
 }

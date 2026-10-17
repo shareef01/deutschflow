@@ -432,7 +432,12 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
       typeof row.isExtraPractice !== "boolean" || !UUID_REGEX.test(str(row.remoteId))) {
       throw new ImportError("invalid", "Invalid review event.");
     }
-    for (const field of ["vocabularyId", "scheduledDays", "actualDays", "reviewedAtTimestamp"]) {
+    if (row.vocabularyId !== null && row.vocabularyId !== undefined) {
+      if (!Number.isSafeInteger(row.vocabularyId) || (row.vocabularyId as number) < 0) {
+        throw new ImportError("invalid", "Invalid review vocabularyId.");
+      }
+    }
+    for (const field of ["scheduledDays", "actualDays", "reviewedAtTimestamp"]) {
       if (!Number.isSafeInteger(row[field]) || (row[field] as number) < 0) {
         throw new ImportError("invalid", `Invalid review ${field}.`);
       }
@@ -707,8 +712,13 @@ async function applyImport(
     if (!isRecord(row)) continue;
     const remoteId = str(row.remoteId).toLowerCase();
     if (knownEvents.has(remoteId)) continue;
+    const rawVocabId = row.vocabularyId;
+    let targetVocabId: number | null = null;
+    if (typeof rawVocabId === "number" && rawVocabId > 0) {
+      targetVocabId = vocabularyIds.get(rawVocabId) ?? null;
+    }
     eventsToAdd.push({
-      vocabularyId: vocabularyIds.get(row.vocabularyId as number) ?? 0,
+      vocabularyId: targetVocabId,
       rating: row.rating as "AGAIN" | "HARD" | "GOOD" | "EASY",
       scheduledDays: row.scheduledDays as number,
       actualDays: row.actualDays as number,

@@ -137,4 +137,89 @@ describe("Cross-Platform Encrypted & Plaintext Backup Compatibility", () => {
     expect(await db.activityLog.count()).toBe(8);
     expect(await db.roleplayMessages.count()).toBe(2);
   });
+
+  it("handles unresolvable review events by assigning null vocabularyId instead of fake 0", async () => {
+    // Construct backup containing an orphaned review event (e.g. from a card deleted before export)
+    const backupWithOrphan = {
+      format: "deutschflow-library",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      vocabulary: [
+        {
+          id: 1,
+          germanText: "der Wald",
+          germanTextKey: "der wald",
+          englishTranslation: "the forest",
+          timestamp: 1000,
+          exampleSentence: "",
+          article: "der",
+          plural: "Wälder",
+          conjugation: "",
+          synonyms: "",
+          antonyms: "",
+          nextReview: 2000,
+          interval: 1,
+          easeFactor: 2.5,
+          reviewCount: 1,
+          remoteId: "c1111111-1111-4111-8111-111111111111",
+          lastModifiedAt: 1000,
+        },
+      ],
+      transcripts: [],
+      userStats: [{ id: 1, xp: 50, streak: 1, lastActivityTimestamp: 1000 }],
+      activityLog: [{ date: "2026-10-17", xpGained: 50, timestamp: 1000 }],
+      roleplayMessages: [],
+      reviewEvents: [
+        {
+          // Valid resolvable event
+          vocabularyId: 1,
+          rating: "GOOD",
+          scheduledDays: 1,
+          actualDays: 1,
+          reviewedAtTimestamp: 1000,
+          isExtraPractice: false,
+          remoteId: "e1111111-1111-4111-8111-111111111111",
+        },
+        {
+          // Orphaned event referencing non-existent vocabulary ID 9999
+          vocabularyId: 9999,
+          rating: "AGAIN",
+          scheduledDays: 0,
+          actualDays: 0,
+          reviewedAtTimestamp: 900,
+          isExtraPractice: false,
+          remoteId: "e2222222-2222-4222-8222-222222222222",
+        },
+        {
+          // Legacy event with explicit null / 0 vocabularyId
+          vocabularyId: null,
+          rating: "EASY",
+          scheduledDays: 4,
+          actualDays: 4,
+          reviewedAtTimestamp: 800,
+          isExtraPractice: false,
+          remoteId: "e3333333-3333-4333-8333-333333333333",
+        },
+      ],
+    };
+
+    const result = await importLibrary(db, backupWithOrphan);
+    expect(result.vocabularyAdded).toBe(1);
+    // All 3 events must be preserved; NONE silently discarded!
+    expect(result.reviewEventsAdded).toBe(3);
+
+    const events = await db.reviewEvents.toArray();
+    expect(events).toHaveLength(3);
+
+    const resolvable = events.find((e) => e.remoteId === "e1111111-1111-4111-8111-111111111111")!;
+    expect(resolvable.vocabularyId).not.toBeNull();
+    expect(resolvable.vocabularyId).toBeGreaterThan(0);
+
+    const orphaned = events.find((e) => e.remoteId === "e2222222-2222-4222-8222-222222222222")!;
+    // Principled policy: unresolvable events map to null, NOT fake ID 0!
+    expect(orphaned.vocabularyId).toBeNull();
+
+    const nullableLegacy = events.find((e) => e.remoteId === "e3333333-3333-4333-8333-333333333333")!;
+    expect(nullableLegacy.vocabularyId).toBeNull();
+  });
 });

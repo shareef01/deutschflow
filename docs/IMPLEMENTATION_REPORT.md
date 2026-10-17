@@ -26,11 +26,11 @@ All work strictly adheres to the core invariants:
 
 | Finding ID | Severity | Focus Area | Status | Key Source Files | Verification Evidence |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **F-01** | High | Vocabulary Collision & Referential Integrity | **FIXED AND VERIFIED** | `web/src/lib/db/repository.ts`<br>`web/src/lib/db/schema.ts`<br>`app/.../VocabularyEntity.kt` | 22/22 tests in `repository.test.ts` pass, including collision remapping, pedagogical SRS merge, atomic rollback, and review event preservation. |
-| **F-02** | High | Android Data Recovery & SAF Support | **PRE-EXISTING AND VERIFIED** | `app/.../ui/screens/SettingsScreen.kt`<br>`app/.../backup/BackupManager.kt`<br>`app/.../backup/BackupCrypto.kt` | Pre-existing Storage Access Framework launcher (`CreateDocument`/`OpenDocument`) verified in `SettingsScreen.kt` and `SettingsViewModel.kt`. 27/27 Android unit test classes pass via `./gradlew.bat testDebugUnitTest`. |
-| **F-03** | Medium | Distributed Rate Limiting & Proxy Trust | **FIXED AND VERIFIED** | `web/src/lib/auth/throttle.ts`<br>`web/src/app/api/login/route.ts` | 17/17 tests in `throttle.test.ts` pass: atomic Upstash Redis pipelines, `fail-closed` vs `fail-secure-fallback` policies, lockout expiry, and spoofing protection requiring `x-vercel-id`. |
-| **F-04** | Medium | Backup Scalability & Capacity Bounds | **FIXED AND VERIFIED** | `web/src/lib/db/backup.ts`<br>`app/.../BackupModels.kt` | Scaled limits to 50 MiB plaintext / 70 MiB encrypted with 500-item batching. Verified 22.4 MiB roundtrip (9,000 vocab + 5,000 transcripts) in `backup-scalability.test.ts` (passed in 2.5s) and 12 MiB payload in `BackupCryptoTest.kt`. |
-| **F-05** | Medium | Encrypted Portable Backups & Cross-Platform Parity | **FIXED AND VERIFIED** | `web/src/lib/db/backup.ts`<br>`app/.../BackupCrypto.kt`<br>`CrossPlatformBackupTest.kt` | Bidirectional cross-platform tests pass: Android export → Web decrypt/import, Web export → Android decrypt/import, German umlauts/eszett preservation (`Straße`, `groß`, `Brücke`), wrong passphrase rejection, and corrupted ciphertext rejection. |
+| **F-01** | High | Vocabulary Collision, Study Recency & Referential Integrity | **FIXED AND VERIFIED** | `web/src/lib/db/repository.ts`<br>`web/src/lib/db/schema.ts`<br>`app/.../VocabularyEntity.kt`<br>`app/.../BackupManager.kt` | 25/25 tests in `repository.test.ts` and 27 tests in `VocabularyMergeTest.kt` pass. Collision remapping, study recency decoupled from `lastModifiedAt`, and elimination of fake ID 0 (nullable on Web, archived entity on Android). |
+| **F-02** | High | Android Data Recovery & SAF Support | **IMPLEMENTED BUT NOT FULLY VERIFIED** | `app/.../ui/screens/SettingsScreen.kt`<br>`app/.../backup/BackupManager.kt`<br>`app/.../backup/BackupCrypto.kt` | Storage Access Framework launcher (`CreateDocument`/`OpenDocument`) implemented in `SettingsScreen.kt` and `SettingsViewModel.kt`. 225/225 Android unit tests pass. Instrumented on-device UI execution unverified due to lack of connected physical device/emulator. |
+| **F-03** | Medium | Distributed Rate Limiting & Proxy Trust | **FIXED AND VERIFIED** | `web/src/lib/auth/throttle.ts`<br>`web/src/app/api/login/route.ts` | 19/19 tests in `throttle.test.ts` pass: atomic Upstash Lua scripts, `/multi-exec` batching, client IP format validation (`isValidIp()`), `fail-closed` vs `fail-secure-fallback` policies, and documented proxy trust boundaries. (Shared state requires provisioned Upstash backend). |
+| **F-04** | Medium | Backup Scalability & Capacity Bounds | **IMPROVED WITH DOCUMENTED LIMITATION** | `web/src/lib/db/backup.ts`<br>`app/.../BackupModels.kt` | Scaled limits to 50 MiB plaintext / 70 MiB encrypted with 500-item chunking. Verified 22.4 MiB roundtrip in `backup-scalability.test.ts` and 12 MiB payload in `BackupCryptoTest.kt`. Classify 50 MiB ceiling as a documented capacity improvement (memory-bounded). |
+| **F-05** | Medium | Encrypted Portable Backups & Cross-Platform Parity | **FIXED AND VERIFIED** | `web/src/lib/db/backup.ts`<br>`app/.../BackupCrypto.kt`<br>`CrossPlatformBackupTest.kt` | Bidirectional cross-platform tests pass: Android export → Web decrypt/import, Web export → Android decrypt/import, German umlauts/eszett preservation (`Straße`, `groß`, `Brücke`), nullable review events, wrong passphrase rejection, and corrupted ciphertext rejection. |
 | **F-06** | Medium | Session Security & Configurable Lifetime | **FIXED AND VERIFIED** | `web/src/lib/auth/session.ts`<br>`web/src/app/api/login/route.ts` | 33/33 tests in `session.test.ts` pass: configurable `SESSION_MAX_AGE_SECONDS` (1h..90d), multi-factor HMAC key derivation, and instant epoch revocation. |
 | **F-07** | Medium | CSP, XSS & Prohibited Sinks Auditing | **FIXED AND VERIFIED** | `web/next.config.ts`<br>`web/tests/security-sinks.test.ts` | Static scan confirms 0 usages of `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `eval`, `new Function`, or `document.write`. Architectural scope of `'unsafe-inline'` documented. |
 | **F-08** | Low | SRS Elapsed-Time & Boundary Semantics | **FIXED AND VERIFIED** | `web/src/lib/ai/srs.ts`<br>`web/tests/srs-boundaries.test.ts` | Boundary tests verify UTC elapsed duration across midnight boundaries, DST transitions, timezone jumps, and maximum interval caps. |
@@ -46,14 +46,14 @@ All work strictly adheres to the core invariants:
 ```
 npm test
 32 test files passed (32/32)
-430 tests passed (430/430)
-Duration: ~5.7s
+436 tests passed (436/436)
+Duration: ~5.6s
 ```
 Key Verified Suites:
-- `tests/backup-scalability.test.ts`: 22.4 MiB round-trip verified (1.4s export/import).
-- `tests/cross-platform-backup.test.ts`: Android ↔ Web plaintext and encrypted interoperability (6/6 passed).
-- `tests/throttle.test.ts`: Atomic pipelines, lockout expiry, spoofing, fail-closed, and fail-secure-fallback (17/17 passed).
-- `tests/repository.test.ts`: Pedagogical merge, lapse preservation, tie-breakers, collision remapping (22/22 passed).
+- `tests/backup-scalability.test.ts`: 22.4 MiB round-trip verified (2.5s export/import).
+- `tests/cross-platform-backup.test.ts`: Android ↔ Web plaintext and encrypted interoperability, nullable review event support (7/7 passed).
+- `tests/throttle.test.ts`: Atomic Lua evaluation, `/multi-exec` batching, lockout expiry, spoofing, fail-closed, and fail-secure-fallback (19/19 passed).
+- `tests/repository.test.ts`: Pedagogical merge, lapse preservation, content edits after lapse, collision remapping (25/25 passed).
 - `tests/session.test.ts`: 405 on GET logout, session lifetimes, epoch revocation (33/33 passed).
 - `tests/backup.test.ts`: Format validation, encrypted envelopes, tampering detection (33/33 passed).
 
@@ -77,14 +77,13 @@ Browsers: Chromium, Firefox-Smoke, WebKit-Smoke
 ### 4.5 Android Test Suite (Gradle)
 ```
 ./gradlew.bat testDebugUnitTest
-33 actionable tasks: 1 executed, 32 up-to-date
-BUILD SUCCESSFUL in 6s
-All 27 test classes passed (including CrossPlatformBackupTest and VocabularyMergeTest).
+BUILD SUCCESSFUL in 8s
+225 unit tests passed across all 27 test classes (including CrossPlatformBackupTest and VocabularyMergeTest).
 ```
 
 ### 4.6 Android Lint & Release Build
-- `./gradlew.bat lintDebug`: **PASSED** (`BUILD SUCCESSFUL in 1m 24s`, 0 errors).
-- `./gradlew.bat assembleRelease`: **PASSED** (`BUILD SUCCESSFUL in 2m 44s`, R8 minification, lintVitalRelease, resource shrinking passed).
+- `./gradlew.bat lintDebug`: **PASSED** (`BUILD SUCCESSFUL in 54s`, 0 errors).
+- `./gradlew.bat assembleRelease`: **PASSED** (`BUILD SUCCESSFUL in 1m 52s`, R8 minification, lintVitalRelease, resource shrinking passed).
 
 ### 4.7 Android Instrumented Tests
 - `./gradlew.bat connectedAndroidTest`: **NOT EXECUTED** (No physical device or emulator attached; confirmed via `adb devices`).
@@ -107,44 +106,55 @@ ALL AUDITS PASSED.
 
 ## 5. In-Depth Architectural & Security Analysis
 
-### 5.1 Pedagogical Vocabulary Scheduling Merge (`withFurthestScheduleOf`)
-The initial audit remediation claimed that comparing `reviewCount` followed by `interval` was sufficient. An adversarial review revealed this was pedagogically unsound:
-- If a user mastered a card weeks ago (`interval = 30`, `reviewCount = 5`) and reviewed it today but failed (`quality = AGAIN`, resulting in `interval = 0`, `nextReview = 0`), merging by highest `interval` or `reviewCount` would resurrect the 30-day interval and hide the forgotten word for a month!
+### 5.1 Decoupling Review Dates from Content Edits (`withFurthestScheduleOf`)
+- **Vulnerability in Previous Model**: Previously, schedule recency compared `lastModifiedAt`. However, `lastModifiedAt` changes whenever a user fixes a typo, adds a synonym, edits a translation, or imports a backup. Using `lastModifiedAt` meant a typographical fix on an older mastered card could wipe out a recent failure (lapse), burying a forgotten card for weeks!
 - **Implemented Pedagogical Policy**:
-  1. **Unreviewed vs Studied**: Content edits on unreviewed cards never erase accumulated study progress on studied cards.
-  2. **Recency of Study (Anti-Lapse-Erasure)**: When timestamps differ, the card with more recent `lastModifiedAt` wins. A recent lapse (`interval = 0`) wins over an older mature interval because the learner needs immediate reinforcement.
+  1. **Unreviewed vs Studied**: Content edits on unreviewed cards never overwrite accumulated study progress on studied cards.
+  2. **Dedicated Study Recency (Anti-Lapse-Erasure)**: Learning recency is determined exclusively by dedicated `lastStudiedAt` or review-event timestamps. If a card recently lapsed (`interval = 0`), later typographical edits (`lastModifiedAt`) on another card copy **never** erase the lapse.
   3. **Safety in Favor of Recall (Tied Timestamps)**:
-     - Due/lapsed cards take precedence over future scheduled cards.
+     - Due or lapsed cards take precedence over future scheduled cards.
      - Between two future cards, the sooner due date (`smaller nextReview`) wins.
      - Tied intervals favor the more conservative ease factor.
+- **Cross-Platform Tests**: Verified in `web/tests/repository.test.ts` and `app/src/test/java/.../VocabularyMergeTest.kt` with tests explicitly verifying that editorial edits after a lapse do not erase the lapse.
 
-### 5.2 Distributed Rate Limiting & Fail-Closed Support
-- **Atomic Operations**: Operations in `web/src/lib/auth/throttle.ts` now execute via Upstash Redis REST `/pipeline` endpoints, ensuring atomicity across concurrent login attempts.
-- **Explicit Failure Policy**: Production deployments can choose:
+### 5.2 Upstash Redis Atomicity & Proxy Trust Boundaries
+- **Corrected Upstash Atomicity Model**:
+  - Upstash documentation explicitly clarifies that `/pipeline` batches commands over a single HTTP connection but does **not** execute them atomically or isolate them from concurrent operations.
+  - In `web/src/lib/auth/throttle.ts`, operations that require conditional decisions based on current counter state (`recordFailure`) are executed using an **atomic Lua script** via `POST /` (`["EVAL", script, "1", key, ...]`). The script atomically increments attempts, sets lockouts, and refreshes TTL in a single isolated step, preventing concurrent read-modify-write races.
+  - Multi-command operations without conditional logic use `/multi-exec` for transactional batching.
+- **Proxy Trust Boundaries**:
+  - Clarified that `x-vercel-id` is an internal routing trace header generated by Vercel for diagnostic and debugging purposes, **not** an authenticated cryptographic signature.
+  - The deployment trust boundary requires verifying `process.env.VERCEL === "1"` combined with strict client IP format validation using `isValidIp()` (validating IPv4 or IPv6 syntax).
+  - Outside of Vercel or behind untrusted/unconfigured reverse proxies where headers could be spoofed, caller identities default to a shared fallback bucket rather than trusting arbitrary client-supplied headers.
+- **Configurable Failure Policies**:
   - `fail-secure-fallback` (default): In-memory LRU fallback during Redis outages, balancing availability with burst protection.
-  - `fail-closed`: Returns HTTP 503 `ThrottleStoreError` when the distributed store is down, preventing any distributed brute-force bypass.
-- **Proxy Boundary Validation**: Forwarding headers (`x-forwarded-for`, `x-real-ip`) are only trusted if the deployment is verified through both `process.env.VERCEL === "1"` and the edge-injected signature header `x-vercel-id`.
+  - `fail-closed`: Returns HTTP 503 `ThrottleStoreError` when Redis is down, preventing any distributed brute-force bypass.
 
-### 5.3 Scalable Backup & Portability
-- Raised backup limits from 10 MiB to 50 MiB plaintext and 15 MiB to 70 MiB encrypted.
-- Memory-safe validation uses `Buffer.byteLength` without memory-duplicating re-encodings.
-- Batch processing in 500-item chunks ensures smooth imports without browser or SQLite thread exhaustion.
-- Verified cross-platform compatibility with realistic German strings (`Straße`, `groß`, `süß`, `Brücke`, `Fußball`) and strict UUID lowercase hex formatting.
-
-### 5.4 State-Changing Logout & CSRF Hardening
-- `GET /api/logout` was hardened to return HTTP 405 Method Not Allowed (`Allow: POST`), preventing browser prefetching and unauthorized GET CSRF.
-- `POST /api/logout` enforces strict origin/referer validation and clears session cookies with `maxAge: 0` and `Cache-Control: no-store`.
+### 5.3 Elimination of Fake Vocabulary ID 0 & 50 MiB Capacity Improvement
+- **Elimination of Fake ID 0**:
+  - On Web: Review events support validated nullable references (`vocabularyId: number | null`). Unlinked review events explicitly store `null`. Version 10 schema migration migrates legacy `0` records to `null`.
+  - On Android: Foreign key constraints are maintained by linking unmapped or deleted review events to an explicit, isolated archived entity (`[Gelöscht]`, key `__archived_deleted__`).
+  - No valid review events are discarded, and no misleading foreign-key references are created.
+- **Documented Capacity Improvement**:
+  - Scaled limits to 50 MiB plaintext and 70 MiB encrypted.
+  - Classified as a **documented capacity improvement**: memory-efficient batching and streaming array chunking allow personal libraries exceeding 20 MiB to export and import smoothly, while maintaining a bounded ceiling to protect low-memory devices against OOM crashes.
 
 ---
 
-## 6. Remaining Limitations & Infrastructure Requirements
+## 6. Production Readiness Checklist & Missing Variable Consequences
 
-1. **Distributed Rate Limiting Infrastructure**:
-   - Requires provisioned Upstash Redis instance with `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` configured.
-   - Without Upstash, rate limiting operates in local in-memory fallback mode, which protects individual instances but does not share state across serverless nodes.
-2. **Content Security Policy `'unsafe-inline'`**:
-   - Required by Next.js static HTML hydration scripts for offline PWA operation.
-   - CSP alone does not prevent inline XSS if untrusted HTML is injected into the DOM; protection relies on React JSX automatic escaping, strict zero-sink enforcement, and automated static tests (`security-sinks.test.ts`).
-3. **Android Device Verification**:
-   - Android unit tests, lint, and release compilation passed completely.
-   - Instrumented tests (`connectedAndroidTest`) require an active physical device or emulator and were marked `NOT EXECUTED`.
+| Variable | Required | Default / Fallback | Consequence if Missing or Misconfigured |
+| :--- | :--- | :--- | :--- |
+| **`SITE_PASSWORD`** | **YES** | None | **Critical**: Access gate fails closed or is inaccessible. Logins cannot succeed. |
+| **`SESSION_SECRET`** / **`AUTH_SECRET`** | **YES** | Ephemeral runtime key | **High**: Sessions cannot be validated or are revoked upon every serverless cold start. |
+| **`UPSTASH_REDIS_REST_URL`** | **RECOMMENDED** | Local in-memory Map | **Medium**: Rate limiting operates locally per container instance; distributed attacks across multiple serverless containers receive separate quotas. |
+| **`UPSTASH_REDIS_REST_TOKEN`** | **RECOMMENDED** | None | Missing token causes Redis HTTP 401. Under `fail-secure-fallback`, falls back to local in-memory limiting; under `fail-closed`, blocks all logins with HTTP 503. |
+| **`THROTTLE_FAILURE_POLICY`** | NO | `"fail-secure-fallback"` | `"fail-closed"` strictly blocks all logins with HTTP 503 during Redis outages. `"fail-secure-fallback"` preserves availability via local rate limiting. |
+| **`SESSION_MAX_AGE_SECONDS`** | NO | `2592000` (30 days) | Session duration in seconds, clamped between 1 hour and 90 days. |
+| **`SESSION_EPOCH`** | NO | `"1"` | Incrementing revokes all active sessions globally. |
+| **`GROQ_API_KEY`** | OPTIONAL | Client Key Vault | AI features graceful fallback if omitted on server. |
+
+### 6.1 Known Limitations Summary
+1. **Distributed Rate Limiting Backend**: Distributed enforcement requires provisioned Upstash Redis. Without it, rate limiting is local to each process/container.
+2. **CSP `'unsafe-inline'`**: Required for Next.js offline PWA static hydration. Mitigated via 0-sink policy and automated sink tests.
+3. **Android Device Verification**: Unit tests, lint, and release compilation passed; instrumented tests (`connectedAndroidTest`) could not be run due to absence of connected hardware/emulator.

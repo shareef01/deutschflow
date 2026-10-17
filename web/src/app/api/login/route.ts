@@ -15,26 +15,61 @@ import {
   recordThrottleSuccess,
 } from "@/lib/auth/throttle";
 
+/**
+ * Strict IPv4 / IPv6 syntax validator.
+ * Ensures caller key is a syntactically valid IP address and prevents
+ * untrusted client-controlled tokens from arbitrarily picking rate-limit identities.
+ */
+export function isValidIp(ip: string | null | undefined): boolean {
+  if (!ip || typeof ip !== "string") return false;
+  const trimmed = ip.trim();
+  if (trimmed.length < 3 || trimmed.length > 45) return false;
+
+  // IPv4: 4 octets 0-255 separated by dots
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$/;
+  if (ipv4Regex.test(trimmed)) return true;
+
+  // IPv6: standard and compressed notation
+  const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?$/;
+  return ipv6Regex.test(trimmed);
+}
+
 export function extractCallerKey(
   headers: Headers,
   isVercel: boolean = process.env.VERCEL === "1"
 ): string {
-  // If not on Vercel or headers lack provider edge signature, do not trust caller headers.
+  // Trust Boundary:
+  // Outside Vercel (e.g. self-hosted Node.js / Docker), incoming proxy headers (x-forwarded-for,
+  // x-real-ip) are client-controlled and untrusted by default unless an internal reverse proxy
+  // has been explicitly configured. Without this check, untrusted clients could arbitrarily
+  // choose rate-limit identities or spoof other users' IPs.
+  // Note: If deployed behind additional proxies (e.g. Cloudflare -> Vercel), x-real-ip
+  // reflects the upstream proxy's egress IP unless custom trusted proxy depth is configured.
   if (!isVercel) return "unknown";
 
-  // Vercel Edge writes x-vercel-id on all requests that traversed its edge infrastructure.
-  // If x-vercel-id is absent, the environment variable cannot be used as sole proof of edge trust.
+  // x-vercel-id is an internal routing trace header assigned by Vercel edge infrastructure
+  // (e.g. 'fra1::iad1::...'). It is NOT an authenticated cryptographic signature, but its
+  // presence in a Vercel runtime environment indicates the request traversed Vercel edge routing.
   const vercelId = headers.get("x-vercel-id");
-  if (!vercelId) {
+  if (!vercelId || !vercelId.trim()) {
     return "unknown";
   }
 
-  // x-real-ip is overwritten by Vercel edge to the connecting socket IP, avoiding client prepending.
+  // On Vercel, x-real-ip is overwritten by the edge proxy to the connecting socket IP,
+  // preventing client-prepended entries.
   const realIp = headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
+  if (realIp && isValidIp(realIp)) {
+    return realIp;
+  }
 
+  // Fallback to first hop of x-forwarded-for if valid IP
   const forwarded = headers.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || "unknown";
+  const firstHop = forwarded?.split(",")[0]?.trim();
+  if (firstHop && isValidIp(firstHop)) {
+    return firstHop;
+  }
+
+  return "unknown";
 }
 
 export async function POST(request: NextRequest) {

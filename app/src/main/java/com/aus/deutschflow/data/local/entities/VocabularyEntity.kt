@@ -202,7 +202,12 @@ data class VocabularyEntity(
      *    If timestamps are tied, a due or lapsed card (nextReview <= now || interval == 0) takes
      *    priority over a future schedule.
      */
-    fun withFurthestScheduleOf(other: VocabularyEntity, now: Long = System.currentTimeMillis()): VocabularyEntity {
+    fun withFurthestScheduleOf(
+        other: VocabularyEntity,
+        now: Long = System.currentTimeMillis(),
+        thisLastStudiedAt: Long = 0L,
+        otherLastStudiedAt: Long = 0L
+    ): VocabularyEntity {
         fun isUnreviewed(e: VocabularyEntity) =
             e.reviewCount == 0 && e.interval == 0 && e.nextReview == 0L && kotlin.math.abs(e.easeFactor - 2.5f) < 0.001f
 
@@ -224,16 +229,20 @@ data class VocabularyEntity(
             return this
         }
 
-        if (other.lastModifiedAt > this.lastModifiedAt) {
-            return copy(
-                nextReview = other.nextReview,
-                interval = other.interval,
-                easeFactor = other.easeFactor,
-                reviewCount = other.reviewCount
-            )
-        }
-        if (this.lastModifiedAt > other.lastModifiedAt) {
-            return this
+        // Compare dedicated study timestamps (actual review event time or lastStudiedAt)
+        // rather than lastModifiedAt, which changes on typographical or content edits.
+        if (otherLastStudiedAt > 0L || thisLastStudiedAt > 0L) {
+            if (otherLastStudiedAt > thisLastStudiedAt) {
+                return copy(
+                    nextReview = other.nextReview,
+                    interval = other.interval,
+                    easeFactor = other.easeFactor,
+                    reviewCount = other.reviewCount
+                )
+            }
+            if (thisLastStudiedAt > otherLastStudiedAt) {
+                return this
+            }
         }
 
         val thisIsDueOrLapsed = this.nextReview <= now || this.interval == 0

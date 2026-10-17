@@ -176,7 +176,8 @@ export class InMemoryThrottleBackend implements ThrottleBackend {
 /**
  * Distributed rate-limiting store using the Upstash Redis REST API.
  * Uses HTTP fetch with bounded timeout, completely compatible with edge and serverless runtimes.
- * Employs atomic REST pipeline commands for atomic increments and TTL expiry without concurrency races.
+ * Employs atomic /multi-exec transaction blocks and atomic Lua scripts via /eval to prevent
+ * concurrency races and ensure that concurrent requests cannot bypass lockout thresholds.
  */
 export class UpstashRedisThrottleBackend implements ThrottleBackend {
   constructor(
@@ -214,16 +215,24 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
     try {
-      const res = await this.fetchWithTimeout("/pipeline", {
+      const res = await this.fetchWithTimeout("/multi-exec", {
         method: "POST",
         body: JSON.stringify([
           ["GET", countKey],
           ["GET", lastKey],
         ]),
       });
-      if (!res.ok) throw new Error(`Upstash returned HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`Upstash /multi-exec returned HTTP ${res.status}`);
       const data = await res.json();
-      if (!Array.isArray(data)) return null;
+      if (!Array.isArray(data)) {
+        if (data && typeof data === "object" && "error" in data) {
+          throw new Error(`Upstash error: ${(data as { error: string }).error}`);
+        }
+        throw new Error("Malformed Upstash response: expected array");
+      }
+      if (data[0]?.error || data[1]?.error) {
+        throw new Error(`Upstash command error: ${data[0]?.error || data[1]?.error}`);
+      }
       const rawCount = data[0]?.result;
       const rawLast = data[1]?.result;
       if (rawCount === null || rawCount === undefined || rawLast === null || rawLast === undefined) {
@@ -247,23 +256,83 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const k = this.key(rawKey);
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
+
+    const luaScript = `
+      local countKey = KEYS[1]
+      local lastKey = KEYS[2]
+      local now = tonumber(ARGV[1])
+      local windowSeconds = tonumber(ARGV[2])
+      local windowMs = windowSeconds * 1000
+      local freeAttempts = tonumber(ARGV[3])
+      local baseDelayMs = tonumber(ARGV[4])
+      local maxDelayMs = tonumber(ARGV[5])
+
+      local last = tonumber(redis.call('GET', lastKey))
+      local currentCount = tonumber(redis.call('GET', countKey))
+
+      local newCount = 1
+      if last and currentCount and (now - last) <= windowMs then
+        newCount = currentCount + 1
+      else
+        newCount = 1
+      end
+
+      redis.call('SET', countKey, tostring(newCount), 'EX', windowSeconds)
+      redis.call('SET', lastKey, tostring(now), 'EX', windowSeconds)
+
+      local cooldown = 0
+      if newCount >= freeAttempts then
+        local exponent = newCount - freeAttempts
+        local delay = baseDelayMs * (2 ^ exponent)
+        if delay > maxDelayMs then
+          cooldown = maxDelayMs
+        else
+          cooldown = math.floor(delay)
+        end
+      end
+
+      return { newCount, cooldown }
+    `.trim();
+
     try {
-      const res = await this.fetchWithTimeout("/pipeline", {
+      // Execute atomic Lua script via Upstash REST command endpoint
+      const res = await this.fetchWithTimeout("/", {
         method: "POST",
         body: JSON.stringify([
-          ["INCR", countKey],
-          ["EXPIRE", countKey, WINDOW_SECONDS],
-          ["SET", lastKey, String(now), "EX", WINDOW_SECONDS],
+          "EVAL",
+          luaScript,
+          2,
+          countKey,
+          lastKey,
+          String(now),
+          String(WINDOW_SECONDS),
+          String(FREE_ATTEMPTS),
+          String(BASE_DELAY_MS),
+          String(MAX_DELAY_MS),
         ]),
       });
-      if (!res.ok) throw new Error(`Upstash pipeline returned HTTP ${res.status}`);
+
+      if (!res.ok) throw new Error(`Upstash EVAL returned HTTP ${res.status}`);
       const data = await res.json();
-      if (!Array.isArray(data) || typeof data[0]?.result !== "number") {
-        throw new Error("Invalid Upstash pipeline response");
+
+      if (data && typeof data === "object" && "error" in data) {
+        throw new Error(`Upstash command error: ${(data as { error: string }).error}`);
       }
-      const count = data[0].result as number;
-      const cooldown = calculateCooldown(count);
-      return { count, cooldown };
+
+      if (
+        data &&
+        typeof data === "object" &&
+        Array.isArray((data as { result?: unknown }).result)
+      ) {
+        const resultArr = (data as { result: [unknown, unknown] }).result;
+        const count = Number(resultArr[0]);
+        const cooldown = Number(resultArr[1]);
+        if (!Number.isNaN(count) && !Number.isNaN(cooldown)) {
+          return { count, cooldown };
+        }
+      }
+
+      throw new Error("Invalid Upstash EVAL response structure");
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
@@ -284,7 +353,7 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
     try {
-      const res = await this.fetchWithTimeout("/pipeline", {
+      const res = await this.fetchWithTimeout("/multi-exec", {
         method: "POST",
         body: JSON.stringify([
           ["SET", countKey, String(entry.count), "EX", ttlSeconds],
@@ -292,6 +361,16 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
         ]),
       });
       if (!res.ok) throw new Error(`Upstash set returned HTTP ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        if (data && typeof data === "object" && "error" in data) {
+          throw new Error(`Upstash error: ${(data as { error: string }).error}`);
+        }
+        throw new Error("Malformed Upstash response: expected array");
+      }
+      if (data[0]?.error || data[1]?.error) {
+        throw new Error(`Upstash command error: ${data[0]?.error || data[1]?.error}`);
+      }
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
@@ -305,13 +384,24 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
     try {
-      await this.fetchWithTimeout("/pipeline", {
+      const res = await this.fetchWithTimeout("/multi-exec", {
         method: "POST",
         body: JSON.stringify([
           ["DEL", countKey],
           ["DEL", lastKey],
         ]),
       });
+      if (!res.ok) throw new Error(`Upstash delete returned HTTP ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        if (data && typeof data === "object" && "error" in data) {
+          throw new Error(`Upstash error: ${(data as { error: string }).error}`);
+        }
+        throw new Error("Malformed Upstash response: expected array");
+      }
+      if (data[0]?.error || data[1]?.error) {
+        throw new Error(`Upstash command error: ${data[0]?.error || data[1]?.error}`);
+      }
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);

@@ -11,11 +11,11 @@
 
 | ID | Priority | Severity | Component | Issue Description | Status | Verification Gate |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **P0-VOCAB** | Priority 0 | HIGH | Web DB | Vocabulary collision in `saveVocabulary` orphans review events and loses SRS schedule on collision | **FIXED AND VERIFIED** | Vitest (`repository.test.ts`, `data-integrity.test.ts` — 36 tests passed) |
-| **P1-AND-BACKUP** | Priority 1 | HIGH | Android | Android Storage Access Framework backup & restore with portable encryption UI | **PRE-EXISTING AND VERIFIED** | Gradle (`testDebugUnitTest`, `assembleRelease` — 27 suites passed; pre-existing SAF in `SettingsScreen.kt`) |
-| **P2-WEB-SCALE** | Priority 2 | MEDIUM | Web DB | Web backup scalability: bounded capacity handling up to 70 MiB encrypted / 50 MiB plaintext | **FIXED AND VERIFIED** | Vitest (`backup.test.ts`, `backup-scalability.test.ts` — 22.4 MiB roundtrip passed) |
+| **P0-VOCAB** | Priority 0 | HIGH | Web & Android DB | Vocabulary collision remapping, elimination of fake ID 0 (nullable on Web, archived on Android), SRS merge recency decoupled from `lastModifiedAt` | **FIXED AND VERIFIED** | Vitest (`repository.test.ts`, `data-integrity.test.ts`), JUnit (`VocabularyMergeTest.kt` — 27 tests passed) |
+| **P1-AND-BACKUP** | Priority 1 | HIGH | Android | Android Storage Access Framework backup & restore with portable encryption UI | **IMPLEMENTED BUT NOT FULLY VERIFIED** | Gradle (`testDebugUnitTest` — 225 unit tests passed; device UI execution unverified due to lack of connected physical device/emulator) |
+| **P2-WEB-SCALE** | Priority 2 | MEDIUM | Web DB | Backup scalability & capacity ceiling: 50 MiB plaintext / 70 MiB encrypted with chunked batching | **IMPROVED WITH DOCUMENTED LIMITATION** | Vitest (`backup.test.ts`, `backup-scalability.test.ts` — 22.4 MiB roundtrip passed; documented capacity improvement bounded by heap) |
 | **P3-WEB-ENCRYPT** | Priority 3 | MEDIUM | Web DB & UI | Web encrypted backup support with WebCrypto (PBKDF2 + AES-GCM) matching Android envelope | **FIXED AND VERIFIED** | Vitest (`backup.test.ts`, `cross-platform-backup.test.ts`), Settings UI, Password Dialogs |
-| **P4-RATE-LIMIT** | Priority 4 | MEDIUM | Web Auth | Distributed rate-limiting integration with atomic store pipelines and trusted proxy validation | **FIXED AND VERIFIED** | Vitest (`throttle.test.ts` — 17 tests passed; fail-closed and fail-secure-fallback policies verified) |
+| **P4-RATE-LIMIT** | Priority 4 | MEDIUM | Web Auth | Distributed rate-limiting with atomic Upstash Lua scripts, `/multi-exec`, and validated proxy IP checking | **FIXED AND VERIFIED** | Vitest (`throttle.test.ts` — 19 tests passed; atomic Lua, fail-closed and fail-secure-fallback policies verified; shared state requires provisioned Upstash backend) |
 | **P5-SESSION** | Priority 5 | MEDIUM | Web Auth | Configurable session lifetime, CSRF protection on logout, documented revocation boundary | **FIXED AND VERIFIED** | Vitest (`session.test.ts` — 33 tests passed; GET logout returns 405) |
 | **P6-CSP-XSS** | Priority 6 | MEDIUM | Web Security | CSP review, automated prohibited sink tests (no `innerHTML`, `eval`), API key redaction | **FIXED AND VERIFIED** | Vitest (`security-sinks.test.ts` — 6 tests passed; documented CSP boundaries) |
 | **P7-SW-PRIVACY** | Priority 7 | MEDIUM | Web PWA | Service worker offline logout privacy and cache purge verification | **FIXED AND VERIFIED** | Vitest (`sw.test.ts`, `logout-privacy.test.ts` — 38 tests passed) |
@@ -29,10 +29,10 @@
 
 - **Static Parity Audit:** `python tools/audit_repo.py` -> **PASSED** (All 267 Android strings and 242 Web keys match 1:1, 100% color token parity, 0 clutter).
 - **Web Typecheck & Lint:** `npm run lint` & `npm run typecheck` -> **PASSED** (0 errors, 0 warnings).
-- **Web Unit & Integration Tests:** `npm test` -> **PASSED** (430 tests across 32 test files).
+- **Web Unit & Integration Tests:** `npm test` -> **PASSED** (436 tests across 32 test files).
 - **Playwright E2E Tests:** `npm run test:e2e` -> **PASSED** (65 tests across Chromium, Firefox, WebKit).
 - **Web Production Build:** `npm run build` -> **PASSED** (Turbopack, all static routes prerendered).
-- **Android Unit Tests:** `./gradlew.bat testDebugUnitTest` -> **PASSED** (All 27 test classes passed).
+- **Android Unit Tests:** `./gradlew.bat testDebugUnitTest` -> **PASSED** (225 tests across 27 test classes passed).
 - **Android Lint:** `./gradlew.bat lintDebug` -> **PASSED** (0 errors).
 - **Android Release Build:** `./gradlew.bat assembleRelease` -> **PASSED** (R8 minified APK built).
 - **Android Instrumented Tests:** `./gradlew.bat connectedAndroidTest` -> **NOT EXECUTED** (No physical device or emulator attached).

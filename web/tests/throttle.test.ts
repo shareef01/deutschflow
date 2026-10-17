@@ -228,7 +228,7 @@ describe("distributed rate limiting & client spoofing defense", () => {
     );
   });
 
-  it("prevents client IP spoofing by requiring x-vercel-id provenance behind Vercel", () => {
+  it("prevents client IP spoofing by requiring x-vercel-id provenance behind Vercel and validates IP format", () => {
     const headers = new Headers();
     headers.set("x-forwarded-for", "1.2.3.4, 5.6.7.8");
 
@@ -242,9 +242,143 @@ describe("distributed rate limiting & client spoofing defense", () => {
     headers.set("x-vercel-id", "fra1::abc123-xyz");
     expect(extractCallerKey(headers, true)).toBe("1.2.3.4");
 
-    // 4. Vercel with x-real-ip prioritizes the single edge-verified socket IP
+    // 4. Vercel with valid IPv6 address
+    headers.set("x-real-ip", "2001:db8::8a2e:370:7334");
+    expect(extractCallerKey(headers, true)).toBe("2001:db8::8a2e:370:7334");
+
+    // 5. Vercel with x-real-ip prioritizes the single edge-verified socket IP
     headers.set("x-real-ip", "198.51.100.99");
     expect(extractCallerKey(headers, true)).toBe("198.51.100.99");
+
+    // 6. Header injection / malicious strings are rejected as "unknown"
+    headers.set("x-real-ip", "evil-attacker-token");
+    headers.set("x-forwarded-for", "malicious-ip-spoof");
+    expect(extractCallerKey(headers, true)).toBe("unknown");
+
+    // 7. Invalid octet (>255) is rejected
+    headers.set("x-real-ip", "192.168.1.999");
+    expect(extractCallerKey(headers, true)).toBe("unknown");
+  });
+
+  it("handles concurrent requests atomically without read-modify-write races", async () => {
+    // Mock atomic Upstash store simulating Redis EVAL execution
+    let redisCounter = 0;
+    let redisLast = 0;
+    const clientIp = "192.0.2.200";
+
+    const atomicBackend = new UpstashRedisThrottleBackend(
+      "https://mock-upstash.local",
+      "mock-token",
+      new InMemoryThrottleBackend(),
+      2000
+    );
+
+    // Mock fetchWithTimeout on the instance
+    const originalFetch = global.fetch;
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlStr = url.toString();
+      const body = JSON.parse((init?.body as string) || "[]");
+
+      if (urlStr.endsWith("/multi-exec")) {
+        // Handle GET /multi-exec
+        if (body[0]?.[0] === "GET") {
+          return new Response(
+            JSON.stringify([
+              { result: redisCounter > 0 ? String(redisCounter) : null },
+              { result: redisLast > 0 ? String(redisLast) : null },
+            ]),
+            { status: 200 }
+          );
+        }
+      }
+
+      // Handle EVAL command via POST /
+      if (body[0] === "EVAL") {
+        redisCounter++;
+        redisLast = Number(body[5]); // now
+        const cooldown = redisCounter < 3 ? 0 : Math.min(30000, 1000 * 2 ** (redisCounter - 3));
+        return new Response(
+          JSON.stringify({ result: [redisCounter, cooldown] }),
+          { status: 200 }
+        );
+      }
+
+      return new Response(JSON.stringify({ error: "Unhandled command" }), { status: 400 });
+    };
+
+    try {
+      // Simulate 10 concurrent failure requests arriving simultaneously
+      const now = 60_000_000;
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () => atomicBackend.recordFailure(clientIp, now))
+      );
+
+      // Verify that every request received a distinct sequential count (1 to 10)
+      const counts = results.map((r) => r.count).sort((a, b) => a - b);
+      expect(counts).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+      // Free attempts are 1 and 2 (cooldown 0), attempt 3 triggers initial cooldown 1000ms, then doubles
+      expect(results.find((r) => r.count === 2)?.cooldown).toBe(0);
+      expect(results.find((r) => r.count === 3)?.cooldown).toBe(1000);
+      expect(results.find((r) => r.count === 4)?.cooldown).toBe(2000);
+      expect(results.find((r) => r.count === 5)?.cooldown).toBe(4000);
+
+      // Final count in Redis is exactly 10; concurrent requests could not bypass lockout
+      expect(redisCounter).toBe(10);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("handles malformed Redis responses, syntax errors, and temporary server failures", async () => {
+    const originalFetch = global.fetch;
+
+    // 1. Upstash returns command syntax error { error: "ERR syntax error" }
+    global.fetch = async (): Promise<Response> => {
+      return new Response(JSON.stringify({ error: "ERR syntax error" }), { status: 200 });
+    };
+
+    const fallbackMemory = new InMemoryThrottleBackend();
+    const store = new UpstashRedisThrottleBackend(
+      "https://mock-upstash.local",
+      "mock-token",
+      fallbackMemory,
+      1000,
+      "fail-secure-fallback"
+    );
+
+    // Should not throw under fail-secure-fallback; gracefully uses local fallback
+    const failureRes = await store.recordFailure("10.0.0.1", 70_000_000);
+    expect(failureRes.count).toBe(1);
+
+    // 2. Upstash returns malformed non-array for /multi-exec get
+    global.fetch = async (): Promise<Response> => {
+      return new Response(JSON.stringify({ notAnArray: true }), { status: 200 });
+    };
+    const getRes = await store.get("10.0.0.1", 70_000_000);
+    // Gracefully handled via fallback
+    expect(getRes).toBeDefined();
+
+    // 3. Upstash returns HTTP 500 internal server error
+    global.fetch = async (): Promise<Response> => {
+      return new Response("Internal Server Error", { status: 500 });
+    };
+    const get500Res = await store.get("10.0.0.1", 70_000_000);
+    expect(get500Res).toBeDefined();
+
+    // 4. Under fail-closed policy, HTTP 500 throws ThrottleStoreError
+    const closedStore = new UpstashRedisThrottleBackend(
+      "https://mock-upstash.local",
+      "mock-token",
+      fallbackMemory,
+      1000,
+      "fail-closed"
+    );
+    await expect(closedStore.get("10.0.0.1", 70_000_000)).rejects.toThrow(
+      "Distributed rate limiter store unavailable (fail-closed policy in effect)"
+    );
+
+    global.fetch = originalFetch;
   });
 
   it("expires lockout after cooldown window elapses", async () => {
