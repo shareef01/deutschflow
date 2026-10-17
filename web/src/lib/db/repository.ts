@@ -28,12 +28,124 @@ export type VocabularyInput = {
   remoteId?: string;
 };
 
+export function isUnreviewedSchedule(
+  entry: Pick<VocabularyEntry, "reviewCount" | "interval" | "easeFactor" | "nextReview">
+): boolean {
+  return (
+    entry.reviewCount === 0 &&
+    entry.interval === 0 &&
+    entry.nextReview === 0 &&
+    (entry.easeFactor === 2.5 || entry.easeFactor === undefined)
+  );
+}
+
+/**
+ * Pedagogical Spaced-Repetition Schedule Merge Policy:
+ *
+ * 1. UNREVIEWED vs STUDIED:
+ *    A card with no study history (reviewCount === 0, interval === 0, nextReview === 0, easeFactor === 2.5)
+ *    never overwrites an actively studied card. If one card is unstudied and the other has study history,
+ *    the studied card's schedule is chosen unconditionally.
+ *
+ * 2. RECENCY OF STUDY (Anti-Lapse-Erasure Principle):
+ *    When both cards have been studied, the schedule from the more recent interaction
+ *    (higher lastModifiedAt) is authoritative. Crucially, if a learner recently failed a card
+ *    (quality AGAIN, resetting interval = 0, reviewCount = 0, nextReview = 0/now), an older copy
+ *    with a large interval (e.g. interval = 30 days) MUST NOT wipe out the lapse.
+ *    Preferring a longer interval over a recent lapse breaks spaced repetition by hiding
+ *    forgotten words for weeks or months.
+ *
+ * 3. SAFETY IN FAVOR OF RECALL (Tied Timestamps):
+ *    If modification timestamps are tied:
+ *    - If one card is due/lapsed (nextReview <= now || interval === 0) and the other is scheduled
+ *      in the future (nextReview > now && interval > 0), the DUE/LAPSED card wins!
+ *      Reviewing a card earlier than necessary does no pedagogical harm, whereas postponing
+ *      a forgotten card causes severe retention loss.
+ *    - If both cards are scheduled in the future, the card with the SOONER due date (min(nextReview))
+ *      is preferred to protect against memory decay.
+ *    - Tie-breaker: higher reviewCount, then longer interval, then keep survivor.
+ */
 export function withFurthestScheduleOf(
   survivor: VocabularyEntry,
-  other: Pick<VocabularyEntry, "reviewCount" | "interval" | "easeFactor" | "nextReview">
+  other: Pick<VocabularyEntry, "reviewCount" | "interval" | "easeFactor" | "nextReview"> &
+    Partial<Pick<VocabularyEntry, "lastModifiedAt">>,
+  now: number = Date.now()
 ): VocabularyEntry {
-  // Ranked the way Android's withFurthestScheduleOf and migrations rank duplicates:
-  // most successful reviews, then longest interval.
+  const survivorUnreviewed = isUnreviewedSchedule(survivor);
+  const otherUnreviewed = isUnreviewedSchedule(other);
+
+  // 1. One is fresh unreviewed, the other is studied
+  if (survivorUnreviewed && !otherUnreviewed) {
+    return {
+      ...survivor,
+      nextReview: other.nextReview,
+      interval: other.interval,
+      easeFactor: other.easeFactor,
+      reviewCount: other.reviewCount,
+    };
+  }
+  if (!survivorUnreviewed && otherUnreviewed) {
+    return survivor;
+  }
+  if (survivorUnreviewed && otherUnreviewed) {
+    return survivor;
+  }
+
+  // 2. Both have study history. Compare recency (lastModifiedAt)
+  const survivorMod = survivor.lastModifiedAt ?? 0;
+  const otherMod = other.lastModifiedAt ?? 0;
+
+  if (otherMod > survivorMod) {
+    // Other was reviewed or updated strictly after survivor
+    return {
+      ...survivor,
+      nextReview: other.nextReview,
+      interval: other.interval,
+      easeFactor: other.easeFactor,
+      reviewCount: other.reviewCount,
+    };
+  }
+  if (survivorMod > otherMod) {
+    // Survivor was reviewed or updated strictly after other
+    return survivor;
+  }
+
+  // 3. Timestamps are identical: Apply Safety-in-Favor-of-Recall
+  const survivorIsDueOrLapsed = survivor.nextReview <= now || survivor.interval === 0;
+  const otherIsDueOrLapsed = other.nextReview <= now || other.interval === 0;
+
+  if (otherIsDueOrLapsed && !survivorIsDueOrLapsed) {
+    // Other requires review now; do not postpone into the future
+    return {
+      ...survivor,
+      nextReview: other.nextReview,
+      interval: other.interval,
+      easeFactor: other.easeFactor,
+      reviewCount: other.reviewCount,
+    };
+  }
+  if (survivorIsDueOrLapsed && !otherIsDueOrLapsed) {
+    // Survivor requires review now; keep it due
+    return survivor;
+  }
+
+  // If both are scheduled in the future, choose the sooner due date
+  if (!survivorIsDueOrLapsed && !otherIsDueOrLapsed) {
+    if (other.nextReview < survivor.nextReview) {
+      return {
+        ...survivor,
+        nextReview: other.nextReview,
+        interval: other.interval,
+        easeFactor: other.easeFactor,
+        reviewCount: other.reviewCount,
+      };
+    }
+    if (survivor.nextReview < other.nextReview) {
+      return survivor;
+    }
+  }
+
+  // Final deterministic tie-breaker: most successful reviews, then longest interval
   const otherIsFurther =
     other.reviewCount > survivor.reviewCount ||
     (other.reviewCount === survivor.reviewCount && other.interval > survivor.interval);

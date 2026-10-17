@@ -188,12 +188,13 @@ describe("distributed rate limiting & client spoofing defense", () => {
     expect(await getThrottleDelay(clientIp, now + 500)).toBe(0);
   });
 
-  it("falls back cleanly to in-memory throttle when distributed store is unavailable", async () => {
+  it("falls back cleanly to in-memory throttle when distributed store is unavailable under fail-secure-fallback", async () => {
     const brokenStore = new UpstashRedisThrottleBackend(
       "https://invalid-nonexistent-domain.nowhere",
       "mock-token",
       new InMemoryThrottleBackend(),
-      50 // fast timeout
+      50, // fast timeout
+      "fail-secure-fallback"
     );
 
     setCustomThrottleBackend(brokenStore);
@@ -202,7 +203,7 @@ describe("distributed rate limiting & client spoofing defense", () => {
     const now = 20_000_000;
 
     // Recording failures should not crash; it should fall back to memory store
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       await recordThrottleFailure(ip, now);
     }
 
@@ -211,14 +212,52 @@ describe("distributed rate limiting & client spoofing defense", () => {
     expect(delay).toBeGreaterThan(0);
   });
 
-  it("prevents client IP spoofing by ignoring x-forwarded-for when not running behind Vercel", () => {
+  it("throws ThrottleStoreError when distributed store is unavailable under fail-closed policy", async () => {
+    const brokenStore = new UpstashRedisThrottleBackend(
+      "https://invalid-nonexistent-domain.nowhere",
+      "mock-token",
+      new InMemoryThrottleBackend(),
+      50,
+      "fail-closed"
+    );
+
+    setCustomThrottleBackend(brokenStore);
+
+    await expect(recordThrottleFailure("attacker-ip", 10_000)).rejects.toThrow(
+      "Distributed rate limiter store unavailable (fail-closed policy in effect)"
+    );
+  });
+
+  it("prevents client IP spoofing by requiring x-vercel-id provenance behind Vercel", () => {
     const headers = new Headers();
     headers.set("x-forwarded-for", "1.2.3.4, 5.6.7.8");
 
-    // Outside Vercel (e.g. self-hosted Node without trusted reverse proxy config), x-forwarded-for is untrusted
+    // 1. Outside Vercel (process.env.VERCEL !== "1"): untrusted -> unknown
     expect(extractCallerKey(headers, false)).toBe("unknown");
 
-    // Behind trusted Vercel proxy, the first IP is verified by Vercel edge
+    // 2. Vercel environment flag alone without x-vercel-id header: untrusted -> unknown
+    expect(extractCallerKey(headers, true)).toBe("unknown");
+
+    // 3. Vercel with valid x-vercel-id: trusts forwarded IP
+    headers.set("x-vercel-id", "fra1::abc123-xyz");
     expect(extractCallerKey(headers, true)).toBe("1.2.3.4");
+
+    // 4. Vercel with x-real-ip prioritizes the single edge-verified socket IP
+    headers.set("x-real-ip", "198.51.100.99");
+    expect(extractCallerKey(headers, true)).toBe("198.51.100.99");
+  });
+
+  it("expires lockout after cooldown window elapses", async () => {
+    const ip = "192.0.2.10";
+    const now = 50_000_000;
+
+    // 4 failures -> 2000ms cooldown (3 free + 1 doubled)
+    for (let i = 0; i < 4; i++) {
+      await recordThrottleFailure(ip, now);
+    }
+
+    expect(await getThrottleDelay(ip, now)).toBe(2000);
+    // At now + 2001ms, lockout has expired
+    expect(await getThrottleDelay(ip, now + 2001)).toBe(0);
   });
 });

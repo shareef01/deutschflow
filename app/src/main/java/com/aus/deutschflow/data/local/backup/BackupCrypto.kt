@@ -47,7 +47,7 @@ object BackupCrypto {
     fun encrypt(plainText: String, passphrase: CharArray): String {
         val plainBytes = plainText.toByteArray(Charsets.UTF_8)
         if (plainBytes.size > MAX_PLAINTEXT_BACKUP_BYTES) {
-            throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (10 MB).")
+            throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (50 MB).")
         }
 
         val salt = ByteArray(SALT_LENGTH_BYTES).apply { secureRandom.nextBytes(this) }
@@ -161,7 +161,7 @@ object BackupCrypto {
             cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
             val plainBytes = cipher.doFinal(ciphertext)
             if (plainBytes.size > MAX_PLAINTEXT_BACKUP_BYTES) {
-                throw BackupException.CapacityExceeded("Decrypted backup exceeds maximum supported plaintext size (10 MB).")
+                throw BackupException.CapacityExceeded("Decrypted backup exceeds maximum supported plaintext size (50 MB).")
             }
             return String(plainBytes, Charsets.UTF_8)
         } catch (e: AEADBadTagException) {

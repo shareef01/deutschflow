@@ -647,7 +647,7 @@ class BackupManagerIntegrationTest {
     @Test
     fun importFromStream_withExactPlaintextLimit_isReadAndProcessedWithoutCapacityException() {
         runBlocking {
-            // Build a valid minimal backup and pad with spaces to exactly MAX_PLAINTEXT_BACKUP_BYTES (10 MiB)
+            // Build a valid minimal backup and pad with spaces to exactly MAX_PLAINTEXT_BACKUP_BYTES (50 MiB)
             val baseJson = JSONObject().apply {
                 put("format", "deutschflow-library")
                 put("version", CURRENT_BACKUP_VERSION)
@@ -669,7 +669,7 @@ class BackupManagerIntegrationTest {
     @Test
     fun importFromStream_withExactEncryptedStreamLimit_isReadAndProcessedWithoutCapacityException() {
         runBlocking {
-            // Build a valid encrypted backup envelope and pad with spaces to exactly MAX_STREAM_READ_BYTES (15 MiB)
+            // Build a valid encrypted backup envelope and pad with spaces to exactly MAX_STREAM_READ_BYTES (70 MiB)
             sourceDb.vocabularyDao().insertVocabulary(
                 VocabularyEntity(
                     germanText = "Grenze",
@@ -701,7 +701,7 @@ class BackupManagerIntegrationTest {
             }.toString()
 
             val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
-            // One byte over MAX_STREAM_READ_BYTES (15 MiB + 1 byte)
+            // One byte over MAX_STREAM_READ_BYTES (70 MiB + 1 byte)
             val stream = createPaddedStream(baseBytes, MAX_STREAM_READ_BYTES.toLong() + 1L)
 
             assertThrows(BackupException.CapacityExceeded::class.java) {
@@ -715,7 +715,7 @@ class BackupManagerIntegrationTest {
     @Test
     fun importBackup_unencryptedPlaintextOneByteOverLimit_throwsCapacityExceeded() {
         runBlocking {
-            // Unencrypted plaintext exceeding MAX_PLAINTEXT_BACKUP_BYTES (10 MiB) must be rejected
+            // Unencrypted plaintext exceeding MAX_PLAINTEXT_BACKUP_BYTES (50 MiB) must be rejected
             val baseJson = JSONObject().apply {
                 put("format", "deutschflow-library")
                 put("version", CURRENT_BACKUP_VERSION)
@@ -726,8 +726,8 @@ class BackupManagerIntegrationTest {
             }.toString()
 
             val baseBytes = baseJson.toByteArray(Charsets.UTF_8)
-            // Stream of MAX_PLAINTEXT_BACKUP_BYTES + 1L is within stream read limit (15 MiB),
-            // but importBackup validates unencrypted payload <= MAX_PLAINTEXT_BACKUP_BYTES (10 MiB)
+            // Stream of MAX_PLAINTEXT_BACKUP_BYTES + 1L is within stream read limit (70 MiB),
+            // but importBackup validates unencrypted payload <= MAX_PLAINTEXT_BACKUP_BYTES (50 MiB)
             val stream = createPaddedStream(baseBytes, MAX_PLAINTEXT_BACKUP_BYTES.toLong() + 1L)
 
             assertThrows(BackupException.CapacityExceeded::class.java) {

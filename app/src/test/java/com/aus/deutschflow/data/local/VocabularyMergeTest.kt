@@ -177,4 +177,70 @@ class VocabularyMergeTest {
         assertEquals("dog", result.englishTranslation)
         assertEquals("der", result.article)
     }
+
+    @Test
+    fun `preserves a recent lapse over an older mastered schedule`() {
+        val matureSurvivor = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 1000L)
+        val recentLapse = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 5000L)
+
+        val merged = matureSurvivor.withFurthestScheduleOf(recentLapse, now = 5000L)
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.4f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `preserves a recent remastering over an older lapse`() {
+        val lapsedSurvivor = scheduled(reviewCount = 0, interval = 0, ease = 2.3f, next = 0L)
+            .copy(lastModifiedAt = 1000L)
+        val remastered = scheduled(reviewCount = 4, interval = 15, ease = 2.5f, next = 300_000L)
+            .copy(lastModifiedAt = 5000L)
+
+        val merged = lapsedSurvivor.withFurthestScheduleOf(remastered, now = 5000L)
+        assertEquals(4, merged.reviewCount)
+        assertEquals(15, merged.interval)
+        assertEquals(300_000L, merged.nextReview)
+        assertEquals(2.5f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `favors due or lapsed card when timestamps are tied to avoid burying review`() {
+        val futureCard = scheduled(reviewCount = 3, interval = 20, ease = 2.5f, next = 150_000L)
+            .copy(lastModifiedAt = 2000L)
+        val dueCard = scheduled(reviewCount = 0, interval = 0, ease = 2.3f, next = 0L)
+            .copy(lastModifiedAt = 2000L)
+
+        val merged = futureCard.withFurthestScheduleOf(dueCard, now = 50_000L)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.3f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `favors sooner review when both future schedules have tied timestamps`() {
+        val furtherCard = scheduled(reviewCount = 4, interval = 25, ease = 2.6f, next = 250_000L)
+            .copy(lastModifiedAt = 1000L)
+        val soonerCard = scheduled(reviewCount = 3, interval = 10, ease = 2.5f, next = 100_000L)
+            .copy(lastModifiedAt = 1000L)
+
+        val merged = furtherCard.withFurthestScheduleOf(soonerCard, now = 50_000L)
+        assertEquals(100_000L, merged.nextReview)
+        assertEquals(10, merged.interval)
+    }
+
+    @Test
+    fun `ensures unreviewed content edits never wipe out existing study progress`() {
+        val studiedSurvivor = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 1000L)
+        val unreviewedEdit = scheduled(reviewCount = 0, interval = 0, ease = 2.5f, next = 0L)
+            .copy(lastModifiedAt = 9000L)
+
+        val merged = studiedSurvivor.withFurthestScheduleOf(unreviewedEdit, now = 9000L)
+        assertEquals(5, merged.reviewCount)
+        assertEquals(30, merged.interval)
+        assertEquals(200_000L, merged.nextReview)
+    }
 }

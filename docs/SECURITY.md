@@ -28,7 +28,8 @@ This multi-factor derivation guarantees:
 - **Safety Bounds**: Enforced between 1 hour (`3,600` seconds) and 90 days (`7,776,000` seconds). Out-of-bound values safely default to 30 days.
 
 ### 1.4 State-Changing Logout & CSRF Protection
-- The logout endpoint (`POST /api/logout`) verifies request origin (`Origin` / `Referer`) against the server origin to eliminate cross-site request forgery.
+- The logout endpoint (`POST /api/logout`) strictly requires a POST method and validates the request origin (`Origin` / `Referer`) against the server origin to eliminate cross-site request forgery.
+- `GET /api/logout` is strictly disabled: it returns HTTP 405 Method Not Allowed (`Allow: POST`) and executes no state changes, preventing prefetch logouts and unauthorized GET CSRF.
 - Upon logout, the `df_access` cookie is cleared with `maxAge: 0` and `expires: Epoch 0`, alongside cache-invalidation headers (`Cache-Control: no-store`).
 
 ---
@@ -44,10 +45,15 @@ To mitigate brute-force password guessing against the gate:
 ### 2.2 Distributed Edge Store (Upstash Redis)
 - **Deployment Strategy**: When deployed on serverless edge environments (e.g., Vercel), in-memory state is not shared across isolated containers.
 - **Centralized Integration**: Setting `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` routes throttle state to a shared atomic Redis store via HTTPS REST.
-- **Fail-Secure Bounded Fallback**: If the distributed store times out or encounters network failures, the system gracefully falls back to the local in-memory throttle. This guarantees the application remains available without silently bypassing security.
+- **Atomic Pipelines**: To prevent race conditions during concurrent authentication spikes, operations are executed atomically using Upstash REST pipelines (`/pipeline`) using transactionally chained `INCR`, `EXPIRE`, `SET ... EX`, and `DEL`.
+- **Configurable Failure Policy (`THROTTLE_FAILURE_POLICY`)**:
+  - `fail-secure-fallback` (default): If Redis times out or is unreachable, the system falls back to an in-memory LRU rate limiter. This provides local burst defense per node while keeping the application accessible.
+  - `fail-closed`: If Redis fails or is unreachable, the endpoint strictly rejects authentication requests with HTTP 503 Service Unavailable (`ThrottleStoreError`), ensuring no attacker can bypass distributed lockouts during a store outage.
+- **Distributed Protection vs Local Fallback Distinction**: Local LRU fallback protects individual instances from rapid flooding, but cannot synchronize lockouts globally across ephemeral serverless instances. For full production-grade distributed enforcement, a highly available Upstash Redis cluster with valid credentials and network egress is required.
 
 ### 2.3 IP Spoofing Protections
-- `x-forwarded-for` is only trusted when running behind a validated proxy boundary (`process.env.VERCEL === "1"`). In untrusted environments, all requests share a fallback bucket to prevent header forgery.
+- `x-forwarded-for` and `x-real-ip` headers are **only** trusted when running behind a validated proxy boundary.
+- Mere presence of `VERCEL === "1"` in environment variables is insufficient: the request must also present the edge-injected signature header `x-vercel-id`. In untrusted or simulated environments, all requests share a fallback bucket to prevent header forgery.
 
 ---
 
@@ -64,12 +70,14 @@ Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: microphone=(self), camera=(), geolocation=()
 ```
 
-### 3.2 Rationale for `'unsafe-inline'`
+### 3.2 Rationale for `'unsafe-inline'` & Comprehensive XSS Defenses
 - DeutschFlow is a 100% client-rendered, local-first PWA that statically pre-renders all application routes and boots completely offline from a service worker precache.
 - Next.js static HTML generation injects inline hydration bootstrap scripts that cannot use dynamic per-request nonces without disabling static rendering and breaking offline boot.
-- **Compensating Controls**:
-  - Prohibited Sinks Policy: The codebase strictly prohibits `dangerouslySetInnerHTML`, `innerHTML`, `eval()`, `new Function()`, and `document.write()`.
+- **Crucial Boundary**: Because `script-src` includes `'unsafe-inline'`, the CSP header alone does **not** protect against inline script execution if untrusted HTML reaches the DOM. Comprehensive XSS resistance is instead established through deep defense-in-depth:
+  - React/JSX automatic output encoding for all rendered strings.
+  - Prohibited Sinks Policy: The codebase strictly prohibits `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `eval()`, `new Function()`, and `document.write()`.
   - Automated Regression Testing: `web/tests/security-sinks.test.ts` statically audits all TypeScript/TSX source files on every test run.
+  - Input validation and byte length bounding on all backup imports.
 
 ---
 

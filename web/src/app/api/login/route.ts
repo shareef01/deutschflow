@@ -9,15 +9,30 @@ import {
   sitePassword,
 } from "@/lib/auth/session";
 import {
+  ThrottleStoreError,
   getThrottleDelay,
   recordThrottleFailure,
   recordThrottleSuccess,
 } from "@/lib/auth/throttle";
 
-export function extractCallerKey(headers: Headers, isVercel: boolean = process.env.VERCEL === "1"): string {
-  // Vercel replaces this header at its trusted edge boundary. On direct-to-Node
-  // hosting it is caller-controlled, so do not trust it: use one shared bucket.
+export function extractCallerKey(
+  headers: Headers,
+  isVercel: boolean = process.env.VERCEL === "1"
+): string {
+  // If not on Vercel or headers lack provider edge signature, do not trust caller headers.
   if (!isVercel) return "unknown";
+
+  // Vercel Edge writes x-vercel-id on all requests that traversed its edge infrastructure.
+  // If x-vercel-id is absent, the environment variable cannot be used as sole proof of edge trust.
+  const vercelId = headers.get("x-vercel-id");
+  if (!vercelId) {
+    return "unknown";
+  }
+
+  // x-real-ip is overwritten by Vercel edge to the connecting socket IP, avoiding client prepending.
+  const realIp = headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+
   const forwarded = headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() || "unknown";
 }
@@ -38,7 +53,19 @@ export async function POST(request: NextRequest) {
     : "";
   const target = safeRedirectTarget(formData.get("from"));
   const caller = extractCallerKey(request.headers);
-  const retryAfterMs = await getThrottleDelay(caller);
+
+  let retryAfterMs: number;
+  try {
+    retryAfterMs = await getThrottleDelay(caller);
+  } catch (err) {
+    if (err instanceof ThrottleStoreError) {
+      return NextResponse.json(
+        { error: "Authentication service temporarily unavailable. Distributed rate limiter store is unreachable." },
+        { status: 503 }
+      );
+    }
+    throw err;
+  }
 
   if (retryAfterMs > 0) {
     const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
@@ -52,7 +79,17 @@ export async function POST(request: NextRequest) {
   }
 
   if (!(await passwordMatches(password, masterPassword))) {
-    await recordThrottleFailure(caller);
+    try {
+      await recordThrottleFailure(caller);
+    } catch (err) {
+      if (err instanceof ThrottleStoreError) {
+        return NextResponse.json(
+          { error: "Authentication service temporarily unavailable. Distributed rate limiter store is unreachable." },
+          { status: 503 }
+        );
+      }
+      throw err;
+    }
     return NextResponse.json(
       { error: "That key doesn't match. Check for stray spaces and try again." },
       { status: 401 }

@@ -137,10 +137,13 @@ When importing a backup into an existing library, records are merged transaction
 ### 3.1 Vocabulary Merging
 1. **Canonical Key Match**: Look up existing card by `germanTextKey = foldGermanKey(incoming.germanText)`.
 2. **Same Word Edit Collision**: If editing an existing word to collide with another word, all associated `reviewEvents` pointing to the deleted key are automatically remapped to the surviving record.
-3. **SRS Progress Retention (`withFurthestScheduleOf`)**:
-   - The card with higher `reviewCount` retains its learning progress.
-   - If review counts tie, the card with longer `interval` wins.
-   - Ease factor and next review dates are preserved from the advanced card.
+3. **Pedagogical SRS Progress Retention (`withFurthestScheduleOf`)**:
+   - **Unreviewed vs Studied**: If one card has been studied (`reviewCount > 0` or `interval > 0`) and the other is unreviewed (`reviewCount == 0 && interval == 0`), the studied card schedule is preserved. Content edits on unreviewed cards never erase accumulated study progress.
+   - **Recency of Study (Anti-Lapse-Erasure)**: When both cards have study history or modification timestamps differ, the card with the more recent `lastModifiedAt` wins. A recent failure (`interval = 0`, card lapsed) is never erased by an older high interval or review count; the learner forgot the item and must review it.
+   - **Safety in Favor of Recall (Tied Timestamps)**: If timestamps are tied:
+     * A card that is due or lapsed (`nextReview <= now || interval == 0`) takes precedence over a card scheduled for the future to prevent burying urgent reviews.
+     * If both cards are scheduled for the future, the sooner due date (`smaller nextReview`) wins to ensure earlier reinforcement.
+     * If both are due or intervals tie, the conservative ease factor (`smaller easeFactor`) and review count are preserved.
 4. **Metadata Merging**: Non-empty fields (example sentences, article, plural, synonyms) from the newer `lastModifiedAt` record are preserved.
 
 ### 3.2 Review Event Integrity
@@ -155,12 +158,13 @@ When importing a backup into an existing library, records are merged transaction
 
 ## 4. Size Limits & Capacity Bounds
 
-To protect memory and prevent DoS / zip-bomb vectors:
-- **Plaintext JSON export**: Maximum `10 MiB` (`10,485,760` bytes).
-- **Encrypted Base64 envelope**: Maximum `15 MiB` (`15,728,640` bytes).
+To protect memory and prevent DoS / zip-bomb vectors while accommodating large libraries (exceeding 20 MiB):
+- **Plaintext JSON export**: Maximum `50 MiB` (`52,428,800` bytes).
+- **Encrypted Base64 envelope**: Maximum `70 MiB` (`73,400,320` bytes).
 - **Maximum Salt Size**: `64` bytes.
-- **Maximum Ciphertext Base64**: `14,000,000` characters.
+- **Maximum Ciphertext Base64**: `68,000,000` characters.
 - **Iterations Range**: `10,000` to `1,000,000`.
+- **Bounded Batch Processing**: Both Web (Dexie/IndexedDB) and Android (Room/SQLite) process large imports and exports in bounded chunks of 500 items to avoid V8 heap exhaustion and SQLite cursor window limits.
 
 ---
 

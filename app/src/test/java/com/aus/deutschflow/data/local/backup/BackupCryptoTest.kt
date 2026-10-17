@@ -256,4 +256,18 @@ class BackupCryptoTest {
             BackupCrypto.decrypt(hugeCiphertext, "pass".toCharArray())
         }
     }
+
+    @Test
+    fun `encrypts and decrypts large payload exceeding 10 MiB successfully`() {
+        val largeChunk = "X".repeat(12 * 1024 * 1024) // 12 MiB payload
+        val plainText = """{"format":"deutschflow-library","version":2,"data":"$largeChunk"}"""
+        val passphrase = "scalability-passphrase".toCharArray()
+
+        val encryptedJsonString = BackupCrypto.encrypt(plainText, passphrase)
+        val encryptedJson = JSONObject(encryptedJsonString)
+
+        assertTrue(BackupCrypto.isEncryptedBackup(encryptedJson))
+        val decrypted = BackupCrypto.decrypt(encryptedJson, passphrase)
+        assertEquals(plainText, decrypted)
+    }
 }

@@ -57,8 +57,15 @@ export async function POST(request: Request) {
   return clearSessionCookie(response, request);
 }
 
-export async function GET(request: Request) {
-  const url = new URL("/login", request.url);
-  const response = NextResponse.redirect(url);
-  return clearSessionCookie(response, request);
+export async function GET() {
+  return NextResponse.json(
+    { error: "Method Not Allowed. Logout must use POST with CSRF verification." },
+    {
+      status: 405,
+      headers: {
+        Allow: "POST",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    }
+  );
 }

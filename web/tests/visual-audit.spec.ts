@@ -26,7 +26,7 @@ test.describe("visual regression", () => {
         await page.waitForLoadState("networkidle");
         expect(new URL(page.url()).pathname).toBe(route.path);
         if (route.path === "/settings") {
-          await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
+          await expect(page.getByRole("button", { name: "Back", exact: true })).toBeVisible();
         } else {
           await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
         }

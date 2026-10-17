@@ -54,10 +54,20 @@ export function calculateCooldown(count: number): number {
   return Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** (count - FREE_ATTEMPTS));
 }
 
+export type ThrottleFailurePolicy = "fail-secure-fallback" | "fail-closed";
+
+export class ThrottleStoreError extends Error {
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = "ThrottleStoreError";
+  }
+}
+
 export interface ThrottleBackend {
   get(key: string, now: number): Promise<Attempts | null>;
   set(key: string, entry: Attempts, ttlSeconds: number): Promise<void>;
   delete(key: string): Promise<void>;
+  recordFailure?(key: string, now: number): Promise<{ count: number; cooldown: number }>;
   reset?(): Promise<void>;
   getTrackedCount?(): number;
 }
@@ -115,6 +125,16 @@ export class InMemoryThrottleBackend implements ThrottleBackend {
     return entry;
   }
 
+  async recordFailure(rawKey: string, now: number): Promise<{ count: number; cooldown: number }> {
+    const key = normalizeKey(rawKey);
+    this.prune(now);
+    const entry = this.attempts.get(key);
+    const count = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
+    const cooldown = calculateCooldown(count);
+    this.attempts.set(key, { count, last: now, nextAllowed: now + cooldown });
+    return { count, cooldown };
+  }
+
   async set(rawKey: string, entry: Attempts): Promise<void> {
     const key = normalizeKey(rawKey);
     this.attempts.set(key, entry);
@@ -156,13 +176,15 @@ export class InMemoryThrottleBackend implements ThrottleBackend {
 /**
  * Distributed rate-limiting store using the Upstash Redis REST API.
  * Uses HTTP fetch with bounded timeout, completely compatible with edge and serverless runtimes.
+ * Employs atomic REST pipeline commands for atomic increments and TTL expiry without concurrency races.
  */
 export class UpstashRedisThrottleBackend implements ThrottleBackend {
   constructor(
     private url: string,
     private token: string,
     private fallback: ThrottleBackend = new InMemoryThrottleBackend(),
-    private timeoutMs: number = 3_000
+    private timeoutMs: number = 3_000,
+    private failurePolicy: ThrottleFailurePolicy = (process.env.THROTTLE_FAILURE_POLICY as ThrottleFailurePolicy) || "fail-secure-fallback"
   ) {}
 
   private key(rawKey: string): string {
@@ -188,41 +210,112 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
   }
 
   async get(rawKey: string, now: number): Promise<Attempts | null> {
+    const k = this.key(rawKey);
+    const countKey = `${k}:count`;
+    const lastKey = `${k}:last`;
     try {
-      const res = await this.fetchWithTimeout(`/get/${encodeURIComponent(this.key(rawKey))}`, {
-        method: "GET",
+      const res = await this.fetchWithTimeout("/pipeline", {
+        method: "POST",
+        body: JSON.stringify([
+          ["GET", countKey],
+          ["GET", lastKey],
+        ]),
       });
       if (!res.ok) throw new Error(`Upstash returned HTTP ${res.status}`);
       const data = await res.json();
-      if (!data || typeof data.result !== "string") return null;
-      const parsed = JSON.parse(data.result) as Attempts;
-      if (!parsed || typeof parsed.count !== "number" || typeof parsed.last !== "number") return null;
-      if (now - parsed.last > WINDOW_MS) return null;
-      return parsed;
-    } catch {
-      // Bounded fallback to memory backend
+      if (!Array.isArray(data)) return null;
+      const rawCount = data[0]?.result;
+      const rawLast = data[1]?.result;
+      if (rawCount === null || rawCount === undefined || rawLast === null || rawLast === undefined) {
+        return null;
+      }
+      const count = Number(rawCount);
+      const last = Number(rawLast);
+      if (Number.isNaN(count) || Number.isNaN(last)) return null;
+      if (now - last > WINDOW_MS) return null;
+      const cooldown = calculateCooldown(count);
+      return { count, last, nextAllowed: last + cooldown };
+    } catch (err) {
+      if (this.failurePolicy === "fail-closed") {
+        throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
+      }
       return this.fallback.get(rawKey, now);
     }
   }
 
-  async set(rawKey: string, entry: Attempts, ttlSeconds: number): Promise<void> {
+  async recordFailure(rawKey: string, now: number): Promise<{ count: number; cooldown: number }> {
+    const k = this.key(rawKey);
+    const countKey = `${k}:count`;
+    const lastKey = `${k}:last`;
     try {
-      const res = await this.fetchWithTimeout(
-        `/set/${encodeURIComponent(this.key(rawKey))}/${encodeURIComponent(JSON.stringify(entry))}?ex=${ttlSeconds}`,
-        { method: "POST" }
-      );
+      const res = await this.fetchWithTimeout("/pipeline", {
+        method: "POST",
+        body: JSON.stringify([
+          ["INCR", countKey],
+          ["EXPIRE", countKey, WINDOW_SECONDS],
+          ["SET", lastKey, String(now), "EX", WINDOW_SECONDS],
+        ]),
+      });
+      if (!res.ok) throw new Error(`Upstash pipeline returned HTTP ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data) || typeof data[0]?.result !== "number") {
+        throw new Error("Invalid Upstash pipeline response");
+      }
+      const count = data[0].result as number;
+      const cooldown = calculateCooldown(count);
+      return { count, cooldown };
+    } catch (err) {
+      if (this.failurePolicy === "fail-closed") {
+        throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
+      }
+      if (this.fallback.recordFailure) {
+        return this.fallback.recordFailure(rawKey, now);
+      }
+      const fallbackEntry = await this.fallback.get(rawKey, now);
+      const count = fallbackEntry && now - fallbackEntry.last <= WINDOW_MS ? fallbackEntry.count + 1 : 1;
+      const cooldown = calculateCooldown(count);
+      await this.fallback.set(rawKey, { count, last: now, nextAllowed: now + cooldown }, WINDOW_SECONDS);
+      return { count, cooldown };
+    }
+  }
+
+  async set(rawKey: string, entry: Attempts, ttlSeconds: number): Promise<void> {
+    const k = this.key(rawKey);
+    const countKey = `${k}:count`;
+    const lastKey = `${k}:last`;
+    try {
+      const res = await this.fetchWithTimeout("/pipeline", {
+        method: "POST",
+        body: JSON.stringify([
+          ["SET", countKey, String(entry.count), "EX", ttlSeconds],
+          ["SET", lastKey, String(entry.last), "EX", ttlSeconds],
+        ]),
+      });
       if (!res.ok) throw new Error(`Upstash set returned HTTP ${res.status}`);
-    } catch {
+    } catch (err) {
+      if (this.failurePolicy === "fail-closed") {
+        throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
+      }
       await this.fallback.set(rawKey, entry, ttlSeconds);
     }
   }
 
   async delete(rawKey: string): Promise<void> {
+    const k = this.key(rawKey);
+    const countKey = `${k}:count`;
+    const lastKey = `${k}:last`;
     try {
-      await this.fetchWithTimeout(`/del/${encodeURIComponent(this.key(rawKey))}`, {
+      await this.fetchWithTimeout("/pipeline", {
         method: "POST",
+        body: JSON.stringify([
+          ["DEL", countKey],
+          ["DEL", lastKey],
+        ]),
       });
-    } catch {
+    } catch (err) {
+      if (this.failurePolicy === "fail-closed") {
+        throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
+      }
       await this.fallback.delete(rawKey);
     }
   }
@@ -271,6 +364,10 @@ export async function getThrottleDelay(rawKey: string, now: number = Date.now())
  */
 export async function recordThrottleFailure(rawKey: string, now: number = Date.now()): Promise<number> {
   const backend = getActiveThrottleBackend();
+  if (backend.recordFailure) {
+    const { cooldown } = await backend.recordFailure(rawKey, now);
+    return cooldown;
+  }
   const entry = await backend.get(rawKey, now);
   const count = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
   const cooldown = calculateCooldown(count);

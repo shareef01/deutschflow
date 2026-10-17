@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PromiseExtended } from "dexie";
-import { DeutschFlowDB } from "@/lib/db/schema";
+import { DeutschFlowDB, type VocabularyEntry } from "@/lib/db/schema";
 import {
   findByGermanText,
   mergedWith,
   rewardXp,
   saveVocabulary,
   updateVocabulary,
+  withFurthestScheduleOf,
 } from "@/lib/db/repository";
 
 let db: DeutschFlowDB;
@@ -391,5 +392,153 @@ describe("rewardXp — the atomic read-modify-write", () => {
     const stats = await rewardXp(db);
     expect(stats.xp).toBe(25);
     expect(await db.userStats.count()).toBe(1);
+  });
+});
+
+describe("withFurthestScheduleOf — pedagogical SRS merge policy", () => {
+  const baseEntry: VocabularyEntry = {
+    id: 1,
+    germanText: "Hund",
+    germanTextKey: "hund",
+    englishTranslation: "dog",
+    timestamp: 1000,
+    exampleSentence: "Der Hund bellt.",
+    article: "der",
+    plural: "Hunde",
+    conjugation: "",
+    synonyms: "",
+    antonyms: "",
+    remoteId: "00000000-0000-4000-8000-000000000001",
+    nextReview: 0,
+    interval: 0,
+    easeFactor: 2.5,
+    reviewCount: 0,
+    lastModifiedAt: 1000,
+  };
+
+  it("preserves a recent lapse over an older mastered schedule", () => {
+    // Survivor had a mature schedule from 3 days ago (T1 = 1000)
+    const matureSurvivor = {
+      ...baseEntry,
+      reviewCount: 5,
+      interval: 30,
+      nextReview: 200_000,
+      easeFactor: 2.6,
+      lastModifiedAt: 1000,
+    };
+    // Learner failed the card today (T2 = 5000, quality AGAIN -> interval 0, nextReview 0, ease penalty)
+    const recentLapse = {
+      ...baseEntry,
+      reviewCount: 0,
+      interval: 0,
+      nextReview: 0,
+      easeFactor: 2.4,
+      lastModifiedAt: 5000,
+    };
+
+    const merged = withFurthestScheduleOf(matureSurvivor, recentLapse, 5000);
+    // The lapse MUST win: the learner forgot the word and must review it now!
+    expect(merged.reviewCount).toBe(0);
+    expect(merged.interval).toBe(0);
+    expect(merged.nextReview).toBe(0);
+    expect(merged.easeFactor).toBe(2.4);
+  });
+
+  it("preserves a recent remastering over an older lapse", () => {
+    // Survivor was a lapsed card from yesterday (T1 = 1000)
+    const lapsedSurvivor = {
+      ...baseEntry,
+      reviewCount: 0,
+      interval: 0,
+      nextReview: 0,
+      easeFactor: 2.3,
+      lastModifiedAt: 1000,
+    };
+    // Learner restudied and mastered the card today (T2 = 5000)
+    const remastered = {
+      ...baseEntry,
+      reviewCount: 4,
+      interval: 15,
+      nextReview: 300_000,
+      easeFactor: 2.5,
+      lastModifiedAt: 5000,
+    };
+
+    const merged = withFurthestScheduleOf(lapsedSurvivor, remastered, 5000);
+    expect(merged.reviewCount).toBe(4);
+    expect(merged.interval).toBe(15);
+    expect(merged.nextReview).toBe(300_000);
+    expect(merged.easeFactor).toBe(2.5);
+  });
+
+  it("favors due/lapsed card when timestamps are tied to avoid burying review", () => {
+    const futureCard = {
+      ...baseEntry,
+      reviewCount: 3,
+      interval: 20,
+      nextReview: 150_000,
+      easeFactor: 2.5,
+      lastModifiedAt: 2000,
+    };
+    const dueCard = {
+      ...baseEntry,
+      reviewCount: 0,
+      interval: 0,
+      nextReview: 0,
+      easeFactor: 2.3,
+      lastModifiedAt: 2000,
+    };
+
+    const merged = withFurthestScheduleOf(futureCard, dueCard, 50_000);
+    expect(merged.interval).toBe(0);
+    expect(merged.nextReview).toBe(0);
+    expect(merged.easeFactor).toBe(2.3);
+  });
+
+  it("favors sooner review when both future schedules have tied timestamps", () => {
+    const furtherCard = {
+      ...baseEntry,
+      reviewCount: 4,
+      interval: 25,
+      nextReview: 250_000,
+      easeFactor: 2.6,
+      lastModifiedAt: 1000,
+    };
+    const soonerCard = {
+      ...baseEntry,
+      reviewCount: 3,
+      interval: 10,
+      nextReview: 100_000,
+      easeFactor: 2.5,
+      lastModifiedAt: 1000,
+    };
+
+    const merged = withFurthestScheduleOf(furtherCard, soonerCard, 50_000);
+    expect(merged.nextReview).toBe(100_000);
+    expect(merged.interval).toBe(10);
+  });
+
+  it("ensures unreviewed content edits never wipe out existing study progress", () => {
+    const studiedSurvivor = {
+      ...baseEntry,
+      reviewCount: 5,
+      interval: 30,
+      nextReview: 200_000,
+      easeFactor: 2.6,
+      lastModifiedAt: 1000,
+    };
+    const unreviewedEdit = {
+      ...baseEntry,
+      reviewCount: 0,
+      interval: 0,
+      nextReview: 0,
+      easeFactor: 2.5,
+      lastModifiedAt: 9000, // freshly edited timestamp
+    };
+
+    const merged = withFurthestScheduleOf(studiedSurvivor, unreviewedEdit, 9000);
+    expect(merged.reviewCount).toBe(5);
+    expect(merged.interval).toBe(30);
+    expect(merged.nextReview).toBe(200_000);
   });
 });
