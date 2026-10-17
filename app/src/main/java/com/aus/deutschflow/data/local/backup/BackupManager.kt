@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.InputStreamReader
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
@@ -162,35 +163,64 @@ class BackupManager @Inject constructor(
 
     suspend fun importFromStream(inputStream: InputStream, passphrase: CharArray? = null): BackupImportResult {
         val maxBytes = MAX_STREAM_READ_BYTES
-        val buffer = ByteArray(8192)
-        val out = ByteArrayOutputStream()
-        var totalBytes = 0
+        val countingStream = object : InputStream() {
+            var totalBytesRead = 0L
+                private set
 
-        while (true) {
-            val bytesRead = inputStream.read(buffer)
-            if (bytesRead == -1) break
-            totalBytes += bytesRead
-            if (totalBytes > maxBytes) {
-                throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
+            override fun read(): Int {
+                val b = inputStream.read()
+                if (b != -1) {
+                    totalBytesRead++
+                    if (totalBytesRead > maxBytes) {
+                        throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
+                    }
+                }
+                return b
             }
-            out.write(buffer, 0, bytesRead)
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val read = inputStream.read(b, off, len)
+                if (read > 0) {
+                    totalBytesRead += read
+                    if (totalBytesRead > maxBytes) {
+                        throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
+                    }
+                }
+                return read
+            }
+
+            override fun close() = inputStream.close()
         }
 
-        if (totalBytes == 0) {
-            throw BackupException.InvalidFormat("Backup file is empty.")
-        }
-
-        val rawBytes = out.toByteArray()
         val decoder = Charsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
 
-        val content = try {
-            decoder.decode(ByteBuffer.wrap(rawBytes)).toString()
+        val reader = InputStreamReader(countingStream, decoder)
+        val stringBuilder = StringBuilder()
+        val charBuffer = CharArray(8192)
+
+        try {
+            while (true) {
+                val charsRead = reader.read(charBuffer, 0, charBuffer.size)
+                if (charsRead == -1) break
+                stringBuilder.append(charBuffer, 0, charsRead)
+            }
         } catch (e: CharacterCodingException) {
             throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${e.message}")
+        } catch (e: java.io.IOException) {
+            val cause = e.cause
+            if (cause is CharacterCodingException) {
+                throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${cause.message}")
+            }
+            throw e
         }
 
+        if (countingStream.totalBytesRead == 0L) {
+            throw BackupException.InvalidFormat("Backup file is empty.")
+        }
+
+        val content = stringBuilder.toString()
         return importBackup(content, passphrase)
     }
 
@@ -210,7 +240,7 @@ class BackupManager @Inject constructor(
 
         val backupObj = if (BackupCrypto.isEncryptedBackup(rawObj)) {
             val decryptedPlain = BackupCrypto.decrypt(rawObj, passphrase)
-            if (decryptedPlain.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
+            if (utf8ByteLength(decryptedPlain) > MAX_PLAINTEXT_BACKUP_BYTES) {
                 throw BackupException.CapacityExceeded("Decrypted backup exceeds 50 MB limit.")
             }
             try {
@@ -220,7 +250,7 @@ class BackupManager @Inject constructor(
             }
         } else {
             // Unencrypted plaintext backup: must strictly not exceed MAX_PLAINTEXT_BACKUP_BYTES (50 MiB)
-            if (content.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
+            if (utf8ByteLength(content) > MAX_PLAINTEXT_BACKUP_BYTES) {
                 throw BackupException.CapacityExceeded("Plaintext backup exceeds 50 MB size limit.")
             }
             rawObj

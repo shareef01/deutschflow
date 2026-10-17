@@ -366,7 +366,7 @@ class VocabularyDaoTest {
         assertEquals("masteryCounts totalWords must be 0", 0, mastery.totalWords)
 
         // 3. User attempts to save or claim ARCHIVED_VOCABULARY_KEY are rejected
-        dao.save(VocabularyEntity(germanText = "[Gelöscht]", englishTranslation = "should not save"))
+        dao.save(VocabularyEntity(germanText = "[Gelöscht]", germanTextKey = ARCHIVED_VOCABULARY_KEY, englishTranslation = "should not save"))
         dao.save(VocabularyEntity(germanText = ARCHIVED_VOCABULARY_KEY, englishTranslation = "should not save"))
         assertEquals("User save cannot create normal card with archived key", 0, dao.countOnce())
 

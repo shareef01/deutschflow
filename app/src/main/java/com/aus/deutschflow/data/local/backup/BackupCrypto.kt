@@ -45,10 +45,10 @@ object BackupCrypto {
     }
 
     fun encrypt(plainText: String, passphrase: CharArray): String {
-        val plainBytes = plainText.toByteArray(Charsets.UTF_8)
-        if (plainBytes.size > MAX_PLAINTEXT_BACKUP_BYTES) {
+        if (utf8ByteLength(plainText) > MAX_PLAINTEXT_BACKUP_BYTES) {
             throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (50 MB).")
         }
+        val plainBytes = plainText.toByteArray(Charsets.UTF_8)
 
         val salt = ByteArray(SALT_LENGTH_BYTES).apply { secureRandom.nextBytes(this) }
         val iv = ByteArray(IV_LENGTH_BYTES).apply { secureRandom.nextBytes(this) }

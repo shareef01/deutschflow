@@ -63,3 +63,40 @@ sealed class BackupException(message: String, cause: Throwable? = null) : Except
     class CapacityExceeded(message: String) : BackupException(message)
     class StorageError(message: String, cause: Throwable? = null) : BackupException(message, cause)
 }
+
+fun utf8ByteLength(s: CharSequence): Long {
+    var count = 0L
+    var i = 0
+    val len = s.length
+    while (i < len) {
+        val c = s[i].code
+        when {
+            c <= 0x7F -> {
+                count += 1
+                i++
+            }
+            c <= 0x7FF -> {
+                count += 2
+                i++
+            }
+            c in 0xD800..0xDBFF -> {
+                if (i + 1 < len && s[i + 1].code in 0xDC00..0xDFFF) {
+                    count += 4
+                    i += 2
+                } else {
+                    count += 3
+                    i++
+                }
+            }
+            c in 0xDC00..0xDFFF -> {
+                count += 3
+                i++
+            }
+            else -> {
+                count += 3
+                i++
+            }
+        }
+    }
+    return count
+}

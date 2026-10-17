@@ -266,7 +266,7 @@ class BackupManagerIntegrationTest {
                 interval = 1,
                 easeFactor = 2.5f,
                 reviewCount = 1,
-                nextReview = now
+                nextReview = (now - 50000) + 86400000L * 1
             )
         )
 
@@ -349,9 +349,9 @@ class BackupManagerIntegrationTest {
     @Test
     fun oversizedBackup_throwsCapacityExceeded() = runBlocking {
         val hugeBuilder = StringBuilder("{\"format\":\"deutschflow-library\",\"version\":2,\"payload\":\"")
-        // Generate string larger than 10MB
+        // Generate string larger than 50MB
         val padding = "A".repeat(1024 * 1024)
-        for (i in 0..10) {
+        for (i in 0..50) {
             hugeBuilder.append(padding)
         }
         hugeBuilder.append("\"}")
@@ -539,7 +539,7 @@ class BackupManagerIntegrationTest {
     }
 
     @Test
-    fun importReviewEvents_withGenuineOrphanReviewEvent_isRejectedAsInvalidFormatAndNeverPersisted() = runBlocking {
+    fun importReviewEvents_withUnmappedReviewEvent_recoversToArchivedPlaceholderAndNeverCrossAssignsToTargetId() = runBlocking {
         // Pre-populate target database with a word that receives target ID 1 ("Apfel")
         targetDb.vocabularyDao().insertVocabulary(
             VocabularyEntity(
@@ -595,18 +595,23 @@ class BackupManagerIntegrationTest {
             })
         }
 
-        // The backup format specifies REJECTION of backups containing orphan review events
-        assertThrows(BackupException.InvalidFormat::class.java) {
-            runBlocking {
-                targetBackupManager.importBackup(backupJson.toString(), null)
-            }
+        val result = targetBackupManager.importBackup(backupJson.toString(), null)
+        assertEquals(1, result.vocabularyAdded)
+        assertEquals(2, result.reviewEventsAdded)
+
+        val allReviews = targetDb.reviewEventDao().getAllEventsList()
+        assertEquals(2, allReviews.size)
+
+        val archivedPlaceholder = targetDb.vocabularyDao().findByKey(ARCHIVED_VOCABULARY_KEY)
+        assertNotNull("Archived placeholder must be created for recovered reviews", archivedPlaceholder)
+
+        allReviews.forEach { review ->
+            assertNotEquals("Orphan review event must NEVER be cross-assigned to Apfel ID", appleId, review.vocabularyId)
+            assertEquals("Unmapped review must be linked to archived placeholder ID", archivedPlaceholder!!.id, review.vocabularyId)
         }
 
-        // Ensure target DB was not mutated: no review events persisted, Apfel unchanged, and Kirsche not added
-        val allReviews = targetDb.reviewEventDao().getAllEventsList()
-        assertTrue("No orphan review events may be persisted in target DB", allReviews.isEmpty())
         val kirsche = targetDb.vocabularyDao().findByGermanText("Kirsche")
-        assertNull("Corrupt backup with orphan review events must not insert vocabulary", kirsche)
+        assertNotNull("Kirsche must be inserted", kirsche)
         val remainingApple = targetDb.vocabularyDao().findByGermanText("Apfel")
         assertNotNull(remainingApple)
         assertEquals(appleId, remainingApple!!.id)
@@ -741,10 +746,10 @@ class BackupManagerIntegrationTest {
     @Test
     fun importFromStream_withVeryLargeStreamingInput_abortsEarlyWithoutCrashingOrOOM() {
         runBlocking {
-            // Stream generator that delivers 50 MB of data without allocating a 50 MB buffer
+            // Stream generator that delivers data exceeding MAX_STREAM_READ_BYTES without allocating a buffer
             val hugeStream = object : InputStream() {
                 private var bytesEmitted = 0
-                private val maxEmit = 50 * 1024 * 1024
+                private val maxEmit = MAX_STREAM_READ_BYTES + 10 * 1024 * 1024
 
                 override fun read(): Int {
                     if (bytesEmitted++ < maxEmit) return ' '.code
