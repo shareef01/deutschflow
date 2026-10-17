@@ -160,8 +160,12 @@ interface VocabularyDao {
      */
     @Transaction
     suspend fun restore(entry: VocabularyEntity) {
-        val now = System.currentTimeMillis()
         val key = germanKey(entry.germanText)
+        if (key == ARCHIVED_VOCABULARY_KEY || entry.germanTextKey == ARCHIVED_VOCABULARY_KEY) {
+            // The internal archived identity is reserved; user actions cannot restore or claim it.
+            return
+        }
+        val now = System.currentTimeMillis()
         val occupant = findByKey(key)
 
         when {

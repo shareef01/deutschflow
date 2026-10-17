@@ -63,11 +63,19 @@ export class ThrottleStoreError extends Error {
   }
 }
 
+export interface AdmissionResult {
+  allowed: boolean;
+  retryAfterMs: number;
+  count: number;
+  cooldown?: number;
+}
+
 export interface ThrottleBackend {
   get(key: string, now: number): Promise<Attempts | null>;
   set(key: string, entry: Attempts, ttlSeconds: number): Promise<void>;
   delete(key: string): Promise<void>;
   recordFailure?(key: string, now: number): Promise<{ count: number; cooldown: number }>;
+  admit?(key: string, now: number): Promise<AdmissionResult>;
   reset?(): Promise<void>;
   getTrackedCount?(): number;
 }
@@ -133,6 +141,34 @@ export class InMemoryThrottleBackend implements ThrottleBackend {
     const cooldown = calculateCooldown(count);
     this.attempts.set(key, { count, last: now, nextAllowed: now + cooldown });
     return { count, cooldown };
+  }
+
+  async admit(rawKey: string, now: number): Promise<AdmissionResult> {
+    const key = normalizeKey(rawKey);
+    this.prune(now);
+    const entry = this.attempts.get(key);
+
+    // 1. If currently in lockout, deny attempt without advancing counter or extending lockout
+    if (entry && now - entry.last <= WINDOW_MS && entry.nextAllowed > now) {
+      return {
+        allowed: false,
+        retryAfterMs: entry.nextAllowed - now,
+        count: entry.count,
+      };
+    }
+
+    // 2. Not in lockout (or window expired): allow this attempt
+    const newCount = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
+    const cooldown = calculateCooldown(newCount);
+    const nextAllowed = cooldown > 0 ? now + cooldown : 0;
+    this.attempts.set(key, { count: newCount, last: now, nextAllowed });
+
+    return {
+      allowed: true,
+      retryAfterMs: 0,
+      count: newCount,
+      cooldown,
+    };
   }
 
   async set(rawKey: string, entry: Attempts): Promise<void> {
@@ -214,12 +250,14 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const k = this.key(rawKey);
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
+    const nextAllowedKey = `${k}:nextAllowed`;
     try {
       const res = await this.fetchWithTimeout("/multi-exec", {
         method: "POST",
         body: JSON.stringify([
           ["GET", countKey],
           ["GET", lastKey],
+          ["GET", nextAllowedKey],
         ]),
       });
       if (!res.ok) throw new Error(`Upstash /multi-exec returned HTTP ${res.status}`);
@@ -235,6 +273,7 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
       }
       const rawCount = data[0]?.result;
       const rawLast = data[1]?.result;
+      const rawNextAllowed = data[2]?.result;
       if (rawCount === null || rawCount === undefined || rawLast === null || rawLast === undefined) {
         return null;
       }
@@ -242,8 +281,10 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
       const last = Number(rawLast);
       if (Number.isNaN(count) || Number.isNaN(last)) return null;
       if (now - last > WINDOW_MS) return null;
-      const cooldown = calculateCooldown(count);
-      return { count, last, nextAllowed: last + cooldown };
+      const nextAllowed = rawNextAllowed !== null && rawNextAllowed !== undefined && !Number.isNaN(Number(rawNextAllowed))
+        ? Number(rawNextAllowed)
+        : last + calculateCooldown(count);
+      return { count, last, nextAllowed };
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
@@ -348,16 +389,155 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     }
   }
 
+  async admit(rawKey: string, now: number): Promise<AdmissionResult> {
+    const k = this.key(rawKey);
+    const countKey = `${k}:count`;
+    const lastKey = `${k}:last`;
+    const nextAllowedKey = `${k}:nextAllowed`;
+
+    const luaScript = `
+      local countKey = KEYS[1]
+      local lastKey = KEYS[2]
+      local nextAllowedKey = KEYS[3]
+
+      local now = tonumber(ARGV[1])
+      local windowSeconds = tonumber(ARGV[2])
+      local windowMs = windowSeconds * 1000
+      local freeAttempts = tonumber(ARGV[3])
+      local baseDelayMs = tonumber(ARGV[4])
+      local maxDelayMs = tonumber(ARGV[5])
+
+      local currentCount = tonumber(redis.call('GET', countKey)) or 0
+      local last = tonumber(redis.call('GET', lastKey)) or 0
+      local nextAllowed = tonumber(redis.call('GET', nextAllowedKey)) or 0
+
+      if last > 0 and (now - last) > windowMs then
+        currentCount = 0
+        nextAllowed = 0
+        redis.call('DEL', countKey, lastKey, nextAllowedKey)
+      end
+
+      -- 1. Check if currently locked out
+      if nextAllowed > now then
+        local retryAfterMs = nextAllowed - now
+        redis.call('EXPIRE', countKey, windowSeconds)
+        redis.call('EXPIRE', lastKey, windowSeconds)
+        redis.call('EXPIRE', nextAllowedKey, windowSeconds)
+        return { 0, retryAfterMs, currentCount }
+      end
+
+      -- 2. Permit attempt and atomically advance counter
+      local newCount = currentCount + 1
+      redis.call('SET', countKey, tostring(newCount), 'EX', windowSeconds)
+      redis.call('SET', lastKey, tostring(now), 'EX', windowSeconds)
+
+      -- 3. If newCount reaches or exceeds freeAttempts, set nextAllowed lockout for subsequent requests
+      local cooldown = 0
+      if newCount >= freeAttempts then
+        local exponent = newCount - freeAttempts
+        local delay = baseDelayMs * (2 ^ exponent)
+        if delay > maxDelayMs then
+          cooldown = maxDelayMs
+        else
+          cooldown = math.floor(delay)
+        end
+        nextAllowed = now + cooldown
+        redis.call('SET', nextAllowedKey, tostring(nextAllowed), 'EX', windowSeconds)
+      else
+        nextAllowed = 0
+        redis.call('DEL', nextAllowedKey)
+      end
+
+      return { 1, 0, newCount, cooldown }
+    `.trim();
+
+    try {
+      const res = await this.fetchWithTimeout("/", {
+        method: "POST",
+        body: JSON.stringify([
+          "EVAL",
+          luaScript,
+          3,
+          countKey,
+          lastKey,
+          nextAllowedKey,
+          String(now),
+          String(WINDOW_SECONDS),
+          String(FREE_ATTEMPTS),
+          String(BASE_DELAY_MS),
+          String(MAX_DELAY_MS),
+        ]),
+      });
+
+      if (!res.ok) throw new Error(`Upstash EVAL returned HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (data && typeof data === "object" && "error" in data) {
+        throw new Error(`Upstash command error: ${(data as { error: string }).error}`);
+      }
+
+      if (
+        data &&
+        typeof data === "object" &&
+        Array.isArray((data as { result?: unknown }).result)
+      ) {
+        const resultArr = (data as { result: [unknown, unknown, unknown, unknown?] }).result;
+        const allowedNum = Number(resultArr[0]);
+        const retryAfterMs = Number(resultArr[1]);
+        const count = Number(resultArr[2]);
+        const cooldown = resultArr[3] !== undefined ? Number(resultArr[3]) : undefined;
+
+        if (!Number.isNaN(allowedNum) && !Number.isNaN(retryAfterMs)) {
+          return {
+            allowed: allowedNum === 1,
+            retryAfterMs: Math.max(0, retryAfterMs),
+            count: Number.isNaN(count) ? 0 : count,
+            cooldown: cooldown !== undefined && !Number.isNaN(cooldown) ? cooldown : undefined,
+          };
+        }
+      }
+
+      throw new Error("Invalid Upstash EVAL response structure for admission");
+    } catch (err) {
+      if (this.failurePolicy === "fail-closed") {
+        throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
+      }
+      if (this.fallback.admit) {
+        return this.fallback.admit(rawKey, now);
+      }
+      const entry = await this.fallback.get(rawKey, now);
+      if (entry && now - entry.last <= WINDOW_MS && entry.nextAllowed > now) {
+        return {
+          allowed: false,
+          retryAfterMs: entry.nextAllowed - now,
+          count: entry.count,
+        };
+      }
+      const newCount = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
+      const cooldown = calculateCooldown(newCount);
+      const nextAllowed = cooldown > 0 ? now + cooldown : 0;
+      await this.fallback.set(rawKey, { count: newCount, last: now, nextAllowed }, WINDOW_SECONDS);
+      return {
+        allowed: true,
+        retryAfterMs: 0,
+        count: newCount,
+        cooldown,
+      };
+    }
+  }
+
   async set(rawKey: string, entry: Attempts, ttlSeconds: number): Promise<void> {
     const k = this.key(rawKey);
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
+    const nextAllowedKey = `${k}:nextAllowed`;
     try {
       const res = await this.fetchWithTimeout("/multi-exec", {
         method: "POST",
         body: JSON.stringify([
           ["SET", countKey, String(entry.count), "EX", ttlSeconds],
           ["SET", lastKey, String(entry.last), "EX", ttlSeconds],
+          ["SET", nextAllowedKey, String(entry.nextAllowed), "EX", ttlSeconds],
         ]),
       });
       if (!res.ok) throw new Error(`Upstash set returned HTTP ${res.status}`);
@@ -383,12 +563,14 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const k = this.key(rawKey);
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
+    const nextAllowedKey = `${k}:nextAllowed`;
     try {
       const res = await this.fetchWithTimeout("/multi-exec", {
         method: "POST",
         body: JSON.stringify([
           ["DEL", countKey],
           ["DEL", lastKey],
+          ["DEL", nextAllowedKey],
         ]),
       });
       if (!res.ok) throw new Error(`Upstash delete returned HTTP ${res.status}`);
@@ -436,6 +618,36 @@ export function setCustomThrottleBackend(backend: ThrottleBackend | null): void 
 // ============================================================================
 // Asynchronous Distributed Rate-Limiting API
 // ============================================================================
+
+/**
+ * Atomically admits an incoming login attempt for a caller.
+ * Checks rate limits and reserves the attempt slot atomically.
+ * Returns whether the attempt is admitted or denied (with retryAfterMs).
+ */
+export async function admitLoginAttempt(rawKey: string, now: number = Date.now()): Promise<AdmissionResult> {
+  const backend = getActiveThrottleBackend();
+  if (backend.admit) {
+    return backend.admit(rawKey, now);
+  }
+  const entry = await backend.get(rawKey, now);
+  if (entry && now - entry.last <= WINDOW_MS && entry.nextAllowed > now) {
+    return {
+      allowed: false,
+      retryAfterMs: Math.max(0, entry.nextAllowed - now),
+      count: entry.count,
+    };
+  }
+  const newCount = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
+  const cooldown = calculateCooldown(newCount);
+  const nextAllowed = cooldown > 0 ? now + cooldown : 0;
+  await backend.set(rawKey, { count: newCount, last: now, nextAllowed }, WINDOW_SECONDS);
+  return {
+    allowed: true,
+    retryAfterMs: 0,
+    count: newCount,
+    cooldown,
+  };
+}
 
 /**
  * Checks how long this caller must wait before their next guess is allowed.

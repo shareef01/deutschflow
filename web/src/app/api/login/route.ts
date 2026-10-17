@@ -10,8 +10,7 @@ import {
 } from "@/lib/auth/session";
 import {
   ThrottleStoreError,
-  getThrottleDelay,
-  recordThrottleFailure,
+  admitLoginAttempt,
   recordThrottleSuccess,
 } from "@/lib/auth/throttle";
 
@@ -93,9 +92,9 @@ export async function POST(request: NextRequest) {
   const target = safeRedirectTarget(formData.get("from"));
   const caller = extractCallerKey(request.headers);
 
-  let retryAfterMs: number;
+  let admission;
   try {
-    retryAfterMs = await getThrottleDelay(caller);
+    admission = await admitLoginAttempt(caller);
   } catch (err) {
     if (err instanceof ThrottleStoreError) {
       return NextResponse.json(
@@ -106,8 +105,8 @@ export async function POST(request: NextRequest) {
     throw err;
   }
 
-  if (retryAfterMs > 0) {
-    const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
+  if (!admission.allowed) {
+    const retryAfterSeconds = Math.max(1, Math.ceil(admission.retryAfterMs / 1000));
     return NextResponse.json(
       { error: `Too many attempts. Try again in ${retryAfterSeconds} seconds.` },
       {
@@ -118,17 +117,6 @@ export async function POST(request: NextRequest) {
   }
 
   if (!(await passwordMatches(password, masterPassword))) {
-    try {
-      await recordThrottleFailure(caller);
-    } catch (err) {
-      if (err instanceof ThrottleStoreError) {
-        return NextResponse.json(
-          { error: "Authentication service temporarily unavailable. Distributed rate limiter store is unreachable." },
-          { status: 503 }
-        );
-      }
-      throw err;
-    }
     return NextResponse.json(
       { error: "That key doesn't match. Check for stray spaces and try again." },
       { status: 401 }
@@ -141,7 +129,17 @@ export async function POST(request: NextRequest) {
     : request.url.startsWith("https://");
   const isSecure = process.env.NODE_ENV === "production" && isHttps;
 
-  await recordThrottleSuccess(caller);
+  try {
+    await recordThrottleSuccess(caller);
+  } catch (err) {
+    if (err instanceof ThrottleStoreError) {
+      return NextResponse.json(
+        { error: "Authentication service temporarily unavailable. Distributed rate limiter store is unreachable." },
+        { status: 503 }
+      );
+    }
+    throw err;
+  }
   const maxAge = getSessionMaxAgeSeconds();
   const response = NextResponse.json({ redirect: target });
   response.cookies.set(SESSION_COOKIE, await createSessionToken(signingSecret, Date.now(), maxAge), {
