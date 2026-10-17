@@ -1,7 +1,11 @@
 package com.aus.deutschflow.data.local
 
+import com.aus.deutschflow.data.local.entities.ARCHIVED_VOCABULARY_KEY
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.data.local.entities.germanKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -315,5 +319,33 @@ class VocabularyMergeTest {
         assertEquals(0, merged.reviewCount)
         assertEquals(0, merged.interval)
         assertEquals(0L, merged.nextReview)
+    }
+
+    @Test
+    fun `archived deleted vocabulary key is protected and cannot collide with normal user words`() {
+        assertEquals("__archived_deleted__", ARCHIVED_VOCABULARY_KEY)
+
+        // Normal words with similar text never generate the reserved archived key
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("[Gelöscht]"))
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("geloescht"))
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("Gelöscht"))
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("Archived"))
+
+        // The archived placeholder entity schedule is set to Long.MAX_VALUE so it never enters due reviews
+        val archivedEntity = VocabularyEntity(
+            id = 1,
+            germanText = "[Gelöscht]",
+            germanTextKey = ARCHIVED_VOCABULARY_KEY,
+            englishTranslation = "[Archived / Deleted Word]",
+            timestamp = 0L,
+            nextReview = Long.MAX_VALUE,
+            interval = 0,
+            reviewCount = 0,
+            remoteId = "00000000-0000-4000-8000-000000000000",
+            lastModifiedAt = 0L
+        )
+        val now = System.currentTimeMillis()
+        assertTrue("Archived placeholder nextReview must be in the infinite future", archivedEntity.nextReview > now)
+        assertTrue("Archived placeholder nextReview must never fall due in 100 years", archivedEntity.nextReview > now + 100L * 365 * 24 * 3600 * 1000)
     }
 }

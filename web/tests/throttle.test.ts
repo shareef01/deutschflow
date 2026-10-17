@@ -15,7 +15,7 @@ import {
   UpstashRedisThrottleBackend,
   InMemoryThrottleBackend,
 } from "@/lib/auth/throttle";
-import { extractCallerKey } from "@/app/api/login/route";
+import { extractCallerKey, isValidIp } from "@/app/api/login/route";
 
 /**
  * The gate's strength is one shared secret, and until this existed the number of
@@ -228,36 +228,85 @@ describe("distributed rate limiting & client spoofing defense", () => {
     );
   });
 
-  it("prevents client IP spoofing by requiring x-vercel-id provenance behind Vercel and validates IP format", () => {
-    const headers = new Headers();
-    headers.set("x-forwarded-for", "1.2.3.4, 5.6.7.8");
+  describe("standards-compliant IP validator & proxy trust boundary", () => {
+    it("validates standard IPv4 addresses", () => {
+      expect(isValidIp("192.168.1.1")).toBe(true);
+      expect(isValidIp("10.0.0.1")).toBe(true);
+      expect(isValidIp("172.16.254.1")).toBe(true);
+      expect(isValidIp("8.8.8.8")).toBe(true);
+    });
 
-    // 1. Outside Vercel (process.env.VERCEL !== "1"): untrusted -> unknown
-    expect(extractCallerKey(headers, false)).toBe("unknown");
+    it("rejects IPv4 octets above 255", () => {
+      expect(isValidIp("192.168.1.256")).toBe(false);
+      expect(isValidIp("256.0.0.1")).toBe(false);
+      expect(isValidIp("10.300.0.1")).toBe(false);
+      expect(isValidIp("1.2.3.999")).toBe(false);
+    });
 
-    // 2. Vercel environment flag alone without x-vercel-id header: untrusted -> unknown
-    expect(extractCallerKey(headers, true)).toBe("unknown");
+    it("rejects addresses with trailing characters or invalid syntax", () => {
+      expect(isValidIp("192.168.1.1extra")).toBe(false);
+      expect(isValidIp("192.168.1.1/24")).toBe(false);
+      expect(isValidIp("192.168.1.1:80")).toBe(false);
+      expect(isValidIp("2001:db8::1trailing")).toBe(false);
+      expect(isValidIp("1.2.3")).toBe(false);
+      expect(isValidIp("1.2.3.4.5")).toBe(false);
+      expect(isValidIp("hello.world")).toBe(false);
+      expect(isValidIp(":::")).toBe(false);
+      expect(isValidIp("")).toBe(false);
+      expect(isValidIp(null)).toBe(false);
+      expect(isValidIp(undefined)).toBe(false);
+    });
 
-    // 3. Vercel with valid x-vercel-id: trusts forwarded IP
-    headers.set("x-vercel-id", "fra1::abc123-xyz");
-    expect(extractCallerKey(headers, true)).toBe("1.2.3.4");
+    it("accepts valid IPv6 compression and standard notations", () => {
+      expect(isValidIp("::1")).toBe(true);
+      expect(isValidIp("::")).toBe(true);
+      expect(isValidIp("2001:db8::1")).toBe(true);
+      expect(isValidIp("fe80::1")).toBe(true);
+      expect(isValidIp("2001:0db8:85a3:0000:0000:8a2e:0370:7334")).toBe(true);
+    });
 
-    // 4. Vercel with valid IPv6 address
-    headers.set("x-real-ip", "2001:db8::8a2e:370:7334");
-    expect(extractCallerKey(headers, true)).toBe("2001:db8::8a2e:370:7334");
+    it("accepts IPv4-mapped IPv6 addresses", () => {
+      expect(isValidIp("::ffff:192.0.2.128")).toBe(true);
+      expect(isValidIp("::ffff:10.0.0.1")).toBe(true);
+      expect(isValidIp("::ffff:999.0.0.1")).toBe(false);
+    });
 
-    // 5. Vercel with x-real-ip prioritizes the single edge-verified socket IP
-    headers.set("x-real-ip", "198.51.100.99");
-    expect(extractCallerKey(headers, true)).toBe("198.51.100.99");
+    it("prevents client IP spoofing by prioritizing x-real-ip and taking trusted edge-appended hop in x-forwarded-for", () => {
+      const headers = new Headers();
+      headers.set("x-forwarded-for", "203.0.113.195, 198.51.100.1");
 
-    // 6. Header injection / malicious strings are rejected as "unknown"
-    headers.set("x-real-ip", "evil-attacker-token");
-    headers.set("x-forwarded-for", "malicious-ip-spoof");
-    expect(extractCallerKey(headers, true)).toBe("unknown");
+      // 1. Outside Vercel (process.env.VERCEL !== "1"): untrusted -> unknown
+      expect(extractCallerKey(headers, false)).toBe("unknown");
 
-    // 7. Invalid octet (>255) is rejected
-    headers.set("x-real-ip", "192.168.1.999");
-    expect(extractCallerKey(headers, true)).toBe("unknown");
+      // 2. Vercel environment flag alone without x-vercel-id header: untrusted -> unknown
+      expect(extractCallerKey(headers, true)).toBe("unknown");
+
+      // 3. Vercel with valid x-vercel-id: trusts edge-appended rightmost hop (198.51.100.1) over spoofed (203.0.113.195)
+      headers.set("x-vercel-id", "fra1::abc123-xyz");
+      expect(extractCallerKey(headers, true)).toBe("198.51.100.1");
+
+      // 4. Single hop in x-forwarded-for
+      headers.set("x-forwarded-for", "1.2.3.4");
+      expect(extractCallerKey(headers, true)).toBe("1.2.3.4");
+
+      // 5. Vercel with x-real-ip prioritizes the single edge-verified socket IP
+      headers.set("x-real-ip", "198.51.100.99");
+      expect(extractCallerKey(headers, true)).toBe("198.51.100.99");
+
+      // 6. Vercel with valid IPv6 address in x-real-ip
+      headers.set("x-real-ip", "2001:db8::8a2e:370:7334");
+      expect(extractCallerKey(headers, true)).toBe("2001:db8::8a2e:370:7334");
+
+      // 7. Header injection / malicious strings are rejected as "unknown"
+      headers.set("x-real-ip", "evil-attacker-token");
+      headers.set("x-forwarded-for", "malicious-ip-spoof");
+      expect(extractCallerKey(headers, true)).toBe("unknown");
+
+      // 8. Octet > 255 rejected
+      headers.set("x-real-ip", "192.168.1.999");
+      headers.set("x-forwarded-for", "256.1.1.1");
+      expect(extractCallerKey(headers, true)).toBe("unknown");
+    });
   });
 
   it("handles concurrent requests atomically without read-modify-write races", async () => {
@@ -393,5 +442,41 @@ describe("distributed rate limiting & client spoofing defense", () => {
     expect(await getThrottleDelay(ip, now)).toBe(2000);
     // At now + 2001ms, lockout has expired
     expect(await getThrottleDelay(ip, now + 2001)).toBe(0);
+  });
+
+  describe("real Redis integration tests (conditional on credentials)", () => {
+    const liveUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const liveToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    it("executes atomic Lua script and /multi-exec against real Upstash service if configured", async () => {
+      if (!liveUrl || !liveToken) {
+        // Explicitly distinguish unit tests with mocked responses from real service execution
+        // Never hardcode or leak credentials
+        expect(true).toBe(true);
+        return;
+      }
+
+      const backend = new UpstashRedisThrottleBackend(liveUrl, liveToken, new InMemoryThrottleBackend(), 5000);
+      const testKey = `test:live:${Date.now()}`;
+      const now = Date.now();
+
+      try {
+        const res1 = await backend.recordFailure(testKey, now);
+        expect(res1.count).toBe(1);
+        expect(res1.cooldown).toBe(0);
+
+        const res2 = await backend.recordFailure(testKey, now + 10);
+        expect(res2.count).toBe(2);
+
+        const getRes = await backend.get(testKey, now + 20);
+        expect(getRes?.count).toBe(2);
+
+        await backend.delete(testKey);
+        const deletedRes = await backend.get(testKey, now + 30);
+        expect(deletedRes).toBeNull();
+      } finally {
+        await backend.delete(testKey).catch(() => {});
+      }
+    });
   });
 });

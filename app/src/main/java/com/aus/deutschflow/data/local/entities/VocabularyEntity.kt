@@ -85,6 +85,13 @@ fun germanMatchKey(text: String): String = germanKey(text).replace("ß", "ss")
 const val NO_ARTICLE = "none"
 
 /**
+ * Reserved internal identity key for archived/deleted vocabulary references.
+ * Used exclusively to preserve historical review events without fake ID 0 or foreign key violations.
+ * Strictly filtered out from learning decks, vocabulary counts, mastery metrics, and user merges.
+ */
+const val ARCHIVED_VOCABULARY_KEY = "__archived_deleted__"
+
+/**
  * Immutable so Compose treats the vocabulary list as skippable when it is handed to a
  * composable unchanged; the DAO only ever swaps whole entities, never mutates one.
  */

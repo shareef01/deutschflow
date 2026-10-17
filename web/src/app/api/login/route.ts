@@ -15,23 +15,18 @@ import {
   recordThrottleSuccess,
 } from "@/lib/auth/throttle";
 
+import { isIP } from "node:net";
+
 /**
- * Strict IPv4 / IPv6 syntax validator.
- * Ensures caller key is a syntactically valid IP address and prevents
- * untrusted client-controlled tokens from arbitrarily picking rate-limit identities.
+ * Standards-compliant IPv4 / IPv6 syntax validator using Node.js libuv parser (node:net.isIP).
+ * Returns true if and only if the input is a valid IPv4 or IPv6 address.
+ * Rejects malformed addresses, trailing characters, octets > 255, and injection tokens.
  */
 export function isValidIp(ip: string | null | undefined): boolean {
   if (!ip || typeof ip !== "string") return false;
   const trimmed = ip.trim();
-  if (trimmed.length < 3 || trimmed.length > 45) return false;
-
-  // IPv4: 4 octets 0-255 separated by dots
-  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$/;
-  if (ipv4Regex.test(trimmed)) return true;
-
-  // IPv6: standard and compressed notation
-  const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?$/;
-  return ipv6Regex.test(trimmed);
+  if (trimmed.length < 2 || trimmed.length > 45) return false;
+  return isIP(trimmed) !== 0;
 }
 
 export function extractCallerKey(
@@ -55,18 +50,27 @@ export function extractCallerKey(
     return "unknown";
   }
 
-  // On Vercel, x-real-ip is overwritten by the edge proxy to the connecting socket IP,
-  // preventing client-prepended entries.
+  // 1. On Vercel, x-real-ip is set by the edge to the connecting socket IP.
+  // When present and valid, it is authoritative over forwarded chains.
   const realIp = headers.get("x-real-ip")?.trim();
   if (realIp && isValidIp(realIp)) {
     return realIp;
   }
 
-  // Fallback to first hop of x-forwarded-for if valid IP
+  // 2. Fallback to x-forwarded-for:
+  // In reverse proxies, incoming client-supplied headers are prepended and the proxy appends
+  // the true connecting IP to the end of the chain. To prevent client-prepended spoofing,
+  // take the rightmost (last) valid hop appended by the edge proxy.
   const forwarded = headers.get("x-forwarded-for");
-  const firstHop = forwarded?.split(",")[0]?.trim();
-  if (firstHop && isValidIp(firstHop)) {
-    return firstHop;
+  if (forwarded) {
+    const hops = forwarded
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
+    const lastHop = hops[hops.length - 1];
+    if (lastHop && isValidIp(lastHop)) {
+      return lastHop;
+    }
   }
 
   return "unknown";

@@ -106,11 +106,17 @@ class BackupManager @Inject constructor(
                 }
             })
 
+            val archivedVocabId = vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id
             put("reviewEvents", JSONArray().apply {
                 reviewEvents.forEach { item ->
                     put(JSONObject().apply {
                         put("id", item.id)
-                        put("vocabularyId", item.vocabularyId)
+                        val exportedVocabId = if (archivedVocabId != null && item.vocabularyId == archivedVocabId) {
+                            JSONObject.NULL
+                        } else {
+                            item.vocabularyId
+                        }
+                        put("vocabularyId", exportedVocabId)
                         put("rating", item.rating)
                         put("scheduledDays", item.scheduledDays)
                         put("actualDays", item.actualDays)
@@ -407,7 +413,7 @@ class BackupManager @Inject constructor(
             val reviewArray = backup.getJSONArray("reviewEvents")
             for (i in 0 until reviewArray.length()) {
                 val row = reviewArray.getJSONObject(i)
-                val originalVocabId = row.optInt("vocabularyId", 0)
+                val originalVocabId = if (row.isNull("vocabularyId")) 0 else row.optInt("vocabularyId", 0)
                 var targetVocabId: Int? = if (originalVocabId > 0) backupIdToPersistedId[originalVocabId] else null
                 if (targetVocabId != null && vocabularyDao.findById(targetVocabId) == null) {
                     targetVocabId = null
@@ -447,13 +453,12 @@ class BackupManager @Inject constructor(
     }
 
     private suspend fun getOrCreateArchivedVocabularyId(): Int {
-        val archivedKey = "__archived_deleted__"
-        val existing = vocabularyDao.findByKey(archivedKey)
+        val existing = vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)
         if (existing != null) return existing.id
         val archived = VocabularyEntity(
             id = 0,
             germanText = "[Gelöscht]",
-            germanTextKey = archivedKey,
+            germanTextKey = ARCHIVED_VOCABULARY_KEY,
             englishTranslation = "[Archived / Deleted Word]",
             timestamp = 0L,
             nextReview = Long.MAX_VALUE, // never appears in due review decks
@@ -463,7 +468,7 @@ class BackupManager @Inject constructor(
             lastModifiedAt = 0L
         )
         vocabularyDao.insertVocabulary(archived)
-        return vocabularyDao.findByKey(archivedKey)?.id ?: 0
+        return vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id ?: 0
     }
 
     companion object {
