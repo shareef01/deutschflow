@@ -34,7 +34,7 @@ export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 export const SUPPORTED_GROQ_MODELS = [
   "openai/gpt-oss-120b",
   "llama-3.3-70b-versatile",
-  "mixtral-8x7b-32768",
+  "llama-3.1-8b-instant",
 ] as const;
 
 export function getActiveGroqModel(): string {
@@ -521,8 +521,22 @@ export function redactSensitiveKey(text: string): string {
 export function detailFrom(body: string | null): string | null {
   if (!body) return null;
   try {
-    const message = JSON.parse(body)?.error?.message;
-    return typeof message === "string" && message.trim() ? redactSensitiveKey(message) : null;
+    const parsed = JSON.parse(body);
+    const errObj = parsed?.error;
+    const message = errObj?.message;
+    const code = errObj?.code;
+    if (typeof message === "string" && message.trim()) {
+      const redacted = redactSensitiveKey(message);
+      if (
+        code === "model_decommissioned" ||
+        code === "model_not_found" ||
+        /decommissioned|model.+not exist|do not have access to it/i.test(message)
+      ) {
+        return `The configured AI model is unavailable or retired. Please update GROQ_MODEL in your settings. (${redacted})`;
+      }
+      return redacted;
+    }
+    return null;
   } catch {
     return null;
   }

@@ -723,9 +723,22 @@ class GroqHelper @Inject constructor(
 
         /** The provider's own error sentence, when the body carries one. */
         internal fun detailFrom(body: String?): String? = body
-            ?.let { runCatching { JSONObject(it).optJSONObject("error")?.optString("message") } }
+            ?.let { runCatching {
+                val err = JSONObject(it).optJSONObject("error")
+                val msg = err?.optString("message")?.trim()
+                val code = err?.optString("code")?.trim()
+                if (!msg.isNullOrBlank()) {
+                    if (code == "model_decommissioned" || code == "model_not_found" ||
+                        msg.contains("decommissioned", ignoreCase = true) ||
+                        msg.contains("does not exist or you do not have access to it", ignoreCase = true)
+                    ) {
+                        "The configured AI model is unavailable or retired. Please update MODEL_NAME. ($msg)"
+                    } else {
+                        msg
+                    }
+                } else null
+            } }
             ?.getOrNull()
-            ?.takeIf { it.isNotBlank() }
 
         /**
          * The model's answer, as JSON first and prefixed lines second.

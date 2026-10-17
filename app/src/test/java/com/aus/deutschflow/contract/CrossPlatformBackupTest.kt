@@ -3,8 +3,10 @@ package com.aus.deutschflow.contract
 import com.aus.deutschflow.data.local.backup.BackupCrypto
 import com.aus.deutschflow.data.local.backup.BackupException
 import com.aus.deutschflow.data.local.backup.BackupManager
+import com.aus.deutschflow.data.local.entities.germanKey
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -112,7 +114,18 @@ class CrossPlatformBackupTest {
         val strasse = vocab.getJSONObject(0)
         assertEquals("die Straße", strasse.getString("germanText"))
         assertEquals("Straßen", strasse.getString("plural"))
-        assertEquals("die strasse", strasse.getString("germanTextKey"))
+        assertEquals("die straße", strasse.getString("germanTextKey"))
+        assertEquals(germanKey("die Straße"), strasse.getString("germanTextKey"))
+
+        val gross = vocab.getJSONObject(1)
+        assertEquals("groß", gross.getString("germanText"))
+        assertEquals("groß", gross.getString("germanTextKey"))
+        assertEquals(germanKey("groß"), gross.getString("germanTextKey"))
+
+        val suess = vocab.getJSONObject(2)
+        assertEquals("süß", suess.getString("germanText"))
+        assertEquals("sueß", suess.getString("germanTextKey"))
+        assertEquals(germanKey("süß"), suess.getString("germanTextKey"))
 
         val events = androidBackup.getJSONArray("reviewEvents")
         assertEquals(3, events.length())
@@ -121,6 +134,28 @@ class CrossPlatformBackupTest {
         val stats = androidBackup.getJSONArray("userStats").getJSONObject(0)
         assertEquals(350, stats.getInt("xp"))
         assertEquals(8, stats.getInt("streak"))
+    }
+
+    @Test
+    fun `canonical German key preserves distinctions between linguistic pairs like Maße and Masse`() {
+        assertNotEquals("Maße and Masse must never share identical canonical identity keys", germanKey("Maße"), germanKey("Masse"))
+        assertNotEquals("Buße and Busse must never share identical canonical identity keys", germanKey("Buße"), germanKey("Busse"))
+        assertNotEquals("Straße and Strasse must never share identical canonical identity keys", germanKey("Straße"), germanKey("Strasse"))
+        assertEquals("maße", germanKey("Maße"))
+        assertEquals("masse", germanKey("Masse"))
+    }
+
+    @Test
+    fun `canonical German key handles composed and decomposed Unicode identically`() {
+        val composed = "Übung"
+        val decomposed = "U\u0308bung"
+        assertEquals(germanKey(composed), germanKey(decomposed))
+        assertEquals("uebung", germanKey(composed))
+
+        val composedA = "Äpfel"
+        val decomposedA = "A\u0308pfel"
+        assertEquals(germanKey(composedA), germanKey(decomposedA))
+        assertEquals("aepfel", germanKey(composedA))
     }
 
     @Test

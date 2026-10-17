@@ -7,6 +7,9 @@ import {
   redactSensitiveKey,
   translateAndExtract,
   WORD_SYSTEM_PROMPT,
+  DEFAULT_GROQ_MODEL,
+  SUPPORTED_GROQ_MODELS,
+  getActiveGroqModel,
 } from "@/lib/ai/groq";
 
 describe("contentOf — the OpenAI chat response shape", () => {
@@ -39,6 +42,60 @@ describe("detailFrom — the provider's own error sentence", () => {
     expect(detailFrom(null)).toBeNull();
     expect(detailFrom("")).toBeNull();
     expect(detailFrom("not json")).toBeNull();
+  });
+
+  it("formats actionable guidance when model is decommissioned or not found", () => {
+    const decommissioned = JSON.stringify({
+      error: {
+        message: "The model `mixtral-8x7b-32768` has been decommissioned. Please choose a different model.",
+        code: "model_decommissioned",
+      },
+    });
+    const result1 = detailFrom(decommissioned);
+    expect(result1).toContain("The configured AI model is unavailable or retired");
+    expect(result1).toContain("Please update GROQ_MODEL");
+    expect(result1).toContain("mixtral-8x7b-32768");
+
+    const notFound = JSON.stringify({
+      error: {
+        message: "The model `nonexistent-model` does not exist or you do not have access to it.",
+        code: "model_not_found",
+      },
+    });
+    const result2 = detailFrom(notFound);
+    expect(result2).toContain("The configured AI model is unavailable or retired");
+    expect(result2).toContain("Please update GROQ_MODEL");
+  });
+});
+
+describe("getActiveGroqModel — model selection and fallback", () => {
+  const origEnv = process.env.GROQ_MODEL;
+  afterEach(() => {
+    if (origEnv !== undefined) {
+      process.env.GROQ_MODEL = origEnv;
+    } else {
+      delete process.env.GROQ_MODEL;
+    }
+  });
+
+  it("uses DEFAULT_GROQ_MODEL when GROQ_MODEL is unset or blank", () => {
+    delete process.env.GROQ_MODEL;
+    expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
+    process.env.GROQ_MODEL = "   ";
+    expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
+  });
+
+  it("rejects retired model mixtral-8x7b-32768 and falls back to default", () => {
+    process.env.GROQ_MODEL = "mixtral-8x7b-32768";
+    expect(SUPPORTED_GROQ_MODELS).not.toContain("mixtral-8x7b-32768");
+    expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
+  });
+
+  it("accepts supported models from SUPPORTED_GROQ_MODELS", () => {
+    for (const model of SUPPORTED_GROQ_MODELS) {
+      process.env.GROQ_MODEL = model;
+      expect(getActiveGroqModel()).toBe(model);
+    }
   });
 });
 

@@ -246,7 +246,7 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     }
   }
 
-  private validateMultiExecResponse(data: unknown, expectedCount = 3): { result?: unknown; error?: string }[] {
+  public validateMultiExecResponse(data: unknown, expectedCount = 3): { result?: unknown; error?: string }[] {
     if (!Array.isArray(data)) {
       if (data && typeof data === "object" && "error" in data) {
         throw new Error(`Upstash error: ${(data as { error: string }).error}`);
@@ -545,18 +545,35 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
     const nextAllowedKey = `${k}:nextAllowed`;
+
+    const luaScript = `
+      redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[4])
+      redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[4])
+      redis.call('SET', KEYS[3], ARGV[3], 'EX', ARGV[4])
+      return 1
+    `.trim();
+
     try {
-      const res = await this.fetchWithTimeout("/multi-exec", {
+      const res = await this.fetchWithTimeout("/", {
         method: "POST",
         body: JSON.stringify([
-          ["SET", countKey, String(entry.count), "EX", ttlSeconds],
-          ["SET", lastKey, String(entry.last), "EX", ttlSeconds],
-          ["SET", nextAllowedKey, String(entry.nextAllowed), "EX", ttlSeconds],
+          "EVAL",
+          luaScript,
+          3,
+          countKey,
+          lastKey,
+          nextAllowedKey,
+          String(entry.count),
+          String(entry.last),
+          String(entry.nextAllowed),
+          String(ttlSeconds),
         ]),
       });
       if (!res.ok) throw new Error(`Upstash set returned HTTP ${res.status}`);
-      const rawData = await res.json();
-      this.validateMultiExecResponse(rawData, 3);
+      const data = await res.json();
+      if (data && typeof data === "object" && "error" in data) {
+        throw new Error(`Upstash command error: ${(data as { error: string }).error}`);
+      }
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);
@@ -570,18 +587,29 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const countKey = `${k}:count`;
     const lastKey = `${k}:last`;
     const nextAllowedKey = `${k}:nextAllowed`;
+
+    const luaScript = `
+      redis.call('DEL', KEYS[1], KEYS[2], KEYS[3])
+      return 1
+    `.trim();
+
     try {
-      const res = await this.fetchWithTimeout("/multi-exec", {
+      const res = await this.fetchWithTimeout("/", {
         method: "POST",
         body: JSON.stringify([
-          ["DEL", countKey],
-          ["DEL", lastKey],
-          ["DEL", nextAllowedKey],
+          "EVAL",
+          luaScript,
+          3,
+          countKey,
+          lastKey,
+          nextAllowedKey,
         ]),
       });
       if (!res.ok) throw new Error(`Upstash delete returned HTTP ${res.status}`);
-      const rawData = await res.json();
-      this.validateMultiExecResponse(rawData, 3);
+      const data = await res.json();
+      if (data && typeof data === "object" && "error" in data) {
+        throw new Error(`Upstash command error: ${(data as { error: string }).error}`);
+      }
     } catch (err) {
       if (this.failurePolicy === "fail-closed") {
         throw new ThrottleStoreError("Distributed rate limiter store unavailable (fail-closed policy in effect)", err);

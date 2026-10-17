@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { DeutschFlowDB } from "@/lib/db/schema";
+import { DeutschFlowDB, foldGermanKey, germanMatchKey } from "@/lib/db/schema";
 import {
   importLibrary,
+  exportLibrary,
+  encryptBackup,
   decryptBackup,
   ImportError,
 } from "@/lib/db/backup";
@@ -221,5 +223,109 @@ describe("Cross-Platform Encrypted & Plaintext Backup Compatibility", () => {
 
     const nullableLegacy = events.find((e) => e.remoteId === "e3333333-3333-4333-8333-333333333333")!;
     expect(nullableLegacy.vocabularyId).toBeNull();
+  });
+
+  it("independently validates canonical German fold identity and distinctions (Maße vs Masse)", () => {
+    // Sharp S must NOT fold to ss for identity to prevent destructive collision
+    expect(foldGermanKey("Maße")).toBe("maße");
+    expect(foldGermanKey("Masse")).toBe("masse");
+    expect(foldGermanKey("Maße")).not.toBe(foldGermanKey("Masse"));
+
+    expect(foldGermanKey("Buße")).toBe("buße");
+    expect(foldGermanKey("Busse")).toBe("busse");
+    expect(foldGermanKey("Buße")).not.toBe(foldGermanKey("Busse"));
+
+    expect(foldGermanKey("Straße")).toBe("straße");
+    expect(foldGermanKey("Strasse")).toBe("strasse");
+    expect(foldGermanKey("Straße")).not.toBe(foldGermanKey("Strasse"));
+
+    // Loose match key folds ß to ss for search/grading
+    expect(germanMatchKey("Straße")).toBe(germanMatchKey("Strasse"));
+    expect(germanMatchKey("Maße")).toBe(germanMatchKey("Masse"));
+
+    // Verify all fixture vocabulary items match foldGermanKey canonical rule
+    const androidVocab = (vectors.androidPlaintext.vocabulary as Array<{ germanText: string; germanTextKey: string }>);
+    for (const v of androidVocab) {
+      expect(foldGermanKey(v.germanText)).toBe(v.germanTextKey);
+    }
+
+    const webVocab = (vectors.webPlaintext.vocabulary as Array<{ germanText: string; germanTextKey: string }>);
+    for (const v of webVocab) {
+      expect(foldGermanKey(v.germanText)).toBe(v.germanTextKey);
+    }
+  });
+
+  it("normalizes composed (NFC) and decomposed (NFD) German Unicode characters identically", () => {
+    // NFD: base character + combining diaeresis \u0308
+    const nfdUeber = "u\u0308ber";
+    const nfcUeber = "über";
+    expect(foldGermanKey(nfdUeber)).toBe("ueber");
+    expect(foldGermanKey(nfcUeber)).toBe("ueber");
+    expect(foldGermanKey(nfdUeber)).toBe(foldGermanKey(nfcUeber));
+
+    const nfdAerger = "A\u0308rger";
+    const nfcAerger = "Ärger";
+    expect(foldGermanKey(nfdAerger)).toBe("aerger");
+    expect(foldGermanKey(nfcAerger)).toBe("aerger");
+    expect(foldGermanKey(nfdAerger)).toBe(foldGermanKey(nfcAerger));
+
+    const nfdOel = "O\u0308l";
+    const nfcOel = "Öl";
+    expect(foldGermanKey(nfdOel)).toBe("oel");
+    expect(foldGermanKey(nfcOel)).toBe("oel");
+    expect(foldGermanKey(nfdOel)).toBe(foldGermanKey(nfcOel));
+
+    // Case normalization
+    expect(foldGermanKey("groß")).toBe("groß");
+    expect(foldGermanKey("Groß")).toBe("groß");
+    expect(foldGermanKey("GROSS")).toBe("gross");
+  });
+
+  it("verifies review event references survive import, merge, export, and restore round-trips", async () => {
+    // 1. Initial import of Android backup into db1
+    const result1 = await importLibrary(db, vectors.androidPlaintext);
+    expect(result1.vocabularyAdded).toBe(3);
+    expect(result1.reviewEventsAdded).toBe(3);
+
+    // 2. Export db1 to full LibraryBackup format
+    const exportedBackup = await exportLibrary(db);
+    expect(exportedBackup.vocabulary).toHaveLength(3);
+    expect(exportedBackup.reviewEvents).toHaveLength(3);
+
+    // 3. Restore exported backup into fresh db2
+    const db2 = new DeutschFlowDB(`cross-platform-backup-${counter++}`);
+    const result2 = await importLibrary(db2, exportedBackup);
+    expect(result2.vocabularyAdded).toBe(3);
+    expect(result2.reviewEventsAdded).toBe(3);
+
+    const db2Vocab = await db2.vocabulary.toArray();
+    const db2Events = await db2.reviewEvents.toArray();
+    expect(db2Vocab).toHaveLength(3);
+    expect(db2Events).toHaveLength(3);
+
+    const strasse = db2Vocab.find((v) => v.germanText === "die Straße")!;
+    expect(strasse).toBeDefined();
+
+    const strasseEvent = db2Events.find((e) => e.remoteId === "a5555555-5555-4555-8555-555555555555")!;
+    expect(strasseEvent).toBeDefined();
+    expect(strasseEvent.vocabularyId).toBe(strasse.id);
+  });
+
+  it("preserves untrimmed passphrases with leading or trailing whitespace without modification", async () => {
+    const rawPassphrase = "  passphrase with leading and trailing spaces  ";
+    const wrongPassphrase = "passphrase with leading and trailing spaces"; // trimmed
+
+    const plainBackup = await exportLibrary(db);
+    const plainJson = JSON.stringify(plainBackup);
+
+    const encryptedJson = await encryptBackup(plainJson, rawPassphrase);
+    const envelope = JSON.parse(encryptedJson);
+
+    // Decrypting with trimmed passphrase must be rejected
+    await expect(decryptBackup(envelope, wrongPassphrase)).rejects.toThrow(ImportError);
+
+    // Decrypting with exact untrimmed passphrase must succeed
+    const decryptedJson = await decryptBackup(envelope, rawPassphrase);
+    expect(JSON.parse(decryptedJson)).toEqual(plainBackup);
   });
 });

@@ -87,6 +87,21 @@ class GroqHelperTest {
     }
 
     @Test
+    fun `formats actionable guidance when model is decommissioned or not found`() {
+        val decommissionedBody = """{"error":{"message":"The model `mixtral-8x7b-32768` has been decommissioned.","code":"model_decommissioned"}}"""
+        val notFoundBody = """{"error":{"message":"The model does not exist or you do not have access to it","code":"model_not_found"}}"""
+
+        val resultDecom = GroqHelper.detailFrom(decommissionedBody)
+        assertTrue(resultDecom?.contains("The configured AI model is unavailable or retired") == true)
+        assertTrue(resultDecom?.contains("Please update MODEL_NAME") == true)
+        assertTrue(resultDecom?.contains("mixtral-8x7b-32768") == true)
+
+        val resultNotFound = GroqHelper.detailFrom(notFoundBody)
+        assertTrue(resultNotFound?.contains("The configured AI model is unavailable or retired") == true)
+        assertTrue(resultNotFound?.contains("Please update MODEL_NAME") == true)
+    }
+
+    @Test
     fun `yields null when the body carries no explanation`() {
         // The caller falls back to a translated sentence for the status code.
         assertNull(GroqHelper.detailFrom(null))

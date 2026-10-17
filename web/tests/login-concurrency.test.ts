@@ -46,6 +46,26 @@ function createUpstashSimulator() {
 
     if (Array.isArray(body) && body[0] === "EVAL") {
       calls.push("EVAL");
+      const script = String(body[1]);
+      if (script.startsWith("redis.call('DEL'")) {
+        const countKey = String(body[3]);
+        const lastKey = String(body[4]);
+        const nextAllowedKey = String(body[5]);
+        redisState.delete(countKey);
+        redisState.delete(lastKey);
+        redisState.delete(nextAllowedKey);
+        return new Response(JSON.stringify({ result: 1 }), { status: 200 });
+      }
+      if (script.startsWith("redis.call('SET'")) {
+        const countKey = String(body[3]);
+        const lastKey = String(body[4]);
+        const nextAllowedKey = String(body[5]);
+        redisState.set(countKey, String(body[6]));
+        redisState.set(lastKey, String(body[7]));
+        redisState.set(nextAllowedKey, String(body[8]));
+        return new Response(JSON.stringify({ result: 1 }), { status: 200 });
+      }
+
       const countKey = String(body[3]);
       const lastKey = String(body[4]);
       const nextAllowedKey = String(body[5]);
@@ -339,7 +359,7 @@ describe("PHASE 2 & 3: Critical Login Concurrency, Atomic Admission & Redis Veri
     try {
       global.fetch = async (_input, init): Promise<Response> => {
         const bodyStr = typeof init?.body === "string" ? init.body : "";
-        if (bodyStr.includes("EVAL")) {
+        if (bodyStr.includes("freeAttempts")) {
           evalCount++;
           // First attempt EVAL succeeds
           return new Response(JSON.stringify({ result: [1, 0, 1, 0] }), { status: 200 });

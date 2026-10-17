@@ -10,6 +10,7 @@ import {
   recordThrottleSuccess,
   resetThrottle,
   setCustomThrottleBackend,
+  admitLoginAttempt,
   type ThrottleBackend,
   type Attempts,
   UpstashRedisThrottleBackend,
@@ -442,6 +443,155 @@ describe("distributed rate limiting & client spoofing defense", () => {
     expect(await getThrottleDelay(ip, now)).toBe(2000);
     // At now + 2001ms, lockout has expired
     expect(await getThrottleDelay(ip, now + 2001)).toBe(0);
+  });
+
+  describe("deterministic failure injection & Upstash response validation", () => {
+    it("validates /multi-exec responses strictly and detects partial command errors", () => {
+      const backend = new UpstashRedisThrottleBackend(
+        "https://mock-upstash.local",
+        "mock-token",
+        new InMemoryThrottleBackend()
+      );
+
+      // 1. Partial command failure: Command 1 OK, Command 2 returns error
+      expect(() =>
+        backend.validateMultiExecResponse(
+          [{ result: "OK" }, { error: "OOM command not allowed" }, { result: "OK" }],
+          3
+        )
+      ).toThrow("Upstash command error at index 1: OOM command not allowed");
+
+      // 2. Truncated response: expected 3 items, got 2
+      expect(() =>
+        backend.validateMultiExecResponse([{ result: "OK" }, { result: "OK" }], 3)
+      ).toThrow("Malformed Upstash response: expected 3 results, got 2");
+
+      // 3. Non-array response payload
+      expect(() =>
+        backend.validateMultiExecResponse({ notAnArray: true }, 3)
+      ).toThrow("Malformed Upstash response: expected array");
+
+      // 4. Top-level error object from Upstash
+      expect(() =>
+        backend.validateMultiExecResponse({ error: "ERR syntax error" }, 3)
+      ).toThrow("Upstash error: ERR syntax error");
+
+      // 5. Malformed item inside results array
+      expect(() =>
+        backend.validateMultiExecResponse([{ result: 1 }, null, { result: 1 }], 3)
+      ).toThrow("Malformed Upstash command result at index 1");
+
+      // 6. Valid complete response succeeds
+      const valid = backend.validateMultiExecResponse(
+        [{ result: "1" }, { result: "1000" }, { result: "2000" }],
+        3
+      );
+      expect(valid).toHaveLength(3);
+      expect(valid[0].result).toBe("1");
+    });
+
+    it("verifies atomic Lua set() and delete() handle errors according to policy", async () => {
+      const originalFetch = global.fetch;
+
+      try {
+        global.fetch = async (): Promise<Response> => {
+          return new Response(JSON.stringify({ error: "ERR Lua execution failed" }), { status: 200 });
+        };
+
+        // Fail-closed policy
+        const closedBackend = new UpstashRedisThrottleBackend(
+          "https://mock-upstash.local",
+          "mock-token",
+          new InMemoryThrottleBackend(),
+          1000,
+          "fail-closed"
+        );
+
+        await expect(
+          closedBackend.set("test-key", { count: 1, last: 1000, nextAllowed: 0 }, 60)
+        ).rejects.toThrow("Distributed rate limiter store unavailable (fail-closed policy in effect)");
+
+        await expect(closedBackend.delete("test-key")).rejects.toThrow(
+          "Distributed rate limiter store unavailable (fail-closed policy in effect)"
+        );
+
+        // Fail-secure-fallback policy
+        const fallbackBackend = new UpstashRedisThrottleBackend(
+          "https://mock-upstash.local",
+          "mock-token",
+          new InMemoryThrottleBackend(),
+          1000,
+          "fail-secure-fallback"
+        );
+
+        await expect(
+          fallbackBackend.set("test-key-fallback", { count: 2, last: 2000, nextAllowed: 0 }, 60)
+        ).resolves.not.toThrow();
+
+        await expect(fallbackBackend.delete("test-key-fallback")).resolves.not.toThrow();
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("ensures admit() never silently grants admission on malformed or non-numeric Lua results", async () => {
+      const originalFetch = global.fetch;
+
+      try {
+        // Fail-closed backend
+        const closedBackend = new UpstashRedisThrottleBackend(
+          "https://mock-upstash.local",
+          "mock-token",
+          new InMemoryThrottleBackend(),
+          1000,
+          "fail-closed"
+        );
+
+        // Case A: Upstash returns non-array result string
+        global.fetch = async (): Promise<Response> => {
+          return new Response(JSON.stringify({ result: "OK" }), { status: 200 });
+        };
+        await expect(closedBackend.admit("test-admit", 1000)).rejects.toThrow(
+          "Distributed rate limiter store unavailable (fail-closed policy in effect)"
+        );
+
+        // Case B: Upstash returns NaN values in result array
+        global.fetch = async (): Promise<Response> => {
+          return new Response(JSON.stringify({ result: ["not-a-number", "invalid"] }), { status: 200 });
+        };
+        await expect(closedBackend.admit("test-admit", 1000)).rejects.toThrow(
+          "Distributed rate limiter store unavailable (fail-closed policy in effect)"
+        );
+
+        // Case C: Legitimate denial result [0, 5000, 3] returns allowed: false
+        global.fetch = async (): Promise<Response> => {
+          return new Response(JSON.stringify({ result: [0, 5000, 3] }), { status: 200 });
+        };
+        const deniedResult = await closedBackend.admit("test-admit", 1000);
+        expect(deniedResult.allowed).toBe(false);
+        expect(deniedResult.retryAfterMs).toBe(5000);
+        expect(deniedResult.count).toBe(3);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it("handles race between successful authentication clearance and concurrent attempt from same IP", async () => {
+      const ip = "198.51.100.77";
+      const now = 80_000_000;
+
+      // Simulate concurrent admission request and success deletion
+      const r1Promise = admitLoginAttempt(ip, now);
+      const r2Promise = recordThrottleSuccess(ip);
+
+      const [r1] = await Promise.all([r1Promise, r2Promise]);
+      expect(r1.allowed).toBe(true);
+
+      // Subsequent attempt after success is treated as fresh
+      const r3 = await admitLoginAttempt(ip, now + 10);
+      expect(r3.allowed).toBe(true);
+      expect(r3.count).toBe(1);
+    });
   });
 
   describe("real Redis integration tests (conditional on credentials)", () => {
