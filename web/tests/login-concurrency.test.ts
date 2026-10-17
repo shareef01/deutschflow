@@ -56,7 +56,7 @@ function createUpstashSimulator() {
         redisState.delete(nextAllowedKey);
         return new Response(JSON.stringify({ result: 1 }), { status: 200 });
       }
-      if (script.startsWith("redis.call('SET'")) {
+      if (script.includes("KEYS[1], ARGV[1]") || script.startsWith("redis.call('SET'")) {
         const countKey = String(body[3]);
         const lastKey = String(body[4]);
         const nextAllowedKey = String(body[5]);

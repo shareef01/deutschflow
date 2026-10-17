@@ -10,6 +10,7 @@ import {
   DEFAULT_GROQ_MODEL,
   SUPPORTED_GROQ_MODELS,
   getActiveGroqModel,
+  wasCutOff,
 } from "@/lib/ai/groq";
 
 describe("contentOf — the OpenAI chat response shape", () => {
@@ -91,7 +92,20 @@ describe("getActiveGroqModel — model selection and fallback", () => {
     expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
   });
 
-  it("accepts supported models from SUPPORTED_GROQ_MODELS", () => {
+  it("rejects deprecated Free-tier models llama-3.1-8b-instant and llama-3.3-70b-versatile", () => {
+    expect(SUPPORTED_GROQ_MODELS).not.toContain("llama-3.1-8b-instant");
+    expect(SUPPORTED_GROQ_MODELS).not.toContain("llama-3.3-70b-versatile");
+
+    process.env.GROQ_MODEL = "llama-3.1-8b-instant";
+    expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
+
+    process.env.GROQ_MODEL = "llama-3.3-70b-versatile";
+    expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
+  });
+
+  it("accepts supported production models from SUPPORTED_GROQ_MODELS", () => {
+    expect(SUPPORTED_GROQ_MODELS).toContain("openai/gpt-oss-120b");
+    expect(SUPPORTED_GROQ_MODELS).toContain("openai/gpt-oss-20b");
     for (const model of SUPPORTED_GROQ_MODELS) {
       process.env.GROQ_MODEL = model;
       expect(getActiveGroqModel()).toBe(model);
@@ -253,6 +267,39 @@ describe("parseWordDetails — the article the model returns", () => {
         JSON.stringify({ word: "Mädchen", article: given, meaning: "girl" })
       );
       expect(details?.article).toBe("none");
+    }
+  });
+});
+
+describe("wasCutOff — finish_reason length detection and error reporting", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("detects choices[0].finish_reason === 'length'", () => {
+    const truncated = JSON.stringify({
+      choices: [{ message: { role: "assistant", content: "{\"translation\":\"Ich bin" }, finish_reason: "length" }],
+    });
+    expect(wasCutOff(truncated)).toBe(true);
+
+    const normal = JSON.stringify({
+      choices: [{ message: { role: "assistant", content: "{\"translation\":\"Ich bin fertig\"}" }, finish_reason: "stop" }],
+    });
+    expect(wasCutOff(normal)).toBe(false);
+
+    expect(wasCutOff("")).toBe(false);
+    expect(wasCutOff("not json")).toBe(false);
+    expect(wasCutOff("{}")).toBe(false);
+  });
+
+  it("reports specific cut-off guidance when response was truncated by provider length limits", async () => {
+    const truncatedPayload = JSON.stringify({
+      choices: [{ message: { role: "assistant", content: "{\"translation\":\"truncated" }, finish_reason: "length" }],
+    });
+    vi.stubGlobal("fetch", async () => new Response(truncatedPayload, { status: 200 }));
+
+    const result = await translateAndExtract("Sehr langer Text...", "gsk_valid_key");
+    expect(result.kind).toBe("failure");
+    if (result.kind === "failure") {
+      expect(result.message).toContain("cut off before it finished");
     }
   });
 });

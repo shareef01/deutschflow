@@ -114,7 +114,7 @@ object BackupCrypto {
         // Reject oversized ciphertext before decoding to prevent DoS/OOM
         val maxBase64Length = MAX_BASE64_CIPHERTEXT_LENGTH
         if (ciphertextStr.length > maxBase64Length) {
-            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB plaintext).")
+            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (50 MB plaintext).")
         }
 
         val salt = try {
@@ -148,7 +148,7 @@ object BackupCrypto {
         }
 
         if (ciphertext.size > MAX_CIPHERTEXT_BYTES) {
-            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (10 MB plaintext).")
+            throw BackupException.CapacityExceeded("Ciphertext exceeds maximum supported size (50 MB plaintext).")
         }
 
         try {

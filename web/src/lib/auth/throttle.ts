@@ -317,10 +317,15 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
       local lastKey = KEYS[2]
       local now = tonumber(ARGV[1])
       local windowSeconds = tonumber(ARGV[2])
-      local windowMs = windowSeconds * 1000
       local freeAttempts = tonumber(ARGV[3])
       local baseDelayMs = tonumber(ARGV[4])
       local maxDelayMs = tonumber(ARGV[5])
+
+      if not now or not windowSeconds or not freeAttempts or not baseDelayMs or not maxDelayMs then
+        return redis.error_reply("ERR invalid arguments")
+      end
+
+      local windowMs = windowSeconds * 1000
 
       local last = tonumber(redis.call('GET', lastKey))
       local currentCount = tonumber(redis.call('GET', countKey))
@@ -416,10 +421,15 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
 
       local now = tonumber(ARGV[1])
       local windowSeconds = tonumber(ARGV[2])
-      local windowMs = windowSeconds * 1000
       local freeAttempts = tonumber(ARGV[3])
       local baseDelayMs = tonumber(ARGV[4])
       local maxDelayMs = tonumber(ARGV[5])
+
+      if not now or not windowSeconds or not freeAttempts or not baseDelayMs or not maxDelayMs then
+        return redis.error_reply("ERR invalid arguments")
+      end
+
+      local windowMs = windowSeconds * 1000
 
       local currentCount = tonumber(redis.call('GET', countKey)) or 0
       local last = tonumber(redis.call('GET', lastKey)) or 0
@@ -547,9 +557,13 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     const nextAllowedKey = `${k}:nextAllowed`;
 
     const luaScript = `
-      redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[4])
-      redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[4])
-      redis.call('SET', KEYS[3], ARGV[3], 'EX', ARGV[4])
+      local ttl = tonumber(ARGV[4])
+      if not ttl or ttl <= 0 then
+        return redis.error_reply("ERR invalid ttl")
+      end
+      redis.call('SET', KEYS[1], ARGV[1], 'EX', ttl)
+      redis.call('SET', KEYS[2], ARGV[2], 'EX', ttl)
+      redis.call('SET', KEYS[3], ARGV[3], 'EX', ttl)
       return 1
     `.trim();
 
