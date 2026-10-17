@@ -1,5 +1,13 @@
-import type { DeutschFlowDB, VocabularyEntry } from "./schema";
+import type {
+  DeutschFlowDB,
+  VocabularyEntry,
+  TranscriptEntry,
+  ActivityEntry,
+  RoleplayMessageEntry,
+  ReviewEventEntry,
+} from "./schema";
 import { foldGermanKey } from "./schema";
+import { withFurthestScheduleOf } from "./repository";
 
 /**
  * Export and import for the whole library.
@@ -21,6 +29,37 @@ import { foldGermanKey } from "./schema";
 
 /** Bumped only if the shape changes in a way an older import cannot read. */
 export const BACKUP_VERSION = 2;
+
+export const ENCRYPTED_BACKUP_FORMAT = "deutschflow-library-encrypted";
+export const ENCRYPTED_BACKUP_VERSION = 1;
+export const KDF_ALGORITHM = "PBKDF2WithHmacSHA256";
+export const ITERATIONS = 210_000;
+export const MIN_ITERATIONS = 50_000;
+export const MAX_ITERATIONS = 1_000_000;
+export const SALT_LENGTH_BYTES = 16;
+export const MIN_SALT_BYTES = 16;
+export const MAX_SALT_BYTES = 64;
+export const IV_LENGTH_BYTES = 12;
+export const TAG_LENGTH_BITS = 128;
+
+export const MAX_PLAINTEXT_BACKUP_BYTES = 50 * 1024 * 1024; // 50 MiB
+export const MAX_BACKUP_FILE_BYTES = MAX_PLAINTEXT_BACKUP_BYTES;
+export const MAX_CIPHERTEXT_BYTES = MAX_PLAINTEXT_BACKUP_BYTES + 16;
+export const MAX_BASE64_CIPHERTEXT_LENGTH = Math.floor((MAX_CIPHERTEXT_BYTES + 2) / 3) * 4;
+export const MAX_ENCRYPTED_BACKUP_FILE_BYTES = 70 * 1024 * 1024; // 70 MiB
+
+export const MAX_TEXT_FIELD_LENGTH = 200_000;
+export const MAX_SHORT_TEXT_FIELD_LENGTH = 10_000;
+
+export interface EncryptedBackupEnvelope {
+  format: "deutschflow-library-encrypted";
+  version: number;
+  kdf: "PBKDF2WithHmacSHA256";
+  iterations: number;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+}
 
 export interface LibraryBackup {
   format: "deutschflow-library";
@@ -63,10 +102,17 @@ export async function exportLibrary(db: DeutschFlowDB): Promise<LibraryBackup> {
   });
 }
 
+export async function exportEncryptedLibrary(db: DeutschFlowDB, passphrase: string): Promise<string> {
+  const backup = await exportLibrary(db);
+  const plainJson = JSON.stringify(backup, null, 2);
+  return encryptBackup(plainJson, passphrase);
+}
+
 export interface ImportResult {
   vocabularyAdded: number;
   vocabularyMerged: number;
   transcriptsAdded: number;
+  reviewEventsAdded?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,7 +141,6 @@ function num(value: unknown, fallback: number): number {
  * existing row keeps its own, because the schedule on this device reflects reviews
  * this device actually saw.
  */
-export const MAX_BACKUP_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // The schema has exactly one aggregate stats row (id = 1). Accepting extras would
 // make the selected row depend on input ordering while silently discarding data.
@@ -226,7 +271,14 @@ export function calculateStreakFromDates(dates: string[], today = new Date()): n
 /**
  * Why a restore failed, in a form the caller can translate.
  */
-export type ImportFailure = "invalid" | "newer" | "storage" | "capacity";
+export type ImportFailure =
+  | "invalid"
+  | "newer"
+  | "storage"
+  | "capacity"
+  | "wrong_passphrase"
+  | "passphrase_required"
+  | "corrupted";
 
 export class ImportError extends Error {
   constructor(readonly reason: ImportFailure, message: string) {
@@ -256,14 +308,21 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     throw new ImportError("invalid", "Malformed backup structure: collections must be arrays.");
   }
 
-  if (new TextEncoder().encode(JSON.stringify(backup)).byteLength > MAX_BACKUP_FILE_BYTES) {
-    throw new ImportError("capacity", "Backup exceeds the 10 MB size limit.");
+  const jsonStr = JSON.stringify(backup);
+  const byteLength = typeof Buffer !== "undefined"
+    ? Buffer.byteLength(jsonStr, "utf8")
+    : new TextEncoder().encode(jsonStr).byteLength;
+  if (byteLength > MAX_BACKUP_FILE_BYTES) {
+    throw new ImportError("capacity", "Backup exceeds maximum supported size limit (50 MB).");
   }
   if (backup.userStats.length > MAX_USER_STATS_ROWS) {
     throw new ImportError("invalid", `User stats count exceeds limit (${MAX_USER_STATS_ROWS}).`);
   }
 
   // Pre-validate all records before touching storage
+  const ids = new Set<number>();
+  const vocabKeys = new Set<string>();
+  const vocabRemoteIds = new Set<string>();
   for (const row of backup.vocabulary) {
     if (!isRecord(row)) {
       throw new ImportError("invalid", "Vocabulary entry must be an object.");
@@ -272,6 +331,25 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     const englishTranslation = str(row.englishTranslation).trim();
     if (!germanText || !englishTranslation) {
       throw new ImportError("invalid", "Vocabulary text and translation are required.");
+    }
+    const key = foldGermanKey(germanText);
+    if (vocabKeys.has(key)) {
+      throw new ImportError("invalid", `Duplicate canonical vocabulary key in backup: "${germanText}".`);
+    }
+    vocabKeys.add(key);
+
+    if (row.id !== undefined) {
+      if (!Number.isSafeInteger(row.id) || (row.id as number) <= 0 || ids.has(row.id as number)) {
+        throw new ImportError("invalid", "Invalid or duplicate vocabulary id.");
+      }
+      ids.add(row.id as number);
+    }
+    if (typeof row.remoteId === "string" && row.remoteId.trim()) {
+      const rId = row.remoteId.trim().toLowerCase();
+      if (vocabRemoteIds.has(rId)) {
+        throw new ImportError("invalid", `Duplicate vocabulary remoteId in backup: "${row.remoteId}".`);
+      }
+      vocabRemoteIds.add(rId);
     }
     validateStrings(row, ["germanText", "englishTranslation", "exampleSentence", "article", "plural",
       "conjugation", "synonyms", "antonyms"]);
@@ -306,6 +384,8 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     }
   }
 
+  const transcriptRemoteIds = new Set<string>();
+  const transcriptContents = new Set<string>();
   for (const row of backup.transcripts) {
     if (!isRecord(row)) {
       throw new ImportError("invalid", "Transcript entry must be an object.");
@@ -313,6 +393,20 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     const fullText = str(row.fullText);
     if (!fullText.trim()) {
       throw new ImportError("invalid", "Transcript text is required.");
+    }
+    const ts = num(row.timestamp, 0);
+    const contentKey = `${fullText.trim()}:${ts}`;
+    if (transcriptContents.has(contentKey)) {
+      throw new ImportError("invalid", "Duplicate transcript content in backup.");
+    }
+    transcriptContents.add(contentKey);
+
+    if (typeof row.remoteId === "string" && row.remoteId.trim()) {
+      const rId = row.remoteId.trim().toLowerCase();
+      if (transcriptRemoteIds.has(rId)) {
+        throw new ImportError("invalid", `Duplicate transcript remoteId in backup: "${row.remoteId}".`);
+      }
+      transcriptRemoteIds.add(rId);
     }
     validateStrings(row, ["fullText", "translation", "analysisJson"]);
     if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
@@ -362,21 +456,24 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
       throw new ImportError("invalid", `${collection} must be an array.`);
     }
   }
-  const ids = new Set<number>();
-  for (const row of backup.vocabulary) {
-    if (isRecord(row) && row.id !== undefined) {
-      if (!Number.isSafeInteger(row.id) || (row.id as number) <= 0 || ids.has(row.id as number)) {
-        throw new ImportError("invalid", "Invalid or duplicate vocabulary id.");
-      }
-      ids.add(row.id as number);
-    }
-  }
+
+  const reviewRemoteIds = new Set<string>();
   for (const row of (backup.reviewEvents ?? []) as unknown[]) {
     if (!isRecord(row) || !["AGAIN", "HARD", "GOOD", "EASY"].includes(str(row.rating)) ||
       typeof row.isExtraPractice !== "boolean" || !UUID_REGEX.test(str(row.remoteId))) {
       throw new ImportError("invalid", "Invalid review event.");
     }
-    for (const field of ["vocabularyId", "scheduledDays", "actualDays", "reviewedAtTimestamp"]) {
+    const rId = str(row.remoteId).toLowerCase();
+    if (reviewRemoteIds.has(rId)) {
+      throw new ImportError("invalid", `Duplicate review event remoteId in backup: "${row.remoteId}".`);
+    }
+    reviewRemoteIds.add(rId);
+    if (row.vocabularyId !== null && row.vocabularyId !== undefined) {
+      if (!Number.isSafeInteger(row.vocabularyId) || (row.vocabularyId as number) < 0) {
+        throw new ImportError("invalid", "Invalid review vocabularyId.");
+      }
+    }
+    for (const field of ["scheduledDays", "actualDays", "reviewedAtTimestamp"]) {
       if (!Number.isSafeInteger(row[field]) || (row[field] as number) < 0) {
         throw new ImportError("invalid", `Invalid review ${field}.`);
       }
@@ -410,19 +507,53 @@ function validateStrings(row: Record<string, unknown>, fields: string[]): void {
   }
 }
 
-export async function importLibrary(db: DeutschFlowDB, backup: unknown): Promise<ImportResult> {
-  validateBackup(backup);
+export async function importLibrary(
+  db: DeutschFlowDB,
+  backup: unknown,
+  passphrase?: string
+): Promise<ImportResult> {
+  let parsedBackup: unknown = backup;
+
+  if (typeof backup === "string") {
+    const trimmed = backup.trim();
+    const strByteLength = typeof Buffer !== "undefined"
+      ? Buffer.byteLength(trimmed, "utf8")
+      : new TextEncoder().encode(trimmed).byteLength;
+    if (strByteLength > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
+      throw new ImportError("capacity", "Backup file exceeds maximum allowed size.");
+    }
+    if (!trimmed.startsWith("{")) {
+      throw new ImportError("invalid", "That file is not a DeutschFlow library export.");
+    }
+    try {
+      parsedBackup = JSON.parse(trimmed);
+    } catch {
+      throw new ImportError("invalid", "Malformed JSON payload.");
+    }
+  }
+
+  if (isEncryptedBackup(parsedBackup)) {
+    const decryptedPlain = await decryptBackup(parsedBackup, passphrase);
+    try {
+      parsedBackup = JSON.parse(decryptedPlain);
+    } catch {
+      throw new ImportError("corrupted", "Decrypted backup is not valid JSON.");
+    }
+  }
+
+  validateBackup(parsedBackup);
   const result: ImportResult = {
     vocabularyAdded: 0,
     vocabularyMerged: 0,
     transcriptsAdded: 0,
+    reviewEventsAdded: 0,
   };
 
   try {
     await db.transaction(
       "rw",
       [db.vocabulary, db.transcripts, db.userStats, db.activityLog, db.reviewEvents, db.roleplayMessages],
-      () => applyImport(db, backup, result)
+      () => applyImport(db, parsedBackup as LibraryBackup, result)
     );
   } catch (err) {
     if (err instanceof ImportError) throw err;
@@ -440,23 +571,75 @@ async function applyImport(
 ): Promise<void> {
   const vocabulary = Array.isArray(backup.vocabulary) ? backup.vocabulary : [];
   const vocabularyIds = new Map<number, number>();
+
+  // Pre-index latest reviewedAtTimestamp per vocabulary ID from incoming review events
+  const incomingMaxReviewByVocabId = new Map<number, number>();
+  for (const event of backup.reviewEvents ?? []) {
+    if (isRecord(event) && typeof event.vocabularyId === "number" && typeof event.reviewedAtTimestamp === "number") {
+      const cur = incomingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
+      if (event.reviewedAtTimestamp > cur) {
+        incomingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
+      }
+    }
+  }
+
+  // Pre-index latest reviewedAtTimestamp per vocabulary ID from existing review events
+  const existingReviewEvents = await db.reviewEvents.toArray();
+  const existingMaxReviewByVocabId = new Map<number, number>();
+  for (const event of existingReviewEvents) {
+    if (typeof event.vocabularyId === "number" && typeof event.reviewedAtTimestamp === "number") {
+      const cur = existingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
+      if (event.reviewedAtTimestamp > cur) {
+        existingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
+      }
+    }
+  }
+
+  // Pre-load all existing vocabulary into an in-memory index for fast O(1) matching
+  const existingVocab = await db.vocabulary.toArray();
+  const existingByKey = new Map<string, VocabularyEntry>();
+  for (const v of existingVocab) {
+    existingByKey.set(v.germanTextKey, v);
+  }
+
+  const vocabToPut: VocabularyEntry[] = [];
+  const vocabToAdd: Omit<VocabularyEntry, "id">[] = [];
+  const vocabToAddOriginalIds: (number | undefined)[] = [];
+
   for (const row of vocabulary) {
     if (!isRecord(row)) continue;
     const germanText = str(row.germanText).trim();
     const englishTranslation = str(row.englishTranslation).trim();
     if (!germanText || !englishTranslation) continue;
 
+    const key = foldGermanKey(germanText);
     const incomingRemoteId = sanitizeRemoteId(row.remoteId);
     const incomingLastModifiedAt = num(row.lastModifiedAt, num(row.timestamp, 0));
+    const incomingOriginalId = typeof row.id === "number" ? row.id : undefined;
+    const incomingMaxReview = incomingOriginalId !== undefined ? (incomingMaxReviewByVocabId.get(incomingOriginalId) ?? 0) : 0;
+    const incomingLastStudiedAt = Math.max(num(row.lastStudiedAt, 0), incomingMaxReview);
 
-    const existing = await db.vocabulary
-      .where("germanTextKey")
-      .equals(foldGermanKey(germanText))
-      .first();
+    const existing = existingByKey.get(key);
 
     if (existing) {
       result.vocabularyMerged++;
+      const existingMaxReview = existing.id !== undefined ? (existingMaxReviewByVocabId.get(existing.id) ?? 0) : 0;
+      const existingLastStudiedAt = Math.max(existing.lastStudiedAt || 0, existingMaxReview);
+
       const incomingIsNewer = incomingLastModifiedAt > (existing.lastModifiedAt || 0);
+
+      const incomingSchedule = {
+        nextReview: num(row.nextReview, 0),
+        interval: num(row.interval, 0),
+        easeFactor: num(row.easeFactor, 2.5),
+        reviewCount: num(row.reviewCount, 0),
+        lastModifiedAt: incomingLastModifiedAt,
+        lastStudiedAt: incomingLastStudiedAt || undefined,
+      };
+      const scheduleWinner = withFurthestScheduleOf(existing, incomingSchedule, Date.now(), {
+        survivorLastStudiedAt: existingLastStudiedAt,
+        otherLastStudiedAt: incomingLastStudiedAt,
+      });
 
       const merged: VocabularyEntry = {
         ...existing,
@@ -487,18 +670,22 @@ async function applyImport(
         timestamp: Math.max(existing.timestamp, num(row.timestamp, 0)),
         remoteId: existing.remoteId || incomingRemoteId,
         lastModifiedAt: Math.max(existing.lastModifiedAt || 0, incomingLastModifiedAt),
-        nextReview: existing.reviewCount > 0 ? existing.nextReview : num(row.nextReview, existing.nextReview),
-        interval: existing.reviewCount > 0 ? existing.interval : num(row.interval, existing.interval),
-        easeFactor: existing.reviewCount > 0 ? existing.easeFactor : num(row.easeFactor, existing.easeFactor),
-        reviewCount: Math.max(existing.reviewCount, num(row.reviewCount, 0)),
+        lastStudiedAt: scheduleWinner.lastStudiedAt || Math.max(existingLastStudiedAt, incomingLastStudiedAt) || undefined,
+        nextReview: scheduleWinner.nextReview,
+        interval: scheduleWinner.interval,
+        easeFactor: scheduleWinner.easeFactor,
+        reviewCount: scheduleWinner.reviewCount,
       };
-      await db.vocabulary.put(merged);
-      if (typeof row.id === "number") vocabularyIds.set(row.id, existing.id!);
+      existingByKey.set(key, merged);
+      vocabToPut.push(merged);
+      if (typeof row.id === "number" && existing.id !== undefined) {
+        vocabularyIds.set(row.id, existing.id);
+      }
     } else {
       result.vocabularyAdded++;
-      const localId = await db.vocabulary.add({
+      const entry: Omit<VocabularyEntry, "id"> = {
         germanText,
-        germanTextKey: foldGermanKey(germanText),
+        germanTextKey: key,
         englishTranslation,
         timestamp: num(row.timestamp, Date.now()),
         exampleSentence: str(row.exampleSentence),
@@ -513,8 +700,28 @@ async function applyImport(
         reviewCount: num(row.reviewCount, 0),
         remoteId: incomingRemoteId,
         lastModifiedAt: incomingLastModifiedAt,
-      });
-      if (typeof row.id === "number") vocabularyIds.set(row.id, localId as number);
+        lastStudiedAt: incomingLastStudiedAt || undefined,
+      };
+      vocabToAdd.push(entry);
+      vocabToAddOriginalIds.push(typeof row.id === "number" ? row.id : undefined);
+    }
+  }
+
+  // Batch insert/update vocabulary in chunks of 500
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < vocabToPut.length; i += CHUNK_SIZE) {
+    await db.vocabulary.bulkPut(vocabToPut.slice(i, i + CHUNK_SIZE));
+  }
+  for (let i = 0; i < vocabToAdd.length; i += CHUNK_SIZE) {
+    const chunk = vocabToAdd.slice(i, i + CHUNK_SIZE);
+    const chunkOriginalIds = vocabToAddOriginalIds.slice(i, i + CHUNK_SIZE);
+    const addedIds = await db.vocabulary.bulkAdd(chunk, { allKeys: true });
+    for (let j = 0; j < chunk.length; j++) {
+      const origId = chunkOriginalIds[j];
+      const newId = addedIds[j] as number;
+      if (origId !== undefined && newId !== undefined) {
+        vocabularyIds.set(origId, newId);
+      }
     }
   }
 
@@ -523,6 +730,9 @@ async function applyImport(
     const existing = await db.transcripts.toArray();
     const knownRemoteIds = new Map(existing.map((t) => [t.remoteId, t]));
     const knownContent = new Map(existing.map((t) => [`${t.fullText}:${t.timestamp}`, t]));
+
+    const transcriptsToPut: TranscriptEntry[] = [];
+    const transcriptsToAdd: Omit<TranscriptEntry, "id">[] = [];
 
     for (const row of transcripts) {
       if (!isRecord(row)) continue;
@@ -534,77 +744,114 @@ async function applyImport(
       const current = knownRemoteIds.get(remoteId) ?? knownContent.get(contentKey);
       const incomingModified = num(row.lastModifiedAt, ts);
       const analysis = { translation: str(row.translation), analysisJson: str(row.analysisJson) };
+
       if (current) {
         const incomingIsNewer = incomingModified > current.lastModifiedAt;
-        const merged = { ...current,
+        const merged = {
+          ...current,
           translation: incomingIsNewer ? analysis.translation || current.translation : current.translation || analysis.translation,
           analysisJson: incomingIsNewer ? analysis.analysisJson || current.analysisJson : current.analysisJson || analysis.analysisJson,
           lastModifiedAt: Math.max(current.lastModifiedAt, incomingModified),
         };
-        await db.transcripts.put(merged);
+        transcriptsToPut.push(merged);
         knownRemoteIds.set(merged.remoteId, merged);
         knownContent.set(contentKey, merged);
-        continue;
+      } else {
+        const entry: Omit<TranscriptEntry, "id"> = {
+          fullText,
+          timestamp: ts,
+          remoteId,
+          lastModifiedAt: incomingModified,
+          ...analysis,
+        };
+        transcriptsToAdd.push(entry);
+        result.transcriptsAdded++;
       }
-      const entry = {
-        fullText,
-        timestamp: ts,
-        remoteId,
-        lastModifiedAt: incomingModified,
-        ...analysis,
-      };
-      const id = await db.transcripts.add(entry);
-      knownRemoteIds.set(remoteId, { ...entry, id: id as number });
-      knownContent.set(contentKey, { ...entry, id: id as number });
-      result.transcriptsAdded++;
+    }
+
+    for (let i = 0; i < transcriptsToPut.length; i += CHUNK_SIZE) {
+      await db.transcripts.bulkPut(transcriptsToPut.slice(i, i + CHUNK_SIZE));
+    }
+    for (let i = 0; i < transcriptsToAdd.length; i += CHUNK_SIZE) {
+      await db.transcripts.bulkAdd(transcriptsToAdd.slice(i, i + CHUNK_SIZE));
     }
   }
 
   const knownEvents = new Set((await db.reviewEvents.toArray()).map((event) => event.remoteId.toLowerCase()));
+  const eventsToAdd: Omit<ReviewEventEntry, "id">[] = [];
   for (const row of backup.reviewEvents ?? []) {
-    if (!isRecord(row)) continue; // validated above
+    if (!isRecord(row)) continue;
     const remoteId = str(row.remoteId).toLowerCase();
     if (knownEvents.has(remoteId)) continue;
-    await db.reviewEvents.add({
-      // Deleted words have no target; retain their history without linking it to an unrelated local ID.
-      vocabularyId: vocabularyIds.get(row.vocabularyId as number) ?? 0,
+    const rawVocabId = row.vocabularyId;
+    let targetVocabId: number | null = null;
+    if (typeof rawVocabId === "number" && rawVocabId > 0) {
+      targetVocabId = vocabularyIds.get(rawVocabId) ?? null;
+    }
+    eventsToAdd.push({
+      vocabularyId: targetVocabId,
       rating: row.rating as "AGAIN" | "HARD" | "GOOD" | "EASY",
-      scheduledDays: row.scheduledDays as number, actualDays: row.actualDays as number,
+      scheduledDays: row.scheduledDays as number,
+      actualDays: row.actualDays as number,
       reviewedAtTimestamp: row.reviewedAtTimestamp as number,
-      isExtraPractice: row.isExtraPractice as boolean, remoteId,
+      isExtraPractice: row.isExtraPractice as boolean,
+      remoteId,
     });
     knownEvents.add(remoteId);
   }
-  // A current conversation is a unit: additive restore must not splice two scenarios together.
-  if (await db.roleplayMessages.count() === 0) {
-    for (const row of backup.roleplayMessages ?? []) {
+  for (let i = 0; i < eventsToAdd.length; i += CHUNK_SIZE) {
+    await db.reviewEvents.bulkAdd(eventsToAdd.slice(i, i + CHUNK_SIZE));
+  }
+  result.reviewEventsAdded = eventsToAdd.length;
+
+  if (await db.roleplayMessages.count() === 0 && backup.roleplayMessages?.length) {
+    const roleplayToAdd: Omit<RoleplayMessageEntry, "id">[] = [];
+    for (const row of backup.roleplayMessages) {
       if (!isRecord(row)) continue;
-      await db.roleplayMessages.add({ position: row.position as number, scenario: str(row.scenario),
-        role: row.role as "user" | "assistant", content: str(row.content),
+      roleplayToAdd.push({
+        position: row.position as number,
+        scenario: str(row.scenario),
+        role: row.role as "user" | "assistant",
+        content: str(row.content),
         translation: typeof row.translation === "string" ? row.translation : undefined,
         timestamp: row.timestamp as number,
       });
     }
+    for (let i = 0; i < roleplayToAdd.length; i += CHUNK_SIZE) {
+      await db.roleplayMessages.bulkAdd(roleplayToAdd.slice(i, i + CHUNK_SIZE));
+    }
   }
 
   const activity = Array.isArray(backup.activityLog) ? backup.activityLog : [];
-  for (const row of activity) {
-    if (!isRecord(row)) continue;
-    const date = str(row.date);
-    if (!isValidCalendarDate(date)) continue;
-    const existing = await db.activityLog.get(date);
-    const incomingActivity = {
-      date,
-      xpGained: num(row.xpGained, 0),
-      timestamp: num(row.timestamp, 0),
-    };
-    if (!existing || incomingActivity.xpGained > existing.xpGained) {
-      await db.activityLog.put(incomingActivity);
-    } else if (incomingActivity.xpGained === existing.xpGained) {
-      await db.activityLog.put({
-        ...existing,
-        timestamp: Math.max(existing.timestamp, incomingActivity.timestamp),
-      });
+  if (activity.length > 0) {
+    const existingActivity = await db.activityLog.toArray();
+    const existingByDate = new Map(existingActivity.map((a) => [a.date, a]));
+    const activityToPut: ActivityEntry[] = [];
+
+    for (const row of activity) {
+      if (!isRecord(row)) continue;
+      const date = str(row.date);
+      if (!isValidCalendarDate(date)) continue;
+      const existing = existingByDate.get(date);
+      const incomingActivity = {
+        date,
+        xpGained: num(row.xpGained, 0),
+        timestamp: num(row.timestamp, 0),
+      };
+      if (!existing || incomingActivity.xpGained > existing.xpGained) {
+        activityToPut.push(incomingActivity);
+        existingByDate.set(date, incomingActivity);
+      } else if (incomingActivity.xpGained === existing.xpGained) {
+        const merged = {
+          ...existing,
+          timestamp: Math.max(existing.timestamp, incomingActivity.timestamp),
+        };
+        activityToPut.push(merged);
+        existingByDate.set(date, merged);
+      }
+    }
+    for (let i = 0; i < activityToPut.length; i += CHUNK_SIZE) {
+      await db.activityLog.bulkPut(activityToPut.slice(i, i + CHUNK_SIZE));
     }
   }
 
@@ -662,3 +909,228 @@ export async function requestPersistentStorage(): Promise<boolean> {
     return false;
   }
 }
+
+export function toBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
+  }
+  let binary = "";
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export function fromBase64(base64: string): Uint8Array {
+  const trimmed = base64.trim();
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed) || trimmed.length % 4 !== 0) {
+    throw new Error("Invalid base64 encoding");
+  }
+  if (typeof Buffer !== "undefined") {
+    const buf = Buffer.from(trimmed, "base64");
+    const arr = new Uint8Array(buf.length);
+    arr.set(buf);
+    return arr;
+  }
+  const binary = atob(trimmed);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function isEncryptedBackup(json: unknown): json is EncryptedBackupEnvelope {
+  return isRecord(json) && json.format === ENCRYPTED_BACKUP_FORMAT;
+}
+
+export async function encryptBackup(plainJson: string, passphrase: string): Promise<string> {
+  if (!passphrase || !passphrase.length) {
+    throw new ImportError("passphrase_required", "Passphrase is required to encrypt backup.");
+  }
+  const plainBytes = new TextEncoder().encode(plainJson);
+  if (plainBytes.byteLength > MAX_PLAINTEXT_BACKUP_BYTES) {
+    throw new ImportError("capacity", "Plaintext backup exceeds maximum supported size (50 MB).");
+  }
+
+  const salt = new Uint8Array(SALT_LENGTH_BYTES);
+  const iv = new Uint8Array(IV_LENGTH_BYTES);
+  crypto.getRandomValues(salt);
+  crypto.getRandomValues(iv);
+
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  const derivedKey = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: ITERATIONS,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+
+  const cipherBuffer = await crypto.subtle.encrypt(
+    {
+      name: "AES-GCM",
+      iv,
+      tagLength: TAG_LENGTH_BITS,
+    },
+    derivedKey,
+    plainBytes
+  );
+
+  const envelope: EncryptedBackupEnvelope = {
+    format: ENCRYPTED_BACKUP_FORMAT,
+    version: ENCRYPTED_BACKUP_VERSION,
+    kdf: KDF_ALGORITHM,
+    iterations: ITERATIONS,
+    salt: toBase64(salt),
+    iv: toBase64(iv),
+    ciphertext: toBase64(new Uint8Array(cipherBuffer)),
+  };
+
+  return JSON.stringify(envelope, null, 2);
+}
+
+export async function decryptBackup(
+  encryptedJson: unknown,
+  passphrase?: string | null
+): Promise<string> {
+  if (!passphrase || !passphrase.length) {
+    throw new ImportError("passphrase_required", "Passphrase is required for encrypted backup.");
+  }
+
+  if (!isRecord(encryptedJson) || encryptedJson.format !== ENCRYPTED_BACKUP_FORMAT) {
+    throw new ImportError("invalid", "Not an encrypted DeutschFlow backup.");
+  }
+
+  if (typeof encryptedJson.version !== "number" || !Number.isInteger(encryptedJson.version)) {
+    throw new ImportError("invalid", "Missing or invalid encrypted backup version.");
+  }
+
+  if (encryptedJson.version <= 0 || encryptedJson.version > ENCRYPTED_BACKUP_VERSION) {
+    throw new ImportError("newer", `Encrypted backup version ${encryptedJson.version} is not supported.`);
+  }
+
+  const kdf = encryptedJson.kdf ?? KDF_ALGORITHM;
+  if (kdf !== KDF_ALGORITHM) {
+    throw new ImportError("invalid", `Unsupported KDF algorithm: ${kdf}`);
+  }
+
+  const saltStr = str(encryptedJson.salt).trim();
+  const ivStr = str(encryptedJson.iv).trim();
+  const ciphertextStr = str(encryptedJson.ciphertext).trim();
+
+  if (!saltStr || !ivStr || !ciphertextStr || encryptedJson.iterations === undefined) {
+    throw new ImportError("corrupted", "Encrypted backup is missing cryptographic fields.");
+  }
+
+  const iterations = encryptedJson.iterations;
+  if (
+    typeof iterations !== "number" ||
+    !Number.isInteger(iterations) ||
+    iterations < MIN_ITERATIONS ||
+    iterations > MAX_ITERATIONS
+  ) {
+    throw new ImportError(
+      "invalid",
+      `Invalid PBKDF2 iterations: ${iterations} (allowed range: ${MIN_ITERATIONS}..${MAX_ITERATIONS}).`
+    );
+  }
+
+  if (ciphertextStr.length > MAX_BASE64_CIPHERTEXT_LENGTH) {
+    throw new ImportError("capacity", "Ciphertext exceeds maximum supported size (50 MB plaintext).");
+  }
+
+  let salt: Uint8Array;
+  let iv: Uint8Array;
+  let ciphertext: Uint8Array;
+
+  try {
+    salt = fromBase64(saltStr);
+  } catch {
+    throw new ImportError("corrupted", "Invalid salt encoding.");
+  }
+
+  try {
+    iv = fromBase64(ivStr);
+  } catch {
+    throw new ImportError("corrupted", "Invalid IV encoding.");
+  }
+
+  try {
+    ciphertext = fromBase64(ciphertextStr);
+  } catch {
+    throw new ImportError("corrupted", "Invalid ciphertext encoding.");
+  }
+
+  if (salt.byteLength < MIN_SALT_BYTES || salt.byteLength > MAX_SALT_BYTES) {
+    throw new ImportError("corrupted", `Invalid salt size: ${salt.byteLength} bytes.`);
+  }
+
+  if (iv.byteLength !== IV_LENGTH_BYTES) {
+    throw new ImportError("corrupted", `Invalid IV size: ${iv.byteLength} bytes (expected ${IV_LENGTH_BYTES}).`);
+  }
+
+  if (ciphertext.byteLength === 0) {
+    throw new ImportError("corrupted", "Ciphertext is empty.");
+  }
+
+  if (ciphertext.byteLength > MAX_CIPHERTEXT_BYTES) {
+    throw new ImportError("capacity", "Ciphertext exceeds maximum supported size (50 MB plaintext).");
+  }
+
+  try {
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(passphrase),
+      "PBKDF2",
+      false,
+      ["deriveKey"]
+    );
+
+    const derivedKey = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: salt as BufferSource,
+        iterations,
+        hash: "SHA-256",
+      },
+      baseKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+
+    const plainBuffer = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: iv as BufferSource,
+        tagLength: TAG_LENGTH_BITS,
+      },
+      derivedKey,
+      ciphertext as BufferSource
+    );
+
+    if (plainBuffer.byteLength > MAX_PLAINTEXT_BACKUP_BYTES) {
+      throw new ImportError("capacity", "Decrypted backup exceeds maximum supported plaintext size (50 MB).");
+    }
+
+    return new TextDecoder().decode(plainBuffer);
+  } catch (err) {
+    if (err instanceof ImportError) throw err;
+    throw new ImportError("wrong_passphrase", "Incorrect passphrase or corrupted backup.");
+  }
+}
+

@@ -85,6 +85,13 @@ fun germanMatchKey(text: String): String = germanKey(text).replace("ß", "ss")
 const val NO_ARTICLE = "none"
 
 /**
+ * Reserved internal identity key for archived/deleted vocabulary references.
+ * Used exclusively to preserve historical review events without fake ID 0 or foreign key violations.
+ * Strictly filtered out from learning decks, vocabulary counts, mastery metrics, and user merges.
+ */
+const val ARCHIVED_VOCABULARY_KEY = "__archived_deleted__"
+
+/**
  * Immutable so Compose treats the vocabulary list as skippable when it is handed to a
  * composable unchanged; the DAO only ever swaps whole entities, never mutates one.
  */
@@ -187,15 +194,93 @@ data class VocabularyEntity(
     )
 
     /**
-     * This entry with whichever of the two schedules is further along.
+     * Pedagogical Spaced-Repetition Schedule Merge Policy:
      *
-     * Ranked the way MIGRATION_12_13 and MIGRATION_14_15 rank duplicates - most
-     * successful reviews, then longest interval - and taken as a set so the four SRS
-     * fields stay consistent with each other. A tie keeps this row's. The migrations
-     * already promised that folding two rows together never loses review progress;
-     * the runtime merge used to keep the surviving row's schedule regardless.
+     * 1. UNREVIEWED vs STUDIED:
+     *    A card with no study history (reviewCount == 0, interval == 0, nextReview == 0, easeFactor == 2.5f)
+     *    never overwrites an actively studied card.
+     *
+     * 2. RECENCY OF STUDY (Anti-Lapse-Erasure Principle):
+     *    When both cards have been studied, the schedule from the more recent interaction
+     *    (higher lastModifiedAt) is authoritative. If a learner recently failed a card (interval == 0),
+     *    an older copy with a large interval MUST NOT erase the lapse.
+     *
+     * 3. SAFETY IN FAVOR OF RECALL (Tied Timestamps):
+     *    If timestamps are tied, a due or lapsed card (nextReview <= now || interval == 0) takes
+     *    priority over a future schedule.
      */
-    fun withFurthestScheduleOf(other: VocabularyEntity): VocabularyEntity {
+    fun withFurthestScheduleOf(
+        other: VocabularyEntity,
+        now: Long = System.currentTimeMillis(),
+        thisLastStudiedAt: Long = 0L,
+        otherLastStudiedAt: Long = 0L
+    ): VocabularyEntity {
+        fun isUnreviewed(e: VocabularyEntity) =
+            e.reviewCount == 0 && e.interval == 0 && e.nextReview == 0L && kotlin.math.abs(e.easeFactor - 2.5f) < 0.001f
+
+        val thisUnreviewed = isUnreviewed(this)
+        val otherUnreviewed = isUnreviewed(other)
+
+        if (thisUnreviewed && !otherUnreviewed) {
+            return copy(
+                nextReview = other.nextReview,
+                interval = other.interval,
+                easeFactor = other.easeFactor,
+                reviewCount = other.reviewCount
+            )
+        }
+        if (!thisUnreviewed && otherUnreviewed) {
+            return this
+        }
+        if (thisUnreviewed && otherUnreviewed) {
+            return this
+        }
+
+        // Compare dedicated study timestamps (actual review event time or lastStudiedAt)
+        // rather than lastModifiedAt, which changes on typographical or content edits.
+        if (otherLastStudiedAt > 0L || thisLastStudiedAt > 0L) {
+            if (otherLastStudiedAt > thisLastStudiedAt) {
+                return copy(
+                    nextReview = other.nextReview,
+                    interval = other.interval,
+                    easeFactor = other.easeFactor,
+                    reviewCount = other.reviewCount
+                )
+            }
+            if (thisLastStudiedAt > otherLastStudiedAt) {
+                return this
+            }
+        }
+
+        val thisIsDueOrLapsed = this.nextReview <= now || this.interval == 0
+        val otherIsDueOrLapsed = other.nextReview <= now || other.interval == 0
+
+        if (otherIsDueOrLapsed && !thisIsDueOrLapsed) {
+            return copy(
+                nextReview = other.nextReview,
+                interval = other.interval,
+                easeFactor = other.easeFactor,
+                reviewCount = other.reviewCount
+            )
+        }
+        if (thisIsDueOrLapsed && !otherIsDueOrLapsed) {
+            return this
+        }
+
+        if (!thisIsDueOrLapsed && !otherIsDueOrLapsed) {
+            if (other.nextReview < this.nextReview) {
+                return copy(
+                    nextReview = other.nextReview,
+                    interval = other.interval,
+                    easeFactor = other.easeFactor,
+                    reviewCount = other.reviewCount
+                )
+            }
+            if (this.nextReview < other.nextReview) {
+                return this
+            }
+        }
+
         val otherIsFurther = compareValuesBy(other, this, { it.reviewCount }, { it.interval }) > 0
         if (!otherIsFurther) return this
         return copy(

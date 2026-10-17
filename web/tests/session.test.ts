@@ -215,16 +215,56 @@ describe("Logout Route Handler — explicit cookie clearance", () => {
     expect(cookie?.sameSite).toBe("lax");
   });
 
-  it("GET /api/logout redirects to /login and clears session cookie", async () => {
-    const request = new Request("https://deutschflow.app/api/logout", { method: "GET" });
-    const response = await logoutGet(request);
+  it("GET /api/logout rejects with 405 Method Not Allowed and does not clear cookies", async () => {
+    const response = await logoutGet();
 
-    expect(response.status).toBe(307);
-    expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+    expect(response.status).toBe(405);
+    expect(response.headers.get("Allow")).toBe("POST");
+    const body = await response.json();
+    expect(body.error).toContain("Method Not Allowed");
     const cookie = response.cookies.get(SESSION_COOKIE);
-    expect(cookie).toBeDefined();
-    expect(cookie?.value).toBe("");
-    expect(cookie?.maxAge).toBe(0);
+    expect(cookie).toBeUndefined();
+  });
+  it("POST /api/logout rejects cross-origin request with 403 Forbidden", async () => {
+    const request = new Request("https://deutschflow.app/api/logout", {
+      method: "POST",
+      headers: { origin: "https://evil-attacker.example" },
+    });
+    const response = await logoutPost(request);
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("Forbidden");
+  });
+
+  it("POST /api/logout accepts matching origin", async () => {
+    const request = new Request("https://deutschflow.app/api/logout", {
+      method: "POST",
+      headers: { origin: "https://deutschflow.app" },
+    });
+    const response = await logoutPost(request);
+    expect(response.status).toBe(200);
+  });
+});
+
+describe("configurable session lifetime (SESSION_MAX_AGE_SECONDS)", () => {
+  it("defaults to 30 days when unset", async () => {
+    const { getSessionMaxAgeSeconds, DEFAULT_SESSION_MAX_AGE_SECONDS } = await import("@/lib/auth/session");
+    expect(getSessionMaxAgeSeconds()).toBe(DEFAULT_SESSION_MAX_AGE_SECONDS);
+  });
+
+  it("respects safe custom bounds (e.g. 7 days)", async () => {
+    vi.stubEnv("SESSION_MAX_AGE_SECONDS", "604800");
+    const { getSessionMaxAgeSeconds } = await import("@/lib/auth/session");
+    expect(getSessionMaxAgeSeconds()).toBe(604800);
+  });
+
+  it("clamps out-of-bound values back to default", async () => {
+    vi.stubEnv("SESSION_MAX_AGE_SECONDS", "10"); // too short (< 1h)
+    const { getSessionMaxAgeSeconds, DEFAULT_SESSION_MAX_AGE_SECONDS } = await import("@/lib/auth/session");
+    expect(getSessionMaxAgeSeconds()).toBe(DEFAULT_SESSION_MAX_AGE_SECONDS);
+
+    vi.stubEnv("SESSION_MAX_AGE_SECONDS", "999999999"); // too long (> 90d)
+    expect(getSessionMaxAgeSeconds()).toBe(DEFAULT_SESSION_MAX_AGE_SECONDS);
   });
 });
 

@@ -22,7 +22,7 @@ export async function recordReview(
     const now = Date.now();
     const scheduled = !isExtraPractice || quality === ReviewQuality.AGAIN
       ? calculateNextReview(current, quality) : current;
-    const persisted = { ...scheduled, lastModifiedAt: Math.max(now, current.lastModifiedAt + 1) };
+    const persisted = { ...scheduled, lastModifiedAt: Math.max(now, current.lastModifiedAt + 1), lastStudiedAt: now };
     const previous = await db.reviewEvents.where("vocabularyId").equals(current.id!)
       .sortBy("reviewedAtTimestamp");
     const lastReview = previous.at(-1)?.reviewedAtTimestamp;
@@ -32,6 +32,7 @@ export async function recordReview(
       nextReview: persisted.nextReview, interval: persisted.interval,
       easeFactor: persisted.easeFactor, reviewCount: persisted.reviewCount,
       lastModifiedAt: persisted.lastModifiedAt,
+      lastStudiedAt: now,
     });
     // Hard is a correct answer (the scheduler grows its interval), so it earns XP and
     // keeps the streak like Good and Easy. Mirrors StudyViewModel.submitReview.

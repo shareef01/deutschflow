@@ -46,6 +46,9 @@ export interface VocabularyEntry {
   // Stable identity and modification metadata used by backup merging.
   remoteId: string;
   lastModifiedAt: number;
+
+  /** Dedicated timestamp of the latest review event (decoupled from content/text edits). */
+  lastStudiedAt?: number;
 }
 
 export interface TranscriptEntry {
@@ -100,7 +103,8 @@ export interface SettingEntry {
 
 export interface ReviewEventEntry {
   id?: number;
-  vocabularyId: number;
+  /** Target vocabulary ID, or null if the original card was deleted or unresolvable. */
+  vocabularyId: number | null;
   rating: "AGAIN" | "HARD" | "GOOD" | "EASY";
   scheduledDays: number;
   actualDays: number;
@@ -174,7 +178,30 @@ export class DeutschFlowDB extends Dexie {
     super(name);
 
     /**
-         * Version 9: ß-preserving identity key.
+     * Version 10: Nullable review event vocabulary references.
+     * Migrates legacy orphan review events with vocabularyId 0 to null,
+     * ensuring no fake references to non-existent rows exist.
+     */
+    this.version(10)
+      .stores({
+        vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+        transcripts: "++id, timestamp",
+        userStats: "id",
+        activityLog: "date",
+        roleplayMessages: "position",
+        settings: "key",
+        reviewEvents: "++id, vocabularyId, reviewedAtTimestamp",
+      })
+      .upgrade(async (tx) => {
+        await tx.table("reviewEvents").toCollection().modify((row: { vocabularyId?: number | null }) => {
+          if (row.vocabularyId === 0) {
+            row.vocabularyId = null;
+          }
+        });
+      });
+
+    /**
+     * Version 9: ß-preserving identity key.
          *
          * foldGermanKey used to fold ß to ss, which made "Maße" (measurements) and
          * "Masse" (mass) the same word — as it did "Buße" and "Busse". With

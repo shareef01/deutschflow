@@ -18,8 +18,22 @@
 
 export const SESSION_COOKIE = "df_access";
 
-/** Thirty days, matching the cookie's own lifetime. */
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+/** Default 30 days. Configurable via SESSION_MAX_AGE_SECONDS between 1 hour and 90 days. */
+export const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export const MIN_SESSION_MAX_AGE_SECONDS = 3600; // 1 hour
+export const MAX_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 90; // 90 days
+
+export function getSessionMaxAgeSeconds(): number {
+  const raw = process.env.SESSION_MAX_AGE_SECONDS?.trim();
+  if (!raw) return DEFAULT_SESSION_MAX_AGE_SECONDS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < MIN_SESSION_MAX_AGE_SECONDS || parsed > MAX_SESSION_MAX_AGE_SECONDS) {
+    return DEFAULT_SESSION_MAX_AGE_SECONDS;
+  }
+  return parsed;
+}
+
+export const SESSION_MAX_AGE_SECONDS = DEFAULT_SESSION_MAX_AGE_SECONDS;
 
 /** HMAC keys need entropy, not merely a non-empty configuration value. */
 export const MIN_SESSION_SECRET_BYTES = 32;
@@ -133,9 +147,13 @@ async function sign(payload: string, secret: string): Promise<string> {
   return toBase64Url(await crypto.subtle.sign("HMAC", await key(secret), encoder.encode(payload)));
 }
 
-/** A token good for [SESSION_MAX_AGE_SECONDS] from now. */
-export async function createSessionToken(secret: string, now: number = Date.now()): Promise<string> {
-  const expiresAt = now + SESSION_MAX_AGE_SECONDS * 1000;
+/** A token good for [maxAgeSeconds] from now. */
+export async function createSessionToken(
+  secret: string,
+  now: number = Date.now(),
+  maxAgeSeconds: number = getSessionMaxAgeSeconds()
+): Promise<string> {
+  const expiresAt = now + maxAgeSeconds * 1000;
   return `${expiresAt}.${await sign(String(expiresAt), secret)}`;
 }
 

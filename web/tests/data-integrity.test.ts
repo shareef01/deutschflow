@@ -155,7 +155,7 @@ it("keeps orphaned review history unlinked and does not overwrite a local conver
   await source.roleplayMessages.add({ ...local, scenario: "Bakery" });
   await seed(target, "Hund");
   await importLibrary(target, await exportLibrary(source));
-  expect((await target.reviewEvents.toArray())[0].vocabularyId).toBe(0);
+  expect((await target.reviewEvents.toArray())[0].vocabularyId).toBeNull();
   expect(await target.roleplayMessages.toArray()).toEqual([local]);
 });
 

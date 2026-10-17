@@ -20,8 +20,9 @@ import { useLive } from "./useLive";
 import type { TKey } from "@/lib/i18n";
 import {
   ImportError,
-  MAX_BACKUP_FILE_BYTES,
+  MAX_ENCRYPTED_BACKUP_FILE_BYTES,
   exportLibrary,
+  exportEncryptedLibrary,
   importLibrary,
 } from "@/lib/db/backup";
 
@@ -98,57 +99,69 @@ export function useSettings() {
    * control standing between a user and losing everything they have built. A blob
    * download rather than anything server-side: there is no server.
    */
-  const downloadBackup = useCallback(async (): Promise<TKey> => {
+  const downloadBackup = useCallback(async (passphrase?: string): Promise<TKey> => {
     try {
-      const backup = await exportLibrary(db);
-      const blob = new Blob([JSON.stringify(backup)], {
+      let content: string;
+      const isEncrypted = typeof passphrase === "string" && passphrase.length > 0;
+      if (isEncrypted) {
+        content = await exportEncryptedLibrary(db, passphrase);
+      } else {
+        const backup = await exportLibrary(db);
+        content = JSON.stringify(backup, null, 2);
+      }
+      const blob = new Blob([content], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `deutschflow-${backup.exportedAt.slice(0, 10)}.json`;
+      const datePart = new Date().toISOString().slice(0, 10);
+      anchor.download = isEncrypted
+        ? `deutschflow-encrypted-${datePart}.json`
+        : `deutschflow-${datePart}.json`;
       anchor.click();
-      // Revoked on the next frame: revoking synchronously races the download in
-      // Safari, which has not read the blob by the time click() returns.
       requestAnimationFrame(() => URL.revokeObjectURL(url));
       const now = Date.now();
       if (typeof window !== "undefined") {
         localStorage.setItem("deutschflow_last_backup", String(now));
       }
       setLastBackupTime(now);
-      return "settings.backupDownloaded";
+      return isEncrypted ? "settings.backupCreated" : "settings.backupDownloaded";
     } catch (error) {
       return error instanceof ImportError && error.reason === "capacity"
         ? "settings.backupCapacity" : "settings.backupFailed";
     }
   }, []);
 
-  /**
-   * Merges a previously exported file back in. Additive - see importLibrary.
-   *
-   * Each failure says which one it was. A single catch reported everything as
-   * "that file isn't a library export", which mislabelled a backup from a newer
-   * version - a different problem with a different answer - and blamed the file
-   * for a storage failure that had nothing to do with it.
-   */
-  const restoreBackup = useCallback(async (file: File): Promise<TKey> => {
+  const restoreBackup = useCallback(async (file: File, passphrase?: string): Promise<TKey> => {
     try {
-      if (file.size > MAX_BACKUP_FILE_BYTES) {
+      if (file.size > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
         throw new ImportError("capacity", "Backup file exceeds maximum allowed size.");
       }
-      await importLibrary(db, JSON.parse(await file.text()));
-      return "settings.backupRestored";
+      const text = await file.text();
+      await importLibrary(db, text, passphrase);
+      return "settings.backupCompleted";
     } catch (error) {
       if (error instanceof ImportError) {
+        if (error.reason === "wrong_passphrase") return "settings.backupIncorrectPassword";
+        if (error.reason === "passphrase_required") return "settings.backupPasswordRequired";
+        if (error.reason === "corrupted") return "settings.backupInvalidBackup";
         if (error.reason === "storage") return "settings.backupStorageFailed";
         if (error.reason === "capacity") return "settings.backupCapacity";
         return error.reason === "newer" ? "settings.backupNewer" : "settings.backupInvalid";
       }
-      // Not a rejected file: JSON.parse choking on something that is not JSON is
-      // still "not a library export", but a write that failed part-way is not.
       if (error instanceof SyntaxError) return "settings.backupInvalid";
       return "settings.backupStorageFailed";
+    }
+  }, []);
+
+  const checkIfEncrypted = useCallback(async (file: File): Promise<boolean> => {
+    try {
+      const slice = await file.slice(0, 2048).text();
+      return slice.includes('"format":"deutschflow-library-encrypted"') ||
+        slice.includes('"format": "deutschflow-library-encrypted"');
+    } catch {
+      return false;
     }
   }, []);
 
@@ -223,6 +236,7 @@ export function useSettings() {
     clearAllProgress,
     downloadBackup,
     restoreBackup,
+    checkIfEncrypted,
     isPersisted,
     isPersistenceSupported,
     requestPersistence,

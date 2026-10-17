@@ -1,6 +1,7 @@
 package com.aus.deutschflow.data.local.dao
 
 import androidx.room.*
+import com.aus.deutschflow.data.local.entities.ARCHIVED_VOCABULARY_KEY
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.data.local.entities.germanKey
 import kotlinx.coroutines.flow.Flow
@@ -15,14 +16,14 @@ data class MasteryCounts(
 
 @Dao
 interface VocabularyDao {
-    @Query("SELECT * FROM vocabulary ORDER BY timestamp DESC")
+    @Query("SELECT * FROM vocabulary WHERE germanTextKey != '__archived_deleted__' ORDER BY timestamp DESC")
     fun getAllVocabulary(): Flow<List<VocabularyEntity>>
 
-    @Query("SELECT * FROM vocabulary ORDER BY timestamp DESC")
+    @Query("SELECT * FROM vocabulary WHERE germanTextKey != '__archived_deleted__' ORDER BY timestamp DESC")
     suspend fun getAllVocabularyList(): List<VocabularyEntity>
 
     /** How many, without reading any of them. See TranscriptDao.countTranscripts. */
-    @Query("SELECT COUNT(*) FROM vocabulary")
+    @Query("SELECT COUNT(*) FROM vocabulary WHERE germanTextKey != '__archived_deleted__'")
     fun countVocabulary(): Flow<Int>
 
     /**
@@ -33,9 +34,12 @@ interface VocabularyDao {
      * unseen word ahead of every review, so a library with a backlog of new material
      * buried the reviews it was the scheduler's whole job to surface. A review has a
      * date it is owed on; new material does not.
+     *
+     * Archived placeholder rows (__archived_deleted__) are strictly excluded so they never
+     * enter the study queue.
      */
     @Query(
-        "SELECT * FROM vocabulary WHERE nextReview <= :currentTime " +
+        "SELECT * FROM vocabulary WHERE germanTextKey != '__archived_deleted__' AND nextReview <= :currentTime " +
             "ORDER BY CASE WHEN nextReview = 0 THEN 1 ELSE 0 END, nextReview ASC, timestamp DESC"
     )
     fun getDueVocabulary(currentTime: Long): Flow<List<VocabularyEntity>>
@@ -68,10 +72,10 @@ interface VocabularyDao {
     @Query("DELETE FROM vocabulary WHERE id = :id")
     suspend fun deleteById(id: Int)
 
-    @Query("SELECT COUNT(*) FROM vocabulary")
+    @Query("SELECT COUNT(*) FROM vocabulary WHERE germanTextKey != '__archived_deleted__'")
     suspend fun countOnce(): Int
 
-    @Query("SELECT * FROM vocabulary ORDER BY id ASC LIMIT 1 OFFSET :offset")
+    @Query("SELECT * FROM vocabulary WHERE germanTextKey != '__archived_deleted__' ORDER BY id ASC LIMIT 1 OFFSET :offset")
     suspend fun nthById(offset: Int): VocabularyEntity?
 
     /**
@@ -102,7 +106,7 @@ interface VocabularyDao {
             "COALESCE(SUM(CASE WHEN reviewCount > 0 AND `interval` >= :masteredDays THEN 1 ELSE 0 END), 0) AS masteredWords, " +
             "COALESCE(SUM(CASE WHEN reviewCount > 0 AND `interval` < :masteredDays THEN 1 ELSE 0 END), 0) AS learningWords, " +
             "COALESCE(SUM(CASE WHEN reviewCount = 0 THEN 1 ELSE 0 END), 0) AS newWords " +
-            "FROM vocabulary"
+            "FROM vocabulary WHERE germanTextKey != '__archived_deleted__'"
     )
     fun masteryCounts(masteredDays: Int): Flow<MasteryCounts>
 
@@ -156,8 +160,12 @@ interface VocabularyDao {
      */
     @Transaction
     suspend fun restore(entry: VocabularyEntity) {
-        val now = System.currentTimeMillis()
         val key = germanKey(entry.germanText)
+        if (key == ARCHIVED_VOCABULARY_KEY || entry.germanTextKey == ARCHIVED_VOCABULARY_KEY) {
+            // The internal archived identity is reserved; user actions cannot restore or claim it.
+            return
+        }
+        val now = System.currentTimeMillis()
         val occupant = findByKey(key)
 
         when {
@@ -188,15 +196,25 @@ interface VocabularyDao {
      */
     @Transaction
     suspend fun save(entry: VocabularyEntity) {
+        val key = germanKey(entry.germanText)
+        if (key == ARCHIVED_VOCABULARY_KEY || entry.germanTextKey == ARCHIVED_VOCABULARY_KEY) {
+            // The internal archived identity is reserved; user actions cannot claim or overwrite it.
+            return
+        }
+
         // Recomputed here rather than trusted from the caller: the key is derived
         // from germanText, and `copy(germanText = ...)` on the edit path would
         // otherwise carry the old word's key into the new one.
         val now = System.currentTimeMillis()
         val vocabulary = entry.copy(
-            germanTextKey = germanKey(entry.germanText),
+            germanTextKey = key,
             lastModifiedAt = maxOf(entry.lastModifiedAt, now)
         )
         val existing = findByKey(vocabulary.germanTextKey)
+        if (existing != null && existing.germanTextKey == ARCHIVED_VOCABULARY_KEY) {
+            // Cannot merge user vocabulary into the internal archived entity.
+            return
+        }
 
         when {
             // Nothing holds that word yet: a new entry, or a rename onto a free name.

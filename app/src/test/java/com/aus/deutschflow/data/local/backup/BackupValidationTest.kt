@@ -173,7 +173,7 @@ class BackupValidationTest {
     }
 
     @Test
-    fun `rejects review event referencing unmapped or non-existent vocabulary ID`() {
+    fun `rejects review event referencing negative vocabulary ID`() {
         val vocab = JSONArray().apply {
             put(JSONObject().apply {
                 put("id", 10)
@@ -187,7 +187,7 @@ class BackupValidationTest {
         }
         val reviews = JSONArray().apply {
             put(JSONObject().apply {
-                put("vocabularyId", 99) // ID 99 does not exist in vocabulary array
+                put("vocabularyId", -1) // Negative ID is malformed
                 put("rating", "GOOD")
                 put("scheduledDays", 1)
                 put("actualDays", 1)
@@ -201,6 +201,36 @@ class BackupValidationTest {
         assertThrows(BackupException.InvalidFormat::class.java) {
             BackupManager.validateBackupJson(backup)
         }
+    }
+
+    @Test
+    fun `accepts review event referencing unmapped vocabulary ID for archival recovery`() {
+        val vocab = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", 10)
+                put("germanText", "Wasser")
+                put("englishTranslation", "water")
+                put("interval", 0)
+                put("easeFactor", 2.5)
+                put("reviewCount", 0)
+                put("nextReview", 0L)
+            })
+        }
+        val reviews = JSONArray().apply {
+            put(JSONObject().apply {
+                put("vocabularyId", 99) // ID 99 not in vocabulary array, accepted and routed to archived entity
+                put("rating", "GOOD")
+                put("scheduledDays", 1)
+                put("actualDays", 1)
+                put("reviewedAtTimestamp", System.currentTimeMillis())
+                put("remoteId", java.util.UUID.randomUUID().toString())
+            })
+        }
+        val backup = createValidBackupJson(vocabulary = vocab).apply {
+            put("reviewEvents", reviews)
+        }
+        // Does not throw
+        BackupManager.validateBackupJson(backup)
     }
 
     @Test

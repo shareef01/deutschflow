@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.data.local.dao.MasteryCounts
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.service.DailyWord
+import com.aus.deutschflow.data.local.entities.ARCHIVED_VOCABULARY_KEY
 import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import kotlinx.coroutines.flow.first
@@ -323,5 +324,61 @@ class VocabularyDaoTest {
         assertEquals("the restored progress is not lost to the fresh entry", 3, saved.first().reviewCount)
         assertEquals(12, saved.first().interval)
         assertEquals(listOf(retyped.id), eventIds())
+    }
+
+    @Test
+    fun archivedDeletedVocabularyPlaceholderIsStrictlyIsolatedFromUserDecksAndStats() = runBlocking {
+        // 1. Insert internal archived placeholder row directly
+        val archived = VocabularyEntity(
+            id = 100,
+            germanText = "[Gelöscht]",
+            germanTextKey = ARCHIVED_VOCABULARY_KEY,
+            englishTranslation = "[Archived / Deleted Word]",
+            timestamp = 0L,
+            nextReview = Long.MAX_VALUE,
+            interval = 0,
+            reviewCount = 0,
+            remoteId = "00000000-0000-4000-8000-000000000000",
+            lastModifiedAt = 0L
+        )
+        dao.insertVocabulary(archived)
+
+        // 2. Verified excluded from user-facing flows
+        val allFlow = dao.getAllVocabulary().first()
+        assertTrue("Archived placeholder must never appear in getAllVocabulary flow", allFlow.isEmpty())
+
+        val allList = dao.getAllVocabularyList()
+        assertTrue("Archived placeholder must never appear in getAllVocabularyList", allList.isEmpty())
+
+        val due = dao.getDueVocabulary(Long.MAX_VALUE).first()
+        assertTrue("Archived placeholder must never appear in getDueVocabulary queue", due.isEmpty())
+
+        val countFlow = dao.countVocabulary().first()
+        assertEquals("countVocabulary must be 0", 0, countFlow)
+
+        val countOnce = dao.countOnce()
+        assertEquals("countOnce must be 0", 0, countOnce)
+
+        val wotd = dao.wordOfTheDay(12345L)
+        assertEquals("wordOfTheDay must be null when only archived placeholder exists", null, wotd)
+
+        val mastery = dao.masteryCounts(21).first()
+        assertEquals("masteryCounts totalWords must be 0", 0, mastery.totalWords)
+
+        // 3. User attempts to save or claim ARCHIVED_VOCABULARY_KEY are rejected
+        dao.save(VocabularyEntity(germanText = "[Gelöscht]", germanTextKey = ARCHIVED_VOCABULARY_KEY, englishTranslation = "should not save"))
+        dao.save(VocabularyEntity(germanText = ARCHIVED_VOCABULARY_KEY, englishTranslation = "should not save"))
+        assertEquals("User save cannot create normal card with archived key", 0, dao.countOnce())
+
+        // 4. User attempts to restore ARCHIVED_VOCABULARY_KEY are rejected
+        dao.restore(archived.copy(id = 0, englishTranslation = "restored evil"))
+        assertEquals("User restore cannot recreate archived key as user card", 0, dao.countOnce())
+
+        // 5. Normal word insertion behaves normally alongside archived placeholder
+        dao.save(VocabularyEntity(germanText = "Baum", englishTranslation = "tree"))
+        assertEquals(1, dao.countOnce())
+        val allAfterNormal = dao.getAllVocabularyList()
+        assertEquals(1, allAfterNormal.size)
+        assertEquals("Baum", allAfterNormal[0].germanText)
     }
 }

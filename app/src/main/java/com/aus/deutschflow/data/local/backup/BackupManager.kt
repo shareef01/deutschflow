@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.InputStreamReader
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
@@ -106,11 +107,17 @@ class BackupManager @Inject constructor(
                 }
             })
 
+            val archivedVocabId = vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id
             put("reviewEvents", JSONArray().apply {
                 reviewEvents.forEach { item ->
                     put(JSONObject().apply {
                         put("id", item.id)
-                        put("vocabularyId", item.vocabularyId)
+                        val exportedVocabId = if (archivedVocabId != null && item.vocabularyId == archivedVocabId) {
+                            JSONObject.NULL
+                        } else {
+                            item.vocabularyId
+                        }
+                        put("vocabularyId", exportedVocabId)
                         put("rating", item.rating)
                         put("scheduledDays", item.scheduledDays)
                         put("actualDays", item.actualDays)
@@ -140,7 +147,7 @@ class BackupManager @Inject constructor(
 
         val plainJson = backupObj.toString(2)
         if (plainJson.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
-            throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (10 MB).")
+            throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (50 MB).")
         }
         return if (passphrase != null && passphrase.isNotEmpty()) {
             BackupCrypto.encrypt(plainJson, passphrase)
@@ -156,35 +163,64 @@ class BackupManager @Inject constructor(
 
     suspend fun importFromStream(inputStream: InputStream, passphrase: CharArray? = null): BackupImportResult {
         val maxBytes = MAX_STREAM_READ_BYTES
-        val buffer = ByteArray(8192)
-        val out = ByteArrayOutputStream()
-        var totalBytes = 0
+        val countingStream = object : InputStream() {
+            var totalBytesRead = 0L
+                private set
 
-        while (true) {
-            val bytesRead = inputStream.read(buffer)
-            if (bytesRead == -1) break
-            totalBytes += bytesRead
-            if (totalBytes > maxBytes) {
-                throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (15 MB).")
+            override fun read(): Int {
+                val b = inputStream.read()
+                if (b != -1) {
+                    totalBytesRead++
+                    if (totalBytesRead > maxBytes) {
+                        throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
+                    }
+                }
+                return b
             }
-            out.write(buffer, 0, bytesRead)
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val read = inputStream.read(b, off, len)
+                if (read > 0) {
+                    totalBytesRead += read
+                    if (totalBytesRead > maxBytes) {
+                        throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
+                    }
+                }
+                return read
+            }
+
+            override fun close() = inputStream.close()
         }
 
-        if (totalBytes == 0) {
-            throw BackupException.InvalidFormat("Backup file is empty.")
-        }
-
-        val rawBytes = out.toByteArray()
         val decoder = Charsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
 
-        val content = try {
-            decoder.decode(ByteBuffer.wrap(rawBytes)).toString()
+        val reader = InputStreamReader(countingStream, decoder)
+        val stringBuilder = StringBuilder()
+        val charBuffer = CharArray(8192)
+
+        try {
+            while (true) {
+                val charsRead = reader.read(charBuffer, 0, charBuffer.size)
+                if (charsRead == -1) break
+                stringBuilder.append(charBuffer, 0, charsRead)
+            }
         } catch (e: CharacterCodingException) {
             throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${e.message}")
+        } catch (e: java.io.IOException) {
+            val cause = e.cause
+            if (cause is CharacterCodingException) {
+                throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${cause.message}")
+            }
+            throw e
         }
 
+        if (countingStream.totalBytesRead == 0L) {
+            throw BackupException.InvalidFormat("Backup file is empty.")
+        }
+
+        val content = stringBuilder.toString()
         return importBackup(content, passphrase)
     }
 
@@ -193,7 +229,7 @@ class BackupManager @Inject constructor(
             throw BackupException.InvalidFormat("Backup content is empty.")
         }
         if (content.length > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
-            throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (15 MB).")
+            throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
         }
 
         val rawObj = try {
@@ -204,8 +240,8 @@ class BackupManager @Inject constructor(
 
         val backupObj = if (BackupCrypto.isEncryptedBackup(rawObj)) {
             val decryptedPlain = BackupCrypto.decrypt(rawObj, passphrase)
-            if (decryptedPlain.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
-                throw BackupException.CapacityExceeded("Decrypted backup exceeds 10 MB limit.")
+            if (utf8ByteLength(decryptedPlain) > MAX_PLAINTEXT_BACKUP_BYTES) {
+                throw BackupException.CapacityExceeded("Decrypted backup exceeds 50 MB limit.")
             }
             try {
                 JSONObject(decryptedPlain)
@@ -213,9 +249,9 @@ class BackupManager @Inject constructor(
                 throw BackupException.CorruptedData("Decrypted backup is not valid JSON.")
             }
         } else {
-            // Unencrypted plaintext backup: must strictly not exceed MAX_PLAINTEXT_BACKUP_BYTES (10 MiB)
-            if (content.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
-                throw BackupException.CapacityExceeded("Plaintext backup exceeds 10 MB size limit.")
+            // Unencrypted plaintext backup: must strictly not exceed MAX_PLAINTEXT_BACKUP_BYTES (50 MiB)
+            if (utf8ByteLength(content) > MAX_PLAINTEXT_BACKUP_BYTES) {
+                throw BackupException.CapacityExceeded("Plaintext backup exceeds 50 MB size limit.")
             }
             rawObj
         }
@@ -241,6 +277,20 @@ class BackupManager @Inject constructor(
         var reviewEventsAdded = 0
 
         val backupIdToPersistedId = mutableMapOf<Int, Int>()
+
+        // Pre-index latest incoming review timestamp per vocabulary id to compare actual study recency
+        val incomingLatestReviewByVocabId = mutableMapOf<Int, Long>()
+        if (backup.has("reviewEvents")) {
+            val revArr = backup.getJSONArray("reviewEvents")
+            for (i in 0 until revArr.length()) {
+                val r = revArr.getJSONObject(i)
+                val vId = r.optInt("vocabularyId", 0)
+                val ts = r.optLong("reviewedAtTimestamp", 0L)
+                if (vId > 0 && ts > 0L) {
+                    incomingLatestReviewByVocabId[vId] = maxOf(incomingLatestReviewByVocabId[vId] ?: 0L, ts)
+                }
+            }
+        }
 
         // 1. Vocabulary
         val vocabArray = backup.getJSONArray("vocabulary")
@@ -276,7 +326,16 @@ class BackupManager @Inject constructor(
 
             val existing = vocabularyDao.findByKey(incoming.germanTextKey)
             if (existing != null) {
-                val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(incoming)
+                val thisLastStudied = reviewEventDao.latestReviewTimestamp(existing.id) ?: 0L
+                val incomingReviewTimestamp = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
+                val incomingStudyField = row.optLong("lastStudiedAt", 0L)
+                val otherLastStudied = maxOf(incomingStudyField, incomingReviewTimestamp)
+                val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(
+                    other = incoming,
+                    now = now,
+                    thisLastStudiedAt = thisLastStudied,
+                    otherLastStudiedAt = otherLastStudied
+                )
                 vocabularyDao.updateVocabulary(merged)
                 if (oldBackupId > 0) backupIdToPersistedId[oldBackupId] = existing.id
                 vocabularyMerged++
@@ -386,15 +445,15 @@ class BackupManager @Inject constructor(
             val reviewArray = backup.getJSONArray("reviewEvents")
             for (i in 0 until reviewArray.length()) {
                 val row = reviewArray.getJSONObject(i)
-                val originalVocabId = row.getInt("vocabularyId")
-                val targetVocabId = backupIdToPersistedId[originalVocabId]
-                // Prevent orphan review events or incorrect cross-assignment to an unrelated target row:
-                // Only link review events whose original vocabulary ID mapped cleanly to an imported/merged target row.
-                if (targetVocabId == null || targetVocabId <= 0) {
-                    continue
+                val originalVocabId = if (row.isNull("vocabularyId")) 0 else row.optInt("vocabularyId", 0)
+                var targetVocabId: Int? = if (originalVocabId > 0) backupIdToPersistedId[originalVocabId] else null
+                if (targetVocabId != null && vocabularyDao.findById(targetVocabId) == null) {
+                    targetVocabId = null
                 }
-                if (vocabularyDao.findById(targetVocabId) == null) {
-                    continue
+                if (targetVocabId == null || targetVocabId <= 0) {
+                    // Do not silently discard valid review events!
+                    // Link orphaned/unresolvable review events to an explicit archived deleted vocabulary entity.
+                    targetVocabId = getOrCreateArchivedVocabularyId()
                 }
 
                 val remoteId = row.optString("remoteId").ifBlank { UUID.randomUUID().toString() }
@@ -423,6 +482,25 @@ class BackupManager @Inject constructor(
             transcriptsAdded = transcriptsAdded,
             reviewEventsAdded = reviewEventsAdded
         )
+    }
+
+    private suspend fun getOrCreateArchivedVocabularyId(): Int {
+        val existing = vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)
+        if (existing != null) return existing.id
+        val archived = VocabularyEntity(
+            id = 0,
+            germanText = "[Gelöscht]",
+            germanTextKey = ARCHIVED_VOCABULARY_KEY,
+            englishTranslation = "[Archived / Deleted Word]",
+            timestamp = 0L,
+            nextReview = Long.MAX_VALUE, // never appears in due review decks
+            interval = 0,
+            reviewCount = 0,
+            remoteId = "00000000-0000-4000-8000-000000000000",
+            lastModifiedAt = 0L
+        )
+        vocabularyDao.insertVocabulary(archived)
+        return vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id ?: 0
     }
 
     companion object {
@@ -492,12 +570,26 @@ class BackupManager @Inject constructor(
             // Validate vocabulary
             val vocabArray = backup.getJSONArray("vocabulary")
             val vocabIds = mutableSetOf<Int>()
+            val vocabKeys = mutableSetOf<String>()
+            val vocabRemoteIds = mutableSetOf<String>()
             for (i in 0 until vocabArray.length()) {
                 val row = vocabArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Vocabulary item must be an object.")
                 val germanText = row.optString("germanText", "").trim()
                 val translation = row.optString("englishTranslation", "").trim()
                 if (germanText.isEmpty() || translation.isEmpty()) {
                     throw BackupException.InvalidFormat("Vocabulary text and translation are required.")
+                }
+                val key = germanKey(germanText)
+                if (vocabKeys.contains(key)) {
+                    throw BackupException.InvalidFormat("Duplicate vocabulary canonical key in backup.")
+                }
+                vocabKeys.add(key)
+                val remoteId = row.optString("remoteId", "").trim()
+                if (remoteId.isNotEmpty()) {
+                    if (vocabRemoteIds.contains(remoteId)) {
+                        throw BackupException.InvalidFormat("Duplicate vocabulary remoteId in backup.")
+                    }
+                    vocabRemoteIds.add(remoteId)
                 }
                 val id = row.optInt("id", 0)
                 if (id > 0) {
@@ -523,12 +615,26 @@ class BackupManager @Inject constructor(
 
             // Validate transcripts
             val transcriptsArray = backup.getJSONArray("transcripts")
+            val transcriptRemoteIds = mutableSetOf<String>()
+            val transcriptContent = mutableSetOf<String>()
             for (i in 0 until transcriptsArray.length()) {
                 val row = transcriptsArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Transcript item must be an object.")
                 val fullText = row.optString("fullText", "").trim()
                 if (fullText.isEmpty()) throw BackupException.InvalidFormat("Transcript text is required.")
                 val ts = row.optLong("timestamp", 0L)
                 if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid transcript timestamp.")
+                val remoteId = row.optString("remoteId", "").trim()
+                if (remoteId.isNotEmpty()) {
+                    if (transcriptRemoteIds.contains(remoteId)) {
+                        throw BackupException.InvalidFormat("Duplicate transcript remoteId in backup.")
+                    }
+                    transcriptRemoteIds.add(remoteId)
+                }
+                val contentKey = "$fullText:$ts"
+                if (transcriptContent.contains(contentKey)) {
+                    throw BackupException.InvalidFormat("Duplicate transcript content in backup.")
+                }
+                transcriptContent.add(contentKey)
             }
 
             // Validate userStats
@@ -559,11 +665,15 @@ class BackupManager @Inject constructor(
             // Validate reviewEvents
             if (backup.has("reviewEvents")) {
                 val reviewArray = backup.optJSONArray("reviewEvents") ?: throw BackupException.InvalidFormat("reviewEvents must be an array.")
+                val reviewRemoteIds = mutableSetOf<String>()
                 for (i in 0 until reviewArray.length()) {
                     val row = reviewArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Review event must be an object.")
-                    val vocabId = row.optInt("vocabularyId", -1)
-                    if (vocabId <= 0 || !vocabIds.contains(vocabId)) {
-                        throw BackupException.InvalidFormat("Review event references non-existent or invalid vocabulary ID: $vocabId.")
+                    val hasVocab = row.has("vocabularyId") && !row.isNull("vocabularyId")
+                    if (hasVocab) {
+                        val vocabId = row.optInt("vocabularyId", -1)
+                        if (vocabId < 0) {
+                            throw BackupException.InvalidFormat("Invalid review event vocabulary ID: $vocabId.")
+                        }
                     }
                     val rating = row.optString("rating", "")
                     if (rating !in listOf("AGAIN", "HARD", "GOOD", "EASY")) {
@@ -576,6 +686,10 @@ class BackupManager @Inject constructor(
                     if (sched < 0 || sched > 365) throw BackupException.InvalidFormat("Invalid review scheduled days.")
                     if (actual < 0 || reviewedAt < 0 || reviewedAt > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid review timestamp.")
                     if (!UUID_REGEX.matches(remoteId)) throw BackupException.InvalidFormat("Invalid review event remoteId UUID.")
+                    if (reviewRemoteIds.contains(remoteId)) {
+                        throw BackupException.InvalidFormat("Duplicate review event remoteId in backup.")
+                    }
+                    reviewRemoteIds.add(remoteId)
                 }
             }
 

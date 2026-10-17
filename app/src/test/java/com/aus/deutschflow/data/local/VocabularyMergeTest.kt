@@ -1,7 +1,11 @@
 package com.aus.deutschflow.data.local
 
+import com.aus.deutschflow.data.local.entities.ARCHIVED_VOCABULARY_KEY
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.data.local.entities.germanKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -176,5 +180,172 @@ class VocabularyMergeTest {
         val result = content.withFurthestScheduleOf(scheduled(reviewCount = 4, interval = 10).copy(englishTranslation = "x"))
         assertEquals("dog", result.englishTranslation)
         assertEquals("der", result.article)
+    }
+
+    @Test
+    fun `preserves a recent lapse over an older mastered schedule`() {
+        val matureSurvivor = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 1000L)
+        val recentLapse = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 5000L)
+
+        val merged = matureSurvivor.withFurthestScheduleOf(
+            recentLapse,
+            now = 5000L,
+            thisLastStudiedAt = 1000L,
+            otherLastStudiedAt = 5000L
+        )
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.4f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `preserves a recent remastering over an older lapse`() {
+        val lapsedSurvivor = scheduled(reviewCount = 0, interval = 0, ease = 2.3f, next = 0L)
+            .copy(lastModifiedAt = 1000L)
+        val remastered = scheduled(reviewCount = 4, interval = 15, ease = 2.5f, next = 300_000L)
+            .copy(lastModifiedAt = 5000L)
+
+        val merged = lapsedSurvivor.withFurthestScheduleOf(
+            remastered,
+            now = 5000L,
+            thisLastStudiedAt = 1000L,
+            otherLastStudiedAt = 5000L
+        )
+        assertEquals(4, merged.reviewCount)
+        assertEquals(15, merged.interval)
+        assertEquals(300_000L, merged.nextReview)
+        assertEquals(2.5f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `preserves recent lapse even when content was edited after the lapse`() {
+        // Survivor was mastered at T=1000, then had typo/content edited at T=9000
+        val matureSurvivorEdited = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 9000L)
+        // Card lapsed at T=2000
+        val recentLapse = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 2000L)
+
+        // Study timestamps (1000 vs 2000) determine that the lapse is the latest learning event,
+        // ignoring lastModifiedAt (9000) from typographical edits.
+        val merged = matureSurvivorEdited.withFurthestScheduleOf(
+            recentLapse,
+            now = 5000L,
+            thisLastStudiedAt = 1000L,
+            otherLastStudiedAt = 2000L
+        )
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.4f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `favors due or lapsed card when timestamps are tied to avoid burying review`() {
+        val futureCard = scheduled(reviewCount = 3, interval = 20, ease = 2.5f, next = 150_000L)
+            .copy(lastModifiedAt = 2000L)
+        val dueCard = scheduled(reviewCount = 0, interval = 0, ease = 2.3f, next = 0L)
+            .copy(lastModifiedAt = 2000L)
+
+        val merged = futureCard.withFurthestScheduleOf(dueCard, now = 50_000L)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.3f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `favors sooner review when both future schedules have tied timestamps`() {
+        val furtherCard = scheduled(reviewCount = 4, interval = 25, ease = 2.6f, next = 250_000L)
+            .copy(lastModifiedAt = 1000L)
+        val soonerCard = scheduled(reviewCount = 3, interval = 10, ease = 2.5f, next = 100_000L)
+            .copy(lastModifiedAt = 1000L)
+
+        val merged = furtherCard.withFurthestScheduleOf(soonerCard, now = 50_000L)
+        assertEquals(100_000L, merged.nextReview)
+        assertEquals(10, merged.interval)
+    }
+
+    @Test
+    fun `ensures unreviewed content edits never wipe out existing study progress`() {
+        val studiedSurvivor = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 1000L)
+        val unreviewedEdit = scheduled(reviewCount = 0, interval = 0, ease = 2.5f, next = 0L)
+            .copy(lastModifiedAt = 9000L)
+
+        val merged = studiedSurvivor.withFurthestScheduleOf(unreviewedEdit, now = 9000L)
+        assertEquals(5, merged.reviewCount)
+        assertEquals(30, merged.interval)
+        assertEquals(200_000L, merged.nextReview)
+    }
+
+    @Test
+    fun `preserves recent lapse when incoming card had a content edit after the lapse`() {
+        val lapsedSurvivor = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 5000L)
+        val editedMastered = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 9000L) // Content edited after the lapse
+
+        // Using actual study event timestamps: lapse occurred at 5000L, mature review was at 1000L
+        val merged = lapsedSurvivor.withFurthestScheduleOf(
+            other = editedMastered,
+            now = 9000L,
+            thisLastStudiedAt = 5000L,
+            otherLastStudiedAt = 1000L
+        )
+
+        // The recent failure must be preserved and NOT postponed into the future
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(2.4f, merged.easeFactor, 0.0001f)
+    }
+
+    @Test
+    fun `preserves recent lapse even without study timestamps when content was edited later`() {
+        // Without explicit review event timestamps, Safety-in-Favor-of-Recall prevents postponing lapsed cards
+        val lapsedSurvivor = scheduled(reviewCount = 0, interval = 0, ease = 2.4f, next = 0L)
+            .copy(lastModifiedAt = 5000L)
+        val editedMastered = scheduled(reviewCount = 5, interval = 30, ease = 2.6f, next = 200_000L)
+            .copy(lastModifiedAt = 9000L)
+
+        val merged = lapsedSurvivor.withFurthestScheduleOf(
+            other = editedMastered,
+            now = 9000L
+        )
+
+        assertEquals(0, merged.reviewCount)
+        assertEquals(0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+    }
+
+    @Test
+    fun `archived deleted vocabulary key is protected and cannot collide with normal user words`() {
+        assertEquals("__archived_deleted__", ARCHIVED_VOCABULARY_KEY)
+
+        // Normal words with similar text never generate the reserved archived key
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("[Gelöscht]"))
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("geloescht"))
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("Gelöscht"))
+        assertNotEquals(ARCHIVED_VOCABULARY_KEY, germanKey("Archived"))
+
+        // The archived placeholder entity schedule is set to Long.MAX_VALUE so it never enters due reviews
+        val archivedEntity = VocabularyEntity(
+            id = 1,
+            germanText = "[Gelöscht]",
+            germanTextKey = ARCHIVED_VOCABULARY_KEY,
+            englishTranslation = "[Archived / Deleted Word]",
+            timestamp = 0L,
+            nextReview = Long.MAX_VALUE,
+            interval = 0,
+            reviewCount = 0,
+            remoteId = "00000000-0000-4000-8000-000000000000",
+            lastModifiedAt = 0L
+        )
+        val now = System.currentTimeMillis()
+        assertTrue("Archived placeholder nextReview must be in the infinite future", archivedEntity.nextReview > now)
+        assertTrue("Archived placeholder nextReview must never fall due in 100 years", archivedEntity.nextReview > now + 100L * 365 * 24 * 3600 * 1000)
     }
 }
