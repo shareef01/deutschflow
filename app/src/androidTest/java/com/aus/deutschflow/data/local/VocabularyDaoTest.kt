@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.aus.deutschflow.data.local.dao.MasteryCounts
 import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.service.DailyWord
+import com.aus.deutschflow.data.local.entities.ARCHIVED_VOCABULARY_KEY
 import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import kotlinx.coroutines.flow.first
