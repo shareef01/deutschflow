@@ -2,7 +2,7 @@
 
 import { useDashboard, type MasteryStats } from "@/hooks/useDashboard";
 import { useI18n } from "@/hooks/useI18n";
-import { DAILY_XP_GOAL, todayKey } from "@/lib/db/repository";
+import { DAILY_XP_GOAL, currentStreak, todayKey } from "@/lib/db/repository";
 import type { ActivityEntry } from "@/lib/db/schema";
 import { useMemo } from "react";
 
@@ -16,7 +16,7 @@ export function DashboardContent() {
   return (
     <div className="flex flex-col gap-8 p-6 overflow-y-auto h-full">
       {/* Daily Goal & Streak */}
-      <DailyGoalCard xp={todayXp} streak={userStats?.streak ?? 0} t={t} />
+      <DailyGoalCard xp={todayXp} streak={currentStreak(userStats)} t={t} />
 
       {/* Retention Analytics */}
       <MasteryBreakdownCard stats={masteryStats} t={t} />

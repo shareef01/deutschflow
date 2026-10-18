@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "@/lib/db";
 import {
   clearAllProgress as clearAllProgressRows,
+  currentStreak,
   observeTranscripts,
   observeUserStats,
   observeVocabulary,
@@ -168,7 +169,7 @@ export function useSettings() {
   const totalVocabulary = vocabulary.length;
   const totalTranscripts = transcripts.length;
   const xp = stats?.xp ?? 0;
-  const streak = stats?.streak ?? 0;
+  const streak = currentStreak(stats);
   const hasApiKey = encryptedKey !== undefined;
 
   const isAutoPlayEnabled = autoPlayRow ? autoPlayRow.value === "true" : true;

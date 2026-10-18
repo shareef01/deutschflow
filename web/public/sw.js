@@ -283,32 +283,30 @@ self.addEventListener("fetch", (event) => {
             return response;
           }
 
-          // Race check: If session terminated or epoch changed during in-flight fetch,
-          // do NOT write to cache! This prevents late writes after logout from reintroducing protected content.
-          const isLoggedOut =
-            isSessionTerminated ||
-            currentSessionEpoch !== requestEpoch ||
-            (await isPersistentSessionLoggedOut());
-
-          if (isLoggedOut) {
+          // Race check: a logout that landed while this fetch was in flight advanced
+          // the epoch, so the late response must not reintroduce protected content.
+          if (currentSessionEpoch !== requestEpoch) {
             return response;
           }
 
-          // User successfully accessed protected route online: session is confirmed active
+          // A 200 for a protected route started after any logout is the gate accepting
+          // the cookie, so the session is live again. This is the path that clears a
+          // logout recorded earlier, including one persisted by a previous worker.
+          // Neither the persisted flag nor isSessionTerminated may veto it: nothing
+          // else clears them, so consulting them here meant a single logout or cookie
+          // expiry disabled caching, and with it offline boot, for good.
           isSessionTerminated = false;
-          event.waitUntil(setPersistentSessionLoggedOut(false));
 
-          // Attach cache write to event lifetime via event.waitUntil to prevent detached write drops
+          // Attach cache write to event lifetime via event.waitUntil to prevent detached write drops.
+          // The flag is cleared first so a logout arriving meanwhile, whose write is
+          // queued behind this one, is the state that persists.
           const copy = response.clone();
           event.waitUntil(
-            caches.open(CACHE_NAME)
+            setPersistentSessionLoggedOut(false)
+              .then(() => caches.open(CACHE_NAME))
               .then(async (cache) => {
                 // Double check before committing write to cache
-                if (
-                  isSessionTerminated ||
-                  currentSessionEpoch !== requestEpoch ||
-                  (await isPersistentSessionLoggedOut())
-                ) {
+                if (isSessionTerminated || currentSessionEpoch !== requestEpoch) {
                   return;
                 }
                 await cache.put(request, copy);

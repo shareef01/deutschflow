@@ -14,6 +14,8 @@ import {
   purgeProtectedCaches,
   isProtectedAppRoute,
   notifyServiceWorkerPurge,
+  markSessionEstablished,
+  setPersistentSessionLoggedOut,
 } from "@/lib/auth/logout";
 
 /**
@@ -399,6 +401,32 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
       expect(ack.success).toBe(false);
       expect(ack.swStatus).toBe("error");
       expect(ack.error).toBe("QuotaExceededError");
+    });
+
+    it("markSessionEstablished clears the persisted logged-out flag and tells the worker", async () => {
+      await setPersistentSessionLoggedOut(true);
+      const mockController = { postMessage: vi.fn() } as unknown as ServiceWorker;
+
+      await markSessionEstablished(mockController);
+
+      expect(mockController.postMessage).toHaveBeenCalledWith({ type: "SESSION_ESTABLISHED" });
+      const state = await new Promise<{ loggedOut?: boolean } | undefined>((resolve, reject) => {
+        const open = indexedDB.open("deutschflow-session", 1);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const get = open.result.transaction("auth", "readonly").objectStore("auth").get("state");
+          get.onsuccess = () => {
+            open.result.close();
+            resolve(get.result);
+          };
+          get.onerror = () => reject(get.error);
+        };
+      });
+      expect(state?.loggedOut).toBe(false);
+    });
+
+    it("markSessionEstablished tolerates a page with no controlling worker", async () => {
+      await expect(markSessionEstablished(null)).resolves.toBeUndefined();
     });
 
     it("notifyServiceWorkerPurge handles missing service worker controller gracefully", async () => {

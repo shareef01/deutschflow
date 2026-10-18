@@ -228,6 +228,35 @@ export async function notifyServiceWorkerPurge(
   });
 }
 
+/**
+ * Tells this origin a session exists again, after a successful sign-in.
+ *
+ * A logout (or an expired cookie) leaves a persisted logged-out flag that makes the
+ * service worker refuse to serve cached pages offline. The post-login redirect is a
+ * client-side transition the worker never sees as a navigation, so without this the
+ * flag outlived the new session and offline boot stayed broken.
+ *
+ * Clears the flag here as well as in the worker, so it is gone even when no worker
+ * controls the page yet. Never throws: a failure only costs offline mode until the
+ * next full navigation, which clears the flag too.
+ */
+export async function markSessionEstablished(
+  controller?: ServiceWorker | null
+): Promise<void> {
+  await setPersistentSessionLoggedOut(false);
+  const swController =
+    controller !== undefined
+      ? controller
+      : typeof navigator !== "undefined"
+      ? navigator.serviceWorker?.controller
+      : null;
+  try {
+    swController?.postMessage({ type: "SESSION_ESTABLISHED" });
+  } catch {
+    // The worker clears the flag on the next navigation it serves.
+  }
+}
+
 export interface LogoutResult {
   success: boolean;
   serverSuccess: boolean;
