@@ -208,6 +208,7 @@ fun GlassButton(
     enabled: Boolean = true,
     glow: Color = AppTheme.colors.azureDeep,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     content: @Composable RowScope.() -> Unit
 ) {
     val interactionSource = rememberPressSource()
@@ -221,6 +222,7 @@ fun GlassButton(
             .pressScale(interactionSource),
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, glassBorderBrush(glow, alpha = 0.5f)),
+        contentPadding = contentPadding,
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = glow.copy(alpha = 0.12f),
             contentColor = contentColor,

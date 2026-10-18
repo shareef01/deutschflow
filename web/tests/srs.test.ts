@@ -4,6 +4,7 @@ import {
   MAX_INTERVAL_DAYS,
   ReviewQuality,
   calculateNextReview,
+  formatSrsInterval,
 } from "@/lib/ai/srs";
 import type { VocabularyEntry } from "@/lib/db/schema";
 
@@ -195,5 +196,25 @@ describe("calculateNextReview — the SM-2 schedule", () => {
     expect(result.plural).toBe("Häuser");
     expect(result.synonyms).toBe("Gebäude");
     expect(result.id).toBe(original.id);
+  });
+});
+
+describe("formatSrsInterval — UI badge formatting", () => {
+  it("formats immediate / zero interval as under 10m", () => {
+    expect(formatSrsInterval(0)).toBe("< 10m");
+    expect(formatSrsInterval(-1)).toBe("< 10m");
+  });
+
+  it("formats single and multi-day intervals", () => {
+    expect(formatSrsInterval(1)).toBe("1d");
+    expect(formatSrsInterval(6)).toBe("6d");
+    expect(formatSrsInterval(29)).toBe("29d");
+  });
+
+  it("formats multi-month and year intervals", () => {
+    expect(formatSrsInterval(30)).toBe("1mo");
+    expect(formatSrsInterval(60)).toBe("2mo");
+    expect(formatSrsInterval(180)).toBe("6mo");
+    expect(formatSrsInterval(365)).toBe("1y");
   });
 });

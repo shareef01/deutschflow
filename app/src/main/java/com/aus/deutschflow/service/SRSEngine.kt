@@ -138,5 +138,17 @@ class SRSEngine @Inject constructor() {
          */
         const val HARD_EASE_PENALTY = 0.15f
         const val AGAIN_EASE_PENALTY = 0.20f
+
+        /**
+         * Formats a spaced repetition interval in days into a concise, learner-friendly badge.
+         * E.g. 0 -> "< 10m", 1 -> "1d", 6 -> "6d", 60 -> "2mo", 365 -> "1y".
+         */
+        fun formatInterval(intervalDays: Int): String = when {
+            intervalDays <= 0 -> "< 10m"
+            intervalDays == 1 -> "1d"
+            intervalDays < 30 -> "${intervalDays}d"
+            intervalDays < 365 -> "${Math.round(intervalDays / 30f)}mo"
+            else -> "${Math.round(intervalDays / 365f)}y"
+        }
     }
 }

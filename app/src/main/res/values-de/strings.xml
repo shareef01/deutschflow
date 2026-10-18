@@ -118,6 +118,8 @@
         <item quantity="one">%1$d Karte übrig</item>
         <item quantity="other">%1$d Karten übrig</item>
     </plurals>
+    <string name="study_progress_counter">Karte %1$d von %2$d</string>
+    <string name="study_reviewed_stat">%1$d Karten wiederholt</string>
     <string name="study_again">Nochmal</string>
     <string name="study_hard">Schwer</string>
     <string name="study_good">Gut</string>

@@ -31,6 +31,8 @@ export function useStudy() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [status, setStatus] = useState<StudyStatus>("loading");
   const [loadError, setLoadError] = useState<TKey | null>(null);
+  const [sessionReviewedCount, setSessionReviewedCount] = useState(0);
+  const [initialSessionSize, setInitialSessionSize] = useState(0);
 
   /**
    * True when this sitting is extra practice rather than the scheduler's queue.
@@ -71,6 +73,8 @@ export function useStudy() {
       setIsFlipped(false);
       setIsExtraPractice(session.isExtraPractice);
       setStudyList(session.studyList);
+      setSessionReviewedCount(0);
+      setInitialSessionSize(session.studyList.length);
       setStatus("ready");
     } catch {
       if (generation !== initGeneration.current) return;
@@ -87,6 +91,8 @@ export function useStudy() {
     setIsFlipped(false);
     setIsExtraPractice(true);
     setStudyList(shuffle(all));
+    setSessionReviewedCount(0);
+    setInitialSessionSize(all.length);
   }, []);
 
   useEffect(() => {
@@ -126,6 +132,7 @@ export function useStudy() {
       }
 
       setStudyList(nextList);
+      setSessionReviewedCount((count) => count + 1);
       // Removing at currentIndex slides the next card into that slot, so the index
       // only moves when it ran off the end.
       setCurrentIndex(currentIndex >= nextList.length ? 0 : currentIndex);
@@ -179,6 +186,8 @@ export function useStudy() {
     restartSession,
     autoPlay,
     speak,
+    sessionReviewedCount,
+    initialSessionSize,
   };
 }
 

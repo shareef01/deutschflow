@@ -55,6 +55,9 @@ class StudyViewModel @Inject constructor(
     private val _sessionReviewedCount = MutableStateFlow(0)
     val sessionReviewedCount: StateFlow<Int> = _sessionReviewedCount
 
+    private val _initialSessionSize = MutableStateFlow(0)
+    val initialSessionSize: StateFlow<Int> = _initialSessionSize
+
     /**
      * True when this sitting is extra practice rather than the scheduler's queue.
      *
@@ -128,6 +131,7 @@ class StudyViewModel @Inject constructor(
             _isExtraPractice.value = isExtra
             _studyList.value = targetList.shuffled()
             _sessionReviewedCount.value = 0
+            _initialSessionSize.value = targetList.size
             _hasLoaded.value = true
         }
     }
@@ -146,6 +150,7 @@ class StudyViewModel @Inject constructor(
             _isExtraPractice.value = true
             _studyList.value = allList.shuffled()
             _sessionReviewedCount.value = 0
+            _initialSessionSize.value = allList.size
         }
     }
 
@@ -299,6 +304,15 @@ class StudyViewModel @Inject constructor(
             _currentIndex.value = (_currentIndex.value + 1) % size
             _isFlipped.value = false
         }
+    }
+
+    /**
+     * Computes a concise learner-facing preview badge (e.g. "< 10m", "1d", "4d", "7d")
+     * for the given word and quality rating.
+     */
+    fun getIntervalPreview(item: VocabularyEntity, quality: ReviewQuality): String {
+        val next = srsEngine.calculateNextReview(item, quality)
+        return SRSEngine.formatInterval(next.interval)
     }
 
     fun autoPlay(text: String) {

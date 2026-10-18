@@ -209,4 +209,17 @@ class SRSEngineTest {
         assertEquals("Gebäude", result.synonyms)
         assertEquals(original.id, result.id)
     }
+
+    @Test
+    fun formatIntervalFormatsBadgesConsistently() {
+        assertEquals("< 10m", SRSEngine.formatInterval(0))
+        assertEquals("< 10m", SRSEngine.formatInterval(-1))
+        assertEquals("1d", SRSEngine.formatInterval(1))
+        assertEquals("6d", SRSEngine.formatInterval(6))
+        assertEquals("29d", SRSEngine.formatInterval(29))
+        assertEquals("1mo", SRSEngine.formatInterval(30))
+        assertEquals("2mo", SRSEngine.formatInterval(60))
+        assertEquals("6mo", SRSEngine.formatInterval(180))
+        assertEquals("1y", SRSEngine.formatInterval(365))
+    }
 }

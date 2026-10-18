@@ -112,3 +112,15 @@ export function calculateNextReview(
     reviewCount: nextReviewCount,
   };
 }
+
+/**
+ * Formats a spaced repetition interval in days into a concise, learner-friendly badge.
+ * E.g. 0 -> "< 10m", 1 -> "1d", 6 -> "6d", 60 -> "2mo", 365 -> "1y".
+ */
+export function formatSrsInterval(intervalDays: number): string {
+  if (intervalDays <= 0) return "< 10m";
+  if (intervalDays === 1) return "1d";
+  if (intervalDays < 30) return `${intervalDays}d`;
+  if (intervalDays < 365) return `${Math.round(intervalDays / 30)}mo`;
+  return `${Math.round(intervalDays / 365)}y`;
+}
