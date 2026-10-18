@@ -2,6 +2,7 @@
 
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { markSessionEstablished } from "@/lib/auth/logout";
 
 /**
  * The login form component that needs Suspense because it uses useSearchParams.
@@ -27,6 +28,7 @@ function LoginForm() {
         setError(result.error || "Sign-in failed. Try again.");
         return;
       }
+      await markSessionEstablished();
       router.replace(result.redirect);
       router.refresh();
     } catch {
