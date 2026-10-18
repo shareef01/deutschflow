@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  currentStreak,
   nextStreak,
   daysBetween,
   getHeatmapCutoffDate,
@@ -111,5 +112,37 @@ describe("nextStreak & daysBetween — calendar days in the device's zone", () =
     const today = new Date();
     const cutoffToday = getHeatmapCutoffDate(today);
     expect(daysBetween(cutoffToday.getTime(), today.getTime())).toBe(84);
+  });
+});
+
+/** Mirrors CurrentStreakTest.kt, in the device's own zone. */
+describe("currentStreak — what the dashboard shows between sessions", () => {
+  const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).getTime();
+
+  it("keeps the streak when studied today", () => {
+    expect(currentStreak({ streak: 10, lastActivityTimestamp: at(12, 8) }, at(12, 22))).toBe(10);
+  });
+
+  it("keeps it when studied yesterday, because today can still extend it", () => {
+    expect(currentStreak({ streak: 10, lastActivityTimestamp: at(11, 23, 59) }, at(12, 23, 59))).toBe(10);
+  });
+
+  it("ends it after a whole missed day", () => {
+    expect(currentStreak({ streak: 10, lastActivityTimestamp: at(10, 23, 59) }, at(12, 0, 1))).toBe(0);
+  });
+
+  it("shows zero, not the old number, after a long absence", () => {
+    expect(currentStreak({ streak: 10, lastActivityTimestamp: at(1, 9) }, at(12, 9))).toBe(0);
+  });
+
+  it("counts calendar days, not 24-hour periods, across a DST change", () => {
+    // 25 Oct 2026 is a 25-hour day where clocks go back; still one calendar day apart.
+    expect(currentStreak({ streak: 4, lastActivityTimestamp: at(24, 23, 30) }, at(25, 23, 30))).toBe(4);
+  });
+
+  it("is zero when never studied", () => {
+    expect(currentStreak(undefined, at(12, 9))).toBe(0);
+    expect(currentStreak({ streak: 0, lastActivityTimestamp: 0 }, at(12, 9))).toBe(0);
+    expect(currentStreak({ streak: 5, lastActivityTimestamp: 0 }, at(12, 9))).toBe(0);
   });
 });

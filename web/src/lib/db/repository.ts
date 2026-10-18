@@ -637,6 +637,21 @@ export function nextStreak(currentStreak: number, lastActivity: number, now: num
 }
 
 /**
+ * The streak to show right now — UserStatsEntity.currentStreak() on Android.
+ *
+ * The stored value only changes when a card is rated, so it kept showing a streak
+ * long after it had lapsed. Studying yesterday still counts, since today can extend
+ * it; a whole missed calendar day ends it.
+ */
+export function currentStreak(
+  stats: Pick<UserStatsEntry, "streak" | "lastActivityTimestamp"> | null | undefined,
+  now: number = Date.now()
+): number {
+  if (!stats || stats.streak <= 0 || stats.lastActivityTimestamp <= 0) return 0;
+  return daysBetween(stats.lastActivityTimestamp, now) <= 1 ? stats.streak : 0;
+}
+
+/**
  * Local civil date ordinal: converts local year/month/date to integer UTC day number.
  * Ensures differences represent civil calendar days regardless of 23h / 25h DST changes.
  */

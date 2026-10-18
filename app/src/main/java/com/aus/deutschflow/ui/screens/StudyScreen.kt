@@ -35,6 +35,32 @@ import com.aus.deutschflow.ui.components.*
 import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.StudyViewModel
 
+/** What the session counter and progress bar show. */
+internal data class StudySessionProgress(
+    val totalInSession: Int,
+    val currentCardNumber: Int,
+    val fraction: Float
+)
+
+/**
+ * The session total is everything answered plus everything still queued.
+ *
+ * It used to be `max(initialSize, remaining)`, but an Again rating counts as reviewed
+ * and puts the card back in the queue, so the real total grows past the starting
+ * size. With three cards and one Again the counter read 3 / 3 and the bar sat at 100%
+ * with a card still to answer. Mirrors the web study page.
+ */
+internal fun studySessionProgress(
+    initialSize: Int,
+    reviewed: Int,
+    remaining: Int
+): StudySessionProgress {
+    val total = maxOf(initialSize, reviewed + remaining)
+    val current = (reviewed + 1).coerceAtMost(total)
+    val fraction = if (total > 0) (reviewed.toFloat() / total).coerceIn(0f, 1f) else 0f
+    return StudySessionProgress(total, current, fraction)
+}
+
 @Composable
 fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
     val hasLoaded by viewModel.hasLoaded.collectAsStateWithLifecycle()
@@ -235,11 +261,8 @@ private fun StudySessionContent(
         viewModel.autoPlay(currentItem.germanText)
     }
 
-    val totalInSession = initialSessionSize.coerceAtLeast(studyList.size)
-    val currentCardNumber = (sessionReviewedCount + 1).coerceAtMost(totalInSession)
-    val sessionProgress = if (totalInSession > 0) {
-        (sessionReviewedCount.toFloat() / totalInSession.toFloat()).coerceIn(0f, 1f)
-    } else 0f
+    val (totalInSession, currentCardNumber, sessionProgress) =
+        studySessionProgress(initialSessionSize, sessionReviewedCount, studyList.size)
     val animatedProgress by animateFloatAsState(
         targetValue = sessionProgress,
         animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { DeutschFlowDB, foldGermanKey, germanMatchKey } from "@/lib/db/schema";
@@ -40,7 +40,17 @@ describe("Cross-Platform Encrypted & Plaintext Backup Compatibility", () => {
     db = new DeutschFlowDB(`cross-platform-backup-${counter++}`);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("imports plaintext Android export into Web Dexie library", async () => {
+    // Import recomputes the streak from the activity log against today's date, and
+    // the fixture's last active day is 2026-10-17. Without a pinned clock the
+    // expected streak of 8 decays to 0 two days later and the test starts failing
+    // on its own. Only Date is faked: Dexie and fake-indexeddb need real timers.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 17, 12, 0));
     const result = await importLibrary(db, vectors.androidPlaintext);
     expect(result.vocabularyAdded).toBe(3);
     expect(result.transcriptsAdded).toBe(1);
