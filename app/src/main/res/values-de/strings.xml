@@ -124,6 +124,10 @@
     <string name="study_hard">Schwer</string>
     <string name="study_good">Gut</string>
     <string name="study_easy">Leicht</string>
+    <string name="srs_interval_soon">&lt; 10 Min.</string>
+    <string name="srs_interval_days">%1$d T.</string>
+    <string name="srs_interval_months">%1$d Mon.</string>
+    <string name="srs_interval_years">%1$d J.</string>
     <string name="study_tap_to_flip">Zum Umdrehen tippen</string>
     <string name="study_show_german">Das deutsche Wort zeigen</string>
     <string name="study_show_translation">Die Übersetzung zeigen</string>
@@ -290,6 +294,7 @@
     <string name="ai_input_too_long">Eingabe ist zu lang (maximal %1$d Zeichen)</string>
     <string name="ai_message_too_long">Nachricht ist zu lang (maximal %1$d Zeichen)</string>
     <string name="ai_cancelled">Anfrage abgebrochen</string>
+    <string name="ai_timeout">Groq hat nicht rechtzeitig geantwortet. Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="settings_cefr_level">GER-Niveau</string>
     <string name="settings_cefr_level_desc">Komplexität der KI-Gespräche und Analysen anpassen</string>
     <string name="settings_cefr_none">Keines (Standard)</string>

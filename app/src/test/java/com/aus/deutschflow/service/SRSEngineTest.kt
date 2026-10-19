@@ -1,10 +1,14 @@
 package com.aus.deutschflow.service
 
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.w3c.dom.Element
+import java.io.File
 import java.util.concurrent.TimeUnit
+import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * The scheduler, which is the one piece of this app whose mistakes compound.
@@ -210,16 +214,55 @@ class SRSEngineTest {
         assertEquals(original.id, result.id)
     }
 
+    // The same cases are asserted for the web in srs.test.ts ("formatSrsInterval").
     @Test
-    fun formatIntervalFormatsBadgesConsistently() {
-        assertEquals("< 10m", SRSEngine.formatInterval(0))
-        assertEquals("< 10m", SRSEngine.formatInterval(-1))
-        assertEquals("1d", SRSEngine.formatInterval(1))
-        assertEquals("6d", SRSEngine.formatInterval(6))
-        assertEquals("29d", SRSEngine.formatInterval(29))
-        assertEquals("1mo", SRSEngine.formatInterval(30))
-        assertEquals("2mo", SRSEngine.formatInterval(60))
-        assertEquals("6mo", SRSEngine.formatInterval(180))
-        assertEquals("1y", SRSEngine.formatInterval(365))
+    fun intervalBadgePicksTheUnitAndCount() {
+        assertEquals(IntervalBadge(R.string.srs_interval_soon, 0), SRSEngine.intervalBadge(0))
+        assertEquals(IntervalBadge(R.string.srs_interval_soon, 0), SRSEngine.intervalBadge(-1))
+        assertEquals(IntervalBadge(R.string.srs_interval_days, 1), SRSEngine.intervalBadge(1))
+        assertEquals(IntervalBadge(R.string.srs_interval_days, 6), SRSEngine.intervalBadge(6))
+        assertEquals(IntervalBadge(R.string.srs_interval_days, 29), SRSEngine.intervalBadge(29))
+        assertEquals(IntervalBadge(R.string.srs_interval_months, 1), SRSEngine.intervalBadge(30))
+        assertEquals(IntervalBadge(R.string.srs_interval_months, 2), SRSEngine.intervalBadge(60))
+        assertEquals(IntervalBadge(R.string.srs_interval_months, 6), SRSEngine.intervalBadge(180))
+        assertEquals(IntervalBadge(R.string.srs_interval_years, 1), SRSEngine.intervalBadge(365))
+    }
+
+    /**
+     * The wording itself, read from the resource files: the badges were hardcoded in
+     * English, and German learners saw "6d". Parsed rather than resolved through a
+     * Context because these are plain JVM tests; the values match web i18n.ts.
+     */
+    @Test
+    fun intervalBadgeWordingIsLocalized() {
+        assertEquals(
+            mapOf(
+                "srs_interval_soon" to "< 10m",
+                "srs_interval_days" to "%1\$dd",
+                "srs_interval_months" to "%1\$dmo",
+                "srs_interval_years" to "%1\$dy",
+            ),
+            srsStrings("values")
+        )
+        assertEquals(
+            mapOf(
+                "srs_interval_soon" to "< 10 Min.",
+                "srs_interval_days" to "%1\$d T.",
+                "srs_interval_months" to "%1\$d Mon.",
+                "srs_interval_years" to "%1\$d J.",
+            ),
+            srsStrings("values-de")
+        )
+    }
+
+    private fun srsStrings(folder: String): Map<String, String> {
+        // Gradle runs unit tests from the module directory; an IDE may use the root.
+        val file = listOf("src/main/res/$folder/strings.xml", "app/src/main/res/$folder/strings.xml")
+            .map(::File).first { it.exists() }
+        val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+            .getElementsByTagName("string")
+        return (0 until nodes.length).map { nodes.item(it) as Element }
+            .filter { it.getAttribute("name").startsWith("srs_interval_") }
+            .associate { it.getAttribute("name") to it.textContent }
     }
 }

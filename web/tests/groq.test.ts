@@ -10,8 +10,11 @@ import {
   DEFAULT_GROQ_MODEL,
   SUPPORTED_GROQ_MODELS,
   getActiveGroqModel,
+  interrogateWord,
+  startRoleplay,
   wasCutOff,
 } from "@/lib/ai/groq";
+import { setCurrentLang, translate } from "@/lib/i18n";
 
 describe("contentOf — the OpenAI chat response shape", () => {
   it("pulls the assistant text from a choices[0].message", () => {
@@ -54,7 +57,7 @@ describe("detailFrom — the provider's own error sentence", () => {
     });
     const result1 = detailFrom(decommissioned);
     expect(result1).toContain("The configured AI model is unavailable or retired");
-    expect(result1).toContain("Please update GROQ_MODEL");
+    expect(result1).toContain("Please update NEXT_PUBLIC_GROQ_MODEL");
     expect(result1).toContain("mixtral-8x7b-32768");
 
     const notFound = JSON.stringify({
@@ -65,29 +68,29 @@ describe("detailFrom — the provider's own error sentence", () => {
     });
     const result2 = detailFrom(notFound);
     expect(result2).toContain("The configured AI model is unavailable or retired");
-    expect(result2).toContain("Please update GROQ_MODEL");
+    expect(result2).toContain("Please update NEXT_PUBLIC_GROQ_MODEL");
   });
 });
 
 describe("getActiveGroqModel — model selection and fallback", () => {
-  const origEnv = process.env.GROQ_MODEL;
+  const origEnv = process.env.NEXT_PUBLIC_GROQ_MODEL;
   afterEach(() => {
     if (origEnv !== undefined) {
-      process.env.GROQ_MODEL = origEnv;
+      process.env.NEXT_PUBLIC_GROQ_MODEL = origEnv;
     } else {
-      delete process.env.GROQ_MODEL;
+      delete process.env.NEXT_PUBLIC_GROQ_MODEL;
     }
   });
 
-  it("uses DEFAULT_GROQ_MODEL when GROQ_MODEL is unset or blank", () => {
-    delete process.env.GROQ_MODEL;
+  it("uses DEFAULT_GROQ_MODEL when NEXT_PUBLIC_GROQ_MODEL is unset or blank", () => {
+    delete process.env.NEXT_PUBLIC_GROQ_MODEL;
     expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
-    process.env.GROQ_MODEL = "   ";
+    process.env.NEXT_PUBLIC_GROQ_MODEL = "   ";
     expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
   });
 
   it("rejects retired model mixtral-8x7b-32768 and falls back to default", () => {
-    process.env.GROQ_MODEL = "mixtral-8x7b-32768";
+    process.env.NEXT_PUBLIC_GROQ_MODEL = "mixtral-8x7b-32768";
     expect(SUPPORTED_GROQ_MODELS).not.toContain("mixtral-8x7b-32768");
     expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
   });
@@ -96,10 +99,10 @@ describe("getActiveGroqModel — model selection and fallback", () => {
     expect(SUPPORTED_GROQ_MODELS).not.toContain("llama-3.1-8b-instant");
     expect(SUPPORTED_GROQ_MODELS).not.toContain("llama-3.3-70b-versatile");
 
-    process.env.GROQ_MODEL = "llama-3.1-8b-instant";
+    process.env.NEXT_PUBLIC_GROQ_MODEL = "llama-3.1-8b-instant";
     expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
 
-    process.env.GROQ_MODEL = "llama-3.3-70b-versatile";
+    process.env.NEXT_PUBLIC_GROQ_MODEL = "llama-3.3-70b-versatile";
     expect(getActiveGroqModel()).toBe(DEFAULT_GROQ_MODEL);
   });
 
@@ -107,7 +110,7 @@ describe("getActiveGroqModel — model selection and fallback", () => {
     expect(SUPPORTED_GROQ_MODELS).toContain("openai/gpt-oss-120b");
     expect(SUPPORTED_GROQ_MODELS).toContain("openai/gpt-oss-20b");
     for (const model of SUPPORTED_GROQ_MODELS) {
-      process.env.GROQ_MODEL = model;
+      process.env.NEXT_PUBLIC_GROQ_MODEL = model;
       expect(getActiveGroqModel()).toBe(model);
     }
   });
@@ -238,6 +241,95 @@ describe("translateAndExtract — the provider's error precedence", () => {
     respond(401, '{"error":{}}');
     const result = await translateAndExtract("Hallo", "gsk_key");
     if (result.kind === "failure") expect(result.message).toMatch(/failed|fehlgeschlagen/i);
+  });
+});
+
+/**
+ * post() aborts its own controller after 30 s, and that abort reaches fetch as the
+ * same AbortError a caller's cancel does. Every caller used to map AbortError to
+ * "Request cancelled", so a slow network looked like something the user had done.
+ */
+describe("request timeout versus caller cancellation", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    setCurrentLang("en");
+  });
+
+  /** A fetch that never answers, and rejects only when its signal is aborted. */
+  const stallUntilAborted = () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("Aborted", "AbortError"))
+        );
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  it("reports the internal 30 s timeout as a timeout, not as cancelled", async () => {
+    vi.useFakeTimers();
+    const fetchMock = stallUntilAborted();
+
+    const pending = translateAndExtract("Hallo", "gsk_key");
+    await vi.advanceTimersByTimeAsync(30_000);
+    const result = await pending;
+
+    expect(result).toEqual({ kind: "failure", message: translate("en", "ai.timeout") });
+    expect(result.kind === "failure" && result.message).not.toBe(translate("en", "ai.cancelled"));
+    // A request that already waited the full timeout is not sent again.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not time out before 30 s", async () => {
+    vi.useFakeTimers();
+    stallUntilAborted();
+    let settled = false;
+
+    const pending = translateAndExtract("Hallo", "gsk_key").then((r) => {
+      settled = true;
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await pending).kind).toBe("failure");
+  });
+
+  it("still reports the caller's own abort as cancelled", async () => {
+    stallUntilAborted();
+    const controller = new AbortController();
+
+    const pending = translateAndExtract("Hallo", "gsk_key", controller.signal);
+    controller.abort();
+
+    expect(await pending).toEqual({ kind: "failure", message: translate("en", "ai.cancelled") });
+  });
+
+  it("maps the timeout the same way for word lookups and roleplay", async () => {
+    vi.useFakeTimers();
+    stallUntilAborted();
+
+    const word = interrogateWord("Haus", "gsk_key");
+    const roleplay = startRoleplay("At the bakery", [], "gsk_key");
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(await word).toEqual({ kind: "failure", message: translate("en", "ai.timeout") });
+    expect(await roleplay).toEqual({ kind: "failure", message: translate("en", "ai.timeout") });
+  });
+
+  it("localizes the timeout message", async () => {
+    vi.useFakeTimers();
+    stallUntilAborted();
+    setCurrentLang("de");
+
+    const pending = translateAndExtract("Hallo", "gsk_key");
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(await pending).toEqual({ kind: "failure", message: translate("de", "ai.timeout") });
+    expect(translate("de", "ai.timeout")).not.toBe(translate("en", "ai.timeout"));
   });
 });
 

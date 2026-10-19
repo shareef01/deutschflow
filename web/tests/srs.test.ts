@@ -6,6 +6,7 @@ import {
   calculateNextReview,
   formatSrsInterval,
 } from "@/lib/ai/srs";
+import { setCurrentLang } from "@/lib/i18n";
 import type { VocabularyEntry } from "@/lib/db/schema";
 
 /**
@@ -200,21 +201,40 @@ describe("calculateNextReview — the SM-2 schedule", () => {
 });
 
 describe("formatSrsInterval — UI badge formatting", () => {
+  // The same cases are asserted for Android in SRSEngineTest.intervalBadge*.
   it("formats immediate / zero interval as under 10m", () => {
-    expect(formatSrsInterval(0)).toBe("< 10m");
-    expect(formatSrsInterval(-1)).toBe("< 10m");
+    expect(formatSrsInterval(0, "en")).toBe("< 10m");
+    expect(formatSrsInterval(-1, "en")).toBe("< 10m");
   });
 
   it("formats single and multi-day intervals", () => {
-    expect(formatSrsInterval(1)).toBe("1d");
-    expect(formatSrsInterval(6)).toBe("6d");
-    expect(formatSrsInterval(29)).toBe("29d");
+    expect(formatSrsInterval(1, "en")).toBe("1d");
+    expect(formatSrsInterval(6, "en")).toBe("6d");
+    expect(formatSrsInterval(29, "en")).toBe("29d");
   });
 
   it("formats multi-month and year intervals", () => {
-    expect(formatSrsInterval(30)).toBe("1mo");
-    expect(formatSrsInterval(60)).toBe("2mo");
-    expect(formatSrsInterval(180)).toBe("6mo");
-    expect(formatSrsInterval(365)).toBe("1y");
+    expect(formatSrsInterval(30, "en")).toBe("1mo");
+    expect(formatSrsInterval(60, "en")).toBe("2mo");
+    expect(formatSrsInterval(180, "en")).toBe("6mo");
+    expect(formatSrsInterval(365, "en")).toBe("1y");
+  });
+
+  it("uses German units for German learners", () => {
+    expect(formatSrsInterval(0, "de")).toBe("< 10 Min.");
+    expect(formatSrsInterval(1, "de")).toBe("1 T.");
+    expect(formatSrsInterval(29, "de")).toBe("29 T.");
+    expect(formatSrsInterval(60, "de")).toBe("2 Mon.");
+    expect(formatSrsInterval(365, "de")).toBe("1 J.");
+  });
+
+  it("follows the current UI language when none is passed", () => {
+    setCurrentLang("de");
+    try {
+      expect(formatSrsInterval(6)).toBe("6 T.");
+    } finally {
+      setCurrentLang("en");
+    }
+    expect(formatSrsInterval(6)).toBe("6d");
   });
 });

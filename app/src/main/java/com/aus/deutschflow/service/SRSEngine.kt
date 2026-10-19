@@ -1,5 +1,7 @@
 package com.aus.deutschflow.service
 
+import androidx.annotation.StringRes
+import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -11,6 +13,9 @@ enum class ReviewQuality(val value: Int) {
     GOOD(2),   // Succeeded with normal effort
     EASY(3)    // Succeeded effortlessly
 }
+
+/** A string resource taking [count] as its only argument (srs_interval_soon ignores it). */
+data class IntervalBadge(@StringRes val resId: Int, val count: Int)
 
 @Singleton
 class SRSEngine @Inject constructor() {
@@ -140,15 +145,20 @@ class SRSEngine @Inject constructor() {
         const val AGAIN_EASE_PENALTY = 0.20f
 
         /**
-         * Formats a spaced repetition interval in days into a concise, learner-friendly badge.
-         * E.g. 0 -> "< 10m", 1 -> "1d", 6 -> "6d", 60 -> "2mo", 365 -> "1y".
+         * The learner-facing badge for an interval in days, as a string resource and
+         * the number to put in it. E.g. in English 0 -> "< 10m", 1 -> "1d", 6 -> "6d",
+         * 60 -> "2mo", 365 -> "1y".
+         *
+         * A resource rather than a String: the units used to be hardcoded in English,
+         * so German learners saw "6d" and "2mo" under German buttons. Resolving it is
+         * left to the UI, which has the configuration's locale. formatSrsInterval in
+         * web/src/lib/ai/srs.ts mirrors these thresholds and the srs.interval* keys.
          */
-        fun formatInterval(intervalDays: Int): String = when {
-            intervalDays <= 0 -> "< 10m"
-            intervalDays == 1 -> "1d"
-            intervalDays < 30 -> "${intervalDays}d"
-            intervalDays < 365 -> "${Math.round(intervalDays / 30f)}mo"
-            else -> "${Math.round(intervalDays / 365f)}y"
+        fun intervalBadge(intervalDays: Int): IntervalBadge = when {
+            intervalDays <= 0 -> IntervalBadge(R.string.srs_interval_soon, 0)
+            intervalDays < 30 -> IntervalBadge(R.string.srs_interval_days, intervalDays)
+            intervalDays < 365 -> IntervalBadge(R.string.srs_interval_months, Math.round(intervalDays / 30f))
+            else -> IntervalBadge(R.string.srs_interval_years, Math.round(intervalDays / 365f))
         }
     }
 }

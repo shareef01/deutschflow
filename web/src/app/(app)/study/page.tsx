@@ -104,7 +104,7 @@ function FlashcardMode({
   study: ReturnType<typeof useStudy>;
   onNavigateToDashboard: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const {
     studyList,
     totalWords,
@@ -262,16 +262,20 @@ function FlashcardMode({
       : 0;
 
   const againInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.AGAIN).interval
+    calculateNextReview(currentItem, ReviewQuality.AGAIN).interval,
+    lang
   );
   const hardInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.HARD).interval
+    calculateNextReview(currentItem, ReviewQuality.HARD).interval,
+    lang
   );
   const goodInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.GOOD).interval
+    calculateNextReview(currentItem, ReviewQuality.GOOD).interval,
+    lang
   );
   const easyInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.EASY).interval
+    calculateNextReview(currentItem, ReviewQuality.EASY).interval,
+    lang
   );
 
   return (
