@@ -54,8 +54,11 @@ describe("login throttle", () => {
   });
 
   it("caps the wait so a legitimate user is not locked out forever", () => {
-    for (let i = 0; i < 40; i++) recordFailure("1.2.3.4");
-    expect(delayForNextAttempt("1.2.3.4")).toBe(30_000);
+    // Pinned clock: with Date.now() a slow runner sees a few ms elapse between the
+    // last failure and the check, and the wait reads 29998 instead of the cap.
+    const now = 1_000_000;
+    for (let i = 0; i < 40; i++) recordFailure("1.2.3.4", now);
+    expect(delayForNextAttempt("1.2.3.4", now)).toBe(30_000);
   });
 
   it("throttles each caller separately", () => {
