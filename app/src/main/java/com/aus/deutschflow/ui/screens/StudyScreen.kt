@@ -518,7 +518,7 @@ private fun StudySessionContent(
         ) {
             StudyFeedbackButton(
                 label = stringResource(R.string.study_again),
-                subtitle = againInterval,
+                subtitle = stringResource(againInterval.resId, againInterval.count),
                 glow = MaterialTheme.colorScheme.error,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
@@ -529,7 +529,7 @@ private fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_hard),
-                subtitle = hardInterval,
+                subtitle = stringResource(hardInterval.resId, hardInterval.count),
                 glow = AppTheme.colors.warningAmber,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
@@ -540,7 +540,7 @@ private fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_good),
-                subtitle = goodInterval,
+                subtitle = stringResource(goodInterval.resId, goodInterval.count),
                 glow = AppTheme.colors.azureDeep,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,
@@ -551,7 +551,7 @@ private fun StudySessionContent(
             )
             StudyFeedbackButton(
                 label = stringResource(R.string.study_easy),
-                subtitle = easyInterval,
+                subtitle = stringResource(easyInterval.resId, easyInterval.count),
                 glow = AppTheme.colors.tertiaryGreen,
                 modifier = Modifier.weight(1f),
                 enabled = !isSubmitting,

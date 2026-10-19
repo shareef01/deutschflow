@@ -123,6 +123,7 @@ Permissions-Policy: microphone=(self), camera=(), geolocation=()
 | **`SESSION_MAX_AGE_SECONDS`** | NO | `2592000` (30 days) | Defaults to 30 days. Clamped to `[3600, 7776000]` (1 hour to 90 days) to prevent unsafe infinite or microscopic session windows. |
 | **`SESSION_EPOCH`** | NO | `"1"` | Defaults to version `"1"`. Incrementing this value invalidates all active sessions globally without changing passwords. |
 | **`GROQ_API_KEY`** | OPTIONAL | Client-side Key Vault | If omitted on server, AI translation and pronunciation features require the user to configure their own API key via the in-app Key Vault settings. |
+| **`NEXT_PUBLIC_GROQ_MODEL`** | NO | `openai/gpt-oss-120b` | Inlined into the client bundle at build time, so a change needs a rebuild. A value outside `SUPPORTED_GROQ_MODELS` is ignored and the default is used. |
 
 ### 6.2 Pre-Launch Verification Checklist
 - [ ] Master `SITE_PASSWORD` set with high entropy (>= 16 characters).

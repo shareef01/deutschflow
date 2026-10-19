@@ -8,12 +8,14 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -70,6 +72,37 @@ class GroqCancellationTest {
                 "${STALL_TIMEOUT_MS}ms timeout",
             tookMs < PROMPT_MS
         )
+    }
+
+    /**
+     * A server that never answers ends in a timeout the callers can recognise, not a
+     * cancellation and not a generic failure: GroqHelper maps exactly this to
+     * ai_timeout instead of the JVM's English "Read timed out".
+     */
+    @Test
+    fun aStalledRequestTimesOutAsATimeout() = runBlocking {
+        thread(isDaemon = true) {
+            val socket = server.accept()
+            synchronized(accepted) { accepted += socket }
+        }
+
+        try {
+            withTimeout(PROMPT_MS) {
+                async(Dispatchers.IO) {
+                    GroqHelper.postTo(endpoint, "{}", "key", noWording, timeoutMs = SHORT_TIMEOUT_MS)
+                }.await()
+            }
+            fail("a request nobody answers should time out")
+        } catch (e: SocketTimeoutException) {
+            assertTrue(GroqHelper.isTimeout(e))
+        }
+    }
+
+    @Test
+    fun onlyATimeoutCountsAsOne() {
+        assertTrue(GroqHelper.isTimeout(SocketTimeoutException("connect timed out")))
+        assertFalse(GroqHelper.isTimeout(java.io.IOException("connection reset")))
+        assertFalse(GroqHelper.isTimeout(IllegalStateException("status 503")))
     }
 
     /** The abort hook must not hold up a request that answers normally. */
@@ -133,5 +166,8 @@ class GroqCancellationTest {
 
         /** Well under the stall timeout, generous for a loaded CI machine. */
         const val PROMPT_MS = 3_000L
+
+        /** Short enough to wait out inside [PROMPT_MS]. */
+        const val SHORT_TIMEOUT_MS = 300
     }
 }

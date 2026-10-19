@@ -25,6 +25,14 @@
         localeConfig is read only on API 33+. Below that the app simply follows the
         system language, which is the behaviour it had anyway, so the attribute being
         ignored there is the intent rather than an oversight.
+
+        largeHeap is here for one measured case: backup import. BackupManager.importFromStream
+        reads the whole file (up to 70 MiB) into a StringBuilder before importBackup
+        checks the 50 MiB plaintext cap, so a file at the limit needs a ~134 MB
+        contiguous char buffer. Without largeHeap, BackupManagerIntegrationTest's
+        "one byte over the limit" case hit OutOfMemoryError on API 31 (192 MB growth
+        limit) instead of CapacityExceeded. Remove it once the import is bounded in
+        memory (rejecting oversize input before buffering it all) and that test passes.
     -->
     <application
         android:name=".MainApp"

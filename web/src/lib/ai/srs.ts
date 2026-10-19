@@ -1,4 +1,5 @@
 import { VocabularyEntry } from "@/lib/db/schema";
+import { getCurrentLang, translate, type Lang } from "@/lib/i18n";
 
 export enum ReviewQuality {
   AGAIN = 0,
@@ -115,12 +116,16 @@ export function calculateNextReview(
 
 /**
  * Formats a spaced repetition interval in days into a concise, learner-friendly badge.
- * E.g. 0 -> "< 10m", 1 -> "1d", 6 -> "6d", 60 -> "2mo", 365 -> "1y".
+ * E.g. in English 0 -> "< 10m", 1 -> "1d", 6 -> "6d", 60 -> "2mo", 365 -> "1y".
+ *
+ * The units come from i18n rather than being written here: they were hardcoded in
+ * English, so German learners saw "6d" and "2mo" under German buttons. The same keys
+ * exist as srs_interval_* in the Android resources; SRSEngine.intervalBadge picks
+ * between them with the same thresholds.
  */
-export function formatSrsInterval(intervalDays: number): string {
-  if (intervalDays <= 0) return "< 10m";
-  if (intervalDays === 1) return "1d";
-  if (intervalDays < 30) return `${intervalDays}d`;
-  if (intervalDays < 365) return `${Math.round(intervalDays / 30)}mo`;
-  return `${Math.round(intervalDays / 365)}y`;
+export function formatSrsInterval(intervalDays: number, lang: Lang = getCurrentLang()): string {
+  if (intervalDays <= 0) return translate(lang, "srs.intervalSoon");
+  if (intervalDays < 30) return translate(lang, "srs.intervalDays", [intervalDays]);
+  if (intervalDays < 365) return translate(lang, "srs.intervalMonths", [Math.round(intervalDays / 30)]);
+  return translate(lang, "srs.intervalYears", [Math.round(intervalDays / 365)]);
 }

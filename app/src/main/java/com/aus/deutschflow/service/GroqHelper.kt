@@ -16,6 +16,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Reader
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import javax.inject.Inject
 
@@ -114,8 +115,7 @@ class GroqHelper @Inject constructor(
                 // ViewModel, and delay the scope's actual shutdown.
                 throw e
             } catch (e: Exception) {
-                val detail = e.message ?: context.getString(R.string.ai_no_response)
-                AIResult.Failure(context.getString(R.string.ai_failed, detail))
+                AIResult.Failure(failureMessage(e))
             }
         }
     }
@@ -148,8 +148,7 @@ class GroqHelper @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val detail = e.message ?: context.getString(R.string.ai_no_response)
-                WordDetailsResult.Failure(context.getString(R.string.ai_failed, detail))
+                WordDetailsResult.Failure(failureMessage(e))
             }
         }
     }
@@ -161,6 +160,20 @@ class GroqHelper @Inject constructor(
     private fun unreadable(rawResponse: String): String = context.getString(
         if (wasCutOff(rawResponse)) R.string.ai_cut_off else R.string.ai_unreadable
     )
+
+    /**
+     * The message for a request that threw. A timeout gets its own: HttpURLConnection
+     * reports it as a SocketTimeoutException whose message is the JVM's English
+     * "Read timed out", which used to reach the user as "Translation failed: Read
+     * timed out" whatever the UI language. Cancellation never gets here - the callers
+     * rethrow it first - so, unlike the web client, a timeout cannot pass for a cancel.
+     */
+    private fun failureMessage(e: Exception): String =
+        if (isTimeout(e)) {
+            context.getString(R.string.ai_timeout)
+        } else {
+            context.getString(R.string.ai_failed, e.message ?: context.getString(R.string.ai_no_response))
+        }
 
     private suspend fun post(body: String, apiKey: String): String =
         postTo(ENDPOINT, body, apiKey, ::errorMessage)
@@ -275,8 +288,7 @@ class GroqHelper @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val detail = e.message ?: context.getString(R.string.ai_no_response)
-                RoleplayResult.Failure(context.getString(R.string.ai_failed, detail))
+                RoleplayResult.Failure(failureMessage(e))
             }
         }
     }
@@ -314,8 +326,7 @@ class GroqHelper @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val detail = e.message ?: context.getString(R.string.ai_no_response)
-                RoleplayResult.Failure(context.getString(R.string.ai_failed, detail))
+                RoleplayResult.Failure(failureMessage(e))
             }
         }
     }
@@ -568,6 +579,10 @@ class GroqHelper @Inject constructor(
                 connection.disconnect()
             }
         }
+
+        /** Covers both the connect and the read timeout set in [postTo]. */
+        @VisibleForTesting
+        internal fun isTimeout(e: Throwable): Boolean = e is SocketTimeoutException
 
         const val MAX_AI_INPUT_CHARS = 4_000
         const val MAX_ROLEPLAY_USER_CHARS = 1_000

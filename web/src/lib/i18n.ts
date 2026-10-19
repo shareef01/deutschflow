@@ -117,6 +117,10 @@ export const STRINGS = {
     "study.hard": "Hard",
     "study.good": "Good",
     "study.easy": "Easy",
+    "srs.intervalSoon": "< 10m",
+    "srs.intervalDays": "{0}d",
+    "srs.intervalMonths": "{0}mo",
+    "srs.intervalYears": "{0}y",
     "study.tapToFlip": "Tap to flip",
     "study.showGerman": "Show the German word",
     "study.showTranslation": "Show the translation",
@@ -293,6 +297,7 @@ export const STRINGS = {
     "ai.inputTooLong": "Input is too long (maximum {0} characters)",
     "ai.messageTooLong": "Message is too long (maximum {0} characters)",
     "ai.cancelled": "Request cancelled",
+    "ai.timeout": "Groq didn't answer in time. Check your connection and try again.",
 
     // Streak plural
     "streak.days": "{0} days",
@@ -405,6 +410,10 @@ export const STRINGS = {
     "study.hard": "Schwer",
     "study.good": "Gut",
     "study.easy": "Leicht",
+    "srs.intervalSoon": "< 10 Min.",
+    "srs.intervalDays": "{0} T.",
+    "srs.intervalMonths": "{0} Mon.",
+    "srs.intervalYears": "{0} J.",
     "study.tapToFlip": "Zum Umdrehen tippen",
     "study.showGerman": "Das deutsche Wort zeigen",
     "study.showTranslation": "Die Übersetzung zeigen",
@@ -574,6 +583,7 @@ export const STRINGS = {
     "ai.inputTooLong": "Eingabe ist zu lang (maximal {0} Zeichen)",
     "ai.messageTooLong": "Nachricht ist zu lang (maximal {0} Zeichen)",
     "ai.cancelled": "Anfrage abgebrochen",
+    "ai.timeout": "Groq hat nicht rechtzeitig geantwortet. Prüfe deine Verbindung und versuche es erneut.",
 
     "streak.days": "{0} Tage",
     "streak.day": "{0} Tag",
