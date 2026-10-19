@@ -174,6 +174,12 @@ class BackupManager @Inject constructor(
         if (content.length > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
             throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
         }
+        // Same early rejection as readBackupText: only an encrypted envelope may exceed the
+        // plaintext cap, so without its marker there is no point paying for a JSON parse
+        // that would copy the oversize values again.
+        if (utf8ByteLength(content) > MAX_PLAINTEXT_BACKUP_BYTES && !content.contains(ENCRYPTED_FORMAT_MARKER_TEXT)) {
+            throw BackupException.CapacityExceeded("Plaintext backup exceeds 50 MB size limit.")
+        }
 
         val rawObj = try {
             JSONObject(content)
@@ -453,8 +459,8 @@ class BackupManager @Inject constructor(
         // The quoted format value every encrypted envelope carries. Only an envelope can
         // legitimately be larger than the plaintext cap, so its absence lets an oversize
         // file be rejected from the byte count alone.
-        private val ENCRYPTED_FORMAT_MARKER =
-            "\"${BackupCrypto.ENCRYPTED_FORMAT}\"".toByteArray(Charsets.UTF_8)
+        private const val ENCRYPTED_FORMAT_MARKER_TEXT = "\"${BackupCrypto.ENCRYPTED_FORMAT}\""
+        private val ENCRYPTED_FORMAT_MARKER = ENCRYPTED_FORMAT_MARKER_TEXT.toByteArray(Charsets.UTF_8)
 
         private class BoundedBytes(val bytes: ByteArray, val size: Int)
 
