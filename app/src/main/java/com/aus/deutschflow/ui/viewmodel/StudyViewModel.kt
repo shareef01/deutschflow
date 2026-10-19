@@ -11,6 +11,7 @@ import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.data.local.entities.UserStatsEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
+import com.aus.deutschflow.service.IntervalBadge
 import com.aus.deutschflow.service.ReviewQuality
 import com.aus.deutschflow.service.SRSEngine
 import com.aus.deutschflow.service.TTSHelper
@@ -308,11 +309,12 @@ class StudyViewModel @Inject constructor(
 
     /**
      * Computes a concise learner-facing preview badge (e.g. "< 10m", "1d", "4d", "7d")
-     * for the given word and quality rating.
+     * for the given word and quality rating. The screen resolves it, so it follows
+     * the UI language.
      */
-    fun getIntervalPreview(item: VocabularyEntity, quality: ReviewQuality): String {
+    fun getIntervalPreview(item: VocabularyEntity, quality: ReviewQuality): IntervalBadge {
         val next = srsEngine.calculateNextReview(item, quality)
-        return SRSEngine.formatInterval(next.interval)
+        return SRSEngine.intervalBadge(next.interval)
     }
 
     fun autoPlay(text: String) {

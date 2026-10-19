@@ -118,6 +118,10 @@
     <string name="study_hard">Hard</string>
     <string name="study_good">Good</string>
     <string name="study_easy">Easy</string>
+    <string name="srs_interval_soon">&lt; 10m</string>
+    <string name="srs_interval_days">%1$dd</string>
+    <string name="srs_interval_months">%1$dmo</string>
+    <string name="srs_interval_years">%1$dy</string>
     <string name="study_tap_to_flip">Tap card to flip</string>
     <string name="study_show_german">Show the German word</string>
     <string name="study_show_translation">Show the translation</string>
@@ -293,6 +297,7 @@
     <string name="ai_input_too_long">Input is too long (maximum %1$d characters)</string>
     <string name="ai_message_too_long">Message is too long (maximum %1$d characters)</string>
     <string name="ai_cancelled">Request cancelled</string>
+    <string name="ai_timeout">Groq didn\'t answer in time. Check your connection and try again.</string>
     <string name="settings_cefr_level">CEFR Level</string>
     <string name="settings_cefr_level_desc">Adjust AI conversation and analysis complexity</string>
     <string name="settings_cefr_none">None (Standard)</string>

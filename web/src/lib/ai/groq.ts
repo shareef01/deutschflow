@@ -36,8 +36,15 @@ export const SUPPORTED_GROQ_MODELS = [
   "openai/gpt-oss-20b",
 ] as const;
 
+/**
+ * This module runs in the browser, where Next inlines only NEXT_PUBLIC_* variables,
+ * and only as the literal `process.env.NEXT_PUBLIC_…` expression - so the name is
+ * spelled out here rather than looked up. It used to read GROQ_MODEL, which was
+ * always undefined on the client and made the override dead. The value is baked in
+ * at build time; the allowlist still guards against a retired or mistyped model.
+ */
 export function getActiveGroqModel(): string {
-  const envModel = process.env.GROQ_MODEL?.trim();
+  const envModel = process.env.NEXT_PUBLIC_GROQ_MODEL?.trim();
   if (envModel && (SUPPORTED_GROQ_MODELS as readonly string[]).includes(envModel)) {
     return envModel;
   }
@@ -181,6 +188,28 @@ export class GroqHttpError extends Error {
   }
 }
 
+/** post() gave up after TIMEOUT_MS with no answer. Distinct from the caller cancelling. */
+export class GroqTimeoutError extends Error {
+  constructor() {
+    super("Groq did not answer in time");
+    this.name = "GroqTimeoutError";
+  }
+}
+
+/**
+ * The user-facing message for anything post() or parsing threw. Cancellation is
+ * checked first and by the caller's own signal, so a request the user abandoned is
+ * never reported as a timeout or a failure.
+ */
+function failureMessage(error: unknown, signal?: AbortSignal): string {
+  if (signal?.aborted || (error as { name?: string })?.name === "AbortError") {
+    return t("ai.cancelled") || "Request cancelled";
+  }
+  if (error instanceof GroqTimeoutError) return t("ai.timeout");
+  const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
+  return t("ai.failed", [detail]);
+}
+
 async function post(body: string, apiKey: string, externalSignal?: AbortSignal): Promise<string> {
   let attempt = 0;
   while (true) {
@@ -189,7 +218,13 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    // Remembered because the abort below and the caller's abort reach fetch as the
+    // same AbortError; without it a slow network was reported as "Request cancelled".
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, TIMEOUT_MS);
     const onAbort = () => controller.abort();
     if (externalSignal) {
       externalSignal.addEventListener("abort", onAbort, { once: true });
@@ -224,7 +259,12 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
       // Provider rejections (400, 401, 403, 404, unqualified 429, etc.) must fail fast without retrying
       throw new GroqHttpError(response.status, redactSensitiveKey(rawMsg));
     } catch (err) {
-      if (externalSignal?.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+      // The caller's cancel wins: if both fired, the user no longer wants an answer.
+      if (externalSignal?.aborted) throw err;
+      // Not retried: a request that already waited TIMEOUT_MS would leave the user
+      // looking at a spinner for a minute and a half before hearing anything.
+      if (timedOut) throw new GroqTimeoutError();
+      if (err instanceof DOMException && err.name === "AbortError") {
         throw err;
       }
       // Never retry non-retryable provider rejections
@@ -356,11 +396,7 @@ export async function translateAndExtract(
     }
     return parsed;
   } catch (error) {
-    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
-      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
-    }
-    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
-    return { kind: "failure", message: t("ai.failed", [detail]) };
+    return { kind: "failure", message: failureMessage(error, signal) };
   }
 }
 
@@ -387,11 +423,7 @@ export async function interrogateWord(
     }
     return { kind: "success", details };
   } catch (error) {
-    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
-      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
-    }
-    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
-    return { kind: "failure", message: t("ai.failed", [detail]) };
+    return { kind: "failure", message: failureMessage(error, signal) };
   }
 }
 
@@ -419,11 +451,7 @@ export async function startRoleplay(
     }
     return parsed;
   } catch (error) {
-    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
-      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
-    }
-    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
-    return { kind: "failure", message: t("ai.failed", [detail]) };
+    return { kind: "failure", message: failureMessage(error, signal) };
   }
 }
 
@@ -457,11 +485,7 @@ export async function continueRoleplay(
     }
     return parsed;
   } catch (error) {
-    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError") || (error as { name?: string })?.name === "AbortError") {
-      return { kind: "failure", message: t("ai.cancelled") || "Request cancelled" };
-    }
-    const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
-    return { kind: "failure", message: t("ai.failed", [detail]) };
+    return { kind: "failure", message: failureMessage(error, signal) };
   }
 }
 
@@ -563,7 +587,7 @@ export function detailFrom(body: string | null): string | null {
         code === "model_not_found" ||
         /decommissioned|model.+not exist|do not have access to it/i.test(message)
       ) {
-        return `The configured AI model is unavailable or retired. Please update GROQ_MODEL in your settings. (${redacted})`;
+        return `The configured AI model is unavailable or retired. Please update NEXT_PUBLIC_GROQ_MODEL. (${redacted})`;
       }
       return redacted;
     }
