@@ -360,16 +360,15 @@ class BackupManagerIntegrationTest {
 
     @Test
     fun oversizedBackup_throwsCapacityExceeded() = runBlocking {
-        val hugeBuilder = StringBuilder("{\"format\":\"deutschflow-library\",\"version\":2,\"payload\":\"")
         // Generate string larger than 50MB
-        val padding = "A".repeat(1024 * 1024)
-        for (i in 0..50) {
-            hugeBuilder.append(padding)
-        }
-        hugeBuilder.append("\"}")
+        val huge = asciiString(
+            "{\"format\":\"deutschflow-library\",\"version\":2,\"payload\":\"",
+            51 * 1024 * 1024,
+            "\"}"
+        )
 
         try {
-            targetBackupManager.importBackup(hugeBuilder.toString(), null)
+            targetBackupManager.importBackup(huge, null)
             fail("Expected BackupException.CapacityExceeded")
         } catch (e: BackupException.CapacityExceeded) {
             // expected
@@ -627,6 +626,22 @@ class BackupManagerIntegrationTest {
         val remainingApple = targetDb.vocabularyDao().findByGermanText("Apfel")
         assertNotNull(remainingApple)
         assertEquals(appleId, remainingApple!!.id)
+    }
+
+    /**
+     * Builds prefix + 'A' * fillChars + suffix straight from bytes. A StringBuilder holds
+     * UTF-16 chars and doubles its array, so a 51 MiB string needs a 134 MB allocation that
+     * the normal app heap (no largeHeap) cannot provide. On ART this constructor makes a
+     * one-byte-per-char String, and the byte array is garbage once this returns.
+     */
+    private fun asciiString(prefix: String, fillChars: Int, suffix: String): String {
+        val head = prefix.toByteArray(Charsets.US_ASCII)
+        val tail = suffix.toByteArray(Charsets.US_ASCII)
+        val bytes = ByteArray(head.size + fillChars + tail.size) { 'A'.code.toByte() }
+        head.copyInto(bytes)
+        tail.copyInto(bytes, head.size + fillChars)
+        @Suppress("DEPRECATION", "PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+        return java.lang.String(bytes, 0, 0, bytes.size).toString()
     }
 
     private fun createPaddedStream(prefix: ByteArray, totalBytes: Long): InputStream {
