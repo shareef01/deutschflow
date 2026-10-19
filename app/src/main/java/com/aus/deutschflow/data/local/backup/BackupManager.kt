@@ -6,11 +6,10 @@ import com.aus.deutschflow.data.local.dao.*
 import com.aus.deutschflow.data.local.entities.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.io.InputStreamReader
 import java.io.OutputStream
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.text.SimpleDateFormat
@@ -162,65 +161,9 @@ class BackupManager @Inject constructor(
     }
 
     suspend fun importFromStream(inputStream: InputStream, passphrase: CharArray? = null): BackupImportResult {
-        val maxBytes = MAX_STREAM_READ_BYTES
-        val countingStream = object : InputStream() {
-            var totalBytesRead = 0L
-                private set
-
-            override fun read(): Int {
-                val b = inputStream.read()
-                if (b != -1) {
-                    totalBytesRead++
-                    if (totalBytesRead > maxBytes) {
-                        throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
-                    }
-                }
-                return b
-            }
-
-            override fun read(b: ByteArray, off: Int, len: Int): Int {
-                val read = inputStream.read(b, off, len)
-                if (read > 0) {
-                    totalBytesRead += read
-                    if (totalBytesRead > maxBytes) {
-                        throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
-                    }
-                }
-                return read
-            }
-
-            override fun close() = inputStream.close()
-        }
-
-        val decoder = Charsets.UTF_8.newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT)
-
-        val reader = InputStreamReader(countingStream, decoder)
-        val stringBuilder = StringBuilder()
-        val charBuffer = CharArray(8192)
-
-        try {
-            while (true) {
-                val charsRead = reader.read(charBuffer, 0, charBuffer.size)
-                if (charsRead == -1) break
-                stringBuilder.append(charBuffer, 0, charsRead)
-            }
-        } catch (e: CharacterCodingException) {
-            throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${e.message}")
-        } catch (e: java.io.IOException) {
-            val cause = e.cause
-            if (cause is CharacterCodingException) {
-                throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${cause.message}")
-            }
-            throw e
-        }
-
-        if (countingStream.totalBytesRead == 0L) {
-            throw BackupException.InvalidFormat("Backup file is empty.")
-        }
-
-        val content = stringBuilder.toString()
+        // readBackupText owns the raw bytes, so by the time JSON parsing starts only the
+        // decoded String is still reachable and the byte buffer can be collected.
+        val content = readBackupText(inputStream)
         return importBackup(content, passphrase)
     }
 
@@ -504,6 +447,120 @@ class BackupManager @Inject constructor(
     }
 
     companion object {
+        private const val MIN_READ_BUFFER_BYTES = 64 * 1024
+        private const val UTF8_VALIDATION_CHUNK_CHARS = 8 * 1024
+
+        // The quoted format value every encrypted envelope carries. Only an envelope can
+        // legitimately be larger than the plaintext cap, so its absence lets an oversize
+        // file be rejected from the byte count alone.
+        private val ENCRYPTED_FORMAT_MARKER =
+            "\"${BackupCrypto.ENCRYPTED_FORMAT}\"".toByteArray(Charsets.UTF_8)
+
+        private class BoundedBytes(val bytes: ByteArray, val size: Int)
+
+        /**
+         * Reads a whole backup file and decodes it as strict UTF-8, keeping peak memory
+         * near twice the file size so import works within the normal app heap.
+         *
+         * Sizes are enforced on the raw byte count before any String exists: more than
+         * [maxBytes] fails while reading, and more than [maxPlaintextBytes] fails unless the
+         * bytes contain the encrypted envelope's format marker. A plaintext file that happens
+         * to contain the marker still reaches importBackup, which applies the plaintext cap
+         * to the decoded text, so the marker check only decides how early we fail.
+         */
+        internal fun readBackupText(
+            inputStream: InputStream,
+            maxBytes: Int = MAX_STREAM_READ_BYTES,
+            maxPlaintextBytes: Int = MAX_PLAINTEXT_BACKUP_BYTES
+        ): String {
+            val buffer = readBoundedBytes(inputStream, maxBytes)
+            if (buffer.size == 0) {
+                throw BackupException.InvalidFormat("Backup file is empty.")
+            }
+            if (buffer.size > maxPlaintextBytes &&
+                !containsBytes(buffer.bytes, buffer.size, ENCRYPTED_FORMAT_MARKER)
+            ) {
+                throw BackupException.CapacityExceeded("Plaintext backup exceeds 50 MB size limit.")
+            }
+            return decodeUtf8Strict(buffer.bytes, buffer.size)
+        }
+
+        private fun readBoundedBytes(inputStream: InputStream, maxBytes: Int): BoundedBytes {
+            // available() is usually the file length for SAF streams. Sizing from it means
+            // the buffer is allocated once instead of doubling, where the old and new arrays
+            // would briefly coexist.
+            val hint = try {
+                inputStream.available()
+            } catch (e: java.io.IOException) {
+                0
+            }
+            var buffer = ByteArray(hint.coerceIn(minOf(MIN_READ_BUFFER_BYTES, maxBytes), maxBytes))
+            var size = 0
+            while (true) {
+                if (size == buffer.size) {
+                    // Probe a single byte before growing, so an exact hint never grows and a
+                    // file one byte over maxBytes is caught without buffering it.
+                    val next = inputStream.read()
+                    if (next == -1) break
+                    if (size >= maxBytes) {
+                        throw BackupException.CapacityExceeded("Backup exceeds maximum supported encoded size (70 MB).")
+                    }
+                    buffer = buffer.copyOf(minOf(maxBytes.toLong(), buffer.size * 2L).toInt())
+                    buffer[size++] = next.toByte()
+                    continue
+                }
+                val read = inputStream.read(buffer, size, buffer.size - size)
+                if (read == -1) break
+                size += read
+            }
+            return BoundedBytes(buffer, size)
+        }
+
+        private fun containsBytes(haystack: ByteArray, size: Int, needle: ByteArray): Boolean {
+            outer@ for (start in 0..size - needle.size) {
+                for (j in needle.indices) {
+                    if (haystack[start + j] != needle[j]) continue@outer
+                }
+                return true
+            }
+            return false
+        }
+
+        private fun decodeUtf8Strict(bytes: ByteArray, size: Int): String {
+            var isAscii = true
+            for (i in 0 until size) {
+                if (bytes[i] < 0) {
+                    isAscii = false
+                    break
+                }
+            }
+            if (isAscii) {
+                // Every encrypted envelope and most plaintext exports are pure ASCII. On ART
+                // this constructor builds a compressed one-byte-per-char String straight from
+                // the array, while the Charset constructors go through a char[] twice the size.
+                @Suppress("DEPRECATION", "PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+                return java.lang.String(bytes, 0, 0, size).toString()
+            }
+            // String(bytes, UTF_8) silently substitutes U+FFFD, so validate strictly first
+            // through a small reusable buffer rather than decoding into a full-size copy.
+            val decoder = Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+            val input = ByteBuffer.wrap(bytes, 0, size)
+            val scratch = CharBuffer.allocate(UTF8_VALIDATION_CHUNK_CHARS)
+            try {
+                while (true) {
+                    val result = decoder.decode(input, scratch, true)
+                    if (result.isError) result.throwException()
+                    scratch.clear()
+                    if (result.isUnderflow) break
+                }
+            } catch (e: CharacterCodingException) {
+                throw BackupException.InvalidFormat("Backup contains invalid UTF-8 byte sequences: ${e.message}")
+            }
+            return String(bytes, 0, size, Charsets.UTF_8)
+        }
+
         fun isValidCalendarDate(dateStr: String): Boolean {
             if (!Regex("""^\d{4}-\d{2}-\d{2}$""").matches(dateStr)) return false
             return try {
