@@ -311,6 +311,24 @@ describe("distributed rate limiting & client spoofing defense", () => {
       headers.set("x-forwarded-for", "256.1.1.1");
       expect(extractCallerKey(headers, true)).toBe("unknown");
     });
+
+    it("off Vercel, ignores forwarding headers unless TRUSTED_PROXY_HEADER names one", () => {
+      const headers = new Headers({
+        "x-forwarded-for": "203.0.113.195, 198.51.100.1",
+        "x-real-ip": "198.51.100.50",
+      });
+      expect(extractCallerKey(headers, false, undefined)).toBe("unknown");
+      expect(extractCallerKey(headers, false, "  ")).toBe("unknown");
+
+      // Only the hop the operator's proxy appended is trusted, not the client's prefix.
+      expect(extractCallerKey(headers, false, "x-forwarded-for")).toBe("198.51.100.1");
+      expect(extractCallerKey(headers, false, "X-Real-IP")).toBe("198.51.100.50");
+
+      // A configured header that is missing or garbage falls back to the shared key.
+      expect(extractCallerKey(headers, false, "cf-connecting-ip")).toBe("unknown");
+      headers.set("x-forwarded-for", "not-an-ip");
+      expect(extractCallerKey(headers, false, "x-forwarded-for")).toBe("unknown");
+    });
   });
 
   it("handles concurrent requests atomically without read-modify-write races", async () => {
