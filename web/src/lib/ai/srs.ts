@@ -48,11 +48,26 @@ export const AGAIN_EASE_PENALTY = 0.2;
  * the two engines agree on every half-day boundary. The shared fixture table in
  * SRSEngineTest and srs.test.ts is what keeps them agreeing.
  */
+/**
+ * The start of the local day `intervalDays` days after `now`.
+ *
+ * It used to be exactly now + N * 24 h, so a card answered at 22:00 with a
+ * one-day interval was not due until 22:00 the next day, and the schedule drifted
+ * later every day the learner studied late (AUDIT_2026-10-12 F-21). An interval
+ * counts calendar days, as Anki does and the streak already does. The Date
+ * constructor normalises the day overflow in local time, so a DST change does not
+ * move the boundary off midnight. Mirrors SRSEngine.dueAt.
+ */
+export function dueAt(now: number, intervalDays: number): number {
+  const today = new Date(now);
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate() + intervalDays).getTime();
+}
+
 export function calculateNextReview(
   vocab: VocabularyEntry,
-  quality: ReviewQuality
+  quality: ReviewQuality,
+  now: number = Date.now()
 ): VocabularyEntry {
-  const now = Date.now();
   let nextEaseFactor = vocab.easeFactor;
   let nextInterval: number;
   let nextReviewCount = vocab.reviewCount;
@@ -102,8 +117,8 @@ export function calculateNextReview(
   nextEaseFactor = Math.min(MAX_EASE_FACTOR, Math.max(MIN_EASE_FACTOR, nextEaseFactor));
   nextInterval = Math.min(MAX_INTERVAL_DAYS, nextInterval);
 
-  const nextReviewTimestamp =
-    nextInterval > 0 ? now + nextInterval * 24 * 60 * 60 * 1000 : 0;
+  // 0 is "again in this session"; otherwise due from the first minute of day N.
+  const nextReviewTimestamp = nextInterval > 0 ? dueAt(now, nextInterval) : 0;
 
   return {
     ...vocab,

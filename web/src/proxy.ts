@@ -14,6 +14,8 @@ const PUBLIC_PATHS = new Set([
   "/login",
   "/api/login",
   "/api/logout",
+  // Play requires a privacy policy anyone can open; the Android app links here.
+  "/privacy",
   "/manifest.json",
   "/sw.js",
   "/favicon.ico",

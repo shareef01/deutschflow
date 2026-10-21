@@ -7,7 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
 import java.io.File
-import java.util.concurrent.TimeUnit
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
@@ -188,11 +189,42 @@ class SRSEngineTest {
 
     @Test
     fun aScheduledCardIsDueTheRightNumberOfDaysOut() {
-        val before = System.currentTimeMillis()
-        val result = engine.calculateNextReview(card(interval = 1, reviewCount = 1), ReviewQuality.GOOD)
+        val zone = ZoneId.of("Europe/Berlin")
+        val now = ZonedDateTime.of(2026, 10, 1, 14, 30, 0, 0, zone).toInstant().toEpochMilli()
+        val result = engine.calculateNextReview(card(interval = 1, reviewCount = 1), ReviewQuality.GOOD, now, zone)
 
-        val daysOut = TimeUnit.MILLISECONDS.toDays(result.nextReview - before)
-        assertEquals(6L, daysOut)
+        assertEquals(
+            ZonedDateTime.of(2026, 10, 7, 0, 0, 0, 0, zone).toInstant().toEpochMilli(),
+            result.nextReview
+        )
+    }
+
+    /**
+     * F-21 (AUDIT_2026-10-12): due times count calendar days. A card answered late in
+     * the evening with a one-day interval is due from midnight, not from the same
+     * minute tomorrow - which put it out of reach for a learner studying next morning.
+     * The same cases are in srs.test.ts ("dueAt").
+     */
+    @Test
+    fun aCardIsDueFromTheStartOfItsDayNotTheMinuteItWasAnswered() {
+        val zone = ZoneId.of("Europe/Berlin")
+        val lateEvening = ZonedDateTime.of(2026, 10, 1, 22, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val earlyMorning = ZonedDateTime.of(2026, 10, 1, 0, 5, 0, 0, zone).toInstant().toEpochMilli()
+        val nextMidnight = ZonedDateTime.of(2026, 10, 2, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+
+        assertEquals(nextMidnight, SRSEngine.dueAt(lateEvening, 1, zone))
+        assertEquals(nextMidnight, SRSEngine.dueAt(earlyMorning, 1, zone))
+        val nextMorning = ZonedDateTime.of(2026, 10, 2, 8, 0, 0, 0, zone).toInstant().toEpochMilli()
+        assertTrue("due by next morning", SRSEngine.dueAt(lateEvening, 1, zone) <= nextMorning)
+    }
+
+    @Test
+    fun aDstChangeDoesNotMoveTheBoundaryOffMidnight() {
+        val zone = ZoneId.of("Europe/Berlin")
+        // Clocks go back at 03:00 on 25 Oct 2026; that day has 25 hours.
+        val before = ZonedDateTime.of(2026, 10, 24, 20, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val due = SRSEngine.dueAt(before, 3, zone)
+        assertEquals(ZonedDateTime.of(2026, 10, 27, 0, 0, 0, 0, zone).toInstant().toEpochMilli(), due)
     }
 
     /** Nothing about a review may touch the word itself. */

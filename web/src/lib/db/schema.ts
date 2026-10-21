@@ -138,6 +138,10 @@ export interface ReviewEventEntry {
  * `toLowerCase()` (not `toLocaleLowerCase`) is deliberate: locale-invariant, so a
  * Turkish locale cannot map I to a dotless ı and break matching.
  *
+ * Case-only homographs ("Essen" the food, "essen" to eat) share one entry by
+ * decision (2026-10-21, AUDIT_2026-10-12 F-08): separating them would need a new
+ * key and a migration on both clients. See germanKey's KDoc for the reasoning.
+ *
  * Mirrors germanKey in
  * app/src/main/java/com/aus/deutschflow/data/local/entities/VocabularyEntity.kt.
  */

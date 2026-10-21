@@ -26,37 +26,33 @@ function dummyCard(overrides: Partial<VocabularyEntry> = {}): VocabularyEntry {
 }
 
 describe("SRS Elapsed Time & Boundary Semantics (Priority 8)", () => {
-  it("schedules elapsed duration across midnight boundaries without collapsing intervals", () => {
-    // 23:59:00 on day 1
+  it("a review just before midnight is due from the start of day N, not 24h steps later", () => {
+    // 23:59 on day 1. Due times count calendar days (AUDIT_2026-10-12 F-21): this
+    // used to assert now + exactly 6 * 24 h, which is what left a late-evening card
+    // out of reach the next morning.
     const lateNightReview = new Date(2026, 9, 15, 23, 59, 0).getTime();
-    expect(lateNightReview).toBeGreaterThan(0);
     const card = dummyCard({ interval: 1, reviewCount: 1 });
 
-    const updated = calculateNextReview(card, ReviewQuality.GOOD);
-    // Interval for reviewCount=1 with GOOD moves to 6 days
+    const updated = calculateNextReview(card, ReviewQuality.GOOD, lateNightReview);
     expect(updated.interval).toBe(6);
-
-    // Elapsed duration: 6 * 24 hours
-    const sixDaysMs = 6 * 24 * 60 * 60 * 1000;
-    // Difference between nextReview and current time should be exactly 6 days
-    expect(updated.nextReview - Date.now()).toBeGreaterThanOrEqual(sixDaysMs - 100);
-    expect(updated.nextReview - Date.now()).toBeLessThanOrEqual(sixDaysMs + 100);
+    expect(updated.nextReview).toBe(new Date(2026, 9, 21).getTime());
+    // One minute later is a new day, and so a day later due.
+    const afterMidnight = calculateNextReview(card, ReviewQuality.GOOD, lateNightReview + 60_000);
+    expect(afterMidnight.nextReview).toBe(new Date(2026, 9, 22).getTime());
   });
 
   it("handles DST spring forward and autumn backward transitions predictably", () => {
-    // Both platforms intentionally use fixed UTC elapsed duration (24h * interval)
-    // rather than wall-clock calendar days. This ensures that clock changes (clocks moving
-    // forward or backward 1h) do not cause sudden schedule jumps or missed reviews.
-    const springReview = Date.UTC(2026, 2, 29, 1, 0, 0); // European spring transition
-    const autumnReview = Date.UTC(2026, 9, 25, 2, 0, 0); // European autumn transition
-    expect(autumnReview).toBeGreaterThan(springReview);
-
+    // Calendar-day arithmetic in local time: whatever the clocks do, a due time
+    // is the first minute of its day, never 23:00 or 01:00 the night before/after.
+    // The runner's own zone decides whether these dates cross a DST change; the
+    // Kotlin test pins Europe/Berlin explicitly.
     const card = dummyCard({ interval: 5, reviewCount: 3 });
-    const springNext = calculateNextReview(card, ReviewQuality.GOOD);
-    const autumnNext = calculateNextReview(card, ReviewQuality.GOOD);
-
-    expect(springNext.interval).toBeGreaterThan(5);
-    expect(autumnNext.interval).toBeGreaterThan(5);
+    for (const reviewedAt of [new Date(2026, 2, 28, 20, 0), new Date(2026, 9, 24, 20, 0)]) {
+      const next = calculateNextReview(card, ReviewQuality.GOOD, reviewedAt.getTime());
+      expect(next.interval).toBeGreaterThan(5);
+      const due = new Date(next.nextReview);
+      expect([due.getHours(), due.getMinutes()]).toEqual([0, 0]);
+    }
   });
 
   it("maintains consistent schedule across device timezone transitions", () => {

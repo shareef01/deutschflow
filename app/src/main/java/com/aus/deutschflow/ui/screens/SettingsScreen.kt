@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -50,6 +51,7 @@ import com.aus.deutschflow.ui.viewmodel.SettingsViewModel
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+    val uriHandler = LocalUriHandler.current
     val totalVocab by viewModel.totalVocabulary.collectAsStateWithLifecycle()
     val totalTranscripts by viewModel.totalTranscripts.collectAsStateWithLifecycle()
     val userStats by viewModel.userStats.collectAsStateWithLifecycle()
@@ -574,6 +576,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
+            // Play requires the policy to be reachable from inside the app, not only
+            // from the store listing. It is the public /privacy page of the web client.
+            val privacyUrl = stringResource(R.string.privacy_policy_url)
+            TextButton(onClick = { uriHandler.openUri(privacyUrl) }) {
+                Text(stringResource(R.string.settings_privacy_policy))
+            }
         }
 
         Spacer(modifier = Modifier.height(Spacing.md))

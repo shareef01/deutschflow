@@ -4,6 +4,7 @@ import {
   MAX_INTERVAL_DAYS,
   ReviewQuality,
   calculateNextReview,
+  dueAt,
   formatSrsInterval,
 } from "@/lib/ai/srs";
 import { setCurrentLang } from "@/lib/i18n";
@@ -174,10 +175,10 @@ describe("calculateNextReview — the SM-2 schedule", () => {
   });
 
   it("puts the due date the right number of days out", () => {
-    const before = Date.now();
-    const result = calculateNextReview(card({ interval: 1, reviewCount: 1 }), ReviewQuality.GOOD);
+    const now = new Date(2026, 9, 1, 14, 30).getTime();
+    const result = calculateNextReview(card({ interval: 1, reviewCount: 1 }), ReviewQuality.GOOD, now);
 
-    expect(Math.round((result.nextReview - before) / DAY_MS)).toBe(6);
+    expect(result.nextReview).toBe(new Date(2026, 9, 7).getTime());
   });
 
   it("leaves the word and its grammar untouched", () => {
@@ -197,6 +198,34 @@ describe("calculateNextReview — the SM-2 schedule", () => {
     expect(result.plural).toBe("Häuser");
     expect(result.synonyms).toBe("Gebäude");
     expect(result.id).toBe(original.id);
+  });
+});
+
+/**
+ * F-21 (AUDIT_2026-10-12): due times count calendar days. A card answered late in
+ * the evening with a one-day interval is due from midnight, not from the same
+ * minute tomorrow. Mirrors SRSEngineTest.aCardIsDueFromTheStartOfItsDay….
+ * Built from local-time Date parts, so it holds in whatever zone the runner uses.
+ */
+describe("dueAt — due from the start of the local day", () => {
+  it("a late-evening and an early-morning answer are both due from the next midnight", () => {
+    const nextMidnight = new Date(2026, 9, 2).getTime();
+    expect(dueAt(new Date(2026, 9, 1, 22, 0).getTime(), 1)).toBe(nextMidnight);
+    expect(dueAt(new Date(2026, 9, 1, 0, 5).getTime(), 1)).toBe(nextMidnight);
+    expect(dueAt(new Date(2026, 9, 1, 22, 0).getTime(), 1)).toBeLessThanOrEqual(
+      new Date(2026, 9, 2, 8, 0).getTime()
+    );
+  });
+
+  it("always lands on local midnight, across a year of DST changes in the runner's zone", () => {
+    for (let day = 0; day < 400; day++) {
+      const now = new Date(2026, 0, 1 + day, 20, 15).getTime();
+      for (const interval of [1, 6, 30]) {
+        const due = new Date(dueAt(now, interval));
+        expect(due.getHours()).toBe(0);
+        expect(due.getMinutes()).toBe(0);
+      }
+    }
   });
 });
 

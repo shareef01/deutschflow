@@ -537,6 +537,19 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
       expect(response.headers.get("location")).toBe("https://deutschflow.app/login?from=%2Fvocabulary");
     });
 
+    it("serves the privacy policy without a session (Play needs a public URL)", async () => {
+      process.env.SITE_PASSWORD = "Test-Password-2026!";
+      process.env.SESSION_SECRET = "super-secret-key-that-is-at-least-32-bytes-long!";
+
+      const response = await proxy(new NextRequest("https://deutschflow.app/privacy"));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+
+      // Only the exact path: nothing under it is public by accident.
+      const nested = await proxy(new NextRequest("https://deutschflow.app/privacy/anything"));
+      expect(nested.status).toBe(307);
+    });
+
     it("allows access when valid session token is present", async () => {
       process.env.SITE_PASSWORD = "Test-Password-2026!";
       process.env.SESSION_SECRET = "super-secret-key-that-is-at-least-32-bytes-long!";
