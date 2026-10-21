@@ -54,7 +54,12 @@ export default function StudyPage() {
           hidden={selectedTab !== "dashboard"}
           className="h-full"
         >
-          {selectedTab === "dashboard" && <DashboardContent />}
+          {selectedTab === "dashboard" && (
+            <DashboardContent
+              dueCount={study.dueCount}
+              onStartReview={() => handleTabSelect("flashcards")}
+            />
+          )}
         </div>
 
         <div
@@ -353,6 +358,12 @@ function FlashcardMode({
                   </span>
                   <span className="mt-2 block text-2xl sm:text-3xl font-bold text-on-surface">
                     {currentItem.englishTranslation}
+                  </span>
+
+                  {/* German reference reminder on answer flip */}
+                  <span className="mt-1.5 text-sm font-semibold text-azure-glow">
+                    {currentItem.article && currentItem.article !== "none" ? `${currentItem.article} ` : ""}
+                    {currentItem.germanText}
                   </span>
 
                   <div className="mt-3 flex items-center gap-2">

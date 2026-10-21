@@ -69,6 +69,11 @@ export const STRINGS = {
     "history.deleted": "Transcript deleted.",
     "history.words": "{0} words",
     "history.detailTitle": "Transcript",
+    "history.noResults": "No matching transcripts",
+    "history.noResultsBody": "Try a different search term or clear the filter.",
+    "library.noResults": "No matching vocabulary",
+    "library.noResultsBody": "Try a different search term or clear the filter.",
+    "action.clearFilter": "Clear search",
     "history.emptyAction": "Start speaking",
     "action.undo": "Undo",
 
@@ -138,6 +143,9 @@ export const STRINGS = {
     // res/values/strings.xml under dashboard_*; keep the two in step.
     "dashboard.tab": "Dashboard",
     "dashboard.flashcardsTab": "Flashcards",
+    "dashboard.startReview": "Start Daily Review",
+    "dashboard.dueTodayBanner": "{0} cards due for review",
+    "dashboard.allCaughtUp": "All caught up! No reviews due.",
     "dashboard.dailyGoal": "Daily goal",
     "dashboard.goalAchieved": "Goal achieved!",
     "dashboard.xpRemaining": "{0} XP remaining",
@@ -373,6 +381,11 @@ export const STRINGS = {
     "history.deleted": "Transkript gelöscht.",
     "history.words": "{0} Wörter",
     "history.detailTitle": "Mitschrift",
+    "history.noResults": "Keine passenden Transkripte",
+    "history.noResultsBody": "Versuche einen anderen Suchbegriff oder setze den Filter zurück.",
+    "library.noResults": "Keine passenden Wörter",
+    "library.noResultsBody": "Versuche einen anderen Suchbegriff oder setze den Filter zurück.",
+    "action.clearFilter": "Suche löschen",
     "history.emptyAction": "Aufnahme starten",
     "action.undo": "Rückgängig",
 
@@ -437,6 +450,9 @@ export const STRINGS = {
 
     "dashboard.tab": "Übersicht",
     "dashboard.flashcardsTab": "Karteikarten",
+    "dashboard.startReview": "Tägliche Wiederholung starten",
+    "dashboard.dueTodayBanner": "{0} Karten heute fällig",
+    "dashboard.allCaughtUp": "Alles erledigt! Keine Wiederholungen fällig.",
     "dashboard.dailyGoal": "Tagesziel",
     "dashboard.goalAchieved": "Ziel erreicht!",
     "dashboard.xpRemaining": "{0} XP verbleibend",
