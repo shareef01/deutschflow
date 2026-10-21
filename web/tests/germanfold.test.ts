@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "fake-indexeddb/auto";
-import { DeutschFlowDB, foldGermanKey, germanMatchKey } from "@/lib/db/schema";
+import { DeutschFlowDB, foldGermanKey, germanMatchKey, savesUnderAnotherWord } from "@/lib/db/schema";
 import { saveVocabulary, findByGermanText } from "@/lib/db/repository";
 
 /**
@@ -135,5 +135,26 @@ describe("saving an umlaut word twice", () => {
     await saveVocabulary(db, { germanText: "schon", englishTranslation: "already" });
     await saveVocabulary(db, { germanText: "schön", englishTranslation: "beautiful" });
     expect(await db.vocabulary.count()).toBe(2);
+  });
+});
+
+/**
+ * AUDIT_2026-10-12 F-24: a word lookup answers with the dictionary form, and Save
+ * files that. The sheet says so when it differs from the tapped chip.
+ */
+describe("savesUnderAnotherWord", () => {
+  it("is true when the lookup answers with a different word", () => {
+    expect(savesUnderAnotherWord("ging", "gehen")).toBe(true);
+    expect(savesUnderAnotherWord("Häuser", "Haus")).toBe(true);
+  });
+
+  it("is false when only case or umlaut spelling differs - those save into the same entry", () => {
+    expect(savesUnderAnotherWord("haus", "Haus")).toBe(false);
+    expect(savesUnderAnotherWord("Aerger", "Ärger")).toBe(false);
+    expect(savesUnderAnotherWord(" gehen ", "gehen")).toBe(false);
+  });
+
+  it("is false when nothing was tapped (no chip to compare with)", () => {
+    expect(savesUnderAnotherWord(null, "gehen")).toBe(false);
   });
 });

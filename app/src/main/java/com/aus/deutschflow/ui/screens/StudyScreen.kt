@@ -646,11 +646,15 @@ private fun StudyFeedbackButton(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Up to two lines, centred: at 200% font scale one line clipped
+            // "Nochmal" and "Leicht" mid-word in a quarter-width button. GlassButton
+            // grows to fit rather than cutting the second line off.
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                maxLines = 1
+                textAlign = TextAlign.Center,
+                maxLines = 2
             )
             if (subtitle != null) {
                 Spacer(modifier = Modifier.height(2.dp))
@@ -658,7 +662,8 @@ private fun StudyFeedbackButton(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                    maxLines = 1
+                    textAlign = TextAlign.Center,
+                    maxLines = 2
                 )
             }
         }

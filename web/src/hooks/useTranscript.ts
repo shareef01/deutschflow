@@ -21,6 +21,8 @@ export interface TranscriptState {
   example: string;
   aiError: string | null;
   wordDetails: WordDetails | null;
+  /** The chip that was tapped for [wordDetails]; the answer may be its dictionary form. */
+  wordDetailsFor: string | null;
   interrogatingWord: string | null;
   wordDetailError: string | null;
   errorState: string | null;
@@ -39,6 +41,7 @@ const INITIAL_STATE: TranscriptState = {
   example: "",
   aiError: null,
   wordDetails: null,
+  wordDetailsFor: null,
   interrogatingWord: null,
   wordDetailError: null,
   errorState: null,
@@ -253,7 +256,9 @@ export function useTranscript() {
     if (!trimmed) return;
 
     const token = ++interrogationToken.current;
-    setState((prev) => ({ ...prev, wordDetails: null, wordDetailError: null, interrogatingWord: trimmed }));
+    setState((prev) => ({
+      ...prev, wordDetails: null, wordDetailsFor: null, wordDetailError: null, interrogatingWord: trimmed,
+    }));
 
     void (async () => {
       try {
@@ -262,7 +267,7 @@ export function useTranscript() {
         if (token !== interrogationToken.current) return;
         setState((prev) =>
           result.kind === "success"
-            ? { ...prev, wordDetails: result.details }
+            ? { ...prev, wordDetails: result.details, wordDetailsFor: trimmed }
             : { ...prev, wordDetailError: result.message }
         );
       } catch {
@@ -301,7 +306,7 @@ export function useTranscript() {
   }, []);
 
   const dismissWordDetails = useCallback(() => {
-    setState((prev) => ({ ...prev, wordDetails: null, wordDetailError: null }));
+    setState((prev) => ({ ...prev, wordDetails: null, wordDetailsFor: null, wordDetailError: null }));
   }, []);
 
   const dismissWordDetailError = useCallback((message: string) => {
