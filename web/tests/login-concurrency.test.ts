@@ -503,3 +503,52 @@ describe("PHASE 2 & 3: Critical Login Concurrency, Atomic Admission & Redis Veri
     }
   });
 });
+
+/**
+ * W-04 (AUDIT_2026-10-19). Off Vercel every caller used to share the "unknown"
+ * bucket, and a real user's successful login reset it - handing an attacker in the
+ * same bucket three fresh free guesses each time.
+ */
+describe("self-hosted (no Vercel edge) caller keys", () => {
+  function selfHostedRequest(password: string, headers: Record<string, string> = {}): NextRequest {
+    const fd = new FormData();
+    fd.set("password", password);
+    fd.set("from", "/");
+    return new NextRequest("http://localhost:3000/api/login", { method: "POST", headers, body: fd });
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("SITE_PASSWORD", PASSWORD);
+    vi.stubEnv("SESSION_SECRET", SECRET);
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUSTED_PROXY_HEADER", "");
+    resetThrottle();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetThrottle();
+  });
+
+  it("a success in the shared bucket does not reset an attacker's failures", async () => {
+    expect((await POST(selfHostedRequest("guess-1"))).status).toBe(401);
+    expect((await POST(selfHostedRequest("guess-2"))).status).toBe(401);
+    // A real user logs in with the right key: still allowed, but no reset.
+    expect((await POST(selfHostedRequest(PASSWORD))).status).toBe(200);
+    // Before the fix this was a fourth admitted guess (401).
+    expect((await POST(selfHostedRequest("guess-3"))).status).toBe(429);
+  });
+
+  it("with TRUSTED_PROXY_HEADER set, each client address gets its own bucket", async () => {
+    vi.stubEnv("TRUSTED_PROXY_HEADER", "x-forwarded-for");
+    const attacker = { "x-forwarded-for": "203.0.113.7" };
+    for (let i = 0; i < 3; i++) {
+      expect((await POST(selfHostedRequest("guess", attacker))).status).toBe(401);
+    }
+    expect((await POST(selfHostedRequest("guess", attacker))).status).toBe(429);
+
+    // A different client behind the same proxy is unaffected.
+    const user = { "x-forwarded-for": "198.51.100.20" };
+    expect((await POST(selfHostedRequest(PASSWORD, user))).status).toBe(200);
+  });
+});
