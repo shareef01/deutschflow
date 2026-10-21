@@ -16,6 +16,8 @@ import {
 } from "@/components/icons";
 import type { Lang } from "@/lib/i18n";
 import { performLogout } from "@/lib/auth/logout";
+import { db } from "@/lib/db";
+import { eraseDeviceData } from "@/lib/db/erase";
 
 export default function SettingsPage() {
   const {
@@ -45,6 +47,8 @@ export default function SettingsPage() {
   const { t, lang, changeLang } = useI18n();
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isErasing, setIsErasing] = useState(false);
+  const [showEraseConfirm, setShowEraseConfirm] = useState(false);
   const [typedKey, setTypedKey] = useState("");
   const [isKeyVisible, setIsKeyVisible] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -61,13 +65,24 @@ export default function SettingsPage() {
 
   const restoreInput = useRef<HTMLInputElement>(null);
 
-  const onLogout = async () => {
+  const onLogout = async (erase = false) => {
+    setShowEraseConfirm(false);
     setIsLoggingOut(true);
+    setIsErasing(erase);
     setMessage(null);
 
-    const result = await performLogout();
-    if (!result.success) {
+    const result = await performLogout(
+      erase ? { eraseLocalData: async () => (await eraseDeviceData(db)).complete } : {}
+    );
+    if (result.localDataErased === false) {
+      // Logged out, but the tab stayed so this can be said. The button stays
+      // usable for a retry.
       setIsLoggingOut(false);
+      setIsErasing(false);
+      setMessage(t("settings.eraseIncomplete"));
+    } else if (!result.success) {
+      setIsLoggingOut(false);
+      setIsErasing(false);
       if (result.errorType === "server") {
         setMessage(t("settings.logoutFailedServer", [String(result.statusCode ?? "error")]));
       } else {
@@ -363,12 +378,25 @@ export default function SettingsPage() {
         <div className="mt-4">
           <GlassButton
             type="button"
-            onClick={onLogout}
+            onClick={() => void onLogout()}
             disabled={isLoggingOut}
             className="w-full sm:w-auto"
           >
             <span className="font-bold text-on-surface">
-              {isLoggingOut ? t("settings.loggingOut") : t("settings.logout")}
+              {isLoggingOut && !isErasing ? t("settings.loggingOut") : t("settings.logout")}
+            </span>
+          </GlassButton>
+        </div>
+        <div className="mt-3">
+          <GlassButton
+            type="button"
+            glow="error"
+            onClick={() => setShowEraseConfirm(true)}
+            disabled={isLoggingOut}
+            className="w-full sm:w-auto"
+          >
+            <span className="font-bold text-error">
+              {isErasing ? t("settings.erasing") : t("settings.eraseDevice")}
             </span>
           </GlassButton>
         </div>
@@ -404,6 +432,23 @@ export default function SettingsPage() {
           }
         >
           <p className="text-body-medium text-on-surface-variant pt-2">{t("settings.wipeBody")}</p>
+        </ModalDialog>
+      )}
+
+      {showEraseConfirm && (
+        <ModalDialog
+          title={t("settings.eraseTitle")}
+          onDismiss={() => setShowEraseConfirm(false)}
+          actions={
+            <>
+              <GlassButton onClick={() => setShowEraseConfirm(false)}>{t("action.cancel")}</GlassButton>
+              <GlassButton type="button" glow="error" onClick={() => void onLogout(true)}>
+                {t("settings.eraseConfirm")}
+              </GlassButton>
+            </>
+          }
+        >
+          <p className="text-body-medium text-on-surface-variant pt-2">{t("settings.eraseBody")}</p>
         </ModalDialog>
       )}
 

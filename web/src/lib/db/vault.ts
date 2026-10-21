@@ -44,7 +44,7 @@ const KEY_ALIAS = "deutschflow.api-key";
  * deserves a vault of its own, mirroring the Android Keystore's separation
  * from the Room database.
  */
-const VAULT_DB_NAME = "deutschflow-vault";
+export const VAULT_DB_NAME = "deutschflow-vault";
 const VAULT_STORE = "keys";
 
 const IV_LENGTH = 12;
@@ -82,8 +82,13 @@ async function readKeyFromVault(): Promise<CryptoKey | undefined> {
  */
 let inMemoryKeyPromise: Promise<CryptoKey> | null = null;
 
-export function resetVaultMemoryCacheForTesting(): void {
+/** Drops the memoized key, so the next call reads (or recreates) the vault. */
+export function forgetVaultKey(): void {
   inMemoryKeyPromise = null;
+}
+
+export function resetVaultMemoryCacheForTesting(): void {
+  forgetVaultKey();
 }
 
 export async function getOrCreateKey(): Promise<CryptoKey> {

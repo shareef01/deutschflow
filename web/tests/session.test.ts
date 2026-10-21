@@ -3,10 +3,12 @@ import {
   createSessionToken,
   deriveSessionSigningSecret,
   MIN_SESSION_SECRET_BYTES,
+  MIN_SITE_PASSWORD_CHARS,
   passwordMatches,
   safeRedirectTarget,
   SESSION_COOKIE,
   sessionSecret,
+  sitePasswordWarning,
   SESSION_MAX_AGE_SECONDS,
   verifySessionToken,
 } from "@/lib/auth/session";
@@ -304,5 +306,48 @@ describe("passwordMatches", () => {
     expect(await passwordMatches("correct horse", "correct horse")).toBe(true);
     expect(await passwordMatches("correct", "correct horse")).toBe(false);
     expect(await passwordMatches("correct horse!", "correct horse")).toBe(false);
+  });
+});
+
+describe("SITE_PASSWORD strength warning (W-05)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("warns below MIN_SITE_PASSWORD_CHARS and names the length", () => {
+    const warning = sitePasswordWarning("hunter2");
+    expect(warning).toContain("7 characters");
+    expect(warning).toContain(String(MIN_SITE_PASSWORD_CHARS));
+  });
+
+  it("is silent at the minimum, and when no password is set (the 503 path covers that)", () => {
+    expect(sitePasswordWarning("a".repeat(MIN_SITE_PASSWORD_CHARS))).toBeNull();
+    expect(sitePasswordWarning(null)).toBeNull();
+  });
+
+  it("counts characters, not UTF-16 units or bytes", () => {
+    expect(sitePasswordWarning("ä".repeat(MIN_SITE_PASSWORD_CHARS))).toBeNull();
+    expect(sitePasswordWarning("😀".repeat(MIN_SITE_PASSWORD_CHARS - 1))).toContain("15 characters");
+  });
+
+  it("reads the env var by default, quotes stripped", () => {
+    vi.stubEnv("SITE_PASSWORD", '"short"');
+    expect(sitePasswordWarning()).toContain("5 characters");
+  });
+
+  it("is logged once at server start, on the Node runtime only", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { register } = await import("@/instrumentation");
+    vi.stubEnv("SITE_PASSWORD", "short");
+
+    vi.stubEnv("NEXT_RUNTIME", "edge");
+    await register();
+    expect(warn).not.toHaveBeenCalled();
+
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    await register();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("SITE_PASSWORD");
   });
 });

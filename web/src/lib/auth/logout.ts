@@ -265,6 +265,8 @@ export interface LogoutResult {
   privacyCleanupComplete: boolean;
   purgedCount: number;
   cleanupWarning?: string;
+  /** Set only when eraseLocalData was passed: whether it finished. */
+  localDataErased?: boolean;
   errorType?: "server" | "offline";
   statusCode?: number;
   errorMessage?: string;
@@ -277,6 +279,12 @@ export interface LogoutOptions {
   onNavigate?: (url: string) => void;
   broadcastChannelFactory?: (name: string) => BroadcastChannel;
   timeoutMs?: number;
+  /**
+   * "Log out and erase this device": run after the server has ended the session,
+   * before other tabs are told and this one leaves. Resolves true when everything
+   * was erased. Omitted for a plain logout, which keeps the library.
+   */
+  eraseLocalData?: () => Promise<boolean>;
 }
 
 /**
@@ -288,7 +296,9 @@ export interface LogoutOptions {
  * 3. Notifies the service worker via MessageChannel with acknowledgement timeout.
  * 4. Broadcasts LOGOUT on BroadcastChannel to terminate stale authenticated sessions in background tabs.
  * 5. Navigates to /login.
- * 6. Preserves local IndexedDB learning data and encrypted Groq credentials.
+ * 6. Preserves local IndexedDB learning data and encrypted Groq credentials,
+ *    unless eraseLocalData is passed. If that erase is incomplete, the tab stays
+ *    put so the user is told, instead of landing on /login believing it worked.
  */
 export async function performLogout(options: LogoutOptions = {}): Promise<LogoutResult> {
   const fetchFn = options.fetchFn ?? (typeof window !== "undefined" ? window.fetch.bind(window) : fetch);
@@ -348,6 +358,13 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
   const cleanupWarning = !privacyCleanupComplete ? "Local cache purge incomplete" : undefined;
   const totalPurgedCount = cachePurgeResult.purgedCount + (swPurgeResult.purgedCount ?? 0);
 
+  // Only after the server confirmed the logout: an erase that ran and then found
+  // the session still alive would leave a logged-in, empty app.
+  let localDataErased: boolean | undefined;
+  if (options.eraseLocalData) {
+    localDataErased = await options.eraseLocalData().catch(() => false);
+  }
+
   // Step 5: Broadcast session termination to other tabs
   try {
     if (options.broadcastChannelFactory) {
@@ -364,7 +381,7 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
   }
 
   // Step 6: Navigate initiating tab to /login
-  onNavigate("/login");
+  if (localDataErased !== false) onNavigate("/login");
 
   return {
     success: true,
@@ -374,5 +391,6 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
     privacyCleanupComplete,
     purgedCount: totalPurgedCount,
     cleanupWarning,
+    localDataErased,
   };
 }

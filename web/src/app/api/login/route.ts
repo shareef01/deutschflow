@@ -28,9 +28,32 @@ export function isValidIp(ip: string | null | undefined): boolean {
   return isIP(trimmed) !== 0;
 }
 
+/**
+ * The key every caller shares when no trustworthy client address is available.
+ * One bucket for everyone: an attacker's failures throttle every user, which is
+ * the price of not letting a client pick its own identity.
+ */
+export const SHARED_CALLER_KEY = "unknown";
+
+/**
+ * Rightmost valid address in a comma-separated forwarding chain. A proxy appends
+ * the address it saw to whatever the client sent, so only the last hop is the
+ * proxy's word; everything before it is client-controlled.
+ */
+function lastValidHop(value: string | null): string | null {
+  if (!value) return null;
+  const hops = value
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean);
+  const lastHop = hops[hops.length - 1];
+  return lastHop && isValidIp(lastHop) ? lastHop : null;
+}
+
 export function extractCallerKey(
   headers: Headers,
-  isVercel: boolean = process.env.VERCEL === "1"
+  isVercel: boolean = process.env.VERCEL === "1",
+  trustedProxyHeader: string | undefined = process.env.TRUSTED_PROXY_HEADER
 ): string {
   // Trust Boundary:
   // Outside Vercel (e.g. self-hosted Node.js / Docker), incoming proxy headers (x-forwarded-for,
@@ -39,14 +62,22 @@ export function extractCallerKey(
   // choose rate-limit identities or spoof other users' IPs.
   // Note: If deployed behind additional proxies (e.g. Cloudflare -> Vercel), x-real-ip
   // reflects the upstream proxy's egress IP unless custom trusted proxy depth is configured.
-  if (!isVercel) return "unknown";
+  if (!isVercel) {
+    // Opt-in for self-hosting behind a proxy the operator controls (nginx, Caddy,
+    // Traefik) that overwrites or appends this header. Off by default because the
+    // app cannot tell such a proxy is there: without one, the header is whatever
+    // the client sent. Unset, every caller shares SHARED_CALLER_KEY.
+    const headerName = trustedProxyHeader?.trim();
+    if (!headerName) return SHARED_CALLER_KEY;
+    return lastValidHop(headers.get(headerName)) ?? SHARED_CALLER_KEY;
+  }
 
   // x-vercel-id is an internal routing trace header assigned by Vercel edge infrastructure
   // (e.g. 'fra1::iad1::...'). It is NOT an authenticated cryptographic signature, but its
   // presence in a Vercel runtime environment indicates the request traversed Vercel edge routing.
   const vercelId = headers.get("x-vercel-id");
   if (!vercelId || !vercelId.trim()) {
-    return "unknown";
+    return SHARED_CALLER_KEY;
   }
 
   // 1. On Vercel, x-real-ip is set by the edge to the connecting socket IP.
@@ -60,19 +91,7 @@ export function extractCallerKey(
   // In reverse proxies, incoming client-supplied headers are prepended and the proxy appends
   // the true connecting IP to the end of the chain. To prevent client-prepended spoofing,
   // take the rightmost (last) valid hop appended by the edge proxy.
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    const hops = forwarded
-      .split(",")
-      .map((h) => h.trim())
-      .filter(Boolean);
-    const lastHop = hops[hops.length - 1];
-    if (lastHop && isValidIp(lastHop)) {
-      return lastHop;
-    }
-  }
-
-  return "unknown";
+  return lastValidHop(headers.get("x-forwarded-for")) ?? SHARED_CALLER_KEY;
 }
 
 export async function POST(request: NextRequest) {
@@ -130,7 +149,10 @@ export async function POST(request: NextRequest) {
   const isSecure = process.env.NODE_ENV === "production" && isHttps;
 
   try {
-    await recordThrottleSuccess(caller);
+    // Not for the shared key: there a success is anyone's, and resetting the
+    // counter would hand an attacker who shares the bucket a fresh set of free
+    // attempts every time a real user logs in. The window still expires it.
+    if (caller !== SHARED_CALLER_KEY) await recordThrottleSuccess(caller);
   } catch (err) {
     if (err instanceof ThrottleStoreError) {
       return NextResponse.json(

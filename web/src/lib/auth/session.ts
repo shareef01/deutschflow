@@ -48,6 +48,31 @@ export function sitePassword(): string | null {
 }
 
 /**
+ * Below this, SITE_PASSWORD is guessable within the throttle's budget: the
+ * cooldown caps at 30 s, so one caller key still gets about 2,880 tries a day,
+ * and without Upstash every serverless instance counts separately. Matches the
+ * ">= 16 characters" item in docs/SECURITY.md's pre-launch checklist.
+ */
+export const MIN_SITE_PASSWORD_CHARS = 16;
+
+/**
+ * A startup warning for a short SITE_PASSWORD, or null. A warning rather than a
+ * refusal (unlike SESSION_SECRET): the password is something people type and
+ * existing deployments already chose one, so rejecting it would lock them out
+ * on upgrade. Counts code points, so "ä" is one character.
+ */
+export function sitePasswordWarning(password: string | null = sitePassword()): string | null {
+  if (!password) return null;
+  const length = Array.from(password).length;
+  if (length >= MIN_SITE_PASSWORD_CHARS) return null;
+  return (
+    `SITE_PASSWORD is ${length} characters. The login throttle still allows about ` +
+    `2,880 guesses a day per caller, so use at least ${MIN_SITE_PASSWORD_CHARS} ` +
+    "random characters (or a long passphrase)."
+  );
+}
+
+/**
  * Independent high-entropy key used only for session authentication.
  *
  * Refuse weak configuration rather than issuing tokens that are trivial to
