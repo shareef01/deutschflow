@@ -55,6 +55,7 @@ class CrossPlatformContractTest {
         val ai = contract.getJSONObject("aiConstants")
 
         assertEquals(ai.getString("MODEL_NAME"), GroqHelper.MODEL_NAME)
+        assertEquals(ai.getString("REASONING_EFFORT"), GroqHelper.REASONING_EFFORT)
         assertEquals(ai.getInt("MAX_AI_INPUT_CHARS"), GroqHelper.MAX_AI_INPUT_CHARS)
         assertEquals(ai.getInt("MAX_ROLEPLAY_USER_CHARS"), GroqHelper.MAX_ROLEPLAY_USER_CHARS)
         assertEquals(ai.getInt("MAX_ROLEPLAY_SCENARIO_CHARS"), GroqHelper.MAX_ROLEPLAY_SCENARIO_CHARS)
