@@ -120,3 +120,27 @@ However, several critical usability, accessibility, and performance deficiencies
 | AUD-08 | Flashcards | P2 | Reveal-before-grade workflow & back-side German reminder | Implemented & Verified |
 | AUD-09 | Search UI | P2 | Instant clear button in SearchInput | Implemented & Verified |
 | AUD-10 | Transcript | P2 | German TTS playback for transcribed speech | Implemented & Verified |
+
+
+---
+
+## 4. Native Android Physical Device Verification (Google Pixel 7)
+
+In addition to headless unit test suites, the redesigned native Android application was installed and verified on a physical Google Pixel 7 ("panther", 1080x2400 resolution) connected via Android Wireless Debugging.
+
+### 4.1 Verified Screens on Hardware
+1. **TranscriptScreen**: Live German speech recognition affordance, dialect selection chip (`de-DE`, `de-AT`, `de-CH`), and real-time audio waveform canvas.
+2. **LibraryScreen & VocabularyScreen**: Words list, alphabetical and recency sorting, word count statistics, and one-tap German TTS playback.
+3. **HistoryScreen**: Daily grouping of transcript sessions, timestamp metadata, word counts, and search filtering.
+4. **StudyScreen & Flashcards**: Daily goal progress ring, current streak badge, SRS retention breakdown tiles (Mastered / Learning / New), and active review mode.
+5. **PracticeScreen**: Pronunciation practice with sentence repetition, recognized speech comparison, and conversational AI roleplay scenarios.
+6. **SettingsScreen**: Model configuration, speech dialect selection, on-device speech privacy disclosures, and AES-GCM encrypted backup import/export.
+
+### 4.2 Verified Screenshots
+The verified device captures are stored in `docs/screenshots/android/`:
+- `docs/screenshots/android/pixel7-transcript.png`
+- `docs/screenshots/android/pixel7-library.png`
+- `docs/screenshots/android/pixel7-history.png`
+- `docs/screenshots/android/pixel7-study.png`
+- `docs/screenshots/android/pixel7-practice.png`
+- `docs/screenshots/android/pixel7-settings.png`
