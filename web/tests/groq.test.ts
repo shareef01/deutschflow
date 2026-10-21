@@ -10,7 +10,9 @@ import {
   DEFAULT_GROQ_MODEL,
   SUPPORTED_GROQ_MODELS,
   getActiveGroqModel,
+  continueRoleplay,
   interrogateWord,
+  REASONING_EFFORT,
   startRoleplay,
   wasCutOff,
 } from "@/lib/ai/groq";
@@ -393,5 +395,36 @@ describe("wasCutOff — finish_reason length detection and error reporting", () 
     if (result.kind === "failure") {
       expect(result.message).toContain("cut off before it finished");
     }
+  });
+});
+
+/**
+ * X-01 (AUDIT_2026-10-19): gpt-oss reasoning tokens count against
+ * max_completion_tokens, so at the default effort a long input could spend the
+ * whole budget before any JSON was written. Every request asks for low effort.
+ */
+describe("reasoning_effort on every request", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is sent as \"low\" by translation, word lookup and both roleplay calls", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response("{}", { status: 200 });
+    });
+
+    await translateAndExtract("Hallo", "gsk_key");
+    await interrogateWord("Haus", "gsk_key");
+    await startRoleplay("At the bakery", [], "gsk_key");
+    await continueRoleplay("Ein Brot, bitte", [], "At the bakery", "gsk_key");
+
+    expect(bodies).toHaveLength(4);
+    for (const body of bodies) {
+      expect(body.reasoning_effort).toBe("low");
+      expect(body.reasoning_effort).toBe(REASONING_EFFORT);
+      expect(body.model).toBe(DEFAULT_GROQ_MODEL);
+    }
+    // The budgets themselves are unchanged.
+    expect(bodies.map((b) => b.max_completion_tokens)).toEqual([1024, 1024, 512, 512]);
   });
 });
