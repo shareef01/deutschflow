@@ -157,6 +157,7 @@ export default function TranscriptPage() {
         <Snackbar message={snackbar} variant={snackbarVariant} onDismiss={() => setSnackbar(null)} />
         <WordDetailsSheet
           details={state.wordDetails}
+          tappedWord={state.wordDetailsFor}
           onDismiss={dismissWordDetails}
           onSave={(details) => {
             // The sheet closes at once; the confirmation waits for the commit.
@@ -348,6 +349,7 @@ export default function TranscriptPage() {
 
       <WordDetailsSheet
         details={state.wordDetails}
+        tappedWord={state.wordDetailsFor}
         onDismiss={dismissWordDetails}
         onSave={(details) => {
           dismissWordDetails();

@@ -158,7 +158,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     )
                     IconButton(
                         onClick = { viewModel.dismissMessage() },
-                        modifier = Modifier.size(24.dp)
+                        // No explicit size: below 48dp it also shrank the touch target,
+                        // which IconButton otherwise keeps at the accessible minimum.
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,

@@ -211,7 +211,8 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                     // message, with no greeting before it. The web port disables the
                     // button for the same reason.
                     enabled = !isProcessing,
-                    modifier = Modifier.size(36.dp)
+                    // No explicit size: below 48dp it also shrank the touch target,
+                    // which IconButton otherwise keeps at the accessible minimum.
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
@@ -464,7 +465,8 @@ private fun ChatBubble(message: ChatMessage, onSpeak: (String) -> Unit) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSpeak(message.content)
                     },
-                    modifier = Modifier.size(36.dp)
+                    // No explicit size: below 48dp it also shrank the touch target,
+                    // which IconButton otherwise keeps at the accessible minimum.
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.VolumeUp,

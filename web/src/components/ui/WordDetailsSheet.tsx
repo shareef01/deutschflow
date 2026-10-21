@@ -6,6 +6,7 @@ import { GlassCard } from "./GlassCard";
 import { useI18n } from "@/hooks/useI18n";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import type { WordDetails } from "@/lib/ai/groq";
+import { savesUnderAnotherWord } from "@/lib/db/schema";
 
 /**
  * WordDetailsSheet — the interrogation result, in a bottom sheet on the dark
@@ -17,10 +18,13 @@ import type { WordDetails } from "@/lib/ai/groq";
  */
 export function WordDetailsSheet({
   details,
+  tappedWord = null,
   onDismiss,
   onSave,
 }: {
   details: WordDetails | null;
+  /** The chip that was tapped; the lookup may answer with its dictionary form. */
+  tappedWord?: string | null;
   onDismiss: () => void;
   onSave: (details: WordDetails) => void;
 }) {
@@ -28,15 +32,19 @@ export function WordDetailsSheet({
   // mount with the container in the tree, and a hook called above an early
   // `return null` would run once against a ref that was never attached.
   if (details === null) return null;
-  return <OpenWordDetailsSheet details={details} onDismiss={onDismiss} onSave={onSave} />;
+  return (
+    <OpenWordDetailsSheet details={details} tappedWord={tappedWord} onDismiss={onDismiss} onSave={onSave} />
+  );
 }
 
 function OpenWordDetailsSheet({
   details,
+  tappedWord,
   onDismiss,
   onSave,
 }: {
   details: WordDetails;
+  tappedWord: string | null;
   onDismiss: () => void;
   onSave: (details: WordDetails) => void;
 }) {
@@ -76,6 +84,16 @@ function OpenWordDetailsSheet({
 
         <div className="flex flex-col items-center text-center">
           <h2 className="text-headline-medium text-primary">{details.word}</h2>
+
+          {/* The lookup returns the dictionary form, and that is what Save files. When
+              it is not the word that was tapped ("gehen" for "ging"), say so, so the
+              save - which may fold into an entry already under that name - is no
+              surprise. */}
+          {savesUnderAnotherWord(tappedWord, details.word) && (
+            <p className="mt-1 text-body-small text-on-surface-variant">
+              {t("wordSheet.dictionaryForm", [tappedWord ?? ""])}
+            </p>
+          )}
 
           {facts.length > 0 && (
             <p className="mt-2 text-label-large text-on-surface-variant">{facts.join("  ·  ")}</p>
