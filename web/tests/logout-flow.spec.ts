@@ -145,7 +145,8 @@ test.describe("Real-Browser Logout & Session Privacy Flow", () => {
     });
 
     // Click the logout button in Settings
-    const logoutBtn = page.getByRole("button", { name: /Log out|Abmelden/i });
+    // Anchored: "Log out and erase this device" also contains "Log out".
+    const logoutBtn = page.getByRole("button", { name: /^(Log out|Abmelden)$/i });
     await expect(logoutBtn).toBeVisible();
     await logoutBtn.scrollIntoViewIfNeeded();
     await logoutBtn.click();
