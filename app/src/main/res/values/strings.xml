@@ -231,6 +231,9 @@
     <string name="settings_wipe_confirm">Delete Everything</string>
     <string name="settings_wipe_cancel">Keep Progress</string>
     <string name="settings_version">DeutschFlow Version %1$s</string>
+    <string name="settings_privacy_policy">Privacy policy</string>
+    <!-- The web client's public policy page; update if the production domain changes. -->
+    <string name="privacy_policy_url" translatable="false">https://deutschflow-iota.vercel.app/privacy</string>
 
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API key saved securely.</string>

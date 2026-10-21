@@ -11,7 +11,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.lifecycleScope
+import com.aus.deutschflow.data.local.PreferenceManager
 import com.aus.deutschflow.service.TTSHelper
+import kotlinx.coroutines.launch
 import com.aus.deutschflow.ui.navigation.MainNavigation
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -22,6 +25,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var ttsHelper: TTSHelper
+
+    @Inject
+    lateinit var preferenceManager: PreferenceManager
 
     /**
      * No permissions are requested here.
@@ -49,6 +55,13 @@ class MainActivity : ComponentActivity() {
         // carries the launching intent, and reopening its word would yank the user
         // back to it from wherever they had moved on to.
         if (savedInstanceState == null) pendingWordId = wordIdFrom(intent)
+
+        // The read-aloud voice follows the dialect chosen in Settings, including a
+        // change made while the app is open. Cheap: setDialect ignores repeats and
+        // never starts the engine itself.
+        lifecycleScope.launch {
+            preferenceManager.selectedDialect.collect { ttsHelper.setDialect(it) }
+        }
 
         enableEdgeToEdge()
         setContent {

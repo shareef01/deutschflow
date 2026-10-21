@@ -264,6 +264,7 @@ export const STRINGS = {
       "This will permanently delete your library, history, and earnings. This action is final.",
     "settings.wipeConfirm": "Delete everything",
     "settings.version": "DeutschFlow v{0}",
+    "settings.privacyPolicy": "Privacy policy",
 
     // Settings outcomes
     "message.apiKeySaved": "API key saved.",
@@ -558,6 +559,7 @@ export const STRINGS = {
       "Damit werden Bibliothek, Verlauf und Punkte endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
     "settings.wipeConfirm": "Alles löschen",
     "settings.version": "DeutschFlow v{0}",
+    "settings.privacyPolicy": "Datenschutzerklärung",
 
     "message.apiKeySaved": "API-Schlüssel gespeichert.",
     "message.apiKeyNotSaved":

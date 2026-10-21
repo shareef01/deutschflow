@@ -417,6 +417,14 @@ export default function SettingsPage() {
         <p className="text-xs font-medium uppercase tracking-[0.15em] text-on-surface-variant">
           {t("settings.version", ["1.3.0 Obsidian"])}
         </p>
+        <a
+          href="/privacy"
+          target="_blank"
+          rel="noopener"
+          className="mt-3 inline-block text-label-large text-primary underline underline-offset-4"
+        >
+          {t("settings.privacyPolicy")}
+        </a>
       </div>
 
       {/* ---- Modals ----------------------------------------------------------- */}
