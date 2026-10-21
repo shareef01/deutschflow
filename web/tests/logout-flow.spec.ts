@@ -20,10 +20,20 @@ test.describe("Real-Browser Logout & Session Privacy Flow", () => {
 
     // 3. Pre-populate Cache Storage with navigation query strings and static assets,
     // and seed a REAL sentinel record into IndexedDB to verify learning data survival.
+    // Seed only once the worker has activated and controls the page: activate()
+    // deletes every deutschflow-* cache but its own, so an entry written earlier
+    // (or into a guessed name) can vanish before the assertions run.
+    await page.waitForFunction(async () => {
+      await navigator.serviceWorker.ready;
+      return navigator.serviceWorker.controller !== null;
+    });
     await page.evaluate(async () => {
-      const keys = await window.caches.keys();
-      const current = keys.find((k) => k.startsWith("deutschflow-")) || "deutschflow-dev";
-      const cache = await window.caches.open(current);
+      const registration = await navigator.serviceWorker.ready;
+      const scriptURL = registration.active?.scriptURL;
+      if (!scriptURL) throw new Error("No active service worker");
+      // Mirrors sw.js: the cache is named after the ?v= build id on the script URL.
+      const build = new URL(scriptURL).searchParams.get("v") || "dev";
+      const cache = await window.caches.open(`deutschflow-${build}`);
       await cache.put(
         new Request("/vocabulary?sort=recent"),
         new Response("cached-vocabulary-recent")
