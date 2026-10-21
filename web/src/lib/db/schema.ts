@@ -152,6 +152,17 @@ export function foldGermanKey(text: string): string {
 }
 
 /**
+ * Whether a word lookup's answer would be saved under a different entry than the
+ * word the user tapped - "gehen" for "ging". Compared by the uniqueness key, so a
+ * difference of case or umlaut spelling alone does not count: those save into the
+ * same row anyway. The sheet says so when this is true (AUDIT_2026-10-12 F-24);
+ * WordDetailsBottomSheet compares germanKey the same way.
+ */
+export function savesUnderAnotherWord(tappedWord: string | null, savedWord: string): boolean {
+  return tappedWord !== null && foldGermanKey(tappedWord) !== foldGermanKey(savedWord);
+}
+
+/**
  * The loose fold, for matching rather than identity. Adds ß→ss, so it also matches
  * Strasse to Straße. Never use this as a uniqueness key - see [foldGermanKey].
  *

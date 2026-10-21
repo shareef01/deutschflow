@@ -314,7 +314,8 @@ private fun TranscriptDetailDialog(
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onSpeak()
                         },
-                        modifier = Modifier.size(36.dp)
+                        // No explicit size: below 48dp it also shrank the touch target,
+                        // which IconButton otherwise keeps at the accessible minimum.
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.VolumeUp,
@@ -328,7 +329,8 @@ private fun TranscriptDetailDialog(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onCopy()
                         },
-                        modifier = Modifier.size(36.dp)
+                        // No explicit size: below 48dp it also shrank the touch target,
+                        // which IconButton otherwise keeps at the accessible minimum.
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,

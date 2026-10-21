@@ -57,6 +57,7 @@ export const STRINGS = {
     "wordSheet.article": "Article: {0}",
     "wordSheet.plural": "Plural: {0}",
     "wordSheet.verb": "Infinitive: {0}",
+    "wordSheet.dictionaryForm": "Dictionary form of “{0}” — saved under this word.",
     "wordSheet.meaning": "Meaning",
 
     // History
@@ -360,6 +361,7 @@ export const STRINGS = {
     "wordSheet.article": "Artikel: {0}",
     "wordSheet.plural": "Plural: {0}",
     "wordSheet.verb": "Infinitiv: {0}",
+    "wordSheet.dictionaryForm": "Grundform von „{0}“ – wird unter diesem Wort gespeichert.",
     "wordSheet.meaning": "Bedeutung",
 
     "history.searchHint": "Verlauf durchsuchen…",

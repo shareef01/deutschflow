@@ -217,8 +217,10 @@ fun GlassButton(
         onClick = onClick,
         enabled = enabled,
         interactionSource = interactionSource,
+        // A minimum, not a fixed height: at large font scales the label needs more
+        // room, and a fixed 56dp clipped it (AUDIT_2026-10-12 F-25).
         modifier = modifier
-            .height(ActionButtonHeight)
+            .heightIn(min = ActionButtonHeight)
             .pressScale(interactionSource),
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, glassBorderBrush(glow, alpha = 0.5f)),
