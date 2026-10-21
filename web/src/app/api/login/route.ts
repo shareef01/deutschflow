@@ -30,8 +30,9 @@ export function isValidIp(ip: string | null | undefined): boolean {
 
 /**
  * The key every caller shares when no trustworthy client address is available.
- * One bucket for everyone: an attacker's failures throttle every user, which is
- * the price of not letting a client pick its own identity.
+ * One bucket for everyone: an attacker's failures throttle every user, and any
+ * user's successful login resets it for the attacker too. That is the price of
+ * not letting a client pick its own identity; TRUSTED_PROXY_HEADER removes it.
  */
 export const SHARED_CALLER_KEY = "unknown";
 
@@ -149,10 +150,10 @@ export async function POST(request: NextRequest) {
   const isSecure = process.env.NODE_ENV === "production" && isHttps;
 
   try {
-    // Not for the shared key: there a success is anyone's, and resetting the
-    // counter would hand an attacker who shares the bucket a fresh set of free
-    // attempts every time a real user logs in. The window still expires it.
-    if (caller !== SHARED_CALLER_KEY) await recordThrottleSuccess(caller);
+    // Also for the shared key, though there it resets an attacker's count too.
+    // Admission counts successes as well as failures, so without the reset any
+    // three logins in the window - all correct - would lock everyone out.
+    await recordThrottleSuccess(caller);
   } catch (err) {
     if (err instanceof ThrottleStoreError) {
       return NextResponse.json(
