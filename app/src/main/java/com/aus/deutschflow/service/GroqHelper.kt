@@ -190,10 +190,7 @@ class GroqHelper @Inject constructor(
      * to translate, in a channel of its own, and nothing has to guess which half of a
      * blob was authored by whom.
      */
-    private fun requestBody(text: String, learnerLevel: String? = null): String = JSONObject().apply {
-        put("model", MODEL_NAME)
-        put("temperature", 0.2)
-        put("max_completion_tokens", 1024)
+    private fun requestBody(text: String, learnerLevel: String? = null): String = baseRequest(temperature = 0.2, maxCompletionTokens = 1024).apply {
         put("response_format", JSONObject().put("type", "json_object"))
         put(
             "messages",
@@ -220,10 +217,7 @@ class GroqHelper @Inject constructor(
      * pins the model to emitting valid JSON. The prompt still spells out the exact
      * keys so the shape, not just the syntax, is what the caller expects.
      */
-    private fun wordRequestBody(word: String, learnerLevel: String? = null): String = JSONObject().apply {
-        put("model", MODEL_NAME)
-        put("temperature", 0.1)
-        put("max_completion_tokens", 1024)
+    private fun wordRequestBody(word: String, learnerLevel: String? = null): String = baseRequest(temperature = 0.1, maxCompletionTokens = 1024).apply {
         put("response_format", JSONObject().put("type", "json_object"))
         put(
             "messages",
@@ -349,10 +343,7 @@ class GroqHelper @Inject constructor(
         scenario: String,
         history: List<Pair<String, String>>,
         learnerLevel: String? = null
-    ): String = JSONObject().apply {
-        put("model", MODEL_NAME)
-        put("temperature", 0.7)
-        put("max_completion_tokens", 512)
+    ): String = baseRequest(temperature = 0.7, maxCompletionTokens = 512).apply {
 
         val messages = JSONArray()
         messages.put(JSONObject().apply {
@@ -375,10 +366,7 @@ class GroqHelper @Inject constructor(
         history: List<Pair<String, String>>,
         scenario: String,
         learnerLevel: String? = null
-    ): String = JSONObject().apply {
-        put("model", MODEL_NAME)
-        put("temperature", 0.7) // Higher for more natural conversation
-        put("max_completion_tokens", 512)
+    ): String = baseRequest(temperature = 0.7, maxCompletionTokens = 512).apply {
 
         val messages = JSONArray()
         // 1. System Prompt
@@ -507,6 +495,27 @@ class GroqHelper @Inject constructor(
          * against an app that makes one per spoken sentence.
          */
         const val MODEL_NAME = "openai/gpt-oss-120b"
+
+        /**
+         * gpt-oss models reason before they answer, and those reasoning tokens are
+         * billed against max_completion_tokens. At the default effort a long input
+         * (up to MAX_AI_INPUT_CHARS) could spend the 1024-token budget - 512 for
+         * roleplay - thinking, and the JSON answer never arrived: the user saw the
+         * "cut off" message (AUDIT_2026-10-19 X-01). Translation, word lookup and a
+         * roleplay line need little reasoning, so "low" leaves the budget for the
+         * answer. Mirrored by REASONING_EFFORT in web/src/lib/ai/groq.ts and pinned
+         * by the cross-platform contract.
+         */
+        const val REASONING_EFFORT = "low"
+
+        /** The fields every request shares; each body adds its own messages. */
+        @VisibleForTesting
+        internal fun baseRequest(temperature: Double, maxCompletionTokens: Int): JSONObject = JSONObject().apply {
+            put("model", MODEL_NAME)
+            put("temperature", temperature)
+            put("max_completion_tokens", maxCompletionTokens)
+            put("reasoning_effort", REASONING_EFFORT)
+        }
 
         private const val TIMEOUT_MS = 30_000
 

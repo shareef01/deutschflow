@@ -258,5 +258,19 @@ class GroqHelperTest {
         assertEquals("Guten Tag!\nWas möchten Sie?", p2!!.first)
         assertEquals("Greeting and question.", p2.second)
     }
-}
 
+    /**
+     * X-01 (AUDIT_2026-10-19): gpt-oss reasoning tokens count against
+     * max_completion_tokens, so every request asks for low effort. All four bodies
+     * start from baseRequest, so this covers them.
+     */
+    @Test
+    fun `baseRequest asks for low reasoning effort and keeps the budget`() {
+        val body = GroqHelper.baseRequest(temperature = 0.2, maxCompletionTokens = 1024)
+        assertEquals("low", body.getString("reasoning_effort"))
+        assertEquals(GroqHelper.REASONING_EFFORT, body.getString("reasoning_effort"))
+        assertEquals(GroqHelper.MODEL_NAME, body.getString("model"))
+        assertEquals(1024, body.getInt("max_completion_tokens"))
+        assertEquals(0.2, body.getDouble("temperature"), 0.0)
+    }
+}

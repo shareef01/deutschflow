@@ -34,6 +34,7 @@
   },
   "aiConstants": {
     "MODEL_NAME": "openai/gpt-oss-120b",
+    "REASONING_EFFORT": "low",
     "MAX_AI_INPUT_CHARS": 4000,
     "MAX_ROLEPLAY_USER_CHARS": 1000,
     "MAX_ROLEPLAY_SCENARIO_CHARS": 500,

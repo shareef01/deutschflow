@@ -52,6 +52,26 @@ export function getActiveGroqModel(): string {
 }
 
 export const GROQ_MODEL = getActiveGroqModel();
+
+/**
+ * gpt-oss models reason before they answer, and those reasoning tokens count
+ * against max_completion_tokens. At the default effort a long input could spend
+ * the whole budget thinking, so the JSON answer never arrived and the user saw
+ * the "cut off" message (AUDIT_2026-10-19 X-01). Translation, word lookup and a
+ * roleplay line need little reasoning; "low" leaves the budget for the answer.
+ * Mirrors GroqHelper.REASONING_EFFORT, pinned by the cross-platform contract.
+ */
+export const REASONING_EFFORT = "low";
+
+/** The fields every request shares; each body adds its own messages. */
+export function baseRequest(temperature: number, maxCompletionTokens: number) {
+  return {
+    model: GROQ_MODEL,
+    temperature,
+    max_completion_tokens: maxCompletionTokens,
+    reasoning_effort: REASONING_EFFORT,
+  };
+}
 const TIMEOUT_MS = 30_000;
 const MAX_POST_RETRIES = 2;
 const RETRY_BACKOFF_MS = [300, 600];
@@ -293,9 +313,7 @@ export function appendCefrInstruction(prompt: string, learnerLevel?: string): st
 function translationRequestBody(text: string, learnerLevel?: string): string {
   const prompt = appendCefrInstruction(SYSTEM_PROMPT, learnerLevel);
   return JSON.stringify({
-    model: GROQ_MODEL,
-    temperature: 0.2,
-    max_completion_tokens: 1024,
+    ...baseRequest(0.2, 1024),
     // The enforcement the prompt alone cannot give. The prefixed-line format this
     // replaced split keywords on "," and grammar notes on ";", so a keyword phrase
     // containing a comma shattered and an explanation containing a semicolon was cut
@@ -311,9 +329,7 @@ function translationRequestBody(text: string, learnerLevel?: string): string {
 function interrogationRequestBody(word: string, learnerLevel?: string): string {
   const prompt = appendCefrInstruction(WORD_SYSTEM_PROMPT, learnerLevel);
   return JSON.stringify({
-    model: GROQ_MODEL,
-    temperature: 0.1,
-    max_completion_tokens: 1024,
+    ...baseRequest(0.1, 1024),
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: prompt },
@@ -345,9 +361,7 @@ function roleplayOpeningRequestBody(
   learnerLevel?: string
 ): string {
   return JSON.stringify({
-    model: GROQ_MODEL,
-    temperature: 0.7,
-    max_completion_tokens: 512,
+    ...baseRequest(0.7, 512),
     messages: [
       { role: "system", content: roleplayOpeningPrompt(scenario, learnerLevel) },
       ...history,
@@ -362,9 +376,7 @@ function roleplayRequestBody(
   learnerLevel?: string
 ): string {
   return JSON.stringify({
-    model: GROQ_MODEL,
-    temperature: 0.7,
-    max_completion_tokens: 512,
+    ...baseRequest(0.7, 512),
     messages: [
       { role: "system", content: roleplayPrompt(scenario, learnerLevel) },
       ...history,

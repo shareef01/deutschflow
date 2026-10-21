@@ -14,6 +14,7 @@ import { XP_PER_CARD, DAILY_XP_GOAL } from "@/lib/db/repository";
 import { importLibrary } from "@/lib/db/backup";
 import {
   GROQ_MODEL,
+  REASONING_EFFORT,
   MAX_AI_INPUT_CHARS,
   MAX_ROLEPLAY_USER_CHARS,
   MAX_ROLEPLAY_SCENARIO_CHARS,
@@ -35,6 +36,7 @@ interface ContractFixture {
   };
   aiConstants: {
     MODEL_NAME: string;
+    REASONING_EFFORT: string;
     MAX_AI_INPUT_CHARS: number;
     MAX_ROLEPLAY_USER_CHARS: number;
     MAX_ROLEPLAY_SCENARIO_CHARS: number;
@@ -120,6 +122,7 @@ describe("Cross-Platform Behavioral Contract", () => {
   describe("AI constants contract", () => {
     it("matches model and character/turn limits", () => {
       expect(GROQ_MODEL).toBe(contract.aiConstants.MODEL_NAME);
+      expect(REASONING_EFFORT).toBe(contract.aiConstants.REASONING_EFFORT);
       expect(MAX_AI_INPUT_CHARS).toBe(contract.aiConstants.MAX_AI_INPUT_CHARS);
       expect(MAX_ROLEPLAY_USER_CHARS).toBe(contract.aiConstants.MAX_ROLEPLAY_USER_CHARS);
       expect(MAX_ROLEPLAY_SCENARIO_CHARS).toBe(contract.aiConstants.MAX_ROLEPLAY_SCENARIO_CHARS);
