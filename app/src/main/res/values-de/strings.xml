@@ -228,6 +228,7 @@
     <string name="settings_wipe_confirm">Alles löschen</string>
     <string name="settings_wipe_cancel">Behalten</string>
     <string name="settings_version">DeutschFlow v%1$s</string>
+    <string name="settings_privacy_policy">Datenschutzerklärung</string>
 
     <!-- Settings outcomes -->
     <string name="message_api_key_saved">API-Schlüssel gespeichert.</string>

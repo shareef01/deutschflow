@@ -3,7 +3,8 @@ package com.aus.deutschflow.service
 import androidx.annotation.StringRes
 import com.aus.deutschflow.R
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
-import java.util.concurrent.TimeUnit
+import java.time.Instant
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,8 +25,12 @@ class SRSEngine @Inject constructor() {
      * Calculates the next review state for a word based on the user's performance.
      * Implements a variation of the SuperMemo-2 (SM-2) algorithm.
      */
-    fun calculateNextReview(vocab: VocabularyEntity, quality: ReviewQuality): VocabularyEntity {
-        val now = System.currentTimeMillis()
+    fun calculateNextReview(
+        vocab: VocabularyEntity,
+        quality: ReviewQuality,
+        now: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault()
+    ): VocabularyEntity {
         
         // SM-2 logic
         var nextEaseFactor = vocab.easeFactor
@@ -93,11 +98,10 @@ class SRSEngine @Inject constructor() {
         nextEaseFactor = nextEaseFactor.coerceIn(MIN_EASE_FACTOR, MAX_EASE_FACTOR)
         nextInterval = nextInterval.coerceAtMost(MAX_INTERVAL_DAYS)
         
-        // Calculate timestamp
-        // Interval 0 means "review again in this session" (handled by ViewModel)
-        // Interval > 0 means "review in N days"
+        // Interval 0 means "review again in this session" (handled by ViewModel);
+        // interval > 0 means "due on the Nth day from today", from its first minute.
         val nextReviewTimestamp = if (nextInterval > 0) {
-            now + TimeUnit.DAYS.toMillis(nextInterval.toLong())
+            dueAt(now, nextInterval, zone)
         } else {
             0 // Ready immediately
         }
@@ -143,6 +147,24 @@ class SRSEngine @Inject constructor() {
          */
         const val HARD_EASE_PENALTY = 0.15f
         const val AGAIN_EASE_PENALTY = 0.20f
+
+        /**
+         * The start of the local day [intervalDays] days after [now].
+         *
+         * It used to be exactly now + N * 24 h, so a card answered at 22:00 with a
+         * one-day interval was not due until 22:00 the next day - a learner studying
+         * the next morning found it missing, and their schedule drifted later every
+         * day they studied late (AUDIT_2026-10-12 F-21). An interval counts calendar
+         * days, as Anki does, and the streak already does. Calendar arithmetic, not
+         * 24-hour steps, so a DST change doesn't move the boundary off midnight.
+         * dueAt in web/src/lib/ai/srs.ts is the mirror.
+         */
+        fun dueAt(now: Long, intervalDays: Int, zone: ZoneId = ZoneId.systemDefault()): Long =
+            Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+                .plusDays(intervalDays.toLong())
+                .atStartOfDay(zone)
+                .toInstant()
+                .toEpochMilli()
 
         /**
          * The learner-facing badge for an interval in days, as a string resource and

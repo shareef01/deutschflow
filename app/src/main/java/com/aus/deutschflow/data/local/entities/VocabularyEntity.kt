@@ -47,6 +47,15 @@ import java.util.UUID
  * scoring filter on the word as written and fold independently, so tightening
  * [germanKey] changed neither. See [germanMatchKey] for the loose rule itself.
  *
+ * ## Case-only homographs share an entry, by decision
+ *
+ * Lowercasing means "Essen" (food) and "essen" (to eat), or "Morgen" and "morgen",
+ * are one row: saving the second merges into the first. Separating them would
+ * need a case-sensitive or part-of-speech key, and so a migration on both clients
+ * and a backup format change; on 2026-10-21 the owner chose to keep merging
+ * (AUDIT_2026-10-12 F-08). The harmful part is already handled: a word lookup's
+ * "none" article never overwrites a real der/die/das (see [NO_ARTICLE]).
+ *
  * Mirrors foldGermanKey in web/src/lib/db/schema.ts.
  */
 fun germanKey(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFC)

@@ -156,18 +156,7 @@ class TTSHelper @Inject constructor(
 
         if (failure == null) {
             _error.value = null
-            // Prefer on-device voice for privacy semantics
-            try {
-                val voices = engine?.voices
-                val onDeviceVoice = voices?.firstOrNull { voice ->
-                    voice.locale.language == Locale.GERMAN.language && !voice.isNetworkConnectionRequired
-                }
-                if (onDeviceVoice != null) {
-                    engine?.let { it.voice = onDeviceVoice }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to select on-device voice: ${e.message}")
-            }
+            applyVoice(engine)
             engine?.setOnUtteranceProgressListener(progressListener)
             queued?.let {
                 requestAudioFocus()
@@ -195,6 +184,48 @@ class TTSHelper @Inject constructor(
      */
     fun dismissError() {
         _error.value = null
+    }
+
+    /** The dialect the voice should match; see [setDialect]. */
+    @Volatile
+    private var dialectTag: String = DEFAULT_DIALECT
+
+    /**
+     * Follows the Settings dialect (de-DE, de-AT, de-CH). Voice selection used to take
+     * the first offline German voice the engine listed, whatever the learner had chosen,
+     * so an Austrian-German learner could be read to in Swiss German
+     * (AUDIT_2026-10-12 F-15). Applied now if the engine is up, else when it connects.
+     */
+    fun setDialect(tag: String) {
+        if (tag == dialectTag) return
+        dialectTag = tag
+        val engine = synchronized(lock) { tts.takeIf { state == State.READY } }
+        if (engine != null) applyVoice(engine)
+    }
+
+    /**
+     * Picks the voice for [dialectTag] - see [chooseVoice]. With no offline German
+     * voice at all, the engine keeps its own default for the dialect's locale, which
+     * may need the network; Settings says "prefers on-device voices" for that reason.
+     */
+    private fun applyVoice(engine: TextToSpeech?) {
+        if (engine == null) return
+        try {
+            val chosen = chooseVoice(
+                engine.voices.orEmpty(),
+                dialectTag,
+                locale = { it.locale },
+                needsNetwork = { it.isNetworkConnectionRequired }
+            )
+            if (chosen != null) {
+                engine.voice = chosen
+            } else {
+                Log.i(TAG, "no offline German voice installed; using the engine default")
+                engine.setLanguage(Locale.forLanguageTag(dialectTag))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to select a voice: ${e.message}")
+        }
     }
 
     fun speak(text: String) {
@@ -290,4 +321,30 @@ class TTSHelper @Inject constructor(
     /** A fresh id per phrase so a queued utterance is never mistaken for the last. */
     private fun utteranceIdFor(text: String): String =
         "deutschflow-${text.hashCode()}-${System.nanoTime()}"
+
+    companion object {
+        const val DEFAULT_DIALECT = "de-DE"
+
+        /**
+         * The offline voice to use for [dialectTag]: one whose language and country
+         * both match, else a standard German (de-DE) one, else any German one. Never a
+         * network voice - those send the text off the device - so null when no offline
+         * German voice is installed.
+         *
+         * Generic over the voice type so JVM tests can call it without the Android
+         * framework's Voice class.
+         */
+        internal fun <V> chooseVoice(
+            voices: Collection<V>,
+            dialectTag: String,
+            locale: (V) -> Locale,
+            needsNetwork: (V) -> Boolean
+        ): V? {
+            val wanted = Locale.forLanguageTag(dialectTag)
+            val offlineGerman = voices.filter { !needsNetwork(it) && locale(it).language == Locale.GERMAN.language }
+            return offlineGerman.firstOrNull { locale(it).country.equals(wanted.country, ignoreCase = true) }
+                ?: offlineGerman.firstOrNull { locale(it).country.equals("DE", ignoreCase = true) }
+                ?: offlineGerman.firstOrNull()
+        }
+    }
 }
