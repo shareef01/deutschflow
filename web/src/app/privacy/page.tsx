@@ -18,11 +18,8 @@ export const metadata: Metadata = {
 
 const LAST_UPDATED = "21 October 2026";
 
-/**
- * Where to send privacy questions. Left for the owner to fill in: a policy needs a
- * real contact, and this repository should not invent one.
- */
-const CONTACT: string | null = null;
+/** Where to send privacy questions: the owner's address, set by the owner. */
+const CONTACT: string | null = "shareef2189@gmail.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
