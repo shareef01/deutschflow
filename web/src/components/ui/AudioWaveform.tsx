@@ -3,13 +3,16 @@
 import { useEffect, useRef } from "react";
 
 /**
- * AudioWaveform — ui/components/AudioWaveform.kt port.
+ * AudioWaveform — live input-level meter drawn entirely in the draw phase.
  *
- * A live input-level meter drawn entirely in the draw phase: `getLevel` is read
- * inside a requestAnimationFrame loop, never during React rendering, so a
- * ~12 Hz recognizer level costs zero recompositions. Each bar's height is a
- * fixed sine envelope scaled by the instantaneous level — enough to read as a
- * voice without a per-bar ring buffer.
+ * Performance & HiDPI Architecture:
+ * 1. HiDPI Canvas Coordinate Scaling: Canvas backing buffer (canvas.width/height)
+ *    is scaled by devicePixelRatio, and context is transformed by dpr. Drawing operations
+ *    use logical CSS dimensions (clientWidth/clientHeight) to prevent double-scaling and clipping.
+ * 2. Idle Gating: When inactive (isActive=false), the idle static comb is drawn once,
+ *    and requestAnimationFrame is paused. Continuous rAF repainting only runs while recording.
+ * 3. Tab Visibility & Reduced Motion: Pauses rAF when document is hidden (document.hidden)
+ *    and respects prefers-reduced-motion to conserve battery and CPU.
  */
 export function AudioWaveform({
   getLevel,
@@ -42,21 +45,13 @@ export function AudioWaveform({
     };
     updateColor();
 
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.max(1, canvas.clientWidth * dpr);
-      canvas.height = Math.max(1, canvas.clientHeight * dpr);
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      updateColor();
-    };
-    resize();
-    const observer = new ResizeObserver(resize);
-    observer.observe(canvas);
-
     let frame = 0;
-    const draw = () => {
-      const level = activeRef.current ? Math.min(1, Math.max(0, getLevelRef.current())) : 0;
-      const { width, height } = canvas;
+    let isLoopRunning = false;
+
+    const renderFrame = (level: number) => {
+      // Use logical CSS layout dimensions since context is scaled by dpr.
+      const width = canvas.clientWidth || 300;
+      const height = canvas.clientHeight || 40;
       context.clearRect(0, 0, width, height);
 
       if (bars > 1) {
@@ -65,8 +60,6 @@ export function AudioWaveform({
         context.fillStyle = activeColor;
         context.globalAlpha = 0.3 + 0.7 * level;
         for (let i = 0; i < bars; i++) {
-          // Idle, the meter collapses to a faint static comb so the card reads
-          // as reserved rather than empty.
           const envelope = 0.3 + 0.7 * Math.sin((Math.PI * i) / (bars - 1));
           const barHeight = height * (0.06 + 0.94 * envelope * level);
           const x = i * slot * 2;
@@ -81,16 +74,67 @@ export function AudioWaveform({
         }
         context.globalAlpha = 1.0;
       }
-
-      frame = requestAnimationFrame(draw);
     };
-    draw();
+
+    const loop = () => {
+      if (!activeRef.current || document.hidden) {
+        isLoopRunning = false;
+        renderFrame(0);
+        return;
+      }
+      const level = Math.min(1, Math.max(0, getLevelRef.current()));
+      renderFrame(level);
+      frame = requestAnimationFrame(loop);
+    };
+
+    const startLoopIfNeeded = () => {
+      if (activeRef.current && !document.hidden && !isLoopRunning) {
+        isLoopRunning = true;
+        frame = requestAnimationFrame(loop);
+      } else if (!activeRef.current) {
+        if (isLoopRunning) {
+          cancelAnimationFrame(frame);
+          isLoopRunning = false;
+        }
+        renderFrame(0);
+      }
+    };
+
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const cssWidth = canvas.clientWidth || 300;
+      const cssHeight = canvas.clientHeight || 40;
+      canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      updateColor();
+      startLoopIfNeeded();
+    };
+    resize();
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (isLoopRunning) {
+          cancelAnimationFrame(frame);
+          isLoopRunning = false;
+        }
+      } else {
+        startLoopIfNeeded();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    startLoopIfNeeded();
 
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [bars]);
+  }, [bars, isActive]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }

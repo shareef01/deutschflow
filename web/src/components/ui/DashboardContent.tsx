@@ -5,16 +5,27 @@ import { useI18n } from "@/hooks/useI18n";
 import { DAILY_XP_GOAL, currentStreak, todayKey } from "@/lib/db/repository";
 import type { ActivityEntry } from "@/lib/db/schema";
 import { useMemo } from "react";
+import { GlassButton } from "./GlassButton";
+import { CheckIcon, PlayArrowIcon, SchoolIcon } from "@/components/icons";
 
 /** The bound translator. Typed, so an unknown key is a compile error. */
 type Translate = ReturnType<typeof useI18n>["t"];
 
-export function DashboardContent() {
+export function DashboardContent({
+  onStartReview,
+  dueCount = 0,
+}: {
+  onStartReview?: () => void;
+  dueCount?: number;
+}) {
   const { userStats, activityLog, masteryStats, todayXp } = useDashboard();
   const { t } = useI18n();
 
   return (
-    <div className="flex flex-col gap-8 p-6 overflow-y-auto h-full">
+    <div className="flex flex-col gap-6 p-6 overflow-y-auto h-full max-w-[var(--container-workspace)] mx-auto w-full">
+      {/* Due Today Action Hero Banner */}
+      <DueTodayBanner dueCount={dueCount} onStartReview={onStartReview} t={t} />
+
       {/* Daily Goal & Streak */}
       <DailyGoalCard xp={todayXp} streak={currentStreak(userStats)} t={t} />
 
@@ -23,6 +34,70 @@ export function DashboardContent() {
 
       {/* Activity Heatmap */}
       <ActivityHeatmapCard logs={activityLog} t={t} />
+    </div>
+  );
+}
+
+function DueTodayBanner({
+  dueCount,
+  onStartReview,
+  t,
+}: {
+  dueCount: number;
+  onStartReview?: () => void;
+  t: Translate;
+}) {
+  if (dueCount <= 0) {
+    return (
+      <div className="glass-surface p-5 flex items-center justify-between gap-4 border border-outline-variant/30">
+        <div className="flex items-center gap-3.5">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-tertiary/15 text-tertiary">
+            <CheckIcon className="size-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-on-surface">{t("dashboard.allCaughtUp")}</h4>
+            <p className="text-xs text-on-surface-variant">{t("dashboard.allCaughtUpBody")}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-surface p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 border border-azure-glow/30 shadow-lg shadow-azure-glow/5">
+      <div className="flex items-center gap-4">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-azure-glow/15 text-azure-glow border border-azure-glow/30">
+          <SchoolIcon className="size-6" />
+        </div>
+        <div>
+          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-widest bg-azure-glow/20 text-azure-glow border border-azure-glow/30 mb-1">
+            {t("dashboard.srsBadge")}
+          </span>
+          <h3 className="text-lg font-bold text-on-surface">
+            {dueCount === 1
+              ? t("dashboard.dueTodayBannerOne", [dueCount])
+              : t("dashboard.dueTodayBanner", [dueCount])}
+          </h3>
+          <p className="text-xs text-on-surface-variant">
+            {t("dashboard.dueTodayBody")}
+          </p>
+        </div>
+      </div>
+
+      {onStartReview && (
+        <GlassButton
+          type="button"
+          onClick={onStartReview}
+          className="w-full sm:w-auto h-11 px-6 min-h-[44px] shrink-0 font-bold"
+        >
+          <span className="flex items-center justify-center gap-2">
+            <PlayArrowIcon className="size-4 text-azure-glow" />
+            <span className="text-sm font-bold text-azure-glow">
+              {t("dashboard.startReview")}
+            </span>
+          </span>
+        </GlassButton>
+      )}
     </div>
   );
 }
@@ -42,7 +117,7 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
         aria-valuemin={0}
         aria-valuemax={goal}
         aria-label={t("dashboard.dailyGoal")}
-        className="relative size-32 flex items-center justify-center"
+        className="relative size-32 flex items-center justify-center shrink-0"
       >
         <svg className="size-full -rotate-90">
           <circle
@@ -68,7 +143,6 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
           />
           <defs>
             <linearGradient id="azure-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              {/* The palette's cyan, not a fourth one: #00E5FF was in neither theme. */}
               <stop offset="0%" stopColor="var(--color-azure-glow)" />
               <stop offset="100%" stopColor="var(--color-azure-deep)" />
             </linearGradient>
@@ -80,7 +154,7 @@ function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Trans
         </div>
       </div>
 
-      <div className="flex-1 text-center sm:text-left space-y-2">
+      <div className="flex-1 text-center sm:text-left space-y-2 w-full">
         <h3 className="text-xl font-black text-on-surface tracking-tight uppercase">
           {t("dashboard.dailyGoal")}
         </h3>
@@ -106,9 +180,6 @@ function MasteryBreakdownCard({ stats, t }: { stats: MasteryStats; t: Translate 
         {t("dashboard.retention")}
       </h3>
       <div className="grid grid-cols-1 xs:grid-cols-3 gap-4">
-        {/* The palette's success colour, not Tailwind's green-400. That green is
-            not in either theme - it never matched Android's TertiaryGreen, and on
-            a light ground it measures 1.7:1. */}
         <RetentionTile label={t("dashboard.mastered")} count={stats.masteredWords} color="text-tertiary" />
         <RetentionTile label={t("dashboard.learning")} count={stats.learningWords} color="text-azure-glow" />
         <RetentionTile label={t("dashboard.new")} count={stats.newWords} color="text-on-surface-variant" />

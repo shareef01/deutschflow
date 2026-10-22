@@ -2,6 +2,8 @@ package com.aus.deutschflow.ui.components
 
 import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,6 +64,7 @@ fun WordDetailsBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.md)
                 .padding(bottom = Spacing.lg),
             horizontalAlignment = Alignment.CenterHorizontally

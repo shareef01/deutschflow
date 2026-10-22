@@ -69,16 +69,29 @@ export default function HistoryPage() {
 
       <div className="mt-6 min-h-0 flex-1 overflow-y-auto pb-4">
         {transcripts.length === 0 ? (
-          <EmptyState
-            icon={<HistoryIcon className="size-full" />}
-            message={t("history.emptyTitle")}
-            description={t("history.emptyBody")}
-            action={
-              <GlassButton onClick={() => router.push("/transcript")}>
-                {t("history.emptyAction")}
-              </GlassButton>
-            }
-          />
+          query.trim().length > 0 ? (
+            <EmptyState
+              icon={<HistoryIcon className="size-full" />}
+              message={t("history.noResults")}
+              description={t("history.noResultsBody")}
+              action={
+                <GlassButton onClick={() => setQuery("")}>
+                  {t("action.clearFilter")}
+                </GlassButton>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<HistoryIcon className="size-full" />}
+              message={t("history.emptyTitle")}
+              description={t("history.emptyBody")}
+              action={
+                <GlassButton onClick={() => router.push("/transcript")}>
+                  {t("history.emptyAction")}
+                </GlassButton>
+              }
+            />
+          )
         ) : (
           <div className="flex flex-col gap-3">
             {groups.map(([day, entries]) => (

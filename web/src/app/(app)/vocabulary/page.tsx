@@ -268,11 +268,24 @@ function VocabularyListContent({
 
       <div className="mt-3 min-h-0 flex-1">
         {vocabularyList.length === 0 ? (
-          <EmptyState
-            icon={<AutoStoriesIcon className="size-full" />}
-            message={t("library.emptyTitle")}
-            description={t("library.emptyBody")}
-          />
+          searchQuery.trim().length > 0 ? (
+            <EmptyState
+              icon={<AutoStoriesIcon className="size-full" />}
+              message={t("library.noResults")}
+              description={t("library.noResultsBody")}
+              action={
+                <GlassButton onClick={() => onSearchChange("")}>
+                  {t("action.clearFilter")}
+                </GlassButton>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<AutoStoriesIcon className="size-full" />}
+              message={t("library.emptyTitle")}
+              description={t("library.emptyBody")}
+            />
+          )
         ) : (
           <ul className="flex h-full flex-col gap-3 overflow-y-auto pb-24">
             {vocabularyList.map((item) => (
