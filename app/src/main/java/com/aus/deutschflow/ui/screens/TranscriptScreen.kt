@@ -238,7 +238,9 @@ private fun TranscriptContent(
     val isIdle = !hasTranscript && !isListening && !isBusy
     val currentText = if (isListening) partialText else finalText
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // imePadding: the typed-input field lives in the bottom dock, and the keyboard
+    // covered it, so what you typed was out of sight until you sent it.
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // ==========================================
         // 1. TOP FIXED HEADER / DIALECT REGION
         // ==========================================
