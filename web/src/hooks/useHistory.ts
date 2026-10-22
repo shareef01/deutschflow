@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { db } from "@/lib/db";
 import type { TranscriptEntry } from "@/lib/db/schema";
 import {
@@ -7,7 +7,7 @@ import {
   observeTranscripts,
 } from "@/lib/db/repository";
 import { useLive } from "./useLive";
-import { foldGerman } from "@/lib/scoring";
+import { matchesGerman, matchesPlain, prepareGermanQuery } from "@/lib/search";
 
 /**
  * useHistory — HistoryViewModel port.
@@ -21,22 +21,17 @@ const EMPTY_TRANSCRIPTS: TranscriptEntry[] = [];
 export function useHistory() {
   const transcripts = useLive(() => observeTranscripts(db), []) ?? EMPTY_TRANSCRIPTS;
   const [query, setQuery] = useState("");
+  // Like the library: folding every transcript's full text per keystroke is
+  // cheap now, but should not block typing as history grows.
+  const deferredQuery = useDeferredValue(query);
 
   // Case-insensitive contains — the in-memory analogue of the Room Flow filter
   // (HistoryViewModel: `it.fullText.contains(query, ignoreCase = true)`).
   const filtered = useMemo(() => {
-    const raw = query.trim();
-    if (!raw) return transcripts;
-    const qLower = raw.toLowerCase();
-    const qFolded = foldGerman(raw);
-
-    return transcripts.filter((t) => {
-      if (t.fullText.toLowerCase().includes(qLower)) return true;
-      if (t.translation && t.translation.toLowerCase().includes(qLower)) return true;
-      const gFolded = foldGerman(t.fullText);
-      return gFolded.includes(qFolded);
-    });
-  }, [transcripts, query]);
+    const q = prepareGermanQuery(deferredQuery);
+    if (!q) return transcripts;
+    return transcripts.filter((t) => matchesGerman(t.fullText, q) || matchesPlain(t.translation, q));
+  }, [transcripts, deferredQuery]);
 
   const deleteTranscript = (transcript: { id?: number }) => {
     if (transcript.id !== undefined) void deleteTranscriptRow(db, transcript);

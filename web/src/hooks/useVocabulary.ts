@@ -14,7 +14,7 @@ import {
   saveVocabulary,
 } from "@/lib/db/repository";
 import { generateExample } from "@/lib/ai/processor";
-import { foldGerman } from "@/lib/scoring";
+import { matchesGerman, matchesPlain, prepareGermanQuery } from "@/lib/search";
 import { tts } from "@/lib/speech/tts";
 import { useLive } from "./useLive";
 import type { VocabularyEntry } from "@/lib/db/schema";
@@ -58,18 +58,9 @@ export function useVocabulary() {
   const deferredQuery = useDeferredValue(searchQuery);
 
   const list = useMemo(() => {
-    const raw = deferredQuery.trim();
-    if (!raw) return vocabulary;
-    const qLower = raw.toLowerCase();
-    const qFolded = foldGerman(raw);
-
-    return vocabulary.filter((v) => {
-      if (v.englishTranslation.toLowerCase().includes(qLower)) return true;
-      const gLower = v.germanText.toLowerCase();
-      if (gLower.includes(qLower)) return true;
-      const gFolded = foldGerman(v.germanText);
-      return gFolded.includes(qFolded);
-    });
+    const q = prepareGermanQuery(deferredQuery);
+    if (!q) return vocabulary;
+    return vocabulary.filter((v) => matchesPlain(v.englishTranslation, q) || matchesGerman(v.germanText, q));
   }, [vocabulary, deferredQuery]);
 
   /**

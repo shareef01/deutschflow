@@ -162,6 +162,9 @@ export default function TranscriptPage() {
               <p className="mt-6 text-label-large text-on-surface-variant">{t("transcript.hint")}</p>
             </>
           ) : (
+            /* No Web Speech API here — Firefox. Everything downstream of recognition
+               takes a plain string, so typing gets the user the whole app rather than
+               a dead microphone. */
             <div className="mt-6 flex flex-col items-center max-w-sm text-center">
               <p className="mb-4 text-body-medium text-on-surface-variant">
                 {t("speech.unavailableBody")}

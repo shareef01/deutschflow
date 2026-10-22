@@ -13,16 +13,16 @@ import { useSyncExternalStore } from "react";
  *   sticky with visible overflow, scrolling could not reach them. Two of the five
  *   destinations were simply unreachable.
  *
- * - The librarys master-detail split needs more width than the rail does. At
+ * - The library's master-detail split needs more width than the rail does. At
  *   768px the empty detail pane took 42% of the screen and squeezed the list to
  *   about 280px - narrower than the same list on a 390px phone. A tablet showed
  *   less content than a phone, and clipped German words the phone rendered whole.
  *
  * Hence a height floor on both, and a higher width floor on the split.
  *
- * Performance / Hydration:
- * Uses useSyncExternalStore to synchronously bind media query snapshots during
- * client hydration, eliminating layout shifts (CLS) and extra render cycles.
+ * The server snapshot is false, so the server markup and the hydrating render
+ * agree; React then re-renders with the real match. That is the same first
+ * paint the old useEffect version gave, without a stale value between renders.
  */
 
 /** Five destinations plus their labels need roughly this much vertical room. */
@@ -31,21 +31,36 @@ const RAIL = "(min-width: 768px) and (min-height: 600px)";
 /** Two panes only make sense once both can hold their content. */
 const SPLIT = "(min-width: 1024px) and (min-height: 600px)";
 
-function subscribe(callback: () => void, query: string) {
-  if (typeof window === "undefined" || !window.matchMedia) {
-    return () => {};
+/**
+ * One stable subscribe/getSnapshot pair per query. useSyncExternalStore
+ * re-subscribes whenever `subscribe` changes identity, so an inline closure
+ * would tear down and re-add the matchMedia listener on every render.
+ */
+const stores = new Map<string, { subscribe: (callback: () => void) => () => void; getSnapshot: () => boolean }>();
+
+function storeFor(query: string) {
+  let store = stores.get(query);
+  if (!store) {
+    store = {
+      subscribe: (callback) => {
+        if (typeof window === "undefined" || !window.matchMedia) return () => {};
+        const mediaQuery = window.matchMedia(query);
+        mediaQuery.addEventListener("change", callback);
+        return () => mediaQuery.removeEventListener("change", callback);
+      },
+      getSnapshot: () =>
+        typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false,
+    };
+    stores.set(query, store);
   }
-  const mediaQuery = window.matchMedia(query);
-  mediaQuery.addEventListener("change", callback);
-  return () => mediaQuery.removeEventListener("change", callback);
+  return store;
 }
 
+const getServerSnapshot = () => false;
+
 function useMediaQuery(query: string): boolean {
-  return useSyncExternalStore(
-    (callback) => subscribe(callback, query),
-    () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false),
-    () => false
-  );
+  const { subscribe, getSnapshot } = storeFor(query);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 /** True when the left rail fits; false means the bottom bar, however wide the screen. */
