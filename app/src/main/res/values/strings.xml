@@ -22,7 +22,9 @@
     <string name="action_close">Close</string>
 
     <string name="transcript_empty_title">Speak German naturally</string>
-    <string name="transcript_empty_body">Tap the microphone and start speaking German. DeutschFlow transcribes in real time, translates, and extracts vocabulary.</string>
+    <string name="transcript_empty_body">DeutschFlow transcribes what you say, translates it, and finds the words worth keeping.</string>
+    <string name="transcript_empty_title_type">Type German naturally</string>
+    <string name="transcript_empty_body_type">DeutschFlow translates what you type and finds the words worth keeping.</string>
     <string name="transcript_idle_hint">Tap the microphone to speak German</string>
     <string name="transcript_listening_status">Listening to German speech…</string>
     <string name="transcript_processing_status">Processing and translating…</string>

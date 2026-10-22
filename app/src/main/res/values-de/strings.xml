@@ -28,6 +28,8 @@
 
     <string name="transcript_empty_title">Sprich einfach Deutsch.</string>
     <string name="transcript_empty_body">DeutschFlow transkribiert, übersetzt und findet die Wörter, die du behalten willst.</string>
+    <string name="transcript_empty_title_type">Schreib einfach Deutsch.</string>
+    <string name="transcript_empty_body_type">DeutschFlow übersetzt, was du tippst, und findet die Wörter, die du behalten willst.</string>
     <string name="transcript_idle_hint">Tippe auf das Mikrofon und sprich Deutsch</string>
     <string name="transcript_listening_status">Höre dein Deutsch…</string>
     <string name="transcript_processing_status">Wird verarbeitet und übersetzt…</string>
