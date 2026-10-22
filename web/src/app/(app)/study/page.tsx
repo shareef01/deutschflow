@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStudy } from "@/hooks/useStudy";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -19,13 +19,14 @@ export default function StudyPage() {
   const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const { t } = useI18n();
 
+  // Picked once, when the session first loads. dueCount now falls as cards are
+  // rated, so re-deciding on every change would yank the user off the
+  // completion screen onto the dashboard the moment the last card is rated.
+  const hasAutoSelectedTab = useRef(false);
   useEffect(() => {
-    if (!hasUserSelectedTab && study.status === "ready") {
-      if (study.dueCount > 0) {
-        setSelectedTab("flashcards");
-      } else {
-        setSelectedTab("dashboard");
-      }
+    if (!hasUserSelectedTab && !hasAutoSelectedTab.current && study.status === "ready") {
+      hasAutoSelectedTab.current = true;
+      setSelectedTab(study.dueCount > 0 ? "flashcards" : "dashboard");
     }
   }, [hasUserSelectedTab, study.status, study.dueCount]);
 
@@ -54,7 +55,12 @@ export default function StudyPage() {
           hidden={selectedTab !== "dashboard"}
           className="h-full"
         >
-          {selectedTab === "dashboard" && <DashboardContent />}
+          {selectedTab === "dashboard" && (
+            <DashboardContent
+              dueCount={study.dueCount}
+              onStartReview={() => handleTabSelect("flashcards")}
+            />
+          )}
         </div>
 
         <div
@@ -353,6 +359,12 @@ function FlashcardMode({
                   </span>
                   <span className="mt-2 block text-2xl sm:text-3xl font-bold text-on-surface">
                     {currentItem.englishTranslation}
+                  </span>
+
+                  {/* German reference reminder on answer flip */}
+                  <span className="mt-1.5 text-sm font-semibold text-azure-glow">
+                    {currentItem.article && currentItem.article !== "none" ? `${currentItem.article} ` : ""}
+                    {currentItem.germanText}
                   </span>
 
                   <div className="mt-3 flex items-center gap-2">

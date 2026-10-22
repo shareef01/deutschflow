@@ -23,10 +23,21 @@ export async function loadStudySession(database = db, now = Date.now()) {
   };
 }
 
+/**
+ * Due cards still waiting in this sitting.
+ *
+ * Derived from the live queue, not the load-time snapshot: a scheduled sitting
+ * holds exactly the due cards, a success removes one and Again re-queues it
+ * (it is due again at once), so the queue length is the count. Extra practice
+ * is by definition nothing due.
+ */
+export function remainingDueCount(studyList: readonly unknown[], isExtraPractice: boolean): number {
+  return isExtraPractice ? 0 : studyList.length;
+}
+
 export function useStudy() {
   const [studyList, setStudyList] = useState<VocabularyEntry[]>([]);
   const [totalWords, setTotalWords] = useState(0);
-  const [dueCount, setDueCount] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [status, setStatus] = useState<StudyStatus>("loading");
@@ -68,7 +79,6 @@ export function useStudy() {
       const session = await loadStudySession(db);
       if (generation !== initGeneration.current) return;
       setTotalWords(session.totalWords);
-      setDueCount(session.dueCount);
       setCurrentIndex(0);
       setIsFlipped(false);
       setIsExtraPractice(session.isExtraPractice);
@@ -169,7 +179,7 @@ export function useStudy() {
   return {
     studyList,
     totalWords,
-    dueCount,
+    dueCount: remainingDueCount(studyList, isExtraPractice),
     currentIndex,
     isFlipped,
     status,

@@ -7,6 +7,7 @@ import {
   observeTranscripts,
 } from "@/lib/db/repository";
 import { useLive } from "./useLive";
+import { foldGerman } from "@/lib/scoring";
 
 /**
  * useHistory — HistoryViewModel port.
@@ -24,9 +25,17 @@ export function useHistory() {
   // Case-insensitive contains — the in-memory analogue of the Room Flow filter
   // (HistoryViewModel: `it.fullText.contains(query, ignoreCase = true)`).
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return transcripts;
-    return transcripts.filter((t) => t.fullText.toLowerCase().includes(q));
+    const raw = query.trim();
+    if (!raw) return transcripts;
+    const qLower = raw.toLowerCase();
+    const qFolded = foldGerman(raw);
+
+    return transcripts.filter((t) => {
+      if (t.fullText.toLowerCase().includes(qLower)) return true;
+      if (t.translation && t.translation.toLowerCase().includes(qLower)) return true;
+      const gFolded = foldGerman(t.fullText);
+      return gFolded.includes(qFolded);
+    });
   }, [transcripts, query]);
 
   const deleteTranscript = (transcript: { id?: number }) => {

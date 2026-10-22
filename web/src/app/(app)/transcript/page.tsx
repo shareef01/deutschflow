@@ -17,7 +17,8 @@ import { Snackbar } from "@/components/ui/Snackbar";
 import { AudioWaveform } from "@/components/ui/AudioWaveform";
 import { GlassTextField } from "@/components/ui/GlassTextField";
 import type { TKey } from "@/lib/i18n";
-import { BookmarkAddIcon, ContentCopyIcon, MicIcon, StopIcon } from "@/components/icons";
+import { BookmarkAddIcon, ContentCopyIcon, EditIcon, MicIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
+import { tts } from "@/lib/speech/tts";
 
 export default function TranscriptPage() {
   const { t } = useI18n();
@@ -64,6 +65,8 @@ export default function TranscriptPage() {
   );
 
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [inputMode, setInputMode] = useState<InputMode>("speak");
+
   useEffect(() => {
     if (!state.isListening) return;
     setRecordingSeconds(0);
@@ -130,27 +133,43 @@ export default function TranscriptPage() {
           {t("transcript.emptyBody")}
         </p>
 
-        {speechSupported ? (
-          <>
-            <OracleMic
-              icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
-              label={
-                state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
-              }
-              isListening={state.isListening}
-              isBusy={isBusy}
-              onClick={state.isListening ? stopListening : () => void startListening()}
-              large
-            />
+        {speechSupported && (
+          <InputModeSwitch
+            mode={inputMode}
+            onChange={setInputMode}
+            disabled={state.isListening}
+            className="mt-6"
+            t={t}
+          />
+        )}
 
-            <ErrorBanner message={state.errorState} />
+        {inputMode === "speak" ? (
+          speechSupported ? (
+            <>
+              <OracleMic
+                icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
+                label={
+                  state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
+                }
+                isListening={state.isListening}
+                isBusy={isBusy}
+                onClick={state.isListening ? stopListening : () => void startListening()}
+                large
+              />
 
-            <p className="mt-6 text-label-large text-on-surface-variant">{t("transcript.hint")}</p>
-          </>
+              <ErrorBanner message={state.errorState} />
+
+              <p className="mt-6 text-label-large text-on-surface-variant">{t("transcript.hint")}</p>
+            </>
+          ) : (
+            <div className="mt-6 flex flex-col items-center max-w-sm text-center">
+              <p className="mb-4 text-body-medium text-on-surface-variant">
+                {t("speech.unavailableBody")}
+              </p>
+              <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
+            </div>
+          )
         ) : (
-          /* No Web Speech API here — Firefox. Everything downstream of recognition
-             takes a plain string, so typing gets the user the whole app rather than
-             a dead microphone. */
           <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
         )}
 
@@ -215,14 +234,24 @@ export default function TranscriptPage() {
           </p>
 
           {state.finalText.length > 0 && !state.isListening && (
-            <button
-              type="button"
-              onClick={() => void copyText(state.finalText)}
-              aria-label={t("action.copy")}
-              className="press-scale rounded-full p-2 text-on-surface-variant transition-opacity hover:opacity-70 focus-visible:outline-2 focus-visible:outline-azure-glow"
-            >
-              <ContentCopyIcon className="size-5" />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => tts.speak(state.finalText)}
+                aria-label={t("action.speak")}
+                className="press-scale rounded-full p-2 text-azure-glow hover:bg-azure-glow/10 transition-colors focus-visible:outline-2 focus-visible:outline-azure-glow"
+              >
+                <VolumeUpIcon className="size-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(state.finalText)}
+                aria-label={t("action.copy")}
+                className="press-scale rounded-full p-2 text-on-surface-variant transition-opacity hover:opacity-70 focus-visible:outline-2 focus-visible:outline-azure-glow"
+              >
+                <ContentCopyIcon className="size-5" />
+              </button>
+            </div>
           )}
         </div>
 
@@ -241,15 +270,32 @@ export default function TranscriptPage() {
       <div className="flex flex-1 flex-col items-center justify-center pb-6">
         <ErrorBanner message={state.errorState} />
 
-        {speechSupported ? <OracleMic
-          icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
-          label={
-            state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
-          }
-          isListening={state.isListening}
-          isBusy={isBusy}
-          onClick={state.isListening ? stopListening : () => void startListening()}
-        /> : <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />}
+        {speechSupported && (
+          <InputModeSwitch
+            mode={inputMode}
+            onChange={setInputMode}
+            // Typing mid-recording would hide the mic, the only stop control,
+            // while recognition carried on.
+            disabled={state.isListening}
+            className="mb-4"
+            compact
+            t={t}
+          />
+        )}
+
+        {inputMode === "speak" && speechSupported ? (
+          <OracleMic
+            icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
+            label={
+              state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
+            }
+            isListening={state.isListening}
+            isBusy={isBusy}
+            onClick={state.isListening ? stopListening : () => void startListening()}
+          />
+        ) : (
+          <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
+        )}
 
         {(state.isListening || isBusy) && (
           <p
@@ -368,6 +414,60 @@ export default function TranscriptPage() {
  * Feeds the same handler an utterance does, so translation, grammar, word details
  * and saving all behave identically — the only thing missing is the microphone.
  */
+type InputMode = "speak" | "type";
+
+/**
+ * Speak / Type toggle. Two buttons with aria-pressed rather than colour alone,
+ * so a screen reader hears which mode is on.
+ */
+function InputModeSwitch({
+  mode,
+  onChange,
+  disabled = false,
+  compact = false,
+  className = "",
+  t,
+}: {
+  mode: InputMode;
+  onChange: (mode: InputMode) => void;
+  disabled?: boolean;
+  compact?: boolean;
+  className?: string;
+  t: (key: TKey) => string;
+}) {
+  const options: { id: InputMode; label: TKey; icon: typeof MicIcon }[] = [
+    { id: "speak", label: "transcript.modeSpeak", icon: MicIcon },
+    { id: "type", label: "transcript.modeType", icon: EditIcon },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label={t("transcript.inputMode")}
+      className={`flex items-center gap-1.5 rounded-xl bg-surface-container-high/60 p-1 border border-outline-variant/30 ${className}`}
+    >
+      {options.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={mode === id}
+          disabled={disabled}
+          onClick={() => onChange(id)}
+          className={`flex items-center gap-2 rounded-lg font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+            compact ? "px-3 py-1 text-label-small" : "px-4 py-1.5 text-label-medium"
+          } ${
+            mode === id
+              ? "bg-secondary-container text-on-secondary-container border border-outline-variant/50 shadow-sm"
+              : "text-on-surface-variant hover:text-on-surface"
+          }`}
+        >
+          <Icon className={compact ? "size-3.5" : "size-4"} />
+          <span>{t(label)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function TypedInput({
   onSubmit,
   isBusy,
@@ -386,10 +486,7 @@ function TypedInput({
   };
 
   return (
-    <div className="mt-8 w-full max-w-sm">
-      <p className="mb-3 text-center text-body-medium text-on-surface-variant">
-        {t("speech.unavailableBody")}
-      </p>
+    <div className="mt-4 w-full max-w-md">
       <GlassTextField
         value={text}
         onChange={(event) => setText(event.target.value)}
@@ -397,14 +494,15 @@ function TypedInput({
           if (event.key === "Enter") submit();
         }}
         label={t("transcript.typeInstead")}
+        placeholder={t("transcript.typePlaceholder")}
         disabled={isBusy}
       />
       <GlassButton
-        className="mt-3 h-12 w-full"
+        className="mt-3 h-12 w-full min-h-[48px]"
         onClick={submit}
         disabled={isBusy || text.trim().length === 0}
       >
-        <span className="font-bold">{t("transcript.translateTyped")}</span>
+        <span className="font-bold text-azure-glow">{t("transcript.translateTyped")}</span>
       </GlassButton>
     </div>
   );
