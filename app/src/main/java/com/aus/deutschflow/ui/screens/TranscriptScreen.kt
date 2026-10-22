@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
@@ -309,7 +310,10 @@ private fun TranscriptContent(
                     )
 
                     if (isIdle) {
-                        // Calm, instructional idle empty state
+                        // Calm, instructional idle empty state. Follows the input mode: the
+                        // speech wording sat above a text field in Type mode, telling the
+                        // user to do the one thing that mode is for not doing.
+                        val typing = inputMode == InputMode.TYPE
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
@@ -323,7 +327,7 @@ private fun TranscriptContent(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = Icons.Default.GraphicEq,
+                                        imageVector = if (typing) Icons.Default.Edit else Icons.Default.GraphicEq,
                                         contentDescription = null,
                                         tint = AppTheme.colors.azureGlow,
                                         modifier = Modifier.size(36.dp)
@@ -332,7 +336,9 @@ private fun TranscriptContent(
                             }
                             Spacer(modifier = Modifier.height(Spacing.lg))
                             Text(
-                                text = stringResource(R.string.transcript_empty_title),
+                                text = stringResource(
+                                    if (typing) R.string.transcript_empty_title_type else R.string.transcript_empty_title
+                                ),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -340,7 +346,9 @@ private fun TranscriptContent(
                             )
                             Spacer(modifier = Modifier.height(Spacing.sm))
                             Text(
-                                text = stringResource(R.string.transcript_empty_body),
+                                text = stringResource(
+                                    if (typing) R.string.transcript_empty_body_type else R.string.transcript_empty_body
+                                ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
