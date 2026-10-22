@@ -8,6 +8,7 @@ import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.service.TTSHelper
 import com.aus.deutschflow.service.VocabularyProcessor
 import com.aus.deutschflow.ui.widget.WidgetUpdater
+import com.aus.deutschflow.util.GermanQuery
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -54,12 +55,12 @@ class VocabularyViewModel @Inject constructor(
             library,
             _sortMode
         ) { query, list, sort ->
-            val filtered = if (query.isBlank()) {
+            val search = GermanQuery.prepare(query)
+            val filtered = if (search == null) {
                 list
             } else {
-                list.filter { 
-                    it.germanText.contains(query, ignoreCase = true) || 
-                    it.englishTranslation.contains(query, ignoreCase = true) 
+                list.filter {
+                    search.matchesGerman(it.germanText) || search.matchesPlain(it.englishTranslation)
                 }
             }
             // The DAO already orders by timestamp DESC, so NEWEST is the list as it

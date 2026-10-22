@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -102,24 +103,36 @@ fun HistoryScreen(
             ) { state ->
                 if (state == null) {
                     HistorySkeleton()
+                } else if (state && hasAnyHistory) {
+                    // A search that matched nothing used to fall through to "No
+                    // transcripts yet ... will appear here", which is false over a
+                    // history that has rows. Same split the library makes.
+                    EmptyState(
+                        icon = Icons.Default.SearchOff,
+                        message = stringResource(R.string.history_no_match_title),
+                        description = stringResource(R.string.history_no_match_body, historyQuery),
+                        action = {
+                            TextButton(onClick = { viewModel.setQuery("") }) {
+                                Text(stringResource(R.string.library_clear_search))
+                            }
+                        }
+                    )
                 } else if (state) {
                     EmptyState(
                         icon = Icons.Default.History,
                         message = stringResource(R.string.history_empty_title),
                         description = stringResource(R.string.history_empty_body),
-                        action = if (!hasAnyHistory) {
-                            {
-                                Button(
-                                    onClick = onStartTranscript,
-                                    modifier = Modifier.height(ActionButtonHeight),
-                                    shape = MaterialTheme.shapes.medium
-                                ) {
-                                    Icon(Icons.Default.Mic, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(Spacing.sm))
-                                    Text(stringResource(R.string.history_empty_action))
-                                }
+                        action = {
+                            Button(
+                                onClick = onStartTranscript,
+                                modifier = Modifier.height(ActionButtonHeight),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(Icons.Default.Mic, contentDescription = null)
+                                Spacer(modifier = Modifier.width(Spacing.sm))
+                                Text(stringResource(R.string.history_empty_action))
                             }
-                        } else null
+                        }
                     )
                 } else {
                     val groups = remember(history) { groupByDay(history) }
