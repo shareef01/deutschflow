@@ -207,6 +207,11 @@ fun MainNavigation(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
+                // Marks the bar's share as handled, so a screen's imePadding adds
+                // only the part of the keyboard that rises above the bottom bar.
+                // Without it the bar's height was counted twice, leaving a gap the
+                // size of the bar between the keyboard and the field.
+                .consumeWindowInsets(innerPadding)
         ) {
             // Above compact width there is no bottom bar, so the rail is the only
             // way to reach the other destinations - including on a phone in
