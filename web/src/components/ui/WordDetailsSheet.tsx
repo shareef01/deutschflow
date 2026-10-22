@@ -135,7 +135,7 @@ function OpenWordDetailsSheet({
                 {t("detail.example")}
               </p>
               <p lang="de" className="mt-1.5 text-body-large text-on-surface italic leading-relaxed">
-                "{details.exampleSentence}"
+                „{details.exampleSentence}“
               </p>
             </GlassCard>
           )}

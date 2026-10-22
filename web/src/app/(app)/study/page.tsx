@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStudy } from "@/hooks/useStudy";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -19,13 +19,14 @@ export default function StudyPage() {
   const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const { t } = useI18n();
 
+  // Picked once, when the session first loads. dueCount now falls as cards are
+  // rated, so re-deciding on every change would yank the user off the
+  // completion screen onto the dashboard the moment the last card is rated.
+  const hasAutoSelectedTab = useRef(false);
   useEffect(() => {
-    if (!hasUserSelectedTab && study.status === "ready") {
-      if (study.dueCount > 0) {
-        setSelectedTab("flashcards");
-      } else {
-        setSelectedTab("dashboard");
-      }
+    if (!hasUserSelectedTab && !hasAutoSelectedTab.current && study.status === "ready") {
+      hasAutoSelectedTab.current = true;
+      setSelectedTab(study.dueCount > 0 ? "flashcards" : "dashboard");
     }
   }, [hasUserSelectedTab, study.status, study.dueCount]);
 

@@ -2,6 +2,7 @@
 
 import { useId, type InputHTMLAttributes, type ReactNode } from "react";
 import { CloseIcon, SearchIcon } from "@/components/icons";
+import { useI18n } from "@/hooks/useI18n";
 
 /**
  * GlassTextField — the one input container in the app.
@@ -63,11 +64,12 @@ export function SearchInput({
   trailingIcon?: ReactNode;
   ariaLabel?: string;
 }) {
+  const { t } = useI18n();
   const clearButton = value ? (
     <button
       type="button"
       onClick={() => onChange("")}
-      aria-label="Clear search"
+      aria-label={t("action.clearFilter")}
       className="flex size-7 items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 transition-colors focus-visible:outline-2 focus-visible:outline-azure-glow"
     >
       <CloseIcon className="size-4" />
@@ -79,7 +81,7 @@ export function SearchInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      aria-label={ariaLabel || "Search"}
+      aria-label={ariaLabel || t("action.search")}
       leadingIcon={<SearchIcon className="size-5 text-azure-deep transition-colors group-focus-within:text-azure-glow" />}
       trailingIcon={trailingIcon ?? clearButton}
       type="search"

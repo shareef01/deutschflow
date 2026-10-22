@@ -27,7 +27,7 @@ export function DashboardContent({
       <DueTodayBanner dueCount={dueCount} onStartReview={onStartReview} t={t} />
 
       {/* Daily Goal & Streak */}
-      <DailyGoalCard xp={todayXp} streak={currentStreak(userStats)} onStartReview={onStartReview} t={t} />
+      <DailyGoalCard xp={todayXp} streak={currentStreak(userStats)} t={t} />
 
       {/* Retention Analytics */}
       <MasteryBreakdownCard stats={masteryStats} t={t} />
@@ -56,7 +56,7 @@ function DueTodayBanner({
           </div>
           <div>
             <h4 className="text-sm font-bold text-on-surface">{t("dashboard.allCaughtUp")}</h4>
-            <p className="text-xs text-on-surface-variant">Ready to practice speaking or explore vocabulary.</p>
+            <p className="text-xs text-on-surface-variant">{t("dashboard.allCaughtUpBody")}</p>
           </div>
         </div>
       </div>
@@ -71,13 +71,15 @@ function DueTodayBanner({
         </div>
         <div>
           <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-widest bg-azure-glow/20 text-azure-glow border border-azure-glow/30 mb-1">
-            SRS Spaced Repetition
+            {t("dashboard.srsBadge")}
           </span>
           <h3 className="text-lg font-bold text-on-surface">
-            {t("dashboard.dueTodayBanner", [dueCount])}
+            {dueCount === 1
+              ? t("dashboard.dueTodayBannerOne", [dueCount])
+              : t("dashboard.dueTodayBanner", [dueCount])}
           </h3>
           <p className="text-xs text-on-surface-variant">
-            Strengthen your German memory retention with targeted review.
+            {t("dashboard.dueTodayBody")}
           </p>
         </div>
       </div>
@@ -100,17 +102,7 @@ function DueTodayBanner({
   );
 }
 
-function DailyGoalCard({
-  xp,
-  streak,
-  onStartReview,
-  t,
-}: {
-  xp: number;
-  streak: number;
-  onStartReview?: () => void;
-  t: Translate;
-}) {
+function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Translate }) {
   const goal = DAILY_XP_GOAL;
   const progress = Math.min(xp / goal, 1);
   const radius = 40;
@@ -176,21 +168,6 @@ function DailyGoalCard({
             {t("dashboard.streak", [streak])}
           </span>
         </div>
-
-        {onStartReview && (
-          <div className="mt-4 pt-2">
-            <GlassButton
-              type="button"
-              onClick={onStartReview}
-              className="w-full sm:w-auto h-10 px-5 text-xs font-bold"
-            >
-              <span className="flex items-center gap-2">
-                <PlayArrowIcon className="size-4 text-azure-glow" />
-                <span>{t("dashboard.startReview")}</span>
-              </span>
-            </GlassButton>
-          </div>
-        )}
       </div>
     </div>
   );

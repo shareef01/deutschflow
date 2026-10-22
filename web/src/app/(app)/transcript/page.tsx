@@ -65,8 +65,7 @@ export default function TranscriptPage() {
   );
 
   const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [inputMode, setInputMode] = useState<"speak" | "type">("speak");
-
+  const [inputMode, setInputMode] = useState<InputMode>("speak");
 
   useEffect(() => {
     if (!state.isListening) return;
@@ -134,34 +133,14 @@ export default function TranscriptPage() {
           {t("transcript.emptyBody")}
         </p>
 
-        {/* Accessible Mode Switcher: Speak or Type */}
         {speechSupported && (
-          <div className="mt-6 flex items-center gap-1.5 rounded-xl bg-surface-container-high/60 p-1 border border-outline-variant/30">
-            <button
-              type="button"
-              onClick={() => setInputMode("speak")}
-              className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-label-medium font-bold transition-all ${
-                inputMode === "speak"
-                  ? "bg-secondary-container text-on-secondary-container border border-outline-variant/50 shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-            >
-              <MicIcon className="size-4" />
-              <span>{t("transcript.startRecording")}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputMode("type")}
-              className={`flex items-center gap-2 rounded-lg px-4 py-1.5 text-label-medium font-bold transition-all ${
-                inputMode === "type"
-                  ? "bg-secondary-container text-on-secondary-container border border-outline-variant/50 shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-            >
-              <EditIcon className="size-4" />
-              <span>{t("transcript.typeInstead")}</span>
-            </button>
-          </div>
+          <InputModeSwitch
+            mode={inputMode}
+            onChange={setInputMode}
+            disabled={state.isListening}
+            className="mt-6"
+            t={t}
+          />
         )}
 
         {inputMode === "speak" ? (
@@ -291,34 +270,17 @@ export default function TranscriptPage() {
       <div className="flex flex-1 flex-col items-center justify-center pb-6">
         <ErrorBanner message={state.errorState} />
 
-        {/* Mode Switcher in Active View */}
         {speechSupported && (
-          <div className="mb-4 flex items-center gap-1.5 rounded-xl bg-surface-container-high/60 p-1 border border-outline-variant/30">
-            <button
-              type="button"
-              onClick={() => setInputMode("speak")}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1 text-label-small font-bold transition-all ${
-                inputMode === "speak"
-                  ? "bg-secondary-container text-on-secondary-container border border-outline-variant/50 shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-            >
-              <MicIcon className="size-3.5" />
-              <span>{t("transcript.startRecording")}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputMode("type")}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1 text-label-small font-bold transition-all ${
-                inputMode === "type"
-                  ? "bg-secondary-container text-on-secondary-container border border-outline-variant/50 shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-            >
-              <EditIcon className="size-3.5" />
-              <span>{t("transcript.typeInstead")}</span>
-            </button>
-          </div>
+          <InputModeSwitch
+            mode={inputMode}
+            onChange={setInputMode}
+            // Typing mid-recording would hide the mic, the only stop control,
+            // while recognition carried on.
+            disabled={state.isListening}
+            className="mb-4"
+            compact
+            t={t}
+          />
         )}
 
         {inputMode === "speak" && speechSupported ? (
@@ -452,6 +414,60 @@ export default function TranscriptPage() {
  * Feeds the same handler an utterance does, so translation, grammar, word details
  * and saving all behave identically — the only thing missing is the microphone.
  */
+type InputMode = "speak" | "type";
+
+/**
+ * Speak / Type toggle. Two buttons with aria-pressed rather than colour alone,
+ * so a screen reader hears which mode is on.
+ */
+function InputModeSwitch({
+  mode,
+  onChange,
+  disabled = false,
+  compact = false,
+  className = "",
+  t,
+}: {
+  mode: InputMode;
+  onChange: (mode: InputMode) => void;
+  disabled?: boolean;
+  compact?: boolean;
+  className?: string;
+  t: (key: TKey) => string;
+}) {
+  const options: { id: InputMode; label: TKey; icon: typeof MicIcon }[] = [
+    { id: "speak", label: "transcript.modeSpeak", icon: MicIcon },
+    { id: "type", label: "transcript.modeType", icon: EditIcon },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label={t("transcript.inputMode")}
+      className={`flex items-center gap-1.5 rounded-xl bg-surface-container-high/60 p-1 border border-outline-variant/30 ${className}`}
+    >
+      {options.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={mode === id}
+          disabled={disabled}
+          onClick={() => onChange(id)}
+          className={`flex items-center gap-2 rounded-lg font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+            compact ? "px-3 py-1 text-label-small" : "px-4 py-1.5 text-label-medium"
+          } ${
+            mode === id
+              ? "bg-secondary-container text-on-secondary-container border border-outline-variant/50 shadow-sm"
+              : "text-on-surface-variant hover:text-on-surface"
+          }`}
+        >
+          <Icon className={compact ? "size-3.5" : "size-4"} />
+          <span>{t(label)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function TypedInput({
   onSubmit,
   isBusy,
@@ -478,7 +494,7 @@ function TypedInput({
           if (event.key === "Enter") submit();
         }}
         label={t("transcript.typeInstead")}
-        placeholder="z.B. Wie geht es dir heute?"
+        placeholder={t("transcript.typePlaceholder")}
         disabled={isBusy}
       />
       <GlassButton
