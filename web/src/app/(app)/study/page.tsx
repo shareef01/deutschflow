@@ -361,9 +361,8 @@ function FlashcardMode({
                     {currentItem.englishTranslation}
                   </span>
 
-                  {/* German reference reminder on answer flip */}
+                  {/* German reference reminder on answer flip. The article is the badge below. */}
                   <span className="mt-1.5 text-sm font-semibold text-azure-glow">
-                    {currentItem.article && currentItem.article !== "none" ? `${currentItem.article} ` : ""}
                     {currentItem.germanText}
                   </span>
 

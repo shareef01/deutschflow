@@ -28,6 +28,9 @@ export function WordDetailsSheet({
   onDismiss: () => void;
   onSave: (details: WordDetails) => void;
 }) {
+  // Split so the open sheet is its own component: useDialogFocus has to run on
+  // mount with the container in the tree, and a hook called above an early
+  // `return null` would run once against a ref that was never attached.
   if (details === null) return null;
   return (
     <OpenWordDetailsSheet details={details} tappedWord={tappedWord} onDismiss={onDismiss} onSave={onSave} />
@@ -109,7 +112,10 @@ function OpenWordDetailsSheet({
             {details.word}
           </h2>
 
-          {/* Dictionary form notice */}
+          {/* The lookup returns the dictionary form, and that is what Save files. When
+              it is not the word that was tapped ("gehen" for "ging"), say so, so the
+              save - which may fold into an entry already under that name - is no
+              surprise. */}
           {savesUnderAnotherWord(tappedWord, details.word) && (
             <p className="mt-1 text-body-small text-on-surface-variant">
               {t("wordSheet.dictionaryForm", [tappedWord ?? ""])}
