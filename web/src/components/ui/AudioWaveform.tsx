@@ -11,8 +11,8 @@ import { useEffect, useRef } from "react";
  *    use logical CSS dimensions (clientWidth/clientHeight) to prevent double-scaling and clipping.
  * 2. Idle Gating: When inactive (isActive=false), the idle static comb is drawn once,
  *    and requestAnimationFrame is paused. Continuous rAF repainting only runs while recording.
- * 3. Tab Visibility & Reduced Motion: Pauses rAF when document is hidden (document.hidden)
- *    and respects prefers-reduced-motion to conserve battery and CPU.
+ * 3. Tab Visibility: Pauses rAF while the document is hidden (document.hidden)
+ *    to conserve battery and CPU.
  */
 export function AudioWaveform({
   getLevel,
@@ -60,6 +60,8 @@ export function AudioWaveform({
         context.fillStyle = activeColor;
         context.globalAlpha = 0.3 + 0.7 * level;
         for (let i = 0; i < bars; i++) {
+          // Idle, the meter collapses to a faint static comb so the card reads
+          // as reserved rather than empty.
           const envelope = 0.3 + 0.7 * Math.sin((Math.PI * i) / (bars - 1));
           const barHeight = height * (0.06 + 0.94 * envelope * level);
           const x = i * slot * 2;
