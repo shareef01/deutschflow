@@ -698,6 +698,20 @@ class SpeechRecognizerHelper @Inject constructor(
     }
 
     /**
+     * Delivers typed German as a completed utterance, with no recording behind it.
+     *
+     * Through [deliverUtterance] rather than a second path in the ViewModel: the
+     * screen reads [finalText] for what it shows and saves, and [results] is the one
+     * place an utterance becomes a transcript row, a translation and its grammar - so
+     * a typed sentence is handled exactly as a spoken one, and a fix to either path
+     * is a fix to both. The caller guards against a recording in progress.
+     */
+    fun submitTyped(text: String) {
+        _partialText.value = ""
+        deliverUtterance(text)
+    }
+
+    /**
      * Asks the system to fetch the missing voice model.
      */
     private fun requestLanguageDownload() {

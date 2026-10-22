@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -47,6 +51,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -175,7 +181,8 @@ fun TranscriptScreen(viewModel: TranscriptViewModel = hiltViewModel()) {
                 copyToClipboard(context, text)
                 scope.launch { snackbarHostState.showSnackbar(copiedMessage) }
             },
-            onSave = { viewModel.saveTranscript(finalText, translation) }
+            onSave = { viewModel.saveTranscript(finalText, translation) },
+            onSubmitTyped = { text -> viewModel.submitTypedText(text) }
         )
 
         SnackbarHost(
@@ -219,11 +226,13 @@ private fun TranscriptContent(
     onWordClick: (String) -> Unit,
     onSpeakTranscript: (String) -> Unit,
     onCopyTranscript: (String) -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onSubmitTyped: (String) -> Boolean
 ) {
     val haptic = LocalHapticFeedback.current
     val primaryColor = MaterialTheme.colorScheme.primary
     val scrollState = rememberScrollState()
+    var inputMode by rememberSaveable { mutableStateOf(InputMode.SPEAK) }
 
     val hasTranscript = partialText.isNotEmpty() || finalText.isNotEmpty()
     val isIdle = !hasTranscript && !isListening && !isBusy
@@ -434,95 +443,170 @@ private fun TranscriptContent(
                     .padding(top = Spacing.xs, bottom = Spacing.sm),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
-                    modifier = Modifier.size(100.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isListening && !LocalReducedMotion.current) {
-                        val pulseScale by rememberInfiniteTransition(label = "recordPulse").animateFloat(
-                            initialValue = 1f,
-                            targetValue = 1.30f,
-                            animationSpec = infiniteRepeatable(
-                                tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
-                                RepeatMode.Restart
-                            ),
-                            label = "pulse"
-                        )
-                        Box(
-                            Modifier
-                                .size(RecordButtonSize)
-                                .scale(pulseScale)
-                                .alpha(0.3f)
-                                .background(MaterialTheme.colorScheme.error, CircleShape)
-                        )
-                    }
+                val inputModeLabel = stringResource(R.string.transcript_input_mode)
+                SegmentedTabs(
+                    selectedIndex = inputMode.ordinal,
+                    tabs = listOf(
+                        stringResource(R.string.transcript_mode_speak),
+                        stringResource(R.string.transcript_mode_type)
+                    ),
+                    onTabSelected = { inputMode = InputMode.entries[it] },
+                    // Typing mid-recording would hide the mic, the only stop control,
+                    // while recognition carried on. Same lock as the web's switch.
+                    enabled = !isListening,
+                    modifier = Modifier.semantics { contentDescription = inputModeLabel }
+                )
 
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val micLabel = stringResource(
-                        if (isListening) R.string.transcript_stop else R.string.transcript_start
-                    )
-
-                    Box(
+                if (inputMode == InputMode.TYPE) {
+                    TypedInput(
+                        isBusy = isBusy,
+                        onSubmit = onSubmitTyped,
                         modifier = Modifier
-                            .size(RecordButtonSize)
-                            .pressScale(interactionSource)
-                            .clip(CircleShape)
-                            .background(
-                                if (isListening) {
-                                    Brush.linearGradient(
-                                        listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
-                                    )
-                                } else {
-                                    Brush.linearGradient(listOf(AppTheme.colors.azureGlow, primaryColor))
-                                }
-                            )
-                            // Inert while a translation is in flight. Without this,
-                            // isListening is already false during TRANSCRIBING, so a
-                            // second tap started a fresh recording underneath the
-                            // request that was still running - and the older answer
-                            // then landed on the newer utterance's screen, where Save
-                            // would file it against the wrong German. The web port
-                            // has always disabled its microphone here.
-                            .clickable(
-                                enabled = !isBusy,
-                                interactionSource = interactionSource,
-                                indication = ripple(bounded = false)
-                            ) {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                if (isListening) onStopListening() else onStartListening()
-                            }
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = micLabel
-                            },
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.md, vertical = Spacing.xs)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.size(100.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isBusy) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.5.dp
+                        if (isListening && !LocalReducedMotion.current) {
+                            val pulseScale by rememberInfiniteTransition(label = "recordPulse").animateFloat(
+                                initialValue = 1f,
+                                targetValue = 1.30f,
+                                animationSpec = infiniteRepeatable(
+                                    tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
+                                    RepeatMode.Restart
+                                ),
+                                label = "pulse"
                             )
-                        } else {
-                            Icon(
-                                imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                                contentDescription = null,
-                                modifier = Modifier.size(RecordIconSize),
-                                tint = MaterialTheme.colorScheme.onPrimary
+                            Box(
+                                Modifier
+                                    .size(RecordButtonSize)
+                                    .scale(pulseScale)
+                                    .alpha(0.3f)
+                                    .background(MaterialTheme.colorScheme.error, CircleShape)
                             )
                         }
-                    }
-                }
 
-                Text(
-                    text = stringResource(
-                        if (isListening) R.string.transcript_stop else R.string.transcript_idle_hint
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                        val interactionSource = remember { MutableInteractionSource() }
+                        val micLabel = stringResource(
+                            if (isListening) R.string.transcript_stop else R.string.transcript_start
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(RecordButtonSize)
+                                .pressScale(interactionSource)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isListening) {
+                                        Brush.linearGradient(
+                                            listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
+                                        )
+                                    } else {
+                                        Brush.linearGradient(listOf(AppTheme.colors.azureGlow, primaryColor))
+                                    }
+                                )
+                                // Inert while a translation is in flight. Without this,
+                                // isListening is already false during TRANSCRIBING, so a
+                                // second tap started a fresh recording underneath the
+                                // request that was still running - and the older answer
+                                // then landed on the newer utterance's screen, where Save
+                                // would file it against the wrong German. The web port
+                                // has always disabled its microphone here.
+                                .clickable(
+                                    enabled = !isBusy,
+                                    interactionSource = interactionSource,
+                                    indication = ripple(bounded = false)
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (isListening) onStopListening() else onStartListening()
+                                }
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = micLabel
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.5.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(RecordIconSize),
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(
+                            if (isListening) R.string.transcript_stop else R.string.transcript_idle_hint
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
+    }
+}
+
+/** How the user gives the screen German: the microphone, or the keyboard. */
+private enum class InputMode { SPEAK, TYPE }
+
+/**
+ * A field for typed German and the button that sends it.
+ *
+ * Inert while a translation is in flight, for the reason the microphone is: an older
+ * answer would land on the newer sentence. The field is cleared only once the
+ * ViewModel accepts the text, so a refused submit does not throw away what was typed.
+ */
+@Composable
+private fun TypedInput(
+    isBusy: Boolean,
+    onSubmit: (String) -> Boolean,
+    modifier: Modifier = Modifier
+) {
+    var text by rememberSaveable { mutableStateOf("") }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val canSubmit = !isBusy && text.isNotBlank()
+    val submit = {
+        if (canSubmit && onSubmit(text)) {
+            text = ""
+            // Out of the way, so the translation that is about to arrive is visible.
+            keyboard?.hide()
+        }
+    }
+
+    Column(modifier = modifier) {
+        GlassTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = stringResource(R.string.transcript_type_label),
+            placeholder = stringResource(R.string.transcript_type_placeholder),
+            enabled = !isBusy,
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Send
+            ),
+            keyboardActions = KeyboardActions(onSend = { submit() })
+        )
+        Spacer(modifier = Modifier.height(Spacing.sm))
+        PrimaryActionButton(
+            text = stringResource(R.string.transcript_translate_typed),
+            onClick = submit,
+            enabled = canSubmit,
+            isLoading = isBusy,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
