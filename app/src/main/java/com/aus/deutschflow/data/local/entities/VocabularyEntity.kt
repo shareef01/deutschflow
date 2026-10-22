@@ -73,8 +73,8 @@ fun germanKey(text: String): String = Normalizer.normalize(text, Normalizer.Form
  * destroy rows. Use it to *find* candidates, then disambiguate on the word as
  * written.
  *
- * No production caller yet. Search filters on `germanText` substrings and speech
- * scoring has its own [PracticeViewModel.foldGerman], so neither needs this today -
+ * No production caller yet. Search ([com.aus.deutschflow.util.GermanQuery]) and speech
+ * scoring both fold with [PracticeViewModel.foldGerman], so neither needs this today -
  * both are unaffected by the stricter identity key either way, which is why nothing
  * had to change when [germanKey] was tightened. It exists as the named, tested
  * statement of the loose rule, and as somewhere for a future substring or fuzzy

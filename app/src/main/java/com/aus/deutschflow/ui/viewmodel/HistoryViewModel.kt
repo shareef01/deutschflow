@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.aus.deutschflow.data.local.dao.TranscriptDao
 import com.aus.deutschflow.data.local.entities.TranscriptEntity
 import com.aus.deutschflow.service.TTSHelper
+import com.aus.deutschflow.util.GermanQuery
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -78,10 +79,13 @@ class HistoryViewModel @Inject constructor(
     val transcripts: StateFlow<List<TranscriptEntity>> = _query
         .combine(history) { query, list ->
             val rows = list.orEmpty()
-            if (query.isBlank()) {
+            val search = GermanQuery.prepare(query)
+            if (search == null) {
                 rows
             } else {
-                rows.filter { it.fullText.contains(query, ignoreCase = true) }
+                // The translation too, as the web does: someone looking for the
+                // airport conversation may only remember it in English.
+                rows.filter { search.matchesGerman(it.fullText) || search.matchesPlain(it.translation) }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

@@ -66,6 +66,7 @@ fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
     val hasLoaded by viewModel.hasLoaded.collectAsStateWithLifecycle()
     val isExtraPractice by viewModel.isExtraPractice.collectAsStateWithLifecycle()
     val studyList by viewModel.studyList.collectAsStateWithLifecycle()
+    val dueCount by viewModel.dueCount.collectAsStateWithLifecycle()
 
     var userSelectedTab by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableIntStateOf(1) } // 0 = Dashboard, 1 = Flashcards
@@ -77,6 +78,11 @@ fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
     // never re-made for this entry; a user who leaves and re-enters the screen
     // gets a fresh decision, which is the intended behaviour.
     var autoTabChosen by rememberSaveable { mutableStateOf(false) }
+
+    // The Dashboard's due banner reads this deck too, so it has to load even when
+    // the screen comes back on the Dashboard tab (after rotation or process death)
+    // and Flashcards, which used to be the only caller, is never composed.
+    LaunchedEffect(Unit) { viewModel.ensureSessionStarted() }
 
     LaunchedEffect(hasLoaded) {
         if (!userSelectedTab && !autoTabChosen && hasLoaded) {
@@ -105,7 +111,7 @@ fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
 
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == 0) {
-                DashboardScreen(onStartReview = {
+                DashboardScreen(dueCount = dueCount, onStartReview = {
                     userSelectedTab = true
                     selectedTab = 1
                 })
@@ -593,10 +599,13 @@ private fun ArticleBadge(article: String, modifier: Modifier = Modifier) {
             AppTheme.colors.azureGlow,
             AppTheme.colors.azureDeep.copy(alpha = 0.35f)
         )
+        // The theme's error red, which DESIGN_SYSTEM.md assigns to "die". A raw rose
+        // (#FB7185) was the same in both themes, so on the light card it was under
+        // 2.7:1 - short of the 4.5:1 the badge's small text needs.
         "die" -> Triple(
-            Color(0xFFF43F5E).copy(alpha = 0.15f),
-            Color(0xFFFB7185),
-            Color(0xFFF43F5E).copy(alpha = 0.35f)
+            MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+            MaterialTheme.colorScheme.error,
+            MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
         )
         "das" -> Triple(
             AppTheme.colors.tertiaryGreen.copy(alpha = 0.15f),
