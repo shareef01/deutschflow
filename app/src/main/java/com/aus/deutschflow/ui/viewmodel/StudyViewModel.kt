@@ -92,6 +92,16 @@ class StudyViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     /**
+     * Due cards still waiting in this sitting, for the Dashboard's banner; null until
+     * the deck has loaded, so the banner never says "all caught up" before it knows.
+     * See [remainingDueCount].
+     */
+    val dueCount: StateFlow<Int?> =
+        combine(_hasLoaded, _studyList, _isExtraPractice) { loaded, list, extra ->
+            if (loaded) remainingDueCount(list.size, extra) else null
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
      * Loads the session if none is in progress; a no-op otherwise.
      *
      * This is what the screen calls on entry. StudySessionContent leaves
@@ -383,6 +393,17 @@ class StudyViewModel @Inject constructor(
          * literal 50 with nothing tying it to what a reviewed card pays out.
          */
         const val DAILY_XP_GOAL = XP_PER_CARD * 5
+
+        /**
+         * Due cards still waiting in this sitting.
+         *
+         * Derived from the live queue, not the load-time snapshot: a scheduled sitting
+         * holds exactly the due cards, a success removes one and Again re-queues it
+         * (it is due again at once), so the queue length is the count. Extra practice
+         * is by definition nothing due. Mirrors remainingDueCount in web/src/hooks/useStudy.ts.
+         */
+        internal fun remainingDueCount(queueSize: Int, isExtraPractice: Boolean): Int =
+            if (isExtraPractice) 0 else queueSize
 
         /** A first review has no preceding review interval; card creation is unrelated. */
         internal fun elapsedReviewDays(previousReview: Long?, now: Long): Int =

@@ -53,6 +53,8 @@
     <string name="history_empty_title">Keine Transkripte gefunden</string>
     <string name="history_empty_body">Deine Transkript-Sitzungen erscheinen hier.</string>
     <string name="history_empty_action">Aufnahme starten</string>
+    <string name="history_no_match_title">Keine passenden Transkripte</string>
+    <string name="history_no_match_body">Kein Transkript und keine Übersetzung passt zu „%1$s“.</string>
     <string name="history_detail_title">Transkriptdetails</string>
     <!-- Time and length of a transcript. A format string, not a template in
          code: the separator is typographic but the order is not universal. -->
@@ -137,6 +139,13 @@
     <string name="dashboard_xp_remaining">%1$d XP verbleibend</string>
     <string name="dashboard_xp_format">%1$d / %2$d XP</string>
     <string name="dashboard_start_review">Tageswiederholung starten</string>
+    <plurals name="dashboard_due_banner">
+        <item quantity="one">%1$d Karte heute fällig</item>
+        <item quantity="other">%1$d Karten heute fällig</item>
+    </plurals>
+    <string name="dashboard_due_body">Festige deine Wörter mit gezielter Wiederholung.</string>
+    <string name="dashboard_all_caught_up">Alles erledigt! Keine Wiederholungen fällig.</string>
+    <string name="dashboard_all_caught_up_body">Zeit zum Sprechen üben oder um deinen Wortschatz zu entdecken.</string>
     <string name="dashboard_retention">Wortschatz-Gedächtnis</string>
     <string name="dashboard_mastered">Meisterhaft</string>
     <string name="dashboard_learning">Lernend</string>

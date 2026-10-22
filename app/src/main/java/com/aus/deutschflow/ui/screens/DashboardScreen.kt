@@ -8,7 +8,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,6 +43,7 @@ import java.time.LocalDate
 
 @Composable
 fun DashboardScreen(
+    dueCount: Int?,
     onStartReview: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
@@ -56,11 +59,13 @@ fun DashboardScreen(
             .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
+        if (dueCount != null) {
+            DueTodayCard(dueCount = dueCount, onStartReview = onStartReview)
+        }
         DailyGoalCard(
             xp = todayXp,
             // The live streak, not the stored one: see UserStatsEntity.currentStreak.
-            streak = userStats?.currentStreak() ?: 0,
-            onStartReview = onStartReview
+            streak = userStats?.currentStreak() ?: 0
         )
         MasteryBreakdownCard(masteryStats)
         ActivityHeatmapCard(activityLog)
@@ -68,11 +73,81 @@ fun DashboardScreen(
     }
 }
 
+/**
+ * How many cards are due, with the way in to them.
+ *
+ * The count is the live queue's (see StudyViewModel.remainingDueCount), so it
+ * falls as cards are answered rather than holding the number the sitting began
+ * with. The review button lives only here: the goal card used to carry its own
+ * "Start Daily Review" whether or not anything was due, which on an empty queue
+ * opened extra practice under a label that promised the daily review. Mirrors
+ * DueTodayBanner in web/src/components/ui/DashboardContent.tsx.
+ */
+@Composable
+private fun DueTodayCard(dueCount: Int, onStartReview: () -> Unit) {
+    val caughtUp = dueCount <= 0
+    val accent = if (caughtUp) AppTheme.colors.tertiaryGreen else AppTheme.colors.azureGlow
+
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(Spacing.lg)
+    ) {
+        Row(
+            // One announcement for icon, headline and body, so TalkBack reads the
+            // count with its explanation instead of three separate stops.
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {},
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(accent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (caughtUp) Icons.Default.CheckCircle else Icons.Default.School,
+                    contentDescription = null,
+                    tint = accent
+                )
+            }
+            Spacer(modifier = Modifier.width(Spacing.md))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (caughtUp) stringResource(R.string.dashboard_all_caught_up)
+                    else pluralStringResource(R.plurals.dashboard_due_banner, dueCount, dueCount),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(
+                        if (caughtUp) R.string.dashboard_all_caught_up_body else R.string.dashboard_due_body
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        if (!caughtUp) {
+            Spacer(modifier = Modifier.height(Spacing.md))
+            PrimaryActionButton(
+                text = stringResource(R.string.dashboard_start_review),
+                icon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary) },
+                onClick = onStartReview,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
 @Composable
 private fun DailyGoalCard(
     xp: Int,
-    streak: Int,
-    onStartReview: () -> Unit
+    streak: Int
 ) {
     // The goal the ring is drawn against, from the one place that knows what a
     // reviewed card pays - not a bare literal that could drift from it.
@@ -168,14 +243,6 @@ private fun DailyGoalCard(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(Spacing.md))
-        PrimaryActionButton(
-            text = stringResource(R.string.dashboard_start_review),
-            icon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary) },
-            onClick = onStartReview,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 
