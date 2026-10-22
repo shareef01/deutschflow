@@ -5,7 +5,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aus.deutschflow.ui.theme.Spacing
@@ -35,6 +37,11 @@ import com.aus.deutschflow.ui.theme.pressScale
  * Modern segmented pill tab switcher.
  *
  * Provides a clean native-feeling capsule container with active highlight pill.
+ *
+ * Each pill is a selectable tab in a selectable group, so TalkBack announces
+ * "Tab, selected, 1 of 2" instead of a bare label: the highlight was colour only,
+ * and a plain clickable carried no selected state for a screen reader to report.
+ * The capsule is 48dp, the touch-target floor in the design system; it was 44.
  */
 @Composable
 fun SegmentedTabs(
@@ -49,13 +56,15 @@ fun SegmentedTabs(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.md, vertical = Spacing.xs)
-            .height(44.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .height(48.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(3.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .selectableGroup(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -78,12 +87,14 @@ fun SegmentedTabs(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(19.dp))
+                        .clip(RoundedCornerShape(21.dp))
                         .background(backgroundColor)
                         .pressScale(interactionSource, pressedScale = 0.96f)
-                        .clickable(
+                        .selectable(
+                            selected = isSelected,
                             interactionSource = interactionSource,
-                            indication = null
+                            indication = null,
+                            role = Role.Tab
                         ) {
                             if (!isSelected) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)

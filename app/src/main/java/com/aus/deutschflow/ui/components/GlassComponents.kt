@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.components
 
+import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.theme.AppTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -24,11 +25,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -172,6 +176,11 @@ fun GlassTextField(
 
 /**
  * A [GlassTextField] specialized for search.
+ *
+ * Shows a one-tap clear button while the field holds text, unless the caller
+ * supplies its own [trailingIcon]. Clearing used to mean select-all and delete,
+ * one character at a time on most keyboards (UX_AUDIT AUD-09; the web has had
+ * the button since the redesign).
  */
 @Composable
 fun SearchInput(
@@ -193,7 +202,17 @@ fun SearchInput(
                 tint = MaterialTheme.colorScheme.primary
             )
         },
-        trailingIcon = trailingIcon,
+        trailingIcon = trailingIcon ?: if (value.isNotEmpty()) {
+            {
+                IconButton(onClick = { onValueChange("") }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.library_clear_search),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else null,
         singleLine = true
     )
 }

@@ -48,6 +48,8 @@
     <string name="history_empty_title">No transcripts yet</string>
     <string name="history_empty_body">Your completed German speaking sessions will appear here.</string>
     <string name="history_empty_action">Start speaking</string>
+    <string name="history_no_match_title">No matching transcripts</string>
+    <string name="history_no_match_body">No transcript or translation matches “%1$s”.</string>
     <string name="history_detail_title">Transcript Details</string>
     <!-- Time and length of a transcript. A format string, not a template in
          code: the separator is typographic but the order is not universal. -->
@@ -131,6 +133,13 @@
     <string name="dashboard_xp_remaining">%1$d XP remaining</string>
     <string name="dashboard_xp_format">%1$d / %2$d XP</string>
     <string name="dashboard_start_review">Start Daily Review</string>
+    <plurals name="dashboard_due_banner">
+        <item quantity="one">%1$d card due for review</item>
+        <item quantity="other">%1$d cards due for review</item>
+    </plurals>
+    <string name="dashboard_due_body">Strengthen your German memory retention with targeted review.</string>
+    <string name="dashboard_all_caught_up">All caught up! No reviews due.</string>
+    <string name="dashboard_all_caught_up_body">Ready to practice speaking or explore your vocabulary.</string>
     <string name="dashboard_retention">Vocabulary Retention</string>
     <string name="dashboard_mastered">Mastered</string>
     <string name="dashboard_learning">Learning</string>
