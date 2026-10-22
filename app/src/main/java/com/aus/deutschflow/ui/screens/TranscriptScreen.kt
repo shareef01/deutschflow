@@ -515,7 +515,9 @@ private fun TranscriptContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = Spacing.xs),
+                            // None above the keyboard: about 58dp is left there, and the
+                            // padding took it below the 48dp the send button needs.
+                            .padding(vertical = if (dockLayout == DockLayout.TYPING_ONLY) 0.dp else Spacing.xs),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (dockLayout == DockLayout.ROW) {
