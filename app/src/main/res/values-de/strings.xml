@@ -187,6 +187,7 @@
     <string name="roleplay_type_placeholder">Schreibe deine Nachricht auf Deutsch…</string>
     <string name="roleplay_send">Senden</string>
     <string name="roleplay_voice_unavailable">Spracheingabe ist in diesem Browser nicht verfügbar. Du kannst deine Antworten unten eintippen.</string>
+    <string name="roleplay_restore_failed">Dein gespeichertes Gespräch konnte nicht geladen werden. Öffne diesen Bildschirm erneut – es wurde nichts gelöscht.</string>
     <string name="practice_tab">Wiederholung</string>
     <string name="practice_speech_unavailable">Mikrofon-Übungen sind in diesem Browser nicht verfügbar. Du kannst dir die Sätze weiterhin anhören.</string>
     <string name="study_skip">Vorerst überspringen</string>

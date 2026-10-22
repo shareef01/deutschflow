@@ -103,6 +103,78 @@ describe("eraseDeviceData", () => {
     expect(await databaseNames()).toContain("deutschflow-session");
   });
 
+  /**
+   * The vault holds the AES key that makes the stored Groq key readable, so it is
+   * the one part of an erase that must not depend on a delete request succeeding.
+   * Another tab mid-request can make `deleteDatabase` fire `onblocked` and stay
+   * pending; the erase used to count that as done while the key was still there.
+   */
+  it("destroys the vault key even when the database deletion is blocked", async () => {
+    await saveApiKey(db, "gsk_blocked_erase");
+
+    // A second connection, as another tab would hold one for the length of a call.
+    const held = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(VAULT_DB_NAME);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    try {
+      const result = await eraseDeviceData(db, {
+        storage: new MemoryStorage(),
+        cacheStorage: cacheStorageWith([]),
+      });
+
+      const stillStored = await new Promise<unknown>((resolve, reject) => {
+        const tx = held.transaction("keys", "readonly");
+        const get = tx.objectStore("keys").get("deutschflow.api-key");
+        get.onsuccess = () => resolve(get.result);
+        get.onerror = () => reject(get.error);
+      });
+
+      expect(stillStored).toBeUndefined();
+      expect(result).toEqual({ complete: true, failed: [] });
+    } finally {
+      held.close();
+    }
+  });
+
+  /**
+   * A throw from the clear (a connection closing under us, a store removed by another
+   * tab's upgrade) happens inside an IndexedDB event handler, where it cannot reach
+   * the promise's executor. Unhandled, the erase never settles and the logout hangs
+   * with the spinner still up - so the step must fail, not stall.
+   */
+  it("reports a vault failure instead of hanging when the clear cannot run", async () => {
+    const brokenFactory = {
+      open: () => {
+        const request = {
+          onsuccess: null as null | (() => void),
+          onerror: null as null | (() => void),
+          onupgradeneeded: null,
+          result: {
+            objectStoreNames: ["keys"],
+            close() {},
+            transaction() {
+              throw new Error("InvalidStateError");
+            },
+          },
+        };
+        queueMicrotask(() => request.onsuccess?.());
+        return request;
+      },
+    } as unknown as IDBFactory;
+
+    const result = await eraseDeviceData(db, {
+      idbFactory: brokenFactory,
+      storage: new MemoryStorage(),
+      cacheStorage: cacheStorageWith([]),
+    });
+
+    expect(result.complete).toBe(false);
+    expect(result.failed).toEqual(["vault"]);
+  });
+
   it("reports the steps that failed instead of claiming success", async () => {
     const storage = new MemoryStorage();
     vi.spyOn(storage, "removeItem").mockImplementation(() => {

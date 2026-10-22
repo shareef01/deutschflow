@@ -90,6 +90,12 @@ class Tts {
     const hasGerman = voices.some((v) => v.lang?.toLowerCase().startsWith("de"));
     if (hasGerman) {
       this.state = "ready";
+      // The engine now has what it said it did not. "No German voice" is no longer
+      // true, so the banner must not outlive it: a cold start that timed out before
+      // the list arrived used to keep that error on screen while the next tap spoke
+      // the phrase perfectly well. Guarded, so an unchanged (already null) error
+      // does not churn the snapshot useSyncExternalStore compares.
+      if (this.stateValue.error !== null) this.setError(null);
       // A text asked for while connecting is spoken the moment the engine answers.
       if (this.pendingText !== null) {
         this.doSpeak(this.pendingText);

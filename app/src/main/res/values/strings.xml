@@ -181,6 +181,7 @@
     <string name="roleplay_type_placeholder">Type your message in German…</string>
     <string name="roleplay_send">Send</string>
     <string name="roleplay_voice_unavailable">Voice input is unavailable in this browser. You can type your responses below.</string>
+    <string name="roleplay_restore_failed">Couldn\'t load your saved conversation. Reopen this screen to try again - nothing was deleted.</string>
     <string name="practice_tab">Repetition</string>
     <string name="practice_speech_unavailable">Microphone practice is unavailable in this browser. You can still listen to the sentences.</string>
     <string name="study_skip">Skip card</string>

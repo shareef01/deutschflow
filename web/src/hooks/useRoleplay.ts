@@ -16,6 +16,14 @@ export interface ChatMessage {
 
 const DEFAULT_SCENARIO = DEFAULT_SCENARIO_TITLE;
 
+/**
+ * How long after "stop" a new recording is refused, so the finished utterance can
+ * still be delivered by the engine's `onend`. Comfortably longer than a healthy
+ * engine needs, and short enough that a throttled background tab cannot strand the
+ * microphone. See [useRoleplay]'s startListening.
+ */
+const STOP_GRACE_MS = 2_000;
+
 const SERVER_RECOGNIZER_STATE: RecognizerState = {
     partialText: "",
     finalText: "",
@@ -258,8 +266,30 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
 
     const isStarting = useRef(false);
 
+    /**
+     * When "stop" was last tapped, so the utterance-delivery window can be bounded.
+     *
+     * See startListening: the guard there must not last longer than the engine needs
+     * to close the session, or a browser that never fires `onend` (a backgrounded
+     * tab throttles it indefinitely) would leave the mic un-armable.
+     */
+    const stopRequestedAt = useRef(0);
+
     const startListening = useCallback(async () => {
-        if (isStarting.current || recognizer.getSnapshot().isListening) return;
+        // A tap between "stop" and the engine's `onend` must not start a new
+        // session: starting one detaches the old engine (recognizer.detach), and
+        // `onend` is where the finished utterance is delivered — so the sentence
+        // the user just spoke would be dropped with no error and no turn sent.
+        // `isProcessing` on the recogniser is exactly that window; the button is
+        // only disabled while a *network* turn is out, which is a different thing.
+        // Bounded, because the window is the engine's to close: after
+        // STOP_GRACE_MS the mic works again even if `onend` never came.
+        const state = recognizer.getSnapshot();
+        const closingUtterance =
+            state.isProcessing &&
+            stopRequestedAt.current > 0 &&
+            Date.now() - stopRequestedAt.current < STOP_GRACE_MS;
+        if (isStarting.current || state.isListening || closingUtterance) return;
         isStarting.current = true;
         setError(null);
         try {
@@ -278,7 +308,10 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
     }, []);
 
     /** Ends the utterance; `onUtterance` above delivers it and sends the turn. */
-    const stopAndSend = useCallback(() => recognizer.stopListening(), []);
+    const stopAndSend = useCallback(() => {
+        stopRequestedAt.current = Date.now();
+        recognizer.stopListening();
+    }, []);
 
     /**
      * Re-sends the turn that failed. The opening line has no user message, so an

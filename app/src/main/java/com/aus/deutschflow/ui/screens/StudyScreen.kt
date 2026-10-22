@@ -275,10 +275,14 @@ private fun StudySessionContent(
         label = "studySessionProgress"
     )
 
-    val againInterval = remember(currentItem) { viewModel.getIntervalPreview(currentItem, ReviewQuality.AGAIN) }
-    val hardInterval = remember(currentItem) { viewModel.getIntervalPreview(currentItem, ReviewQuality.HARD) }
-    val goodInterval = remember(currentItem) { viewModel.getIntervalPreview(currentItem, ReviewQuality.GOOD) }
-    val easyInterval = remember(currentItem) { viewModel.getIntervalPreview(currentItem, ReviewQuality.EASY) }
+    // Keyed on the extra-practice flag as well as the card: each badge now says what
+    // that rating actually writes, and the answer differs between a scheduled review
+    // and extra practice. Remembering per card alone would keep showing a scheduled
+    // review's interval after the same card reappears in an extra-practice sitting.
+    val againInterval = remember(currentItem, isExtraPractice) { viewModel.getIntervalPreview(currentItem, ReviewQuality.AGAIN) }
+    val hardInterval = remember(currentItem, isExtraPractice) { viewModel.getIntervalPreview(currentItem, ReviewQuality.HARD) }
+    val goodInterval = remember(currentItem, isExtraPractice) { viewModel.getIntervalPreview(currentItem, ReviewQuality.GOOD) }
+    val easyInterval = remember(currentItem, isExtraPractice) { viewModel.getIntervalPreview(currentItem, ReviewQuality.EASY) }
 
     Column(
         modifier = Modifier
