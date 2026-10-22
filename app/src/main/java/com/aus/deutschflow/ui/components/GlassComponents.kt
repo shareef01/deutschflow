@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -99,6 +100,7 @@ fun GlassTextField(
     singleLine: Boolean = true,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
     textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
     shape: Shape = MaterialTheme.shapes.medium,
     minHeight: Dp = 56.dp
@@ -144,6 +146,7 @@ fun GlassTextField(
                     singleLine = singleLine,
                     visualTransformation = visualTransformation,
                     keyboardOptions = keyboardOptions,
+                    keyboardActions = keyboardActions,
                     textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     interactionSource = interactionSource,

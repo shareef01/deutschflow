@@ -40,6 +40,12 @@
     <string name="transcript_saved">In deiner Bibliothek gespeichert.</string>
     <string name="transcript_copy">Transkript kopieren</string>
     <string name="transcript_listen">Transkript vorlesen</string>
+    <string name="transcript_input_mode">Eingabeart</string>
+    <string name="transcript_mode_speak">Sprechen</string>
+    <string name="transcript_mode_type">Tippen</string>
+    <string name="transcript_type_label">Deutschen Satz eingeben</string>
+    <string name="transcript_type_placeholder">z. B. Wie geht es dir heute?</string>
+    <string name="transcript_translate_typed">Übersetzen</string>
     <string name="transcript_section_translation">Übersetzung</string>
     <string name="transcript_section_vocabulary">Wichtige Vokabeln</string>
     <string name="word_sheet_article">Artikel: %1$s</string>

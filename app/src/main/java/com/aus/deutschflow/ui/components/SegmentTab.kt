@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -42,13 +43,18 @@ import com.aus.deutschflow.ui.theme.pressScale
  * "Tab, selected, 1 of 2" instead of a bare label: the highlight was colour only,
  * and a plain clickable carried no selected state for a screen reader to report.
  * The capsule is 48dp, the touch-target floor in the design system; it was 44.
+ *
+ * [enabled] false keeps the current tab shown but refuses a switch, and dims the
+ * capsule so it does not look tappable - the Transcript screen locks its Speak/Type
+ * switch while recording.
  */
 @Composable
 fun SegmentedTabs(
     selectedIndex: Int,
     tabs: List<String>,
     onTabSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -59,6 +65,7 @@ fun SegmentedTabs(
             .height(48.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .alpha(if (enabled) 1f else 0.5f)
             .padding(3.dp)
     ) {
         Row(
@@ -92,6 +99,7 @@ fun SegmentedTabs(
                         .pressScale(interactionSource, pressedScale = 0.96f)
                         .selectable(
                             selected = isSelected,
+                            enabled = enabled,
                             interactionSource = interactionSource,
                             indication = null,
                             role = Role.Tab

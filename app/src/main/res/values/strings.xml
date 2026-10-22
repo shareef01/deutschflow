@@ -32,6 +32,12 @@
     <string name="transcript_stop">Stop recording</string>
     <string name="transcript_copy">Copy transcript</string>
     <string name="transcript_listen">Listen to transcript</string>
+    <string name="transcript_input_mode">Input mode</string>
+    <string name="transcript_mode_speak">Speak</string>
+    <string name="transcript_mode_type">Type</string>
+    <string name="transcript_type_label">Type a German sentence</string>
+    <string name="transcript_type_placeholder">e.g. Wie geht es dir heute?</string>
+    <string name="transcript_translate_typed">Translate</string>
     <string name="transcript_section_translation">Translation</string>
     <string name="transcript_section_vocabulary">Key Vocabulary</string>
     <!-- Elapsed recording time, m:ss. -->

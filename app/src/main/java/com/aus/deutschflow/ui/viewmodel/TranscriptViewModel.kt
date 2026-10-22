@@ -247,17 +247,50 @@ class TranscriptViewModel @Inject constructor(
         // a throw before it gets that far - or from the DataStore read of the
         // dialect - used to escape a bare launch and kill the process.
         launchGuarded(TAG) {
-            _translation.value = ""
-            _suggestedWords.value = emptyList()
-            _example.value = ""
-            // With the rest of the last utterance's analysis. Leaving these behind was
-            // harmless only because the screen happens to hide grammar until a new
-            // translation arrives - a layout change away from showing the previous
-            // sentence's cases under the next one.
-            _grammarNotes.value = emptyList()
-            _aiError.value = null
+            clearResult()
             speechRecognizerHelper.startListening(preferenceManager.selectedDialect.first())
         }
+    }
+
+    /**
+     * Sends a typed German sentence down the same pipeline as a spoken one.
+     *
+     * The web has had a typed mode from the start; Android had only the microphone,
+     * so anyone who could not speak aloud - a library, a shared office, no permission
+     * - got nothing from this screen. The text goes through
+     * [SpeechRecognizerHelper.submitTyped], which delivers it exactly as a final
+     * recognition result, so [handleUtterance] stays the one place an utterance is
+     * translated, analysed and filed.
+     *
+     * @return true if the text was accepted, so the screen clears its field only
+     * then and a refused submit keeps what the user typed.
+     */
+    fun submitTypedText(text: String): Boolean {
+        val utterance = typedUtterance(
+            text,
+            isListening = speechRecognizerHelper.isListening.value,
+            isBusy = speechRecognizerHelper.isProcessing.value || _isTranslating.value
+        ) ?: return false
+        // Same reasons as startListening: a slower answer for the previous utterance
+        // must not land on this one, and its analysis must not linger beneath it.
+        utteranceToken++
+        _permissionDenied.value = false
+        clearResult()
+        speechRecognizerHelper.submitTyped(utterance)
+        return true
+    }
+
+    /** Forgets the last utterance's analysis, ahead of a new one. */
+    private fun clearResult() {
+        _translation.value = ""
+        _suggestedWords.value = emptyList()
+        _example.value = ""
+        // With the rest of the last utterance's analysis. Leaving these behind was
+        // harmless only because the screen happens to hide grammar until a new
+        // translation arrives - a layout change away from showing the previous
+        // sentence's cases under the next one.
+        _grammarNotes.value = emptyList()
+        _aiError.value = null
     }
 
     fun stopListening() {
@@ -503,8 +536,25 @@ class TranscriptViewModel @Inject constructor(
         speechRecognizerHelper.destroy()
     }
 
-    private companion object {
+    companion object {
         private const val TAG = "TranscriptViewModel"
+
+        /**
+         * The typed text to submit, or null when there is nothing to submit or now is
+         * not the moment.
+         *
+         * Refused while recording, because the recognizer's own result would follow and
+         * replace it, and while busy, for the reason the microphone is inert then: the
+         * older answer could land on the newer sentence. Trimmed, as the web does, so a
+         * stray space is not filed as part of the German.
+         *
+         * Extracted so it can be tested without constructing any Android dependencies -
+         * same pattern as [PracticeViewModel.evaluateMatch].
+         */
+        internal fun typedUtterance(text: String, isListening: Boolean, isBusy: Boolean): String? {
+            if (isListening || isBusy) return null
+            return text.trim().ifBlank { null }
+        }
     }
 }
 
