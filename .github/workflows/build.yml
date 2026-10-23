@@ -132,6 +132,13 @@ jobs:
     name: Browser, accessibility and visual tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    # Firefox's sandbox needs an unprivileged user namespace, and this container host
+    # refuses to create one (EPERM on clone(CLONE_NEWUSER)); lifting seccomp and the
+    # AppArmor profile did not change that. The browser here only loads this project's
+    # own build on an ephemeral runner, so it runs with its sandbox off.
+    env:
+      MOZ_DISABLE_CONTENT_SANDBOX: "1"
+      MOZ_DISABLE_GMP_SANDBOX: "1"
     defaults:
       run:
         working-directory: web
