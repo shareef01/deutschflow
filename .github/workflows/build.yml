@@ -137,15 +137,16 @@ jobs:
         working-directory: web
     container:
       image: mcr.microsoft.com/playwright:v1.64.0-noble
-      # Firefox builds a content sandbox out of a user namespace, and a container job
-      # runs under a seccomp/AppArmor profile that denies `clone(CLONE_NEWUSER)` on
-      # the host (Ubuntu 24.04 restricts unprivileged user namespaces by default).
-      # Without this, every Firefox test died with
-      # "[pid=N][err] Sandbox: CanCreateUserNamespace() clone() failure: EPERM" while
-      # Chromium and WebKit ran normally: 62 passed, 3 failed, all of them Firefox.
+      # Firefox builds a content sandbox out of a user namespace, and this host
+      # restricts unprivileged user namespaces (Ubuntu 24.04's
+      # kernel.apparmor_restrict_unprivileged_userns=1), so `clone(CLONE_NEWUSER)`
+      # returns EPERM and the browser never starts:
+      #   [pid=N][err] Sandbox: CanCreateUserNamespace() clone() failure: EPERM
+      # seccomp=unconfined alone did not help (62 passed, 3 failed - all Firefox,
+      # Chromium and WebKit fine), which is why the AppArmor profile is lifted too.
       # --init reaps the browser processes Playwright leaves behind; --ipc=host is
       # Playwright's own recommendation for its image.
-      options: --init --ipc=host --security-opt seccomp=unconfined
+      options: --init --ipc=host --security-opt seccomp=unconfined --security-opt apparmor=unconfined
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
