@@ -13,12 +13,28 @@ import {
 } from "./groq";
 
 export class VocabularyProcessor {
-  async processText(text: string, apiKey: string, learnerLevel?: string): Promise<AIResult> {
-    return groqTranslate(text, apiKey, undefined, learnerLevel);
+  /**
+   * @param signal the caller's cancellation. Forwarded rather than dropped: the
+   * provider layer has always accepted one and turns an abort into `ai.cancelled`,
+   * but the processor hard-coded `undefined`, so an abandoned translation still ran
+   * to completion and resolved against a screen that had moved on.
+   */
+  async processText(
+    text: string,
+    apiKey: string,
+    learnerLevel?: string,
+    signal?: AbortSignal
+  ): Promise<AIResult> {
+    return groqTranslate(text, apiKey, signal, learnerLevel);
   }
 
-  async interrogateWord(word: string, apiKey: string, learnerLevel?: string): Promise<WordDetailsResult> {
-    return groqInterrogate(word, apiKey, undefined, learnerLevel);
+  async interrogateWord(
+    word: string,
+    apiKey: string,
+    learnerLevel?: string,
+    signal?: AbortSignal
+  ): Promise<WordDetailsResult> {
+    return groqInterrogate(word, apiKey, signal, learnerLevel);
   }
 
   generateExample(word: string): string {

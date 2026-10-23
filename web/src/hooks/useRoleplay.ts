@@ -73,6 +73,9 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
      */
     const inFlight = useRef(false);
 
+    /** The turn in flight, so a replaced scene or a closed screen can cancel it. */
+    const turnAbort = useRef<AbortController | null>(null);
+
     /** The scenario the next turn belongs to, for callbacks that outlive a render. */
     const scenarioRef = useRef(scenario);
     scenarioRef.current = scenario;
@@ -109,11 +112,21 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         setIsProcessing(true);
         setError(null);
 
+        // The turn's cancellation. A conversation that has been replaced, or a screen
+        // the user has left, must not keep a request alive - and must not persist or
+        // speak the answer it eventually gets. That is how a reply used to arrive
+        // thirty seconds later, be read aloud over whatever was on screen by then, and
+        // be written into a conversation that had already been cleared.
+        turnAbort.current?.abort();
+        const controller = new AbortController();
+        turnAbort.current = controller;
+
         try {
             const apiKey = (await getApiKey(db)) ?? "";
             const cefr = await getCefrLevel(db);
-            const result = await startRoleplay(scenarioRef.current, [], apiKey, cefr);
+            const result = await startRoleplay(scenarioRef.current, [], apiKey, cefr, controller.signal);
 
+            if (controller.signal.aborted) return;
             if (result.kind === "success") {
                 const reply: ChatMessage = {
                     role: "assistant",
@@ -145,6 +158,11 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         setIsProcessing(true);
         setError(null);
 
+        // See runOpening: one turn in flight, and superseding or leaving cancels it.
+        turnAbort.current?.abort();
+        const controller = new AbortController();
+        turnAbort.current = controller;
+
         // Taken before the optimistic append, so the model is not shown the turn
         // it is being asked to answer. On a retry the message is already in the
         // history, so it is excluded here instead.
@@ -164,7 +182,9 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
             const inputToSend = appendUser
                 ? trimmed
                 : (historyRef.current[historyRef.current.length - 1]?.content ?? trimmed);
-            const result = await continueRoleplay(inputToSend, history, scenarioRef.current, apiKey, cefr);
+            const result = await continueRoleplay(inputToSend, history, scenarioRef.current, apiKey, cefr, controller.signal);
+
+            if (controller.signal.aborted) return;
 
             if (result.kind === "success") {
                 const reply: ChatMessage = {
@@ -202,13 +222,27 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
      * listening now. RepetitionMode applies the same discipline on its own unmount.
      */
     useEffect(() => {
-        if (!active) recognizer.cancel();
+        if (!active) {
+            recognizer.cancel();
+            // The mode is off screen: an answer that arrives now would be spoken and
+            // persisted under a conversation nobody is looking at.
+            turnAbort.current?.abort();
+        }
     }, [active]);
-    useEffect(() => () => recognizer.cancel(), []);
+    useEffect(
+        () => () => {
+            recognizer.cancel();
+            turnAbort.current?.abort();
+        },
+        []
+    );
 
     const startSession = useCallback(
         async (newScenario?: string) => {
             const activeScenario = newScenario ?? scenarioRef.current;
+            // A new scene cancels the old one's turn before the rows are cleared, so a
+            // late answer cannot be persisted into a conversation that no longer exists.
+            turnAbort.current?.abort();
             setScenario(activeScenario);
             scenarioRef.current = activeScenario;
             historyRef.current = [];
