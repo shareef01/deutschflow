@@ -734,6 +734,69 @@ class AppDatabaseMigrationTest {
     }
 
     /**
+     * MIGRATION_12_13, the tie: two rows with the same grammar filled in and the same
+     * timestamp, so the winner rule falls all the way through to "highest id".
+     *
+     * That is the case where the merge could quietly cost study history. The surviving
+     * row is not the one holding the furthest schedule - it is the later insert - so
+     * the schedule has to be copied into it rather than taken from it. Read the other
+     * way round, an audit of this migration concluded that a v12 install could lose
+     * the group's furthest schedule here; this asserts the opposite, and pins it.
+     *
+     * The rule is self-consistent because the two rankings are the same one. The
+     * survivor's richness becomes the union of the group's fields and its timestamp
+     * becomes the group's maximum, so the re-evaluated ranking can only land on the
+     * same row - its remaining tie-break, highest id, is the one that chose it.
+     */
+    @Test
+    fun theGermanFoldKeepsTheFurthestScheduleWhenTheWinnerIsDecidedById() {
+        helper.createDatabase(TEST_DB, 12).use { db ->
+            fun insert(
+                german: String,
+                english: String,
+                article: String,
+                timestamp: Long,
+                nextReview: Long,
+                interval: Int,
+                reviewCount: Int
+            ) = db.execSQL(
+                "INSERT INTO vocabulary (germanText, englishTranslation, timestamp, " +
+                    "article, nextReview, interval, reviewCount) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>(
+                    german, english, timestamp, article, nextReview, interval, reviewCount
+                )
+            )
+
+            // Same one filled field, same timestamp: the ranking has nothing left but
+            // the id, and the later insert wins - the row with the *weaker* schedule.
+            insert("Öl", "oil", "das", 500, nextReview = 9_000, interval = 40, reviewCount = 9)
+            insert("öl", "petroleum", "das", 500, nextReview = 100, interval = 1, reviewCount = 1)
+        }
+
+        val database = openAsReleaseWould()
+        try {
+            val saved = runBlocking { database.vocabularyDao().getAllVocabulary().first() }
+            assertEquals("the two spellings are one word", 1, saved.size)
+
+            val word = saved.single()
+            assertEquals("oel", word.germanTextKey)
+            // Latest-non-blank tie-break is also the id, so the later insert's wording
+            // survives - which is why the schedule below is the thing worth asserting.
+            assertEquals("petroleum", word.englishTranslation)
+
+            // The nine reviews and the forty-day interval lived on the row that was
+            // deleted. The merge must carry them across, or the user's progress is
+            // replaced by a card that was answered once.
+            assertEquals(9, word.reviewCount)
+            assertEquals(40, word.interval)
+            assertEquals(9_000L, word.nextReview)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
      * The fold key the migration computes in SQL must equal the one the app computes
      * in Kotlin, or a word saved after the upgrade would not find the row the
      * upgrade made for it.
