@@ -22,12 +22,13 @@ jobs:
   # does not produce something publishable.
   build:
     name: Tests, lint and release build
-    runs-on: ubuntu-latest
+    # Pinned rather than `ubuntu-latest`, which is migrating to Ubuntu 26.04 during
+    # this release cycle. The toolchain here (JDK 21, Gradle, the repo's own Python)
+    # is version-independent, so it takes the image it has been proven on.
+    runs-on: ubuntu-24.04
     # Bounded, because the default is six hours and nothing here legitimately runs
-    # for more than a few minutes. `playwright install --with-deps` stalled twice on
-    # an apt lock and burned 6h each time, on branches whose code had nothing to do
-    # with it; the re-run finished in 1m37s. A job that hangs should fail while
-    # someone is still looking at it.
+    # for more than a few minutes. A job that hangs should fail while someone is
+    # still looking at it.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,19 +79,14 @@ jobs:
           if-no-files-found: ignore
 
 
+  # Pinned, not `-latest`: ubuntu-latest is migrating to Ubuntu 26.04 ("resolute"),
+  # and a job that installs nothing and only runs the project's own toolchain should
+  # not change operating system because a label moved. The browser suite lives in its
+  # own job (`browser`) so that this one never touches apt at all.
   web:
     name: PWA lint, tests and build
-    # Pinned, not `-latest`. ubuntu-latest started migrating to Ubuntu 26.04
-    # ("resolute") on 19 October 2026, and `playwright install --with-deps` there
-    # pulled 131 apt packages from a mirror that stalled for minutes between
-    # single packages: the step had not finished when the job's budget ran out
-    # (runs 39875052521 and 39876334832). This job only needs a Node + browsers
-    # image, so it takes the image Playwright documents support for and leaves the
-    # migration to the jobs that have to be tested against it.
     runs-on: ubuntu-24.04
-    # Raised from 20: the browser install alone has been observed to take 19m39s
-    # on a slow mirror day, which killed an otherwise healthy run.
-    timeout-minutes: 30
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
@@ -121,32 +117,40 @@ jobs:
       - name: Production build
         run: npm run build
 
+  # The browser suite runs inside Playwright's own image: the browsers and their
+  # system libraries are already installed there, so nothing in this job depends on
+  # the runner's apt mirror. That dependency is what turned the old combined job red
+  # four times in two days - `npx playwright install --with-deps` spent 19m39s
+  # fetching 131 apt packages from a mirror that stalled for minutes between single
+  # requests, on both Ubuntu 26.04 and 24.04 (runs 39875052521, 39876334832,
+  # 39881990195). More timeout only buys a better coin flip; taking apt off the
+  # critical path is the fix.
+  #
+  # The image tag must match @playwright/test in web/package-lock.json. Bump both
+  # together, or Playwright will complain about browsers it did not ship.
+  browser:
+    name: Browser, accessibility and visual tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.0-noble
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # ci, not install: same reason as the web job. Node and npm come from the image.
+      - name: Install
+        run: npm ci
+
+      # playwright.config.ts starts the production build (`next start -p 3200`)
+      # itself, so the build has to exist before the suite runs.
+      - name: Production build
+        run: npm run build
+
       # Chromium carries the full functional, accessibility, and visual suite.
       # Firefox and WebKit run a smaller compatibility/speech-fallback contract.
-      #
-      # The browsers themselves are cached: the download is ~120 MB per run, and the
-      # key follows the lockfile so a version bump still fetches the right build.
-      - name: Cache Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
-          restore-keys: playwright-${{ runner.os }}-
-
-      # --with-deps still installs the system libraries on a cache hit; the retries
-      # are for the mirror, which has stalled for minutes between single packages
-      # rather than failing outright. Three attempts, then fail for real.
-      - name: Install Playwright browsers
-        run: |
-          for attempt in 1 2 3; do
-            if npx playwright install --with-deps chromium firefox webkit; then
-              exit 0
-            fi
-            echo "::warning::Playwright install failed (attempt $attempt); retrying in 30s"
-            sleep 30
-          done
-          exit 1
-
       - name: Browser, accessibility and visual tests
         run: npx playwright test
 
@@ -165,7 +169,10 @@ jobs:
   # actually exercised.
   instrumented:
     name: Instrumented tests (${{ matrix.name }})
-    runs-on: ubuntu-latest
+    # Pinned for the same reason as `build`: an emulator job is the last place to
+    # absorb an unannounced OS change, and API 31/35/36 are the platforms under test,
+    # not the host image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
