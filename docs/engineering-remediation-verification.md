@@ -4,7 +4,7 @@
 **Date:** October 16, 2026  
 **Repository:** [deutschflow](https://github.com/shareef01/deutschflow)  
 **Branch:** `feature/engineering-remediation`  
-**Base Commit on main:** `cfddb7e` (merged from `origin/main`)  
+**Base Commit on main:** `6440869` (merged from `origin/main`)  
 
 ---
 
@@ -220,11 +220,11 @@ All automated release gates, static audits, unit suites, browser E2E suites, and
 
 ### Pull Request Reference
 - **GitHub Pull Request:** [PR #56 — Engineering Remediation: Backup & Restore, Session Revocation, Throttling Hardening, and A11y Parity](https://github.com/shareef01/deutschflow/pull/56)
-- **Base Commit on main:** `cfddb7e`
+- **Base Commit on main:** `6440869`
 - **Branch Head:** `feature/engineering-remediation`
 
 ### Pre-Merge Checklist
-- [x] All commits rebased and merged cleanly with `origin/main` (`cfddb7e`).
+- [x] All commits rebased and merged cleanly with `origin/main` (`6440869`).
 - [x] Zero merge conflicts remaining; all remediation commits preserved.
 - [x] `BackupManager.kt`: Enforced aligned 10 MiB plaintext and 15 MiB encrypted stream read limits, safe UTF-8 decoding, explicit review-event ID mapping, orphan record rejection (`BackupException.InvalidFormat`), and transactional rollback.
 - [x] `BackupCrypto.kt`: Enforced strict pre-validation of version, KDF, iterations, salt, IV, Base64 length, and ciphertext size before expensive crypto. Added malicious-backup and oversized-parameter tests.
