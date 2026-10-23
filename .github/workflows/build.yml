@@ -80,8 +80,17 @@ jobs:
 
   web:
     name: PWA lint, tests and build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Pinned, not `-latest`. ubuntu-latest started migrating to Ubuntu 26.04
+    # ("resolute") on 19 October 2026, and `playwright install --with-deps` there
+    # pulled 131 apt packages from a mirror that stalled for minutes between
+    # single packages: the step had not finished when the job's budget ran out
+    # (runs 39875052521 and 39876334832). This job only needs a Node + browsers
+    # image, so it takes the image Playwright documents support for and leaves the
+    # migration to the jobs that have to be tested against it.
+    runs-on: ubuntu-24.04
+    # Raised from 20: the browser install alone has been observed to take 19m39s
+    # on a slow mirror day, which killed an otherwise healthy run.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: web
@@ -114,8 +123,29 @@ jobs:
 
       # Chromium carries the full functional, accessibility, and visual suite.
       # Firefox and WebKit run a smaller compatibility/speech-fallback contract.
+      #
+      # The browsers themselves are cached: the download is ~120 MB per run, and the
+      # key follows the lockfile so a version bump still fetches the right build.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      # --with-deps still installs the system libraries on a cache hit; the retries
+      # are for the mirror, which has stalled for minutes between single packages
+      # rather than failing outright. Three attempts, then fail for real.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: |
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium firefox webkit; then
+              exit 0
+            fi
+            echo "::warning::Playwright install failed (attempt $attempt); retrying in 30s"
+            sleep 30
+          done
+          exit 1
 
       - name: Browser, accessibility and visual tests
         run: npx playwright test
