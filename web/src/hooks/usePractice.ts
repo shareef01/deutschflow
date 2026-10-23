@@ -53,7 +53,7 @@ export function selectWeightedVocabulary<T extends { interval?: number; easeFact
   return items[items.length - 1];
 }
 
-export function usePractice() {
+export function usePractice({ active = true }: { active?: boolean } = {}) {
   const speechSupported = useSyncExternalStore(
     () => () => {},
     isRecognitionSupported,
@@ -107,7 +107,21 @@ export function usePractice() {
   useEffect(() => {
     tts.dismissError();
     void loadRandomTarget();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  /**
+   * Subscribes only while this mode is on screen.
+   *
+   * The Practice page keeps both modes mounted so switching tabs does not reset
+   * either one, and both drive the same recogniser singleton: with this
+   * subscription unconditional, a sentence spoken to the roleplay partner was
+   * also scored against the repetition target, so switching back showed a
+   * verdict for an attempt the user never made. useRoleplay gates its own
+   * listener the same way; exactly one mode may listen.
+   */
+  useEffect(() => {
+    if (!active) return;
     // Scoring runs when the utterance actually arrives, against the sentence
     // currently on screen — read through the ref, not a mount-time closure.
     return recognizer.onUtterance((text) => {
@@ -115,8 +129,22 @@ export function usePractice() {
       setWordResults(results);
       setFeedback(verdict);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active]);
+
+  // The microphone and the last utterance belong to whichever mode is showing: take
+  // neither back when the tab changes, and drop the other mode's transcript rather
+  // than presenting it as this one's. The scored result goes with it — a verdict
+  // that outlived the transcript it describes would sit above the intro text, with
+  // no sentence under it.
+  useEffect(() => {
+    if (active) {
+      recognizer.clearTranscript();
+      setWordResults([]);
+      setFeedback("NONE");
+      return;
+    }
+    recognizer.cancel();
+  }, [active]);
 
   const startPractice = useCallback(async () => {
     if (isStarting.current || recognizer.getSnapshot().isListening) return;

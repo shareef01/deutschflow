@@ -102,6 +102,15 @@ class RoleplayViewModel @Inject constructor(
     val selectedScenario: StateFlow<RoleplayScenario> = _selectedScenario
 
     /**
+     * Set when the read itself failed, which is not the same thing as an empty
+     * conversation. The two used to be one value - a failed read became
+     * `emptyList()` - and [openScenarioIfEmpty] then concluded there was nothing to
+     * come back to, opened a new scene, and deleted the saved conversation in the
+     * process. A read that could not run now stops that path instead.
+     */
+    private var restoreFailed = false
+
+    /**
      * Reads the saved conversation back.
      *
      * The chat used to be StateFlow and nothing else, so process death lost it -
@@ -115,7 +124,8 @@ class RoleplayViewModel @Inject constructor(
             roleplayDao.getConversation()
         } catch (e: Exception) {
             Log.w(TAG, "Could not read the saved conversation", e)
-            emptyList()
+            restoreFailed = true
+            return@launchGuarded
         }
         if (saved.isNotEmpty() && _messages.value.isEmpty()) {
             currentScenarioId = saved.first().scenario
@@ -140,6 +150,11 @@ class RoleplayViewModel @Inject constructor(
         // bare launch here had no handler at all if that ever changed.
         launchGuarded(TAG) {
             restore.join()
+            if (restoreFailed) {
+                // Opening a scene here would delete the rows this read could not see.
+                _error.value = context.getString(R.string.roleplay_restore_failed)
+                return@launchGuarded
+            }
             if (_messages.value.isEmpty() && !_isProcessing.value) startSession(scenarioId)
         }
     }
@@ -175,17 +190,23 @@ class RoleplayViewModel @Inject constructor(
         turnJob = null
         _isProcessing.value = false
 
-        currentScenarioId = scenarioId
-        RoleplayScenarioCatalog.SCENARIOS.find { it.id == scenarioId }?.let {
-            _selectedScenario.value = it
-        }
-        _messages.value = emptyList()
-        _error.value = null
-        // Guarded: the clear is itself wrapped in `write`, but the launch around
-        // it had no handler - a throw anywhere else in the block killed the
-        // process. Sequencing is unchanged: the clear still lands before the
-        // opening turn's first write.
         launchGuarded(TAG) {
+            // The restore is the other writer of `_messages`, and on a cold open its
+            // first database read can finish after this call. Joining it here is what
+            // puts the two in order: the read lands first, then this scene replaces
+            // it. Without the join the read installed the previous conversation into
+            // the scene just opened - rewinding `currentScenarioId`, so the picker
+            // snapped back - and this scene's opening line was then written under the
+            // old id, while the rows it had already deleted stayed deleted.
+            restore.join()
+
+            currentScenarioId = scenarioId
+            RoleplayScenarioCatalog.SCENARIOS.find { it.id == scenarioId }?.let {
+                _selectedScenario.value = it
+            }
+            _messages.value = emptyList()
+            _error.value = null
+
             // Sequenced, not fired alongside: the clear and the first turn's write
             // both touch this table, and a delete that landed second would take the
             // new scene's opening line with it.

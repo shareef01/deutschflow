@@ -196,13 +196,13 @@ Every push and pull request is validated by [GitHub Actions](.github/workflows/b
 ## 💾 Backup & Data Portability
 
 - **Web Library Backup**: In the Web app under **Settings $\rightarrow$ Backup**, export your entire learning history (vocabulary, transcripts, review events, XP, and streaks) to a versioned JSON file.
-- **Backup format v2**: Includes saved transcript translations/analysis and the current roleplay conversation, with review events linked to the restored vocabulary IDs. Version 1 backups remain supported. Backups are limited to 10 MB; an oversized export is reported before downloading a file, and no library data is removed.
+- **Backup format v2**: Includes saved transcript translations/analysis and the current roleplay conversation, with review events linked to the restored vocabulary IDs. Version 1 backups remain supported. Backups are limited to 50 MB; an oversized export is reported before downloading a file, and no library data is removed.
 - **Additive Import**: Importing a backup file safely merges records:
   - Existing local cards and transcripts are preserved.
   - Matching German vocabulary entries merge linguistic metadata without resetting SRS progress.
   - XP never decreases, and activity streaks are deterministically recomputed.
   - Review events merge by stable identity. An existing roleplay conversation is preserved; the backup conversation is restored when no local conversation exists.
-- **Android Backup**: Learning data, transcripts, roleplay conversations, and encrypted settings are excluded from Android OS cloud backup and device-to-device transfer. This keeps sensitive learning content on the device; Android currently has no manual export feature.
+- **Android Backup**: Learning data, transcripts, roleplay conversations, and encrypted settings are excluded from Android OS cloud backup and device-to-device transfer, so sensitive learning content never leaves the device through a platform channel. Manual portability is provided instead: **Settings $\rightarrow$ Backup & Recovery** exports the whole library to a plain JSON file or a passphrase-encrypted one, and imports it back on this or another device (the file is the same format the web client reads and writes).
 
 ---
 

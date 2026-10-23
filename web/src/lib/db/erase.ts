@@ -33,18 +33,73 @@ export interface EraseDeps {
 }
 
 /**
- * Deletes a whole database. A "blocked" delete still completes once the other
- * connection closes - vault.ts closes its connection after every operation, and
- * the tab navigates away right after - so blocked counts as done rather than
- * hanging the logout on it.
+ * Empties every object store in a database, leaving the database itself in place.
+ *
+ * The vault holds one value - the non-extractable AES key - so clearing the store
+ * is what actually destroys the key material. Opening a database that does not
+ * exist creates an empty one, which the caller deletes immediately after; that is
+ * cheaper than a probe, and `indexedDB.databases()` is not available everywhere.
+ */
+function clearDatabaseContents(factory: IDBFactory, name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = factory.open(name);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      try {
+        const stores = Array.from(db.objectStoreNames);
+        if (stores.length === 0) {
+          db.close();
+          resolve();
+          return;
+        }
+        // Everything below can throw synchronously - a closing connection, a store
+        // removed by another tab's upgrade - and a throw inside an event handler
+        // would leave this promise pending forever: the logout would hang instead of
+        // reporting a failed step.
+        const tx = db.transaction(stores, "readwrite");
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error ?? new Error("VaultClearFailed"));
+        };
+        tx.onabort = () => {
+          db.close();
+          reject(tx.error ?? new Error("VaultClearAborted"));
+        };
+        for (const store of stores) tx.objectStore(store).clear();
+      } catch (err) {
+        db.close();
+        reject(err);
+      }
+    };
+  });
+}
+
+/**
+ * Deletes a whole database.
+ *
+ * A "blocked" delete completes as soon as the other connection closes - vault.ts
+ * closes after every operation, and the tab navigates away right after - so
+ * blocked counts as done rather than hanging the logout on it. Resolving on
+ * `blocked` used to be the whole story, though, and it reported success while the
+ * key was still on disk. Emptying the stores first makes the erase effective
+ * whichever way the delete request ends: what survives a blocked delete is an
+ * empty database, not a usable key.
  */
 function deleteDatabase(factory: IDBFactory, name: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const request = factory.deleteDatabase(name);
-    request.onsuccess = () => resolve();
-    request.onblocked = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+  return clearDatabaseContents(factory, name).then(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = factory.deleteDatabase(name);
+        request.onsuccess = () => resolve();
+        request.onblocked = () => resolve();
+        request.onerror = () => reject(request.error);
+      })
+  );
 }
 
 export async function eraseDeviceData(db: DeutschFlowDB, deps: EraseDeps = {}): Promise<EraseResult> {

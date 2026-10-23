@@ -1,5 +1,6 @@
 package com.aus.deutschflow.ui.viewmodel
 
+import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,7 @@ import com.aus.deutschflow.service.WordDetails
 import com.aus.deutschflow.service.WordDetailsResult
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -206,9 +208,15 @@ class TranscriptViewModel @Inject constructor(
         // Completed utterances arrive here, once each. Reading finalText straight
         // after stopListening() used to return the *previous* recording, because the
         // engine had not answered yet.
-        speechRecognizerHelper.results
-            .onEach { handleUtterance(it) }
-            .launchIn(viewModelScope)
+        //
+        // Guarded rather than launched straight into the scope: viewModelScope has
+        // no exception handler, so a throw out of this collector reached the thread's
+        // default handler and took the process down - and a collector that merely
+        // died would leave every later utterance heard and never filed, with nothing
+        // on screen to say so.
+        launchGuarded(TAG) {
+            speechRecognizerHelper.results.collect { handleUtterance(it) }
+        }
     }
 
     /**
@@ -315,10 +323,12 @@ class TranscriptViewModel @Inject constructor(
     @VisibleForTesting
     internal suspend fun handleUtterance(text: String) {
         val token = ++utteranceToken
-        val transcriptId = transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
-
         _isTranslating.value = true
         try {
+            // Inside the try: filing the transcript is the first thing here that can
+            // fail - a full disk, a corrupted database - and it used to sit before
+            // the try, so that failure escaped the collector.
+            val transcriptId = transcriptDao.insertTranscript(TranscriptEntity(fullText = text))
             val apiKey = preferenceManager.apiKey.first()
             val cefr = preferenceManager.selectedCefrLevel.first().trim().ifBlank { null }
             val result = vocabularyProcessor.processText(text, apiKey, cefr)
@@ -360,6 +370,18 @@ class TranscriptViewModel @Inject constructor(
                     _aiError.value = result.message
                 }
             }
+        } catch (e: CancellationException) {
+            // An utterance abandoned by navigation is not a failure to report.
+            throw e
+        } catch (e: Exception) {
+            // Log-only, like every other unexpected failure in this ViewModel: the
+            // messages it can show are built from resources by GroqHelper, and there
+            // is no string here for a storage fault. What matters is that the
+            // collector survives, so the next utterance is still handled.
+            Log.w(TAG, "Could not process the utterance", e)
+            // Only if this is still the utterance on screen: a slow failure that lands
+            // after the next sentence was translated must not blank that translation.
+            if (token == utteranceToken) _translation.value = ""
         } finally {
             // A stale utterance must not clear the spinner of the newer one that
             // replaced it.

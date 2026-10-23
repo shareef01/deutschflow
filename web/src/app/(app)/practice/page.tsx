@@ -20,7 +20,8 @@ export default function PracticePage() {
   // Mounted at page level, not inside RoleplayMode: the hook holds the
   // conversation, and unmounting it on every tab switch would silently reset the
   // chat and re-greet the user. Its utterance subscription is gated by `active`,
-  // so exactly one mode listens at a time.
+  // and Repetition gates its own the same way, so exactly one mode listens at a
+  // time — both drive the same recogniser singleton.
   const roleplay = useRoleplay({ active: selectedTab === "roleplay" });
 
   return (
@@ -46,7 +47,7 @@ export default function PracticePage() {
           hidden={selectedTab !== "repetition"}
           className={`h-full ${selectedTab === "repetition" ? "" : "hidden"}`}
         >
-          <RepetitionMode />
+          <RepetitionMode active={selectedTab === "repetition"} />
         </div>
         <div
           id="practice-panel-roleplay"
@@ -62,7 +63,7 @@ export default function PracticePage() {
   );
 }
 
-function RepetitionMode() {
+function RepetitionMode({ active }: { active: boolean }) {
   const { t } = useI18n();
   const {
     speechSupported,
@@ -80,7 +81,7 @@ function RepetitionMode() {
     cancelListening,
     speak,
     nextSentence,
-  } = usePractice();
+  } = usePractice({ active });
 
   useEffect(() => () => cancelListening(), [cancelListening]);
 

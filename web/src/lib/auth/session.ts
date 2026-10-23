@@ -7,10 +7,13 @@
  * stops page scripts *reading* the cookie, and has no bearing on what a client
  * chooses to send.
  *
- * A token is `<expiry>.<hmac>`, signed with an independent SESSION_SECRET. The
- * password is only an authentication credential: changing it does not silently
- * repurpose a human-entered value as cryptographic key material. Rotating
- * SESSION_SECRET invalidates every outstanding session.
+ * A token is `<expiry>.<hmac>`, signed with a key derived from SESSION_SECRET,
+ * SITE_PASSWORD and SESSION_EPOCH (see deriveSessionSigningSecret). The password
+ * is never used as the key itself — it is one input to an HMAC, so the key
+ * material is a fixed-length digest rather than a human-typed value — but it is
+ * an input: changing it, like rotating SESSION_SECRET or bumping the epoch,
+ * invalidates every outstanding session. docs/SECURITY.md §1.2 states the same
+ * derivation; keep the two in step.
  *
  * Web Crypto only — this runs inside the server action and the network proxy,
  * and keeps the two on one implementation rather than diverging per runtime.
