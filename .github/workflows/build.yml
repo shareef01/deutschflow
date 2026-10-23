@@ -117,43 +117,28 @@ jobs:
       - name: Production build
         run: npm run build
 
-  # The browser suite runs inside Playwright's own image: the browsers and their
-  # system libraries are already installed there, so nothing in this job depends on
-  # the runner's apt mirror. That dependency is what turned the old combined job red
-  # four times in two days - `npx playwright install --with-deps` spent 19m39s
-  # fetching 131 apt packages from a mirror that stalled for minutes between single
-  # requests, on both Ubuntu 26.04 and 24.04 (runs 39875052521, 39876334832,
-  # 39881990195). More timeout only buys a better coin flip; taking apt off the
-  # critical path is the fix.
+  # The bulk of the suite runs inside Playwright's own image: the browsers and their
+  # system libraries are already installed there, so nothing in this job depends on the
+  # runner's apt mirror. That dependency is what turned the old combined job red four
+  # times in two days - `npx playwright install --with-deps` spent 19m39s fetching 131
+  # apt packages from a mirror that stalled for minutes between single requests, on
+  # both Ubuntu 26.04 and 24.04 (runs 39875052521, 39876334832, 39881990195). More
+  # timeout only bought a better coin flip.
   #
   # The image tag must match @playwright/test in web/package-lock.json. Bump both
   # together, or Playwright will complain about browsers it did not ship.
   browser:
-    name: Browser, accessibility and visual tests
+    name: Browser and accessibility tests (Chromium, WebKit)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    # Firefox's sandbox needs an unprivileged user namespace, and this container host
-    # refuses to create one (EPERM on clone(CLONE_NEWUSER)); lifting seccomp and the
-    # AppArmor profile did not change that. The browser here only loads this project's
-    # own build on an ephemeral runner, so it runs with its sandbox off.
-    env:
-      MOZ_DISABLE_CONTENT_SANDBOX: "1"
-      MOZ_DISABLE_GMP_SANDBOX: "1"
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: web
     container:
       image: mcr.microsoft.com/playwright:v1.64.0-noble
-      # Firefox builds a content sandbox out of a user namespace, and this host
-      # restricts unprivileged user namespaces (Ubuntu 24.04's
-      # kernel.apparmor_restrict_unprivileged_userns=1), so `clone(CLONE_NEWUSER)`
-      # returns EPERM and the browser never starts:
-      #   [pid=N][err] Sandbox: CanCreateUserNamespace() clone() failure: EPERM
-      # seccomp=unconfined alone did not help (62 passed, 3 failed - all Firefox,
-      # Chromium and WebKit fine), which is why the AppArmor profile is lifted too.
       # --init reaps the browser processes Playwright leaves behind; --ipc=host is
       # Playwright's own recommendation for its image.
-      options: --init --ipc=host --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add=SYS_ADMIN
+      options: --init --ipc=host
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -166,16 +151,83 @@ jobs:
       - name: Production build
         run: npm run build
 
-      # Chromium carries the full functional, accessibility, and visual suite.
-      # Firefox and WebKit run a smaller compatibility/speech-fallback contract.
-      - name: Browser, accessibility and visual tests
-        run: npx playwright test
+      # Chromium carries the full functional, accessibility and visual suite; WebKit
+      # runs the smaller compatibility/speech-fallback/logout contract and pulls
+      # Chromium in as its declared dependency.
+      - name: Browser and accessibility tests
+        run: npx playwright test --project=chromium --project=webkit-smoke
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report
+          name: playwright-report-chromium-webkit
+          path: |
+            web/playwright-report/
+            web/test-results/
+          if-no-files-found: ignore
+
+  # Firefox cannot run inside that container. It builds its content sandbox out of an
+  # unprivileged user namespace, and a container job is refused one:
+  #   [pid=N][err] Sandbox: CanCreateUserNamespace() clone() failure: EPERM
+  # Lifting seccomp, lifting the AppArmor profile, MOZ_DISABLE_CONTENT_SANDBOX=1 and
+  # --cap-add=SYS_ADMIN all left it unchanged, while Chromium and WebKit pass in the
+  # same image - so this is Firefox-specific, not a broken container. Its three tests
+  # keep the host runner, and are now the only place apt is needed.
+  browser-firefox:
+    name: Browser tests (Firefox)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-firefox-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+          restore-keys: playwright-firefox-${{ runner.os }}-
+
+      # One browser's dependencies, with retries: the mirror stalls for minutes at a
+      # time rather than failing outright.
+      - name: Install Firefox
+        run: |
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps firefox; then
+              exit 0
+            fi
+            echo "::warning::Firefox install failed (attempt $attempt); retrying in 30s"
+            sleep 30
+          done
+          exit 1
+
+      # playwright.config.ts starts the production build itself.
+      - name: Production build
+        run: npm run build
+
+      # --no-deps: Chromium already ran in the job above, and this job owes only the
+      # Firefox contract.
+      - name: Firefox compatibility tests
+        run: npx playwright test --project=firefox-smoke --no-deps
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-firefox
           path: |
             web/playwright-report/
             web/test-results/
