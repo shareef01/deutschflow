@@ -131,6 +131,23 @@ describe("the engine really has no German", () => {
     expect(tts.getSnapshot().error).not.toBeNull();
   });
 
+  it("clears the failure once the engine publishes German voices after all", async () => {
+    const tts = await loadTts([]);
+
+    tts.speak("Hallo");
+    // No list and no `voiceschanged`: the timeout calls it unavailable.
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(tts.getSnapshot().error).not.toBeNull();
+
+    synthesis.publishVoices([ENGLISH, GERMAN]);
+
+    // The banner's claim is no longer true, and the next tap works, so leaving it up
+    // said the voice was missing while it played.
+    expect(tts.getSnapshot().error).toBeNull();
+    tts.speak("Hallo");
+    expect(synthesis.spoken).toEqual(["Hallo"]);
+  });
+
   it("clears the failure when asked", async () => {
     const tts = await loadTts([ENGLISH]);
 

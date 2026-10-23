@@ -77,6 +77,17 @@ open class KeystoreCipher @Inject constructor() {
         null
     }
 
+    /**
+     * The Keystore entry, created on first use.
+     *
+     * `@Synchronized` because check-then-generate is not atomic. MainApp migrates a
+     * legacy key on the IO dispatcher at exactly the moment Settings can be saving
+     * one, and two callers that both saw no entry both generate: the second
+     * `generateKey` replaces the first under the same alias, so the ciphertext the
+     * first wrote can never be decrypted again. The user's key silently became
+     * "unreadable" and had to be entered again.
+     */
+    @Synchronized
     private fun secretKey(): SecretKey {
         val keyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
         (keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let {

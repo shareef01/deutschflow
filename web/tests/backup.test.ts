@@ -16,6 +16,7 @@ import {
   MAX_BACKUP_FILE_BYTES,
 } from "@/lib/db/backup";
 import { saveVocabulary, insertTranscript, rewardXp } from "@/lib/db/repository";
+import { translate } from "@/lib/i18n";
 
 /**
  * The round trip that stands between a user and losing everything.
@@ -167,6 +168,19 @@ describe("exportLibrary / importLibrary", () => {
       vocabulary: [],
       userStats: [{ xp: 1 }, { xp: 2 }],
     })).rejects.toThrow(/stats count exceeds limit/i);
+  });
+
+  /**
+   * The capacity copy is the only place a user is told how big a backup may be, and
+   * it still said 10 MB after the limit was raised to 50 MiB - so the one message
+   * about a limit described a limit the code no longer enforced. Tying the two
+   * together is what keeps a raised ceiling from leaving its copy behind.
+   */
+  it("tells the user the limit the code actually enforces", () => {
+    const limitMb = MAX_BACKUP_FILE_BYTES / (1024 * 1024);
+    for (const lang of ["en", "de"] as const) {
+      expect(translate(lang, "settings.backupCapacity")).toContain(`${limitMb} MB`);
+    }
   });
 
   it("restores legitimate long text fields from legacy backups within the byte budget", async () => {

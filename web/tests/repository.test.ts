@@ -132,6 +132,55 @@ describe("saveVocabulary — VocabularyDao.save() port", () => {
     expect(updated.englishTranslation).toBe("desk");
   });
 
+  /**
+   * The library's edit sheet writes the row back through saveVocabulary, which
+   * builds a fresh record from a fixed list of fields. Every field missing from
+   * that list was deleted by an edit: renaming a word also erased when it was
+   * last studied, which is the value the merge rules use to decide which of two
+   * copies of a card keeps its progress.
+   */
+  it("keeps a studied card's lastStudiedAt when the user edits it", async () => {
+    await saveVocabulary(db, { germanText: "Haus", englishTranslation: "house" });
+    const row = (await findByGermanText(db, "Haus"))!;
+    const studiedAt = 1_700_000_000_000;
+    // What recordReview writes when the card is answered Good.
+    await db.vocabulary.update(row.id!, {
+      reviewCount: 4,
+      interval: 9,
+      nextReview: studiedAt + 9 * 86_400_000,
+      lastStudiedAt: studiedAt,
+    });
+
+    const beforeEdit = (await findByGermanText(db, "Haus"))!;
+    await saveVocabulary(db, { ...beforeEdit, englishTranslation: "the house" });
+
+    const edited = (await db.vocabulary.get(row.id!))!;
+    expect(edited.englishTranslation).toBe("the house");
+    expect(edited.lastStudiedAt).toBe(studiedAt);
+    // The schedule travels with the same identity, as it did before.
+    expect(edited.reviewCount).toBe(4);
+    expect(edited.interval).toBe(9);
+  });
+
+  it("keeps the caller's lastStudiedAt when the row being edited has gone", async () => {
+    // The edit sheet writes back an entry it read earlier; another tab (or a
+    // completed erase-then-restore) can remove that row in between. The schedule the
+    // caller passes is kept in that case, so the study timestamp must be kept too.
+    await saveVocabulary(db, { germanText: "Weg", englishTranslation: "way" });
+    const row = (await findByGermanText(db, "Weg"))!;
+    const studiedAt = 1_700_000_000_000;
+    await db.vocabulary.update(row.id!, { lastStudiedAt: studiedAt, reviewCount: 2, interval: 6 });
+    const beforeEdit = (await findByGermanText(db, "Weg"))!;
+    await db.vocabulary.delete(row.id!);
+
+    await saveVocabulary(db, { ...beforeEdit, englishTranslation: "the way" });
+
+    const recreated = (await findByGermanText(db, "Weg"))!;
+    expect(recreated.englishTranslation).toBe("the way");
+    expect(recreated.lastStudiedAt).toBe(studiedAt);
+    expect(recreated.reviewCount).toBe(2);
+  });
+
   it("editing a reviewed card to collide with another card remaps review events to surviving ID", async () => {
     // Card 1: Katze (id 1), reviewed 5 times
     await saveVocabulary(db, { germanText: "Katze", englishTranslation: "cat" });

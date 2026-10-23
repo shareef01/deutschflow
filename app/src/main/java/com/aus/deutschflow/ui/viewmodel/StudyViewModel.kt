@@ -321,10 +321,19 @@ class StudyViewModel @Inject constructor(
      * Computes a concise learner-facing preview badge (e.g. "< 10m", "1d", "4d", "7d")
      * for the given word and quality rating. The screen resolves it, so it follows
      * the UI language.
+     *
+     * Extra practice writes nothing for a successful answer - see [scheduleFor] - so
+     * the badge must be the interval the card keeps, not the one the engine would
+     * have chosen. It promised "3mo" on a card ten minutes from now and then left the
+     * schedule exactly where it was.
      */
     fun getIntervalPreview(item: VocabularyEntity, quality: ReviewQuality): IntervalBadge {
-        val next = srsEngine.calculateNextReview(item, quality)
-        return SRSEngine.intervalBadge(next.interval)
+        val preview = if (_isExtraPractice.value && quality != ReviewQuality.AGAIN) {
+            item
+        } else {
+            srsEngine.calculateNextReview(item, quality)
+        }
+        return SRSEngine.intervalBadge(preview.interval)
     }
 
     fun autoPlay(text: String) {

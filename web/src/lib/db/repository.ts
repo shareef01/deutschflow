@@ -26,6 +26,12 @@ export type VocabularyInput = {
   easeFactor?: number;
   reviewCount?: number;
   remoteId?: string;
+  /**
+   * When the card was last reviewed. Only `recordReview` produces it; a save carries
+   * it so an edit cannot delete it (see [saveVocabulary]) and so a row that has gone
+   * missing under an edit keeps its study timestamp rather than losing it.
+   */
+  lastStudiedAt?: number;
 };
 
 export function isUnreviewedSchedule(
@@ -250,6 +256,15 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
       // empty string, which needs a real id just as much as a missing one.
       remoteId: input.remoteId || editing?.remoteId || crypto.randomUUID(),
       lastModifiedAt: Math.max(editing?.lastModifiedAt ?? 0, input.lastModifiedAt ?? 0, now),
+
+      // The row is written back whole below, so a field left out of this literal
+      // is a field the edit deletes. `lastStudiedAt` is set only by recordReview,
+      // never by the edit sheet, so it comes from the row being edited: leaving it
+      // out made renaming a card also erase when it was last studied, which is what
+      // the merge rules in withFurthestScheduleOf() compare. The caller's value is
+      // the fallback for an edit whose row is no longer there - the schedule it
+      // passes survives that case, and its study timestamp should travel with it.
+      lastStudiedAt: editing?.lastStudiedAt ?? input.lastStudiedAt,
     };
 
     const existing = await db.vocabulary.where("germanTextKey").equals(entry.germanTextKey).first();
