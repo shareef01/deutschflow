@@ -97,10 +97,29 @@ export function useTranscript() {
    */
   const utteranceToken = useRef(0);
 
+  /**
+   * The in-flight translation, so leaving the screen can stop it.
+   *
+   * The token above keeps a stale *answer* out of the state, but it never stopped
+   * the request: the provider kept a socket busy for up to thirty seconds after the
+   * user had gone, and its retries ran against a screen that no longer exists.
+   */
+  const utteranceAbort = useRef<AbortController | null>(null);
+
+  /** The in-flight word lookup, for the same reason. */
+  const wordAbort = useRef<AbortController | null>(null);
+
   const errorState = recognizerState.errorState ?? state.aiError;
 
   const handleUtterance = useCallback(async (text: string) => {
     const token = ++utteranceToken.current;
+    // Supersedes the previous request *and* holds the one this utterance may be
+    // cancelled by: leaving the screen aborts it, so the answer cannot arrive after
+    // the user has gone. The row is already filed by then, which is the point - the
+    // transcription is kept, only the analysis is abandoned.
+    utteranceAbort.current?.abort();
+    const controller = new AbortController();
+    utteranceAbort.current = controller;
     setState((prev) => ({ ...prev, finalText: text, isTranslating: true,
       translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
     let transcriptId: number | null = null;
@@ -119,8 +138,13 @@ export function useTranscript() {
     setState((prev) => ({ ...prev, isTranslating: true }));
     try {
       const apiKey = (await getApiKey(db)) ?? "";
-      const result = await vocabularyProcessor.processText(text, apiKey, await getCefrLevel(db));
-      if (token !== utteranceToken.current) return;
+      const result = await vocabularyProcessor.processText(
+        text,
+        apiKey,
+        await getCefrLevel(db),
+        controller.signal
+      );
+      if (token !== utteranceToken.current || controller.signal.aborted) return;
       let storageFailed = transcriptId === null;
       if (result.kind === "success" && transcriptId !== null) {
         try {
@@ -178,6 +202,9 @@ export function useTranscript() {
   useEffect(() => {
     return () => {
       recognizer.cancel();
+      // Leaving the screen: stop the translation too, not just the microphone.
+      utteranceAbort.current?.abort();
+      wordAbort.current?.abort();
     };
   }, []);
 
@@ -187,6 +214,7 @@ export function useTranscript() {
     // A new session clears the screen; an older utterance still in flight would
     // otherwise repopulate it with a result for text that is no longer shown.
     utteranceToken.current++;
+    utteranceAbort.current?.abort();
     setState((prev) => ({ ...prev, finalText: "", translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
 
     try {
@@ -256,6 +284,12 @@ export function useTranscript() {
     if (!trimmed) return;
 
     const token = ++interrogationToken.current;
+    // Same rule as the utterance path: a word the user has moved on from should not
+    // keep a request alive. The Android ViewModel cancels its job here; this is the
+    // web equivalent, and it was the other call site that accepted no signal.
+    wordAbort.current?.abort();
+    const controller = new AbortController();
+    wordAbort.current = controller;
     setState((prev) => ({
       ...prev, wordDetails: null, wordDetailsFor: null, wordDetailError: null, interrogatingWord: trimmed,
     }));
@@ -263,8 +297,13 @@ export function useTranscript() {
     void (async () => {
       try {
         const apiKey = (await getApiKey(db)) ?? "";
-        const result = await vocabularyProcessor.interrogateWord(trimmed, apiKey, await getCefrLevel(db));
-        if (token !== interrogationToken.current) return;
+        const result = await vocabularyProcessor.interrogateWord(
+          trimmed,
+          apiKey,
+          await getCefrLevel(db),
+          controller.signal
+        );
+        if (token !== interrogationToken.current || controller.signal.aborted) return;
         setState((prev) =>
           result.kind === "success"
             ? { ...prev, wordDetails: result.details, wordDetailsFor: trimmed }
