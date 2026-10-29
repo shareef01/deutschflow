@@ -36,7 +36,12 @@ test.describe("visual regression", () => {
         await expect(page).toHaveScreenshot(`${route.name}-${vp.name}.png`, {
           animations: "disabled",
           caret: "hide",
-          maxDiffPixelRatio: 0.08,
+          // 1%, not the 8% this shipped with. At 8% a 390×844 image could lose
+          // ~26,000 pixels — a whole navigation bar — and still pass, which is how a
+          // real layout change lands with the suite green and the committed
+          // baselines stale. The structural assertions above are the semantic net;
+          // this budget is only for antialiasing and font-hinting noise.
+          maxDiffPixelRatio: 0.01,
         });
       });
     }

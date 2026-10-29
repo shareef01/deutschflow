@@ -531,7 +531,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(againInterval.resId, againInterval.count),
                 glow = MaterialTheme.colorScheme.error,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.AGAIN)
@@ -542,7 +542,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(hardInterval.resId, hardInterval.count),
                 glow = AppTheme.colors.warningAmber,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.HARD)
@@ -553,7 +553,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(goodInterval.resId, goodInterval.count),
                 glow = AppTheme.colors.azureDeep,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.GOOD)
@@ -564,7 +564,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(easyInterval.resId, easyInterval.count),
                 glow = AppTheme.colors.tertiaryGreen,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.EASY)

@@ -9,6 +9,7 @@ import { GlassButton } from "@/components/ui/GlassButton";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { CheckIcon, RefreshIcon, SchoolIcon, VolumeUpIcon } from "@/components/icons";
 import { ReviewQuality, calculateNextReview, formatSrsInterval } from "@/lib/ai/srs";
+import { shouldIgnoreShortcut } from "@/lib/a11y/keyboard";
 import { DashboardContent } from "@/components/ui/DashboardContent";
 
 type TabType = "dashboard" | "flashcards";
@@ -130,6 +131,7 @@ function FlashcardMode({
     speak,
     sessionReviewedCount,
     initialSessionSize,
+    canGrade,
   } = study;
 
   const safeIndex = Math.min(Math.max(currentIndex, 0), Math.max(studyList.length - 1, 0));
@@ -139,18 +141,25 @@ function FlashcardMode({
     if (currentItem) autoPlay(currentItem.germanText);
   }, [currentIndex, currentItem?.id, autoPlay, currentItem]);
 
-  // Keyboard navigation for desktop studying
+  /**
+   * Keyboard shortcuts for desktop studying.
+   *
+   * Two things this has to get right, and did not:
+   *
+   * 1. **It defers to whatever already has focus.** The handler used to skip only
+   *    text fields, so Space with the "Again" button focused flipped the card
+   *    *instead of* grading it (the `preventDefault` suppressed the button's own
+   *    activation), and "3" graded a card from anywhere on the page — including
+   *    while a control the user had deliberately focused was waiting for input.
+   *    `shouldIgnoreShortcut` encodes the two-tier rule: typing keys stand down in
+   *    any text field, activation keys additionally stand down on any control that
+   *    already handles them.
+   * 2. **Grading keys need a revealed answer.** `canGrade` is the same flag the
+   *    buttons use, so the keyboard and the pointer cannot disagree.
+   */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      if (shouldIgnoreShortcut(e)) return;
 
       if (
         e.code === "Space" ||
@@ -160,10 +169,10 @@ function FlashcardMode({
       ) {
         e.preventDefault();
         flipCard();
-      } else if (e.key === "1") {
+      } else if (canGrade && e.key === "1") {
         e.preventDefault();
         void submitReview(ReviewQuality.AGAIN);
-      } else if (e.key === "2") {
+      } else if (canGrade && e.key === "2") {
         e.preventDefault();
         void submitReview(ReviewQuality.HARD);
       } else if (e.key === "3") {
@@ -183,7 +192,7 @@ function FlashcardMode({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [flipCard, submitReview, skipCard, speak, currentItem]);
+  }, [flipCard, submitReview, skipCard, speak, currentItem, canGrade]);
 
   if (status === "loading") {
     return (
@@ -285,7 +294,8 @@ function FlashcardMode({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-8">
+    <div className="min-h-0 h-full overflow-y-auto">
+      <div className="mx-auto flex min-h-full flex-col items-center justify-center px-6 py-8">
       <ErrorBanner message={reviewError ? t(reviewError) : ttsError} />
 
       {/* Progress & Context Header */}
@@ -411,12 +421,24 @@ function FlashcardMode({
         </div>
       </div>
 
+      {/* The grading row. Disabled until the answer is showing — a grade is a
+          statement about recall, and there is nothing to recall before the reveal.
+          The hint says why, for anyone who cannot see that the buttons are dimmed. */}
+      <p
+        id="study-grade-hint"
+        className="mt-4 text-center text-xs font-medium text-on-surface-variant"
+      >
+        {canGrade ? t("study.shortcutHint") : t("study.revealToGrade")}
+      </p>
+
       {/* 4-Tier SRS Feedback Buttons with Interval Previews and Keyboard Shortcuts */}
-      <div className="mt-6 grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-2 grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
         <GlassButton
           type="button"
           glow="error"
           onClick={() => submitReview(ReviewQuality.AGAIN)}
+          disabled={!canGrade}
+          aria-describedby="study-grade-hint"
           className="w-full min-h-[3.75rem] py-2 flex flex-col items-center justify-center gap-0.5"
         >
           <span className="text-sm font-bold uppercase tracking-wider flex items-center gap-1">
@@ -434,6 +456,8 @@ function FlashcardMode({
           type="button"
           glow="amber"
           onClick={() => submitReview(ReviewQuality.HARD)}
+          disabled={!canGrade}
+          aria-describedby="study-grade-hint"
           className="w-full min-h-[3.75rem] py-2 flex flex-col items-center justify-center gap-0.5"
         >
           <span className="text-sm font-bold uppercase tracking-wider flex items-center gap-1">
@@ -450,6 +474,8 @@ function FlashcardMode({
         <GlassButton
           type="button"
           onClick={() => submitReview(ReviewQuality.GOOD)}
+          disabled={!canGrade}
+          aria-describedby="study-grade-hint"
           className="w-full min-h-[3.75rem] py-2 flex flex-col items-center justify-center gap-0.5"
         >
           <span className="text-sm font-bold uppercase tracking-wider flex items-center gap-1">
@@ -467,6 +493,8 @@ function FlashcardMode({
           type="button"
           glow="green"
           onClick={() => submitReview(ReviewQuality.EASY)}
+          disabled={!canGrade}
+          aria-describedby="study-grade-hint"
           className="w-full min-h-[3.75rem] py-2 flex flex-col items-center justify-center gap-0.5"
         >
           <span className="text-sm font-bold uppercase tracking-wider flex items-center gap-1">
@@ -492,6 +520,7 @@ function FlashcardMode({
             S
           </kbd>
         </button>
+      </div>
       </div>
     </div>
   );

@@ -35,6 +35,18 @@ export function remainingDueCount(studyList: readonly unknown[], isExtraPractice
   return isExtraPractice ? 0 : studyList.length;
 }
 
+/**
+ * Whether a grade may be submitted.
+ *
+ * The reveal is what turns a card into a judgement. Before it there is nothing to
+ * recall, and "Again" would reset the word's interval and review count — scheduling
+ * an unread card as forgotten. Exported so the same rule is asserted directly
+ * (tests/study-reveal-gate.test.ts) rather than only through a rendered screen.
+ */
+export function canGradeCard(isFlipped: boolean, remaining: number): boolean {
+  return isFlipped && remaining > 0;
+}
+
 export function useStudy() {
   const [studyList, setStudyList] = useState<VocabularyEntry[]>([]);
   const [totalWords, setTotalWords] = useState(0);
@@ -112,11 +124,34 @@ export function useStudy() {
 
   const flipCard = useCallback(() => setIsFlipped((flipped) => !flipped), []);
 
+  /**
+   * The reveal state, readable synchronously, and consumed on use.
+   *
+   * A grade is only meaningful once the answer has been shown. The four buttons
+   * were live from the moment a card was dealt, so a mistimed tap — or the "1"
+   * shortcut — graded a card the learner had not read; on "Again" that resets the
+   * interval and the review count, scheduling an unseen word as forgotten.
+   *
+   * A ref rather than the `isFlipped` state because of the window between a review
+   * committing and the re-render that clears the reveal: a held key repeats every
+   * ~30ms, re-enters with the *old* closure, passes the old state check, and
+   * submits the same card again. `recordReview`'s snapshot check catches that, so
+   * the schedule survives — but the user is told "this card changed elsewhere, your
+   * session has been refreshed" for holding a key. The flag is cleared the instant a
+   * grade is accepted, so the second event finds nothing to grade.
+   */
+  const revealed = useRef(isFlipped);
+  revealed.current = isFlipped;
+
   const submitReview = useCallback(async (quality: ReviewQuality) => {
     if (inFlight.current) return;
+    // Nothing to grade until the card has been turned over.
+    if (!revealed.current) return;
     const card = studyList[currentIndex];
     if (!card) return;
     inFlight.current = true;
+    // Consumed, not merely read: see `revealed`.
+    revealed.current = false;
 
     try {
       // Commit the schedule, event, and reward against the current database row.
@@ -192,6 +227,11 @@ export function useStudy() {
     ttsError,
     flipCard,
     submitReview,
+    /**
+     * Whether a grade may be submitted. The same predicate governs the buttons,
+     * the keyboard shortcuts and the hook's own guard, so the three cannot drift.
+     */
+    canGrade: canGradeCard(isFlipped, studyList.length),
     skipCard,
     restartSession,
     autoPlay,

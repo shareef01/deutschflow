@@ -22,7 +22,18 @@ export function DashboardContent({
   const { t } = useI18n();
 
   return (
-    <div className="flex flex-col gap-6 p-6 overflow-y-auto h-full max-w-[var(--container-workspace)] mx-auto w-full">
+    // A scroll region that must be reachable by keyboard. It contains controls in
+    // most states, but not in all of them (the first-run dashboard is text and
+    // numbers only), and a scrollable box with nothing focusable inside cannot be
+    // scrolled without a pointer — `axe` flags it as `scrollable-region-focusable`,
+    // which became visible once the app shell gained a bounded height and this pane
+    // started scrolling itself instead of growing the page.
+    <div
+      tabIndex={0}
+      role="group"
+      aria-label={t("dashboard.tab")}
+      className="flex flex-col gap-6 p-6 overflow-y-auto h-full max-w-[var(--container-workspace)] mx-auto w-full focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-azure-glow"
+    >
       {/* Due Today Action Hero Banner */}
       <DueTodayBanner dueCount={dueCount} onStartReview={onStartReview} t={t} />
 

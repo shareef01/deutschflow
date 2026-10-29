@@ -190,6 +190,12 @@ class StudyViewModel @Inject constructor(
         // read the old value and both got through — the same re-entry discipline
         // RoleplayViewModel.sendInput applies.
         if (_isSubmitting.value) return
+        // Nothing to grade until the card has been turned over. The four buttons
+        // were live from the moment a card was dealt, so a card the learner had
+        // not read could be rated — and "Again" resets the interval and the review
+        // count, which schedules an unseen word as forgotten. Guarded here as well
+        // as in the screen, so no other caller can skip the reveal.
+        if (!_isFlipped.value) return
         val currentList = _studyList.value
         val index = _currentIndex.value
         val card = currentList.getOrNull(index) ?: return

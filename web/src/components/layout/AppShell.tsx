@@ -76,7 +76,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background text-on-surface">
+    // h-dvh, not min-h-dvh. `min-height` lets the shell grow with its content,
+    // which silently disables every bounded scroll region inside it: `h-full` and
+    // `flex-1` resolve to the *content* height, so a screen that asks for its own
+    // scroll area gets a page that scrolls instead. The roleplay conversation was
+    // the visible casualty — a long reply pushed the microphone and the text input
+    // off the bottom of the document, and the log itself never scrolled, so the
+    // "follow the conversation" logic could never fire.
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-on-surface">
       {/* First thing in the tab order, visible only on focus. With a sticky header
           and a five-item rail, a keyboard user otherwise tabs through the whole
           navigation on every page before reaching anything they came for. */}

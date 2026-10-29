@@ -131,6 +131,10 @@ describe("login throttle", () => {
     expect(delayForNextAttempt(lockedIp, now + 100)).toBeGreaterThan(0);
   }, 15_000);
 
+  // O(n²) by nature: (MAX_TRACKED + 100) keys × 5 failures each, with an eviction
+  // sweep per insert. It takes ~10s alone and tips over the old 15s budget once the
+  // suite runs more files in parallel, so the budget is the thing that is wrong, not
+  // the assertion. The test still fails if the eviction guarantee breaks.
   it("evicts earliest-expiring lockouts when all tracked entries are actively locked", () => {
     const now = 3_000_000;
     // Saturate the map with entries that are ALL actively locked out
@@ -148,7 +152,7 @@ describe("login throttle", () => {
     // The most recently added entry with a longer future lockout must still be tracked and locked
     const recentKey = `all-locked-${MAX_TRACKED + 50}`;
     expect(delayForNextAttempt(recentKey, now + MAX_TRACKED + 50)).toBeGreaterThan(0);
-  }, 15_000);
+  }, 60_000);
 });
 
 describe("distributed rate limiting & client spoofing defense", () => {

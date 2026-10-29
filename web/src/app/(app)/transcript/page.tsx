@@ -217,11 +217,12 @@ export default function TranscriptPage() {
           hasTranscript ? "" : "flex items-center justify-center"
         }`}
       >
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex w-full items-start gap-3"
-        >
+        {/* Not a live region. While listening this text is the interim recognition
+            result, which changes several times a second — as a live region it made
+            a screen reader read the sentence out word by word, over its own status
+            messages. The announcement belongs on the finished utterance: see the
+            visually hidden region below the copy controls. */}
+        <div className="flex w-full items-start gap-3">
           <p
             className={`min-w-0 flex-1 leading-relaxed ${
               hasTranscript
@@ -257,6 +258,12 @@ export default function TranscriptPage() {
             </div>
           )}
         </div>
+
+        {/* Announced once, when the utterance is final. The Compose screen posts
+            the same thing through announceForAccessibility. */}
+        <p className="sr-only" role="status" aria-live="polite">
+          {state.finalText}
+        </p>
 
         {state.isListening && (
           <div className="mt-4">
