@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
 import com.aus.deutschflow.ui.components.GlassmorphicCard
+import com.aus.deutschflow.ui.components.isAtConversationBottom
+import kotlinx.coroutines.launch
 import com.aus.deutschflow.ui.components.OnLeavingScreen
 import com.aus.deutschflow.ui.theme.*
 import com.aus.deutschflow.ui.viewmodel.ChatMessage
@@ -103,6 +105,9 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
 
     val listState = rememberLazyListState()
 
+    // Used by the "jump to latest" control.
+    val scope = rememberCoroutineScope()
+
     // The ViewModel is scoped to the saved back stack entry, so tab switches and
     // backgrounding would otherwise leave the recogniser holding the microphone
     // behind whatever screen the user moved on to.
@@ -113,13 +118,45 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
         viewModel.stopSpeaking()
     }
 
-    // Auto-scroll to bottom when messages update
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    /**
+     * Whether the conversation should follow its own tail.
+     *
+     * The list used to scroll to the bottom whenever a message arrived, which pulled
+     * a reader away from whatever they had scrolled back to re-read. Now it follows
+     * only a reader who was already at the end, and one who is not gets the "jump to
+     * latest" control instead of losing their place.
+     *
+     * The latch is updated only when scrolling *settles* — by the reader or by us —
+     * because the frames in between are not a position anybody chose. That is what
+     * keeps our own `animateScrollToItem` from reading as "the reader scrolled away"
+     * halfway through its animation.
+     */
+    var autoFollow by remember { mutableStateOf(true) }
+
+    val atBottom by remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            isAtConversationBottom(
+                lastVisibleIndex = last?.index ?: -1,
+                lastVisibleOffset = last?.offset ?: 0,
+                lastVisibleSize = last?.size ?: 0,
+                totalItems = info.totalItemsCount,
+                viewportEndOffset = info.viewportEndOffset
+            )
         }
     }
 
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { scrolling -> if (!scrolling) autoFollow = atBottom }
+    }
+
+    LaunchedEffect(messages.size, isProcessing) {
+        if (autoFollow && messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
     // Open a scene only if there is nothing to come back to. The decision belongs
     // to the ViewModel: the saved conversation is read asynchronously, so this
     // composes while `messages` is still empty and used to start a new scene over
@@ -225,11 +262,11 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
         }
 
         // Conversation Chat Timeline
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxSize(),
             contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
@@ -308,6 +345,26 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                             }
                         }
                     }
+                }
+            }
+        }
+
+            // Offered only when the reader has scrolled away from the end — the same
+            // condition that stops the list from following on its own.
+            if (!autoFollow && messages.isNotEmpty()) {
+                TextButton(
+                    onClick = {
+                        scope.launch { listState.animateScrollToItem(messages.size - 1) }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = Spacing.xs)
+                ) {
+                    Text(
+                        text = stringResource(R.string.roleplay_jump_to_latest),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

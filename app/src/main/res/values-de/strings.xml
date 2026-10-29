@@ -359,4 +359,6 @@
     <string name="scenario_job_interview_title">Vorstellungsgespräch für eine Fachstelle</string>
     <string name="scenario_job_interview_context">Du führst ein erstes Vorstellungsgespräch mit einem deutschen Arbeitgeber.</string>
     <string name="widget_label">DeutschFlow Wort</string>
+    <string name="roleplay_jump_to_latest">Zu den neuesten</string>
+    <string name="study_reveal_to_grade">Zeige die Antwort, um diese Karte zu bewerten</string>
 </resources>

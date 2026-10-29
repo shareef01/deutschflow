@@ -363,4 +363,6 @@
     <string name="scenario_job_interview_title">Job Interview for a Professional Role</string>
     <string name="scenario_job_interview_context">You are participating in a first-round job interview with a German employer.</string>
     <string name="widget_label">DeutschFlow Word</string>
+    <string name="roleplay_jump_to_latest">Jump to latest</string>
+    <string name="study_reveal_to_grade">Show the answer to grade this card</string>
 </resources>
