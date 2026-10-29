@@ -200,7 +200,9 @@ class StudyViewModelTest {
         viewModel.submitReview(ReviewQuality.AGAIN)
         awaitCondition(timeoutMs = 1_000) { !viewModel.isSubmitting.value }
 
-        assertEquals("an unrevealed grade must not bank XP", 0, xp())
+        // `xp()` is null until the first award creates the stats row; no row is
+        // exactly what "nothing banked" looks like before a review has landed.
+        assertEquals("an unrevealed grade must not bank XP", 0, xp() ?: 0)
         assertEquals("the card must still be in the sitting", 1, viewModel.studyList.value.size)
         assertEquals(
             "the card's schedule must be untouched",
