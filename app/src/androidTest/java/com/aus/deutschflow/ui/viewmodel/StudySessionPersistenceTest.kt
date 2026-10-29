@@ -69,6 +69,19 @@ class StudySessionPersistenceTest {
     }
 
     /** Seeds [count] words without starting anything. */
+    /**
+     * Submits a grade the way a learner can: the answer has to be showing first.
+     *
+     * `submitReview` refuses a grade on an unrevealed card, because "Again" on a
+     * card nobody has read resets its interval and review count — scheduling an
+     * unseen word as one just failed. These tests drive the ViewModel directly, so
+     * they have to perform the reveal a tap on the card would perform.
+     */
+    private fun answerRevealed(quality: ReviewQuality) {
+        viewModel.flipCard()
+        viewModel.submitReview(quality)
+    }
+
     private suspend fun seedWords(count: Int) {
         repeat(count) {
             database.vocabularyDao().insertVocabulary(
@@ -99,7 +112,7 @@ class StudySessionPersistenceTest {
         // Answer one card so there is a reviewed count worth preserving, then
         // build the mid-sitting state a reload would destroy: a position past
         // the first card and a flipped card.
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(
             "the review never landed",
             awaitCondition { viewModel.sessionReviewedCount.value == 1 && !viewModel.isSubmitting.value }
@@ -140,7 +153,7 @@ class StudySessionPersistenceTest {
         seedWords(2)
         viewModel.ensureSessionStarted()
         assertTrue(awaitCondition { viewModel.studyList.value.size == 2 })
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(
             awaitCondition { viewModel.sessionReviewedCount.value == 1 && !viewModel.isSubmitting.value }
         )
@@ -161,11 +174,11 @@ class StudySessionPersistenceTest {
         assertTrue(awaitCondition { viewModel.studyList.value.size == 2 })
         // One at a time: submitReview refuses re-entry while a save is in flight,
         // so a second answer fired before the first lands is dropped by design.
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(
             awaitCondition { viewModel.sessionReviewedCount.value == 1 && !viewModel.isSubmitting.value }
         )
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(
             "the sitting should be over",
             awaitCondition { viewModel.studyList.value.isEmpty() && !viewModel.isSubmitting.value }
@@ -174,7 +187,7 @@ class StudySessionPersistenceTest {
         // "Drill again" from the completion screen.
         viewModel.restartSession()
         assertTrue(awaitCondition { viewModel.studyList.value.size == 2 })
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(
             "the drill-again review never landed",
             awaitCondition { viewModel.sessionReviewedCount.value == 1 && !viewModel.isSubmitting.value }
@@ -199,7 +212,7 @@ class StudySessionPersistenceTest {
         // Answer the only card: the sitting ends on the completion screen, and
         // the kickoff guard re-arms so the next tab entry loads afresh instead
         // of resurrecting that screen for the rest of the process's lifetime.
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(
             "the review never landed",
             awaitCondition { viewModel.studyList.value.isEmpty() && !viewModel.isSubmitting.value }
