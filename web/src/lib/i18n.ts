@@ -133,6 +133,8 @@ export const STRINGS = {
     "srs.intervalMonths": "{0}mo",
     "srs.intervalYears": "{0}y",
     "study.tapToFlip": "Tap to flip",
+    "study.revealToGrade": "Show the answer to grade this card",
+    "study.shortcutHint": "Space flips · 1–4 grades",
     "study.showGerman": "Show the German word",
     "study.showTranslation": "Show the translation",
     "study.skip": "Skip",
@@ -197,6 +199,7 @@ export const STRINGS = {
     "roleplay.speakReply": "Speak to Reply",
     "roleplay.typePlaceholder": "Type your message in German…",
     "roleplay.send": "Send",
+    "roleplay.jumpToLatest": "Jump to latest",
     "roleplay.voiceUnavailable": "Voice input is unavailable in this browser. You can type your responses below.",
 
     // Settings
@@ -451,6 +454,8 @@ export const STRINGS = {
     "srs.intervalMonths": "{0} Mon.",
     "srs.intervalYears": "{0} J.",
     "study.tapToFlip": "Zum Umdrehen tippen",
+    "study.revealToGrade": "Zeige die Antwort, um diese Karte zu bewerten",
+    "study.shortcutHint": "Leertaste dreht um · 1–4 bewertet",
     "study.showGerman": "Das deutsche Wort zeigen",
     "study.showTranslation": "Die Übersetzung zeigen",
     "study.skip": "Überspringen",
@@ -510,6 +515,7 @@ export const STRINGS = {
     "roleplay.speakReply": "Tippen, um zu antworten",
     "roleplay.typePlaceholder": "Schreibe deine Nachricht auf Deutsch…",
     "roleplay.send": "Senden",
+    "roleplay.jumpToLatest": "Zu den neuesten",
     "roleplay.voiceUnavailable": "Spracheingabe ist in diesem Browser nicht verfügbar. Du kannst deine Antworten unten eintippen.",
 
     "settings.backupHeader": "Sicherung",

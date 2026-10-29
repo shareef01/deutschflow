@@ -86,7 +86,7 @@ class StudyViewModelTest {
             reviewedAtTimestamp = System.currentTimeMillis() - 2 * 86_400_000L - 60_000L,
             isExtraPractice = false
         ))
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(awaitCondition {
             database.reviewEventDao().getAllEvents().first().size == 2 && !viewModel.isSubmitting.value
         })
@@ -124,9 +124,22 @@ class StudyViewModelTest {
      *   fired in that window is refused outright, costing that card its ten points.
      *   That is the guard working as designed; the test simply has to respect it.
      */
+    /**
+     * Submits a grade the way a learner can: the answer has to be showing first.
+     *
+     * `submitReview` refuses a grade on an unrevealed card, because "Again" on a
+     * card nobody has read resets its interval and review count — scheduling an
+     * unseen word as one just failed. These tests drive the ViewModel directly, so
+     * they have to perform the reveal a tap on the card would perform.
+     */
+    private fun answerRevealed(quality: ReviewQuality) {
+        viewModel.flipCard()
+        viewModel.submitReview(quality)
+    }
+
     private suspend fun answerWell(times: Int) {
         repeat(times) { n ->
-            viewModel.submitReview(ReviewQuality.GOOD)
+            answerRevealed(ReviewQuality.GOOD)
             assertTrue(
                 "card ${n + 1} of $times was never banked: its award did not land, or " +
                     "the ViewModel was still submitting when the next review came due",
@@ -160,7 +173,7 @@ class StudyViewModelTest {
 
         // Nothing on screen to bank again - the queue is what enforces once-per-card
         // now, so holding "Got it!" down cannot mint XP.
-        repeat(9) { viewModel.submitReview(ReviewQuality.GOOD) }
+        repeat(9) { answerRevealed(ReviewQuality.GOOD) }
         awaitCondition(timeoutMs = 1_000) { viewModel.studyList.value.isEmpty() }
 
         assertEquals(
@@ -168,6 +181,41 @@ class StudyViewModelTest {
             StudyViewModel.XP_PER_CARD,
             xp()
         )
+    }
+
+    /**
+     * A grade on an unrevealed card must not be written at all.
+     *
+     * "Again" resets the interval and the review count, so grading a card the
+     * learner has not read schedules an unseen word as one just failed. This is the
+     * regression test for the guard: the same call that banks a card once the answer
+     * is showing must bank nothing — no XP, no schedule change, card still in the
+     * queue — while it is not.
+     */
+    @Test
+    fun aGradeBeforeTheAnswerIsShownIsRefused() = runBlocking {
+        startSessionOf(1)
+        val dealt = viewModel.studyList.value.first()
+
+        viewModel.submitReview(ReviewQuality.AGAIN)
+        awaitCondition(timeoutMs = 1_000) { !viewModel.isSubmitting.value }
+
+        // `xp()` is null until the first award creates the stats row; no row is
+        // exactly what "nothing banked" looks like before a review has landed.
+        assertEquals("an unrevealed grade must not bank XP", 0, xp() ?: 0)
+        assertEquals("the card must still be in the sitting", 1, viewModel.studyList.value.size)
+        assertEquals(
+            "the card's schedule must be untouched",
+            dealt.reviewCount,
+            database.vocabularyDao().findById(dealt.id)?.reviewCount
+        )
+
+        // The same grade lands once the reveal has happened.
+        answerRevealed(ReviewQuality.GOOD)
+        awaitCondition(timeoutMs = 2_000) {
+            xp() == StudyViewModel.XP_PER_CARD && !viewModel.isSubmitting.value
+        }
+        assertTrue("revealing, then grading, must bank the card", viewModel.studyList.value.isEmpty())
     }
 
     /**
@@ -180,7 +228,7 @@ class StudyViewModelTest {
 
         val card = viewModel.studyList.value.first()
 
-        viewModel.submitReview(ReviewQuality.AGAIN)
+        answerRevealed(ReviewQuality.AGAIN)
         // The ease penalty, not the review count: a seeded card already has
         // reviewCount 0, so waiting on that would be true before the write landed
         // and would let this test pass without the code doing anything.
@@ -215,7 +263,7 @@ class StudyViewModelTest {
     fun hardIsACorrectAnswerAndBanksXp() = runBlocking {
         startSessionOf(1)
 
-        viewModel.submitReview(ReviewQuality.HARD)
+        answerRevealed(ReviewQuality.HARD)
 
         assertTrue(awaitCondition { xp() == StudyViewModel.XP_PER_CARD && !viewModel.isSubmitting.value })
         assertEquals(1, database.userStatsDao().getUserStatsOnce()?.streak)
@@ -288,7 +336,7 @@ class StudyViewModelTest {
         // The user fixes the word in the library while the sitting is open.
         database.vocabularyDao().save(dealt.copy(germanText = "Haus", englishTranslation = "house"))
 
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(awaitCondition {
             database.vocabularyDao().findById(dealt.id)?.reviewCount == 1 && !viewModel.isSubmitting.value
         })
@@ -310,7 +358,7 @@ class StudyViewModelTest {
 
         database.vocabularyDao().deleteById(dealt.id)
 
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         assertTrue(awaitCondition {
             viewModel.studyList.value.size == 1 && !viewModel.isSubmitting.value
         })
@@ -337,7 +385,7 @@ class StudyViewModelTest {
         val dealt = viewModel.studyList.value
         val next = dealt[1]
 
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
         viewModel.skipCard()
 
         assertTrue(awaitCondition {
@@ -352,7 +400,7 @@ class StudyViewModelTest {
         viewModel.startSession()
         awaitCondition { viewModel.hasLoaded.value }
 
-        viewModel.submitReview(ReviewQuality.GOOD)
+        answerRevealed(ReviewQuality.GOOD)
 
         // No card on screen, so nothing to bank and nothing to crash on.
         awaitCondition(timeoutMs = 1_000) { xp() != null }

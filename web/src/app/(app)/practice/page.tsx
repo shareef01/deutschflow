@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePractice } from "@/hooks/usePractice";
 import { useRoleplay } from "@/hooks/useRoleplay";
 import { useI18n } from "@/hooks/useI18n";
@@ -12,6 +12,7 @@ import { PRACTICE_FEEDBACK_KEYS } from "@/lib/scoring";
 
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { ROLEPLAY_SCENARIOS } from "@/lib/ai/scenarios";
+import { settleScrollToEnd, shouldFollowConversation } from "@/lib/ui/scroll-follow";
 
 export default function PracticePage() {
   const [selectedTab, setSelectedTab] = useState<"repetition" | "roleplay">("repetition");
@@ -230,16 +231,98 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const [isSending, setIsSending] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    /**
+     * Whether the reader is at the bottom of the conversation, kept in a ref
+     * because the effect below needs its *current* value without re-subscribing.
+     */
+    const pinnedToBottom = useRef(true);
+    /** Only for the button's visibility. */
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
+    /**
+     * True while this component itself is moving the viewport.
+     *
+     * `scroll` events do not say who caused them, so the follow-scroll's own
+     * assignment echoed back as a "the user scrolled" event: it fired while the
+     * list was between two heights, measured the reader as away from the bottom,
+     * cleared the pin, and stopped following. Held for the whole settle sequence
+     * and released two frames after it lands — long enough for the echo, far too
+     * short for a real scroll of the user's own to be missed.
+     */
+    const suppressPinUpdate = useRef(false);
+
     // Open a scene only if there is nothing to come back to.
     useEffect(() => {
         void openScenarioIfEmpty();
     }, [openScenarioIfEmpty]);
 
+    const metricsOf = (el: HTMLDivElement) => ({
+        scrollTop: el.scrollTop,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+    });
+
+    const releaseSuppressionAfterEcho = useCallback(() => {
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+                suppressPinUpdate.current = false;
+            })
+        );
+    }, []);
+
+    /** Brings the conversation's end into view, once the pane has a layout box. */
+    const followToEnd = useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        suppressPinUpdate.current = true;
+        const applied = settleScrollToEnd(el, requestAnimationFrame, releaseSuppressionAfterEcho);
+        // If it could not apply within the retry budget the pane is not
+        // scrollable at all, so there is no echo to suppress.
+        if (!applied) releaseSuppressionAfterEcho();
+    }, [releaseSuppressionAfterEcho]);
+
+    const handleScroll = () => {
+        const el = scrollRef.current;
+        if (!el) return;
+        if (suppressPinUpdate.current) return;
+        const atBottom = shouldFollowConversation(metricsOf(el));
+        pinnedToBottom.current = atBottom;
+        if (atBottom) setShowJumpToLatest(false);
+    };
+
+    const scrollToLatest = () => {
+        pinnedToBottom.current = true;
+        setShowJumpToLatest(false);
+        followToEnd();
+    };
+
+    /**
+     * Follow the conversation — but only for a reader who is already at the end
+     * of it.
+     *
+     * This used to pin the list to the bottom whenever the message count, the
+     * pending state OR the live transcript changed. The transcript half is what
+     * made it unusable: merely opening the microphone scrolled the conversation
+     * away from whoever was re-reading an earlier exchange, several times a
+     * second, mid-word. Now a scroll only happens for a reader who has not
+     * scrolled away, and one who has gets a "jump to latest" affordance instead of
+     * losing their place.
+     *
+     * The decision comes from `pinnedToBottom`, which `handleScroll` keeps up to
+     * date from the position the reader *chose*. Re-measuring here would be wrong,
+     * not merely redundant: by the time this runs the new message has already grown
+     * the list, so a reader who was at the bottom is now 200px away from it and
+     * would never be followed again.
+     */
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        if (!pinnedToBottom.current) {
+            setShowJumpToLatest(true);
+            return;
         }
-    }, [messages.length, isProcessing, partialText]);
+        followToEnd();
+        // Deliberately not depending on `partialText`: interim recognition results
+        // must never move the viewport.
+    }, [messages.length, isProcessing, followToEnd]);
 
     const handleSendTyped = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -300,7 +383,14 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                     </button>
                 </div>
             )}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pb-4">
+            <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                role="log"
+                aria-live="polite"
+                aria-label={t("roleplay.tab")}
+                className="flex-1 overflow-y-auto space-y-4 pb-4"
+            >
                 {messages.map((msg, i) => (
                     <div key={i} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[85%] rounded-2xl p-4 glass-surface ${
@@ -329,6 +419,18 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                     </div>
                 )}
             </div>
+
+            {/* Offered only when the reader has scrolled away from the end — the
+                same condition that stops the list from following on its own. */}
+            {showJumpToLatest && (
+                <button
+                    type="button"
+                    onClick={scrollToLatest}
+                    className="glass-button press-scale mx-auto flex min-h-11 w-fit items-center gap-2 px-4 text-xs font-bold text-azure-glow shadow-lg"
+                >
+                    {t("roleplay.jumpToLatest")}
+                </button>
+            )}
 
             <div className="glass-surface p-4 sm:p-6 flex flex-col items-center gap-3 shadow-xl">
                 {!speechSupported && (

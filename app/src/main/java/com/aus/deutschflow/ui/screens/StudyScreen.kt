@@ -521,6 +521,18 @@ private fun StudySessionContent(
 
         Spacer(modifier = Modifier.height(Spacing.md))
 
+        // Why the four buttons are inert. Dimmed controls with no explanation read
+        // as a broken screen rather than as "you have not seen the answer yet".
+        if (!isFlipped) {
+            Text(
+                text = stringResource(R.string.study_reveal_to_grade),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         // 4-Tier SRS Spaced Repetition Quality Buttons with Live Interval Previews
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -531,7 +543,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(againInterval.resId, againInterval.count),
                 glow = MaterialTheme.colorScheme.error,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.AGAIN)
@@ -542,7 +554,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(hardInterval.resId, hardInterval.count),
                 glow = AppTheme.colors.warningAmber,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.HARD)
@@ -553,7 +565,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(goodInterval.resId, goodInterval.count),
                 glow = AppTheme.colors.azureDeep,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.GOOD)
@@ -564,7 +576,7 @@ private fun StudySessionContent(
                 subtitle = stringResource(easyInterval.resId, easyInterval.count),
                 glow = AppTheme.colors.tertiaryGreen,
                 modifier = Modifier.weight(1f),
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && isFlipped,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModel.submitReview(ReviewQuality.EASY)
