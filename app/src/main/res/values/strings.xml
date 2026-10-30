@@ -139,7 +139,6 @@
     <string name="dashboard_daily_goal">Daily Goal</string>
     <string name="dashboard_goal_achieved">Goal achieved today!</string>
     <string name="dashboard_xp_remaining">%1$d XP remaining</string>
-    <string name="dashboard_xp_format">%1$d / %2$d XP</string>
     <string name="dashboard_start_review">Start Daily Review</string>
     <plurals name="dashboard_due_banner">
         <item quantity="one">%1$d card due for review</item>
@@ -156,11 +155,21 @@
     <string name="dashboard_heatmap_sub">Past 12 weeks of daily practice</string>
     <string name="dashboard_heatmap_less">Less</string>
     <string name="dashboard_heatmap_more">More</string>
+    <string name="dashboard_today">Today</string>
+    <string name="dashboard_practice_anyway">Practise anyway</string>
+    <string name="dashboard_no_words">Start your library</string>
+    <string name="dashboard_no_words_body">Save words from a transcript or add them in the Library. They\'ll appear here when they\'re due.</string>
+    <string name="dashboard_go_to_transcript">Go to Transcript</string>
+    <string name="dashboard_progress">Your progress</string>
+    <plurals name="dashboard_words_total">
+        <item quantity="one">%1$d word in your library</item>
+        <item quantity="other">%1$d words in your library</item>
+    </plurals>
     <plurals name="dashboard_streak">
         <item quantity="one">🔥 %1$d Day Streak</item>
         <item quantity="other">🔥 %1$d Days Streak</item>
     </plurals>
-    <string name="dashboard_xp">XP</string>
+    <string name="dashboard_xp_of_goal">/ %1$d XP</string>
     <string name="dashboard_tab">Dashboard</string>
     <string name="dashboard_flashcards_tab">Flashcards</string>
     <string name="dashboard_goal_progress_a11y" tools:ignore="PluralsCandidate">%1$d of %2$d XP, %3$d percent</string>
@@ -192,6 +201,10 @@
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyms</string>
     <string name="detail_antonyms">Antonyms</string>
+    <string name="detail_no_relations">No synonyms or antonyms saved for this word yet.</string>
+    <string name="detail_grammar">Grammar</string>
+    <string name="detail_plural">Plural</string>
+    <string name="detail_forms">Forms</string>
 
     <!-- Practice -->
     <string name="practice_intro">Listen to the German sentence, then tap Speak and say it back.</string>

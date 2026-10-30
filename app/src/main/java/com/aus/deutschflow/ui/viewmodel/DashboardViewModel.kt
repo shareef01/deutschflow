@@ -51,7 +51,9 @@ class DashboardViewModel @Inject constructor(
 
     // Counted in SQL: this used to load and partition every row of the library on every
     // change to it, to produce four numbers. Same buckets - see VocabularyDao.masteryCounts.
-    val masteryStats: StateFlow<MasteryStats> = vocabularyDao.masteryCounts(MASTERED_INTERVAL_DAYS)
+    // Null until the first count lands, so the Today card never tells someone with a
+    // full library to start one in the frame before the query answers.
+    val masteryStats: StateFlow<MasteryStats?> = vocabularyDao.masteryCounts(MASTERED_INTERVAL_DAYS)
         .map { counts ->
             MasteryStats(
                 totalWords = counts.totalWords,
@@ -60,7 +62,7 @@ class DashboardViewModel @Inject constructor(
                 newWords = counts.newWords
             )
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MasteryStats(0, 0, 0, 0))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /** XP gained today, under the same local-calendar key StudyViewModel writes. */
     val todayXp: StateFlow<Int> = activityLog.map { list ->

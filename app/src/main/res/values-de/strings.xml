@@ -145,7 +145,6 @@
     <string name="dashboard_daily_goal">Tagesziel</string>
     <string name="dashboard_goal_achieved">Ziel erreicht!</string>
     <string name="dashboard_xp_remaining">%1$d XP verbleibend</string>
-    <string name="dashboard_xp_format">%1$d / %2$d XP</string>
     <string name="dashboard_start_review">Tageswiederholung starten</string>
     <plurals name="dashboard_due_banner">
         <item quantity="one">%1$d Karte heute fällig</item>
@@ -162,11 +161,21 @@
     <string name="dashboard_heatmap_sub">Letzte 3 Monate konsequenter Bemühungen</string>
     <string name="dashboard_heatmap_less">Weniger</string>
     <string name="dashboard_heatmap_more">Mehr</string>
+    <string name="dashboard_today">Heute</string>
+    <string name="dashboard_practice_anyway">Trotzdem üben</string>
+    <string name="dashboard_no_words">Leg deine Bibliothek an</string>
+    <string name="dashboard_no_words_body">Speichere Wörter aus einem Transkript oder füge sie in der Bibliothek hinzu. Sie erscheinen hier, sobald sie fällig sind.</string>
+    <string name="dashboard_go_to_transcript">Zum Transkript</string>
+    <string name="dashboard_progress">Dein Fortschritt</string>
+    <plurals name="dashboard_words_total">
+        <item quantity="one">%1$d Wort in deiner Bibliothek</item>
+        <item quantity="other">%1$d Wörter in deiner Bibliothek</item>
+    </plurals>
     <plurals name="dashboard_streak">
         <item quantity="one">🔥 %1$d Tag Serie</item>
         <item quantity="other">🔥 %1$d Tage Serie</item>
     </plurals>
-    <string name="dashboard_xp">XP</string>
+    <string name="dashboard_xp_of_goal">/ %1$d XP</string>
     <string name="dashboard_tab">Übersicht</string>
     <string name="dashboard_flashcards_tab">Karteikarten</string>
     <string name="dashboard_goal_progress_a11y">%1$d von %2$d XP, %3$d Prozent</string>
@@ -198,6 +207,10 @@
     <!-- Word detail -->
     <string name="detail_synonyms">Synonyme</string>
     <string name="detail_antonyms">Antonyme</string>
+    <string name="detail_no_relations">Für dieses Wort sind noch keine Synonyme oder Antonyme gespeichert.</string>
+    <string name="detail_grammar">Grammatik</string>
+    <string name="detail_plural">Plural</string>
+    <string name="detail_forms">Formen</string>
 
     <!-- Practice -->
     <string name="practice_intro">Höre den deutschen Satz an, tippe dann auf Sprechen und sage ihn nach.</string>

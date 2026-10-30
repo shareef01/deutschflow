@@ -62,7 +62,10 @@ internal fun studySessionProgress(
 }
 
 @Composable
-fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
+fun StudyScreen(
+    viewModel: StudyViewModel = hiltViewModel(),
+    onStartTranscript: () -> Unit = {}
+) {
     val hasLoaded by viewModel.hasLoaded.collectAsStateWithLifecycle()
     val isExtraPractice by viewModel.isExtraPractice.collectAsStateWithLifecycle()
     val studyList by viewModel.studyList.collectAsStateWithLifecycle()
@@ -111,10 +114,14 @@ fun StudyScreen(viewModel: StudyViewModel = hiltViewModel()) {
 
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == 0) {
-                DashboardScreen(dueCount = dueCount, onStartReview = {
-                    userSelectedTab = true
-                    selectedTab = 1
-                })
+                DashboardScreen(
+                    dueCount = dueCount,
+                    onStartReview = {
+                        userSelectedTab = true
+                        selectedTab = 1
+                    },
+                    onStartTranscript = onStartTranscript
+                )
             } else {
                 StudySessionContent(
                     viewModel = viewModel,
