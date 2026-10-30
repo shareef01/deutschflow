@@ -231,7 +231,7 @@ fun VocabularyDetailScreen(
 private fun SectionLabel(text: String) {
     Spacer(modifier = Modifier.height(Spacing.lg))
     Text(
-        text = text.uppercase(),
+        text = text,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,

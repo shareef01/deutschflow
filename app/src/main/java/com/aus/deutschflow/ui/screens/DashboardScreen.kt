@@ -92,11 +92,11 @@ fun DashboardScreen(
     }
 }
 
-/** The dashboard's one section label: small, uppercase, primary. */
+/** The dashboard's one section label: small, tracked, primary. Shown as written, so TalkBack and tests read the resource text. */
 @Composable
 private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = text.uppercase(),
+        text = text,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
