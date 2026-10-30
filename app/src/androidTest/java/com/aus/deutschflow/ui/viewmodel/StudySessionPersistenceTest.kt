@@ -227,4 +227,23 @@ class StudySessionPersistenceTest {
             }
         )
     }
+
+    @Test
+    fun aDeckLoadedFromAnEmptyLibraryReloadsOnceTheLibraryFills() = runBlocking {
+        // First entry with nothing in the library: an empty deck, "all caught up".
+        viewModel.ensureSessionStarted()
+        assertTrue(awaitCondition { viewModel.hasLoaded.value })
+        assertTrue(viewModel.studyList.value.isEmpty())
+
+        // A backup import (or a word added in the Library) while the user is away.
+        seedWords(3)
+
+        // Returning to Study: the empty deck was no session in progress, so it reloads.
+        viewModel.ensureSessionStarted()
+
+        assertTrue(
+            "the deck should pick up the words added since the empty load",
+            awaitCondition { viewModel.studyList.value.size == 3 && !viewModel.isExtraPractice.value }
+        )
+    }
 }

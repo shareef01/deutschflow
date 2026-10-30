@@ -118,9 +118,23 @@ class StudyViewModel @Inject constructor(
      */
     private var sessionKickoffDone = false
 
+    /**
+     * True when the last deck that landed held nothing, i.e. the library was empty.
+     *
+     * Such a deck is not a session in progress - there is no position, flip or count
+     * to protect - so [ensureSessionStarted] reloads it. Without this, a library that
+     * filled up after the first entry (a backup import in Settings, a word added in
+     * the Library) left the Dashboard saying "all caught up" and Flashcards empty
+     * until the process died, because the guard had already been spent on nothing.
+     */
+    private var loadedEmptyDeck = false
+
     fun ensureSessionStarted() {
-        if (sessionKickoffDone) return
+        if (!needsKickoff(sessionKickoffDone, loadedEmptyDeck)) return
         sessionKickoffDone = true
+        // Cleared here rather than when the load lands, so a second entry before
+        // it does is still a no-op and the deck is loaded once.
+        loadedEmptyDeck = false
         startSession()
     }
 
@@ -143,6 +157,7 @@ class StudyViewModel @Inject constructor(
             _studyList.value = targetList.shuffled()
             _sessionReviewedCount.value = 0
             _initialSessionSize.value = targetList.size
+            loadedEmptyDeck = targetList.isEmpty()
             _hasLoaded.value = true
         }
     }
@@ -162,6 +177,7 @@ class StudyViewModel @Inject constructor(
             _studyList.value = allList.shuffled()
             _sessionReviewedCount.value = 0
             _initialSessionSize.value = allList.size
+            loadedEmptyDeck = allList.isEmpty()
         }
     }
 
@@ -417,6 +433,13 @@ class StudyViewModel @Inject constructor(
          * (it is due again at once), so the queue length is the count. Extra practice
          * is by definition nothing due. Mirrors remainingDueCount in web/src/hooks/useStudy.ts.
          */
+        /**
+         * Whether a screen entry should load a deck: when no sitting has been kicked
+         * off, or when the one that was held nothing. See [loadedEmptyDeck].
+         */
+        internal fun needsKickoff(kickoffDone: Boolean, loadedEmptyDeck: Boolean): Boolean =
+            !kickoffDone || loadedEmptyDeck
+
         internal fun remainingDueCount(queueSize: Int, isExtraPractice: Boolean): Int =
             if (isExtraPractice) 0 else queueSize
 
