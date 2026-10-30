@@ -183,8 +183,6 @@
 
     <!-- Roleplay -->
     <string name="roleplay_tab">Rollenspiel</string>
-    <string name="roleplay_tap_to_speak">Zum Sprechen tippen</string>
-    <string name="roleplay_tap_to_send">Zum Senden tippen</string>
     <string name="roleplay_start_speaking">Sprechen beginnen</string>
     <string name="roleplay_send_turn">Das Gesagte senden</string>
     <string name="roleplay_speak_message">Diese Antwort vorlesen</string>
@@ -374,4 +372,26 @@
     <string name="widget_label">DeutschFlow Wort</string>
     <string name="roleplay_jump_to_latest">Zu den neuesten</string>
     <string name="study_reveal_to_grade">Zeige die Antwort, um diese Karte zu bewerten</string>
+    <string name="scenario_bakery_goal_1">Begrüße den Bäcker</string>
+    <string name="scenario_bakery_goal_2">Bestelle Brot oder Gebäck</string>
+    <string name="scenario_bakery_goal_3">Frage nach dem Gesamtpreis und bezahle</string>
+    <string name="scenario_cafe_goal_1">Bestelle eine Melange</string>
+    <string name="scenario_cafe_goal_2">Frage nach einem Stück Kuchen</string>
+    <string name="scenario_cafe_goal_3">Bitte um die Rechnung</string>
+    <string name="scenario_supermarket_goal_1">Frage, wo es Bio-Milch oder Butter gibt</string>
+    <string name="scenario_supermarket_goal_2">Frage nach den Öffnungszeiten</string>
+    <string name="scenario_train_station_goal_1">Frage nach einer Fahrkarte nach München</string>
+    <string name="scenario_train_station_goal_2">Erkundige dich nach Abfahrtszeit und Gleis</string>
+    <string name="scenario_train_station_goal_3">Frage, ob eine Sitzplatzreservierung enthalten ist</string>
+    <string name="scenario_buergeramt_goal_1">Erkläre, dass du zur Anmeldung hier bist</string>
+    <string name="scenario_buergeramt_goal_2">Lege deine Unterlagen vor</string>
+    <string name="scenario_buergeramt_goal_3">Bestätige die Meldebescheinigung</string>
+    <string name="scenario_doctor_goal_1">Beschreibe deine Symptome (Kopfschmerzen, Fieber)</string>
+    <string name="scenario_doctor_goal_2">Frage nach Medikamenten und einer Krankschreibung</string>
+    <string name="scenario_apartment_goal_1">Frage nach Miete und Nebenkosten</string>
+    <string name="scenario_apartment_goal_2">Frage nach Einzugstermin und Kaution</string>
+    <string name="scenario_job_interview_goal_1">Stelle deinen beruflichen Werdegang vor</string>
+    <string name="scenario_job_interview_goal_2">Erkläre deine Motivation für die Stelle</string>
+    <string name="roleplay_your_goals">Deine Ziele</string>
+    <string name="practice_listen">Anhören</string>
 </resources>

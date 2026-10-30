@@ -8,7 +8,7 @@ import com.aus.deutschflow.R
  *
  * [title] and [context] are English and are what the *model* is told - prompt text,
  * like the system prompts in GroqHelper, kept in one language whatever the UI's. The
- * screen shows [titleRes] and [contextRes] instead: it used to show the English
+ * screen shows [titleRes], [contextRes] and [goalRes] instead: it used to show the English
  * strings directly, so a German UI listed every scene in English.
  */
 data class RoleplayScenario(
@@ -20,6 +20,7 @@ data class RoleplayScenario(
     @StringRes val contextRes: Int,
     val assistantRole: String,
     val learnerGoals: List<String>,
+    @StringRes val goalRes: List<Int>,
     val openingInstruction: String
 )
 
@@ -34,6 +35,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_bakery_context,
             assistantRole = "A friendly baker in Berlin behind the counter.",
             learnerGoals = listOf("Greet the baker", "Order bread or pastries", "Ask for the total price and pay"),
+            goalRes = listOf(R.string.scenario_bakery_goal_1, R.string.scenario_bakery_goal_2, R.string.scenario_bakery_goal_3),
             openingInstruction = "Greet the customer warmly and ask what they would like to have today."
         ),
         RoleplayScenario(
@@ -45,6 +47,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_cafe_context,
             assistantRole = "A polite Viennese waiter (Herr Ober).",
             learnerGoals = listOf("Order a Melange coffee", "Ask for a slice of cake", "Request the bill"),
+            goalRes = listOf(R.string.scenario_cafe_goal_1, R.string.scenario_cafe_goal_2, R.string.scenario_cafe_goal_3),
             openingInstruction = "Welcome the guest to the café and ask what beverage they would like."
         ),
         RoleplayScenario(
@@ -56,6 +59,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_supermarket_context,
             assistantRole = "A helpful supermarket employee stocking shelves.",
             learnerGoals = listOf("Ask where organic milk or butter is", "Ask about store opening hours"),
+            goalRes = listOf(R.string.scenario_supermarket_goal_1, R.string.scenario_supermarket_goal_2),
             openingInstruction = "Ask the customer politely if they need any assistance finding something."
         ),
         RoleplayScenario(
@@ -67,6 +71,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_train_station_context,
             assistantRole = "A Deutsche Bahn service agent at the ticket counter.",
             learnerGoals = listOf("Ask for a ticket to Munich", "Inquire about departure time and platform", "Ask if a seat reservation is included"),
+            goalRes = listOf(R.string.scenario_train_station_goal_1, R.string.scenario_train_station_goal_2, R.string.scenario_train_station_goal_3),
             openingInstruction = "Greet the traveler and ask where they would like to travel to."
         ),
         RoleplayScenario(
@@ -78,6 +83,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_buergeramt_context,
             assistantRole = "A formal civil servant at the Bürgeramt.",
             learnerGoals = listOf("Explain you are here for Anmeldung", "Present your documents", "Confirm the registration paper"),
+            goalRes = listOf(R.string.scenario_buergeramt_goal_1, R.string.scenario_buergeramt_goal_2, R.string.scenario_buergeramt_goal_3),
             openingInstruction = "Call the appointment number and ask the citizen for their purpose of visit."
         ),
         RoleplayScenario(
@@ -89,6 +95,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_doctor_context,
             assistantRole = "A physician listening to your health complaints.",
             learnerGoals = listOf("Describe symptoms (headache, fever)", "Ask about medication and doctor's note"),
+            goalRes = listOf(R.string.scenario_doctor_goal_1, R.string.scenario_doctor_goal_2),
             openingInstruction = "Greet the patient into your consultation room and ask what brings them in today."
         ),
         RoleplayScenario(
@@ -100,6 +107,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_apartment_context,
             assistantRole = "A landlord showing a 2-room apartment.",
             learnerGoals = listOf("Ask about rent and utilities", "Ask about move-in date and deposit"),
+            goalRes = listOf(R.string.scenario_apartment_goal_1, R.string.scenario_apartment_goal_2),
             openingInstruction = "Welcome the potential tenant to the apartment viewing and invite questions."
         ),
         RoleplayScenario(
@@ -111,6 +119,7 @@ object RoleplayScenarioCatalog {
             contextRes = R.string.scenario_job_interview_context,
             assistantRole = "An interviewer / hiring manager from Human Resources.",
             learnerGoals = listOf("Introduce your professional background", "Explain your motivation for the position"),
+            goalRes = listOf(R.string.scenario_job_interview_goal_1, R.string.scenario_job_interview_goal_2),
             openingInstruction = "Thank the applicant for coming and ask them to introduce themselves briefly."
         )
     )

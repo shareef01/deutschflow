@@ -177,8 +177,6 @@
 
     <!-- Roleplay -->
     <string name="roleplay_tab">Roleplay</string>
-    <string name="roleplay_tap_to_speak">Tap to speak</string>
-    <string name="roleplay_tap_to_send">Tap to send</string>
     <string name="roleplay_start_speaking">Start speaking</string>
     <string name="roleplay_send_turn">Send message</string>
     <string name="roleplay_speak_message">Play response aloud</string>
@@ -209,10 +207,10 @@
     <!-- Practice -->
     <string name="practice_intro">Listen to the German sentence, then tap Speak and say it back.</string>
     <string name="practice_waiting">Waiting for your German speech…</string>
-    <string name="practice_listen_repeat">Listen to Sentence</string>
+    <string name="practice_listen_repeat">Listen and repeat</string>
     <string name="practice_speak">Speak</string>
-    <string name="practice_evaluate">Evaluating…</string>
-    <string name="practice_next">Next Sentence</string>
+    <string name="practice_evaluate">Evaluate</string>
+    <string name="practice_next">Next</string>
     <!--
         These say what was measured, not how well you speak. The screen used to
         report "Perfect pronunciation" on a result it had no way to judge: it
@@ -378,4 +376,26 @@
     <string name="widget_label">DeutschFlow Word</string>
     <string name="roleplay_jump_to_latest">Jump to latest</string>
     <string name="study_reveal_to_grade">Show the answer to grade this card</string>
+    <string name="scenario_bakery_goal_1">Greet the baker</string>
+    <string name="scenario_bakery_goal_2">Order bread or pastries</string>
+    <string name="scenario_bakery_goal_3">Ask for the total price and pay</string>
+    <string name="scenario_cafe_goal_1">Order a Melange coffee</string>
+    <string name="scenario_cafe_goal_2">Ask for a slice of cake</string>
+    <string name="scenario_cafe_goal_3">Request the bill</string>
+    <string name="scenario_supermarket_goal_1">Ask where organic milk or butter is</string>
+    <string name="scenario_supermarket_goal_2">Ask about store opening hours</string>
+    <string name="scenario_train_station_goal_1">Ask for a ticket to Munich</string>
+    <string name="scenario_train_station_goal_2">Inquire about departure time and platform</string>
+    <string name="scenario_train_station_goal_3">Ask if a seat reservation is included</string>
+    <string name="scenario_buergeramt_goal_1">Explain you are here for Anmeldung</string>
+    <string name="scenario_buergeramt_goal_2">Present your documents</string>
+    <string name="scenario_buergeramt_goal_3">Confirm the registration paper</string>
+    <string name="scenario_doctor_goal_1">Describe symptoms (headache, fever)</string>
+    <string name="scenario_doctor_goal_2">Ask about medication and doctor\'s note</string>
+    <string name="scenario_apartment_goal_1">Ask about rent and utilities</string>
+    <string name="scenario_apartment_goal_2">Ask about move-in date and deposit</string>
+    <string name="scenario_job_interview_goal_1">Introduce your professional background</string>
+    <string name="scenario_job_interview_goal_2">Explain your motivation for the position</string>
+    <string name="roleplay_your_goals">Your goals</string>
+    <string name="practice_listen">Listen</string>
 </resources>

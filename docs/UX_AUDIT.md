@@ -149,4 +149,5 @@ The original Pixel 7 hardware captures were replaced on 30 October 2026 by API 3
 - `docs/screenshots/android/emulator-api36-study-progress.png`
 - `docs/screenshots/android/emulator-api36-flashcards.png`
 - `docs/screenshots/android/emulator-api36-practice.png`
+- `docs/screenshots/android/emulator-api36-roleplay.png`
 - `docs/screenshots/android/emulator-api36-settings.png`
