@@ -27,12 +27,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
+import com.aus.deutschflow.data.local.entities.NO_ARTICLE
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.ui.viewmodel.VocabularyViewModel
 import com.aus.deutschflow.ui.viewmodel.VocabularySort
@@ -43,6 +47,7 @@ import com.aus.deutschflow.ui.theme.motionDuration
 import com.aus.deutschflow.ui.theme.Motion
 import com.aus.deutschflow.ui.theme.ActionButtonHeight
 import com.aus.deutschflow.ui.theme.SelectionDefaults
+import com.aus.deutschflow.ui.theme.AppTheme
 import com.aus.deutschflow.ui.theme.Spacing
 import com.aus.deutschflow.ui.theme.glassSurface
 import kotlinx.coroutines.launch
@@ -183,6 +188,10 @@ fun VocabularyScreen(
                         item = selectedItem,
                         exampleSentence = exampleSentence,
                         onClose = { selectedId = null },
+                        onEdit = { editingId = it.id },
+                        onDelete = onDeleteWithUndo,
+                        // The list stays beside it, so there is nothing to go back to.
+                        showBack = false,
                         onSpeak = { viewModel.speak(it) }
                     )
                 }
@@ -199,6 +208,8 @@ fun VocabularyScreen(
                         item = selectedItem,
                         exampleSentence = exampleSentence,
                         onClose = { selectedId = null },
+                        onEdit = { editingId = it.id },
+                        onDelete = onDeleteWithUndo,
                         onSpeak = { viewModel.speak(it) }
                     )
                 } else {
@@ -491,16 +502,44 @@ private fun VocabularyItem(
                     .weight(1f)
                     .padding(top = Spacing.sm, end = Spacing.sm)
             ) {
+                // The German first and loudest, its article as quiet grammar beside
+                // it, the meaning underneath: three things, three weights. Mirrors
+                // VocabularyItem in web/src/app/(app)/vocabulary/page.tsx.
+                val article = item.displayArticle()
+                Row(verticalAlignment = Alignment.Bottom) {
+                    if (article != null) {
+                        Text(
+                            text = article,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.alignByBaseline()
+                        )
+                        Spacer(modifier = Modifier.width(Spacing.sm))
+                    }
+                    Text(
+                        text = item.germanText,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.alignByBaseline()
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                val plural = item.plural.trim()
                 Text(
-                    text = item.germanText,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(Spacing.xs))
-                Text(
-                    text = item.englishTranslation,
+                    text = buildAnnotatedString {
+                        append(item.englishTranslation)
+                        if (plural.isNotEmpty()) {
+                            withStyle(SpanStyle(color = AppTheme.colors.onSurfaceMuted)) {
+                                append("  ·  ")
+                                // Non-breaking, so a long meaning wraps the whole
+                                // "Plural: Feierabende" to the next line rather than
+                                // leaving "Plural:" stranded at the end of this one.
+                                append(stringResource(R.string.word_sheet_plural, plural).replace(' ', ' '))
+                            }
+                        }
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -666,3 +705,7 @@ private fun VocabularyEditorDialog(
 
 /** How long a failed-write banner stays up before it clears itself. */
 private const val ERROR_VISIBLE_MS = 4_000L
+
+/** "der", "die", "das" - or null for a verb, a phrase, or the model's "none". */
+internal fun VocabularyEntity.displayArticle(): String? =
+    article.trim().takeIf { it.isNotEmpty() && it != NO_ARTICLE }

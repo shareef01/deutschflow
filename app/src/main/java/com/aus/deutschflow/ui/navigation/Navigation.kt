@@ -270,7 +270,12 @@ fun MainNavigation(
                         onWordOpened = onWordOpened
                     )
                 }
-                composable(Screen.Study.route) { StudyScreen(hiltViewModel()) }
+                composable(Screen.Study.route) {
+                    StudyScreen(
+                        viewModel = hiltViewModel(),
+                        onStartTranscript = { navigateToTab(navController, Screen.Transcript) }
+                    )
+                }
                 composable(Screen.Practice.route) {
                     // Both, explicitly. A NavBackStackEntry's default factory is not
                     // Hilt-aware, so the `= viewModel()` default on the second

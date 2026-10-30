@@ -138,9 +138,15 @@ In addition to headless unit test suites, the redesigned native Android applicat
 
 ### 4.2 Verified Screenshots
 The verified device captures are stored in `docs/screenshots/android/`:
-- `docs/screenshots/android/pixel7-transcript.png`
-- `docs/screenshots/android/pixel7-library.png`
-- `docs/screenshots/android/pixel7-history.png`
-- `docs/screenshots/android/pixel7-study.png`
-- `docs/screenshots/android/pixel7-practice.png`
-- `docs/screenshots/android/pixel7-settings.png`
+The original Pixel 7 hardware captures were replaced on 30 October 2026 by API 36 emulator captures (1080×2400) taken after the Library and Study dashboard port to Compose:
+- `docs/screenshots/android/emulator-api36-transcript.png`
+- `docs/screenshots/android/emulator-api36-library.png`
+- `docs/screenshots/android/emulator-api36-word-detail.png`
+- `docs/screenshots/android/emulator-api36-history.png`
+- `docs/screenshots/android/emulator-api36-study.png`
+- `docs/screenshots/android/emulator-api36-study-empty.png`
+- `docs/screenshots/android/emulator-api36-study-caught-up.png`
+- `docs/screenshots/android/emulator-api36-study-progress.png`
+- `docs/screenshots/android/emulator-api36-flashcards.png`
+- `docs/screenshots/android/emulator-api36-practice.png`
+- `docs/screenshots/android/emulator-api36-settings.png`
