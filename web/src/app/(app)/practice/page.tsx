@@ -27,18 +27,15 @@ export default function PracticePage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Tab Selector */}
-      <div className="flex w-full justify-center p-4 border-b border-on-surface/5 bg-background/50 backdrop-blur-md">
-        <SegmentedTabs
-          value={selectedTab}
-          onValueChange={(val) => setSelectedTab(val as "repetition" | "roleplay")}
-          ariaLabel={t("nav.practice")}
-          tabs={[
-            { id: "repetition", label: t("practice.tab"), panelId: "practice-panel-repetition" },
-            { id: "roleplay", label: t("roleplay.tab"), panelId: "practice-panel-roleplay" },
-          ]}
-        />
-      </div>
+      <SegmentedTabs
+        value={selectedTab}
+        onValueChange={(val) => setSelectedTab(val as "repetition" | "roleplay")}
+        ariaLabel={t("nav.practice")}
+        tabs={[
+          { id: "repetition", label: t("practice.tab"), panelId: "practice-panel-repetition" },
+          { id: "roleplay", label: t("roleplay.tab"), panelId: "practice-panel-roleplay" },
+        ]}
+      />
 
       <div className="flex-1 min-h-0">
         <div
@@ -100,116 +97,117 @@ function RepetitionMode({ active }: { active: boolean }) {
       : t(PRACTICE_FEEDBACK_KEYS[feedback], [heardCount, wordResults.length]);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-[var(--container-workspace)] flex-col overflow-y-auto px-[var(--gutter)] py-[var(--space-6)]">
-      <p className="mb-2 w-full pl-1 text-label-large text-on-surface-variant">
-        {t("practice.listenRepeat")}
-      </p>
-
-      <div className="glass-surface shadow-lg shadow-azure-glow/5">
-        <div className="flex items-center gap-6 p-8">
-          <p lang="de" className="min-w-0 flex-1 hyphens-auto break-words text-3xl font-bold leading-tight text-on-surface">
-            {wordResults.length === 0
-              ? targetSentence
-              : wordResults.map((result, i) => (
-                  <span
-                    key={`${result.word}-${i}`}
-                    className={
-                      result.isCorrect ? "font-bold text-azure-glow" : "font-bold text-error"
-                    }
-                  >
-                    {result.word}{" "}
-                  </span>
-                ))}
-          </p>
-          <button
+    <div className="mx-auto flex h-full w-full max-w-[var(--container-workspace)] flex-col overflow-y-auto px-[var(--gutter)] py-[var(--space-5)]">
+      {/* Step 1: listen. The sentence is the material, so it gets the size. */}
+      <section aria-labelledby="practice-listen" className="glass-surface p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="practice-listen" className="eyebrow">
+            <span aria-hidden="true" className="mr-2 text-primary">1</span>
+            {t("practice.listenRepeat")}
+          </h2>
+          <GlassButton
             type="button"
             onClick={() => speak(targetSentence)}
-            aria-label={t("action.speak")}
-            className="glass-button press-scale flex size-14 shrink-0 items-center justify-center text-azure-glow"
+            className="h-11 shrink-0 px-4"
           >
-            <VolumeUpIcon className="size-7" />
-          </button>
+            <span className="flex items-center gap-2 text-label-large font-bold text-primary">
+              <VolumeUpIcon className="size-5" />
+              {t("practice.listen")}
+            </span>
+          </GlassButton>
         </div>
-      </div>
+        <p lang="de" className="mt-4 break-words text-headline-small text-on-surface sm:text-headline-medium">
+          {wordResults.length === 0
+            ? targetSentence
+            : wordResults.map((result, i) => (
+                // Colour plus an underline, so a missed word does not depend on
+                // telling red from cyan.
+                <span
+                  key={`${result.word}-${i}`}
+                  className={
+                    result.isCorrect
+                      ? "text-tertiary"
+                      : "text-error underline decoration-2 underline-offset-4"
+                  }
+                >
+                  {result.word}{" "}
+                </span>
+              ))}
+        </p>
+      </section>
 
       {!speechSupported && (
-        <div role="status" className="mt-4 rounded-lg bg-surface-variant/40 p-4 text-center text-body-medium text-on-surface-variant">
+        <div role="status" className="mt-4 rounded-[var(--radius-sm)] bg-surface-container-high p-4 text-body-medium text-on-surface-variant">
           {t("practice.speechUnavailable")}
         </div>
       )}
 
-      <ErrorBanner message={errorState} />
-
-      <div className="w-full flex-1 pt-6">
-        <div className="glass-surface p-8 shadow-lg shadow-azure-glow/5">
-          {isListening ? (
-            <div>
-              {partialText && (
-                <p className="line-clamp-3 w-full text-center text-base text-on-surface">
-                  {partialText}
-                </p>
-              )}
-              <AudioWaveform
-                getLevel={() => rmsLevel}
-                isActive
-                className="mt-4 h-16 w-full"
-              />
-            </div>
-          ) : isProcessing ? (
-            <div className="flex min-h-[96px] w-full items-center justify-center">
-              <span className="size-9 animate-spin rounded-full border-[3px] border-azure-glow border-t-transparent" />
-            </div>
-          ) : spokenText.length === 0 ? (
-            <p className="mx-auto max-w-[60ch] w-full px-4 py-8 text-center text-sm text-on-surface-variant">
-              {t("practice.intro")}
-            </p>
-          ) : (
-            <div className="flex w-full flex-col items-center">
-              {feedbackText && (
-                <span
-                  className={`rounded-full px-5 py-2 text-center text-sm font-medium ${
-                    isPositive
-                      ? "bg-tertiary-container text-on-tertiary-container"
-                      : "bg-error-container text-on-error-container"
-                  }`}
-                >
-                  {feedbackText}
-                </span>
-              )}
-
-              {wordResults.length > 0 && (
-                <p className="mt-3 max-w-[46ch] text-center text-label-medium text-on-surface-variant">
-                  {t("practice.feedbackCaption")}
-                </p>
-              )}
-
-              <p className="mt-4 w-full text-center text-base text-on-surface">
-                {spokenText}
-              </p>
-            </div>
-          )}
+      {errorState && (
+        <div className="mt-4">
+          <ErrorBanner message={errorState} />
         </div>
-      </div>
+      )}
 
-      <div className="mt-6 flex w-full flex-col gap-3 pb-5 xs:flex-row xs:gap-4">
+      {/* Step 2: speak, and what the recogniser made of it. */}
+      <section aria-labelledby="practice-speak" className="glass-surface mt-4 min-h-[9rem] p-5 sm:p-6" aria-live="polite">
+        <h2 id="practice-speak" className="eyebrow">
+          <span aria-hidden="true" className="mr-2 text-primary">2</span>
+          {t("practice.speak")}
+        </h2>
+        {isListening ? (
+          <div className="mt-3">
+            <p className="min-h-6 text-body-large text-on-surface">{partialText || t("transcript.listening")}</p>
+            <AudioWaveform getLevel={() => rmsLevel} isActive className="mt-4 h-14 w-full" />
+          </div>
+        ) : isProcessing ? (
+          <div className="flex min-h-[96px] w-full items-center justify-center">
+            <span className="size-8 animate-spin rounded-full border-[3px] border-azure-glow border-t-transparent" />
+          </div>
+        ) : spokenText.length === 0 ? (
+          <p className="mt-3 max-w-[60ch] text-body-medium text-on-surface-variant">{t("practice.intro")}</p>
+        ) : (
+          <div className="mt-3 flex flex-col items-start gap-3">
+            {feedbackText && (
+              <span
+                className={`rounded-full px-4 py-1.5 text-label-large ${
+                  isPositive
+                    ? "bg-tertiary-container text-on-tertiary-container"
+                    : "bg-warning-container text-on-warning-container"
+                }`}
+              >
+                {feedbackText}
+              </span>
+            )}
+            <p lang="de" className="text-body-large text-on-surface">{spokenText}</p>
+            {/* Recognition, not pronunciation: the browser returns a transcript,
+                and its language model will happily resolve poor audio into the
+                word that was meant. Said every time a result is shown. */}
+            {wordResults.length > 0 && (
+              <p className="text-label-medium text-on-surface-variant">{t("practice.feedbackCaption")}</p>
+            )}
+          </div>
+        )}
+      </section>
+
+      <div className="mt-5 flex w-full flex-col gap-3 pb-2 xs:flex-row">
         <GlassButton
           type="button"
           disabled={isProcessing || !speechSupported}
-          glow={isListening ? "error" : "azure"}
+          glow={isListening ? "error" : "solid"}
           onClick={isListening ? stopPractice : () => void startPractice()}
-          className="w-full xs:flex-1 h-14"
+          className="h-14 w-full xs:flex-[2]"
         >
           <span className="flex items-center justify-center gap-2">
             {isListening ? <StopIcon className="size-5" /> : <MicIcon className="size-5" />}
-            <span className="text-sm font-bold">
+            <span className="text-label-large font-bold">
               {isListening ? t("practice.evaluate") : t("practice.speak")}
             </span>
           </span>
         </GlassButton>
-        <GlassButton type="button" onClick={nextSentence} className="w-full xs:flex-1 h-14">
+        <GlassButton type="button" onClick={nextSentence} className="h-14 w-full xs:flex-1">
           <span className="flex items-center justify-center gap-2">
             <NavigateNextIcon className="size-5" />
-            <span className="text-sm font-bold">{t("practice.next")}</span>
+            <span className="text-label-large font-bold">{t("practice.next")}</span>
           </span>
         </GlassButton>
       </div>
@@ -337,19 +335,23 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
         }
     };
 
+    const current = ROLEPLAY_SCENARIOS.find((s) => s.title === scenario) ?? ROLEPLAY_SCENARIOS[0];
+    const busy = isProcessing || isSending;
+
     return (
-        <div className="flex h-full flex-col p-4">
-            <div className="mb-3 flex items-center gap-3">
+        <div className="mx-auto flex h-full w-full max-w-[var(--container-workspace)] flex-col px-[var(--gutter)] pt-[var(--space-4)]">
+            {/* The scene: which one, where you are, and what you are trying to do. */}
+            <div className="flex items-end gap-2">
                 <div className="min-w-0 flex-1">
-                    <label htmlFor="roleplay-scenario-select" className="text-label-small uppercase tracking-wider text-on-surface-variant block mb-1">
-                        {t("roleplay.tab")}
+                    <label htmlFor="roleplay-scenario-select" className="eyebrow mb-1.5 block">
+                        {t("roleplay.scenario")}
                     </label>
                     <select
                         id="roleplay-scenario-select"
                         value={scenario}
                         onChange={(e) => void startSession(e.target.value)}
-                        disabled={isProcessing || isSending}
-                        className="w-full bg-surface-variant/50 text-on-surface text-label-large font-bold rounded-lg px-2 py-1 border border-outline-variant/30 focus:outline-none focus:border-azure-glow"
+                        disabled={busy}
+                        className="h-11 w-full rounded-[var(--radius-sm)] border border-outline-variant bg-glass-fill px-3 text-label-large text-on-surface focus:border-azure-glow focus:outline-none"
                     >
                         {ROLEPLAY_SCENARIOS.map((s) => (
                             <option key={s.id} value={s.title} className="bg-background text-on-surface">
@@ -361,61 +363,73 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                 <button
                     type="button"
                     onClick={() => void startSession()}
-                    disabled={isProcessing || isSending}
+                    disabled={busy}
                     aria-label={t("roleplay.restart")}
                     title={t("roleplay.restart")}
-                    className="glass-button press-scale flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:text-azure-glow disabled:opacity-40 self-end"
+                    className="glass-button press-scale flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-colors hover:text-primary disabled:opacity-40"
                 >
                     <RefreshIcon className="size-5" />
                 </button>
             </div>
+            <details className="group mt-2 rounded-[var(--radius-sm)] border border-outline-variant/70 px-3 py-2">
+                <summary className="flex min-h-7 cursor-pointer list-none items-center justify-between gap-2 text-body-medium text-on-surface-variant">
+                    <span className="min-w-0 truncate">{current.context}</span>
+                    <span className="shrink-0 text-label-medium text-primary">{t("roleplay.yourGoals")}</span>
+                </summary>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-body-medium text-on-surface">
+                    {current.learnerGoals.map((goal) => (
+                        <li key={goal}>{goal}</li>
+                    ))}
+                </ul>
+            </details>
 
-            {error && (
-                <div className="mb-2">
-                    <ErrorBanner message={error} />
-                    <button
-                        type="button"
-                        onClick={retry}
-                        disabled={isProcessing || isSending}
-                        className="text-xs text-primary underline hover:text-azure-glow ml-1"
-                    >
-                        {t("action.retry") || "Retry"}
-                    </button>
-                </div>
-            )}
             <div
                 ref={scrollRef}
                 onScroll={handleScroll}
                 role="log"
                 aria-live="polite"
                 aria-label={t("roleplay.tab")}
-                className="flex-1 overflow-y-auto space-y-4 pb-4"
+                className="mt-3 flex-1 space-y-3 overflow-y-auto pb-4"
             >
                 {messages.map((msg, i) => (
-                    <div key={i} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-2xl p-4 glass-surface ${
-                            msg.role === 'user' ? 'bg-primary/20 border-primary/20' : 'bg-surface-variant/40'
-                        }`}>
-                            <p className="text-base text-on-surface">{msg.content}</p>
+                    <div key={i} className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div
+                            className={`max-w-[85%] rounded-[var(--radius-lg)] px-4 py-3 sm:max-w-[70%] ${
+                                msg.role === "user"
+                                    ? "rounded-br-[var(--radius-xs)] bg-primary-container text-on-primary-container"
+                                    : "glass-surface rounded-bl-[var(--radius-xs)]"
+                            }`}
+                        >
+                            <p lang="de" className={`text-body-large ${msg.role === "user" ? "" : "text-on-surface"}`}>
+                                {msg.content}
+                            </p>
                             {msg.translation && (
-                                <p className="mt-2 text-xs text-on-surface-variant opacity-60 italic">{msg.translation}</p>
+                                <p className="mt-1.5 text-body-medium text-on-surface-variant">{msg.translation}</p>
                             )}
-                            {msg.role === 'assistant' && (
+                            {msg.role === "assistant" && (
                                 <button
                                     type="button"
                                     onClick={() => speak(msg.content)}
                                     aria-label={t("action.speak")}
-                                    className="mt-2 text-primary press-scale"
+                                    title={t("action.speak")}
+                                    className="press-scale -mb-1 -ml-2 mt-1 grid size-9 place-items-center rounded-full text-primary hover:bg-primary/10"
                                 >
-                                    <VolumeUpIcon className="size-4" />
+                                    <VolumeUpIcon className="size-5" />
                                 </button>
                             )}
                         </div>
                     </div>
                 ))}
-                {(isProcessing || isSending) && (
-                    <div className="flex justify-start">
-                        <div className="glass-surface p-4 opacity-50 animate-pulse">{t("roleplay.thinking")}</div>
+                {busy && (
+                    <div className="flex justify-start" role="status">
+                        <div className="glass-surface flex items-center gap-2 rounded-bl-[var(--radius-xs)] px-4 py-3 text-body-medium text-on-surface-variant">
+                            <span aria-hidden="true" className="flex gap-1">
+                                <span className="size-1.5 animate-pulse rounded-full bg-on-surface-variant" />
+                                <span className="size-1.5 animate-pulse rounded-full bg-on-surface-variant [animation-delay:150ms]" />
+                                <span className="size-1.5 animate-pulse rounded-full bg-on-surface-variant [animation-delay:300ms]" />
+                            </span>
+                            {t("roleplay.thinking")}
+                        </div>
                     </div>
                 )}
             </div>
@@ -426,65 +440,74 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                 <button
                     type="button"
                     onClick={scrollToLatest}
-                    className="glass-button press-scale mx-auto flex min-h-11 w-fit items-center gap-2 px-4 text-xs font-bold text-azure-glow shadow-lg"
+                    className="glass-button press-scale mx-auto mb-2 flex min-h-11 w-fit items-center gap-2 px-4 text-label-large font-bold text-primary shadow-[var(--shadow-raised)]"
                 >
                     {t("roleplay.jumpToLatest")}
                 </button>
             )}
 
-            <div className="glass-surface p-4 sm:p-6 flex flex-col items-center gap-3 shadow-xl">
-                {!speechSupported && (
-                    <div role="status" className="w-full rounded-lg bg-surface-variant/40 p-2 text-center text-xs text-on-surface-variant">
-                        {t("roleplay.voiceUnavailable")}
+            {error && (
+                <div className="mb-2 flex flex-wrap items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                        <ErrorBanner message={error} />
                     </div>
-                )}
+                    <GlassButton type="button" onClick={retry} disabled={busy} className="h-11 px-4">
+                        <span className="flex items-center gap-2 text-label-large font-bold">
+                            <RefreshIcon className="size-4" />
+                            {t("action.retry")}
+                        </span>
+                    </GlassButton>
+                </div>
+            )}
 
-                {speechSupported && isListening && partialText && (
-                    <p className="text-sm text-on-surface text-center animate-in fade-in slide-in-from-bottom-2">
-                        {partialText}
+            {/* The composer: one row, mic first. It used to be a card a third of
+                the phone's height, with a 64px solid button that pinged. */}
+            <div className="border-t border-outline-variant/60 pb-[max(var(--space-4),env(safe-area-inset-bottom))] pt-3">
+                {!speechSupported && (
+                    <p role="status" className="mb-2 text-label-medium text-on-surface-variant">
+                        {t("roleplay.voiceUnavailable")}
                     </p>
                 )}
-
-                {speechSupported && (
-                    <div className="flex flex-col items-center gap-2">
-                        <div className="relative group">
-                            {isListening && (
-                                <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping scale-150" />
-                            )}
-                            <button
-                                type="button"
-                                onClick={isListening ? stopAndSend : startListening}
-                                disabled={isProcessing || isSending}
-                                aria-label={isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
-                                className={`relative z-10 size-16 rounded-full flex items-center justify-center transition-all ${
-                                    isListening ? 'bg-error scale-110 shadow-error/20' : 'bg-primary shadow-primary/20'
-                                } shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50`}
-                            >
-                                {isListening ? <StopIcon className="size-8 text-white" /> : <MicIcon className="size-8 text-white" />}
-                            </button>
-                        </div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/80">
-                            {isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
-                        </span>
-                    </div>
+                {speechSupported && isListening && (
+                    <p className="mb-2 flex items-center gap-2 text-body-medium text-on-surface" aria-live="polite">
+                        <span aria-hidden="true" className="size-2 shrink-0 animate-pulse rounded-full bg-error" />
+                        {partialText || t("transcript.listening")}
+                    </p>
                 )}
-
-                {/* Typed interaction fallback & complement */}
-                <form onSubmit={handleSendTyped} className="flex w-full max-w-lg items-center gap-2 mt-1">
+                <form onSubmit={handleSendTyped} className="flex items-center gap-2">
+                    {speechSupported && (
+                        <button
+                            type="button"
+                            onClick={isListening ? stopAndSend : startListening}
+                            disabled={busy}
+                            aria-label={isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
+                            title={isListening ? t("roleplay.stopSend") : t("roleplay.speakReply")}
+                            className={`press-scale grid size-12 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-50 ${
+                                isListening
+                                    ? "bg-error-container text-on-error-container ring-2 ring-error"
+                                    : "bg-primary text-background hover:brightness-110"
+                            }`}
+                        >
+                            {isListening ? <StopIcon className="size-6" /> : <MicIcon className="size-6" />}
+                        </button>
+                    )}
                     <input
                         type="text"
+                        lang="de"
                         value={typedText}
                         onChange={(e) => setTypedText(e.target.value)}
                         placeholder={t("roleplay.typePlaceholder")}
-                        disabled={isProcessing || isSending}
-                        className="flex-1 rounded-full border border-outline-variant bg-glass-fill px-4 py-2.5 text-body-medium text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-azure-glow"
+                        aria-label={t("roleplay.typePlaceholder")}
+                        disabled={busy}
+                        className="h-12 min-w-0 flex-1 rounded-full border border-outline-variant bg-glass-fill px-4 text-body-large text-on-surface placeholder:text-on-surface-variant focus:border-azure-glow focus:outline-none"
                     />
                     <GlassButton
                         type="submit"
-                        disabled={!typedText.trim() || isProcessing || isSending}
-                        className="px-5 py-2 text-label-large font-bold shrink-0"
+                        glow="solid"
+                        disabled={!typedText.trim() || busy}
+                        className="h-12 shrink-0 px-5"
                     >
-                        {t("roleplay.send")}
+                        <span className="text-label-large font-bold">{t("roleplay.send")}</span>
                     </GlassButton>
                 </form>
             </div>

@@ -30,15 +30,15 @@ export function EmptyState({
 }) {
   return (
     <div className="flex min-h-full w-full flex-col items-center justify-center px-6 py-6 text-center sm:px-12 sm:py-12">
-      {/* Solid disc from the elevation ramp — alpha-dimmed would float. */}
-      <div className="flex size-24 shrink-0 items-center justify-center rounded-full bg-surface-container-high sm:size-44">
-        <span className="size-12 text-on-surface-muted sm:size-20">{icon}</span>
+      {/* Solid disc from the elevation ramp — alpha-dimmed would float. Sized to
+          introduce the message, not to be the screen: at 176px on desktop it was
+          the largest object on every empty page, bigger than its own action. */}
+      <div className="flex size-20 shrink-0 items-center justify-center rounded-full bg-surface-container-high">
+        <span className="size-9 text-on-surface-muted">{icon}</span>
       </div>
-      <h2 className="mt-5 text-xl font-bold tracking-wide text-on-surface sm:mt-8">{message}</h2>
+      <h2 className="mt-5 text-title-large text-on-surface">{message}</h2>
       {description != null && (
-        <p className="mt-3 max-w-[46ch] text-base leading-relaxed text-on-surface-variant sm:mt-4">
-          {description}
-        </p>
+        <p className="mt-2 max-w-[46ch] text-body-medium text-on-surface-variant">{description}</p>
       )}
       {action != null && (
         // The wrapper owns the horizontal padding: a GlassButton has none of its

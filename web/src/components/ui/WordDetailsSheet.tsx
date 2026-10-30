@@ -117,7 +117,7 @@ function OpenWordDetailsSheet({
               save - which may fold into an entry already under that name - is no
               surprise. */}
           {savesUnderAnotherWord(tappedWord, details.word) && (
-            <p className="mt-1 text-body-small text-on-surface-variant">
+            <p className="mt-1 text-body-medium text-on-surface-variant">
               {t("wordSheet.dictionaryForm", [tappedWord ?? ""])}
             </p>
           )}

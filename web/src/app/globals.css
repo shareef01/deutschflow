@@ -338,9 +338,33 @@
   background: color-mix(in srgb, var(--color-warning) 12%, transparent);
 }
 
+/* The one filled action on a screen: "Save to library", "Show answer", "Start
+   review". A tinted button beside a tinted button does not say which one the
+   screen is for; this does. The ink is the ground colour, which contrast.py
+   holds to AA on the action blue in both palettes (5.3:1 dark, 5.5:1 light). */
+.glass-button.edge-solid {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-background);
+}
+
 .glass-button:disabled {
   border-color: color-mix(in srgb, var(--color-azure-glow) 16%, transparent);
   background: var(--color-glass-fill);
+}
+
+/* The section label: the one heading style above a group of cards. It used to
+   be four different things - black-weight 0.2em-tracked blue capitals on the
+   dashboard, 0.15em on settings, a bold blue sentence on the transcript - so
+   no two screens introduced their content the same way. Neutral rather than
+   blue: the accent is for actions and progress, and a heading is neither. */
+@utility eyebrow {
+  font-size: var(--text-label-small);
+  line-height: var(--text-label-small--line-height);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
 }
 
 /* An interactive chip: raised fill + a quiet cyan hairline, at a small radius

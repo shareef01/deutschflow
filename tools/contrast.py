@@ -67,6 +67,9 @@ PAIRS = [
     ('TertiaryGreen',       'GlassFillRaised',  'the Mastered stat',                 'large'),
     ('WarningAmber',        'Background',       'warning',                           'body'),
     ('OnPrimaryContainer',  'PrimaryContainer', 'selected chip label',               'body'),
+    # The filled primary action (web .edge-solid, the idle microphone): the ground
+    # colour as ink on the action blue, so one rule serves both themes.
+    ('Background',          'PrimaryBlue',      'label on the filled primary action', 'body'),
     ('OnSecondaryContainer','SecondaryContainer','cyan container text',              'body'),
     ('Outline',             'Background',       'card borders',                      'ui'),
     # 1.4.11 covers what is "required to identify" a component. A card's edge is,

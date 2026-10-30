@@ -1,16 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useDashboard, type MasteryStats } from "@/hooks/useDashboard";
 import { useI18n } from "@/hooks/useI18n";
 import { DAILY_XP_GOAL, currentStreak, todayKey } from "@/lib/db/repository";
 import type { ActivityEntry } from "@/lib/db/schema";
 import { useMemo } from "react";
 import { GlassButton } from "./GlassButton";
-import { CheckIcon, PlayArrowIcon, SchoolIcon } from "@/components/icons";
+import { PlayArrowIcon } from "@/components/icons";
 
 /** The bound translator. Typed, so an unknown key is a compile error. */
 type Translate = ReturnType<typeof useI18n>["t"];
 
+/**
+ * The Study dashboard, in the order of the questions it answers: what to do
+ * today, how today is going, then how the library is doing over time. Every
+ * figure is read from storage: the due count from the study session, XP and the
+ * heatmap from the activity log, mastery on Android's 21-day interval.
+ */
 export function DashboardContent({
   onStartReview,
   dueCount = 0,
@@ -32,184 +39,181 @@ export function DashboardContent({
       tabIndex={0}
       role="group"
       aria-label={t("dashboard.tab")}
-      className="flex flex-col gap-6 p-6 overflow-y-auto h-full max-w-[var(--container-workspace)] mx-auto w-full focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-azure-glow"
+      className="h-full overflow-y-auto focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-azure-glow"
     >
-      {/* Due Today Action Hero Banner */}
-      <DueTodayBanner dueCount={dueCount} onStartReview={onStartReview} t={t} />
+      <div className="mx-auto grid w-full max-w-[var(--container-workspace)] gap-[var(--space-4)] px-[var(--gutter)] py-[var(--space-5)] lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <TodayCard
+          dueCount={dueCount}
+          totalWords={masteryStats.totalWords}
+          onStartReview={onStartReview}
+          t={t}
+        />
+        <DailyGoalCard xp={todayXp} streak={currentStreak(userStats)} t={t} />
 
-      {/* Daily Goal & Streak */}
-      <DailyGoalCard xp={todayXp} streak={currentStreak(userStats)} t={t} />
-
-      {/* Retention Analytics */}
-      <MasteryBreakdownCard stats={masteryStats} t={t} />
-
-      {/* Activity Heatmap */}
-      <ActivityHeatmapCard logs={activityLog} t={t} />
+        <h2 className="eyebrow mt-[var(--space-4)] pl-1 lg:col-span-2">{t("dashboard.progress")}</h2>
+        <MasteryBreakdownCard stats={masteryStats} t={t} />
+        <ActivityHeatmapCard logs={activityLog} t={t} />
+      </div>
     </div>
   );
 }
 
-function DueTodayBanner({
+/**
+ * Three honest states rather than one card with a zero in it. An empty library
+ * used to read "All caught up!" - true, and no help to someone who has not
+ * started.
+ */
+function TodayCard({
   dueCount,
+  totalWords,
   onStartReview,
   t,
 }: {
   dueCount: number;
+  totalWords: number;
   onStartReview?: () => void;
   t: Translate;
 }) {
-  if (dueCount <= 0) {
-    return (
-      <div className="glass-surface p-5 flex items-center justify-between gap-4 border border-outline-variant/30">
-        <div className="flex items-center gap-3.5">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-tertiary/15 text-tertiary">
-            <CheckIcon className="size-5" />
-          </div>
-          <div>
-            <h4 className="text-sm font-bold text-on-surface">{t("dashboard.allCaughtUp")}</h4>
-            <p className="text-xs text-on-surface-variant">{t("dashboard.allCaughtUpBody")}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const [title, body] =
+    totalWords === 0
+      ? [t("dashboard.noWords"), t("dashboard.noWordsBody")]
+      : dueCount > 0
+        ? [
+            dueCount === 1
+              ? t("dashboard.dueTodayBannerOne", [dueCount])
+              : t("dashboard.dueTodayBanner", [dueCount]),
+            t("dashboard.dueTodayBody"),
+          ]
+        : [t("dashboard.allCaughtUp"), t("dashboard.allCaughtUpBody")];
 
   return (
-    <div className="glass-surface p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 border border-azure-glow/30 shadow-lg shadow-azure-glow/5">
-      <div className="flex items-center gap-4">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-azure-glow/15 text-azure-glow border border-azure-glow/30">
-          <SchoolIcon className="size-6" />
-        </div>
-        <div>
-          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-widest bg-azure-glow/20 text-azure-glow border border-azure-glow/30 mb-1">
-            {t("dashboard.srsBadge")}
-          </span>
-          <h3 className="text-lg font-bold text-on-surface">
-            {dueCount === 1
-              ? t("dashboard.dueTodayBannerOne", [dueCount])
-              : t("dashboard.dueTodayBanner", [dueCount])}
-          </h3>
-          <p className="text-xs text-on-surface-variant">
-            {t("dashboard.dueTodayBody")}
-          </p>
-        </div>
+    <section aria-labelledby="dashboard-today" className="glass-surface flex flex-col p-5 sm:p-6">
+      <p className="eyebrow">{t("dashboard.today")}</p>
+      <h2 id="dashboard-today" className="mt-2 text-headline-small text-on-surface">{title}</h2>
+      <p className="mt-1 max-w-prose text-body-medium text-on-surface-variant">{body}</p>
+      <div className="mt-auto pt-5">
+        {totalWords === 0 ? (
+          <Link
+            href="/transcript"
+            className="glass-button edge-solid press-scale inline-flex h-12 items-center justify-center px-6 text-label-large font-bold"
+          >
+            {t("dashboard.goToTranscript")}
+          </Link>
+        ) : (
+          onStartReview && (
+            <GlassButton
+              type="button"
+              glow={dueCount > 0 ? "solid" : "deep"}
+              onClick={onStartReview}
+              className="w-full px-6 sm:w-auto"
+            >
+              <span className="flex items-center justify-center gap-2 text-label-large font-bold">
+                {dueCount > 0 && <PlayArrowIcon className="size-4" />}
+                {dueCount > 0 ? t("dashboard.startReview") : t("dashboard.practiceAnyway")}
+              </span>
+            </GlassButton>
+          )
+        )}
       </div>
-
-      {onStartReview && (
-        <GlassButton
-          type="button"
-          onClick={onStartReview}
-          className="w-full sm:w-auto h-11 px-6 min-h-[44px] shrink-0 font-bold"
-        >
-          <span className="flex items-center justify-center gap-2">
-            <PlayArrowIcon className="size-4 text-azure-glow" />
-            <span className="text-sm font-bold text-azure-glow">
-              {t("dashboard.startReview")}
-            </span>
-          </span>
-        </GlassButton>
-      )}
-    </div>
+    </section>
   );
 }
 
 function DailyGoalCard({ xp, streak, t }: { xp: number; streak: number; t: Translate }) {
   const goal = DAILY_XP_GOAL;
   const progress = Math.min(xp / goal, 1);
-  const radius = 40;
+  const radius = 34;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - progress * circumference;
 
   return (
-    <div className="glass-surface p-8 flex flex-col sm:flex-row items-center gap-8 shadow-xl shadow-azure-glow/5">
+    <section aria-labelledby="dashboard-goal" className="glass-surface flex items-center gap-5 p-5 sm:p-6">
       <div
         role="progressbar"
         aria-valuenow={xp}
         aria-valuemin={0}
         aria-valuemax={goal}
         aria-label={t("dashboard.dailyGoal")}
-        className="relative size-32 flex items-center justify-center shrink-0"
+        className="relative size-24 shrink-0"
       >
-        <svg className="size-full -rotate-90">
+        <svg className="size-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
+          <circle cx="40" cy="40" r={radius} fill="none" strokeWidth="7" className="stroke-surface-container-highest" />
           <circle
-            cx="64"
-            cy="64"
+            cx="40"
+            cy="40"
             r={radius}
-            fill="transparent"
-            stroke="currentColor"
-            strokeWidth="8"
-            className="text-on-surface/5"
-          />
-          <circle
-            cx="64"
-            cy="64"
-            r={radius}
-            fill="transparent"
-            stroke="url(#azure-gradient)"
-            strokeWidth="10"
+            fill="none"
+            strokeWidth="7"
             strokeDasharray={circumference}
             style={{ strokeDashoffset: offset }}
             strokeLinecap="round"
-            className="transition-all duration-1000 ease-out"
+            className="stroke-primary transition-[stroke-dashoffset] duration-700 ease-out"
           />
-          <defs>
-            <linearGradient id="azure-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              {/* The palette's cyan, not a fourth one: #00E5FF was in neither theme. */}
-              <stop offset="0%" stopColor="var(--color-azure-glow)" />
-              <stop offset="100%" stopColor="var(--color-azure-deep)" />
-            </linearGradient>
-          </defs>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-black text-on-surface leading-none">{xp}</span>
-          <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mt-1">XP</span>
+          <span className="text-title-large leading-none text-on-surface">{xp}</span>
+          <span className="mt-0.5 text-label-small text-on-surface-variant">/ {goal} {t("dashboard.xp")}</span>
         </div>
       </div>
 
-      <div className="flex-1 text-center sm:text-left space-y-2 w-full">
-        <h3 className="text-xl font-black text-on-surface tracking-tight uppercase">
-          {t("dashboard.dailyGoal")}
-        </h3>
-        <p className="text-sm text-on-surface-variant font-medium">
-          {progress >= 1
-            ? t("dashboard.goalAchieved")
-            : t("dashboard.xpRemaining", [goal - xp])}
+      <div className="min-w-0 flex-1">
+        <h2 id="dashboard-goal" className="eyebrow">{t("dashboard.dailyGoal")}</h2>
+        <p className="mt-1 text-title-medium text-on-surface">
+          {progress >= 1 ? t("dashboard.goalAchieved") : t("dashboard.xpRemaining", [goal - xp])}
         </p>
-        <div className="inline-flex mt-4 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 items-center gap-2">
-          <span className="text-sm font-black text-primary">
-            {t("dashboard.streak", [streak])}
-          </span>
-        </div>
+        <p className="mt-3 inline-flex items-center rounded-full bg-warning-container px-3 py-1 text-label-medium text-on-warning-container">
+          {t("dashboard.streak", [streak])}
+        </p>
       </div>
-    </div>
+    </section>
   );
 }
 
 function MasteryBreakdownCard({ stats, t }: { stats: MasteryStats; t: Translate }) {
+  const total = stats.totalWords;
+  // The palette's success colour, not Tailwind's green-400: that green was in
+  // neither theme and measures 1.7:1 on a light ground.
+  const segments = [
+    { label: t("dashboard.mastered"), count: stats.masteredWords, swatch: "bg-tertiary" },
+    { label: t("dashboard.learning"), count: stats.learningWords, swatch: "bg-azure-glow" },
+    { label: t("dashboard.new"), count: stats.newWords, swatch: "bg-outline" },
+  ];
+
   return (
-    <div className="glass-surface p-8 space-y-6">
-      <h3 className="text-sm font-black text-primary tracking-[0.2em] uppercase">
-        {t("dashboard.retention")}
-      </h3>
-      <div className="grid grid-cols-1 xs:grid-cols-3 gap-4">
-        {/* The palette's success colour, not Tailwind's green-400. That green is
-            not in either theme - it never matched Android's TertiaryGreen, and on
-            a light ground it measures 1.7:1. */}
-        <RetentionTile label={t("dashboard.mastered")} count={stats.masteredWords} color="text-tertiary" />
-        <RetentionTile label={t("dashboard.learning")} count={stats.learningWords} color="text-azure-glow" />
-        <RetentionTile label={t("dashboard.new")} count={stats.newWords} color="text-on-surface-variant" />
+    <section aria-labelledby="dashboard-retention" className="glass-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 id="dashboard-retention" className="text-title-medium text-on-surface">{t("dashboard.retention")}</h3>
+        <p className="text-label-medium text-on-surface-variant">{t("dashboard.wordsTotal", [total])}</p>
       </div>
-    </div>
+
+      {/* The three buckets as one bar, so the split reads at a glance; the
+          numbers below carry the same information for a screen reader. */}
+      <div aria-hidden="true" className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-surface-container-highest">
+        {total > 0 &&
+          segments.map((s) =>
+            s.count > 0 ? <span key={s.label} className={s.swatch} style={{ width: `${(s.count / total) * 100}%` }} /> : null
+          )}
+      </div>
+
+      <dl className="mt-4 grid grid-cols-3 gap-3">
+        {segments.map((s) => (
+          <div key={s.label} className="min-w-0">
+            <dt className="flex items-center gap-1.5 text-label-medium text-on-surface-variant">
+              <span aria-hidden="true" className={`size-2.5 shrink-0 rounded-full ${s.swatch}`} />
+              <span className="truncate">{s.label}</span>
+            </dt>
+            <dd className="mt-1 text-headline-small text-on-surface">{s.count}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
-function RetentionTile({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <div className="bg-surface-variant/20 rounded-2xl p-5 border border-on-surface/5">
-      <span className={`text-3xl font-black ${color}`}>{count}</span>
-      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mt-1">{label}</p>
-    </div>
-  );
+const HEATMAP_LEVELS = ["bg-on-surface/8", "bg-tertiary/25", "bg-tertiary/45", "bg-tertiary/70", "bg-tertiary"];
+
+function heatLevel(xp: number) {
+  return xp >= 100 ? 4 : xp >= 50 ? 3 : xp >= 20 ? 2 : xp > 0 ? 1 : 0;
 }
 
 function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate }) {
@@ -237,42 +241,35 @@ function ActivityHeatmapCard({ logs, t }: { logs: ActivityEntry[]; t: Translate 
   const activeDays = useMemo(() => cells.filter((c) => c.xp > 0).length, [cells]);
 
   return (
-    <div className="glass-surface p-8 space-y-6">
-      <h3 className="text-sm font-black text-primary tracking-[0.2em] uppercase">
-        {t("dashboard.heatmap")}
-      </h3>
+    <section aria-labelledby="dashboard-heatmap" className="glass-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 id="dashboard-heatmap" className="text-title-medium text-on-surface">{t("dashboard.heatmap")}</h3>
+        <p className="text-label-medium text-on-surface-variant">{t("dashboard.heatmapSub")}</p>
+      </div>
 
-      <div className="overflow-x-auto pb-2">
+      <div className="mt-4 overflow-x-auto pb-1">
         <div
           role="img"
           aria-label={`${t("dashboard.heatmap")}: ${activeDays} / ${daysToShow} ${t("streak.days", [daysToShow])}`}
-          className="grid grid-flow-col grid-rows-7 gap-1.5 h-32 w-fit"
+          className="grid w-fit grid-flow-col grid-rows-7 gap-1"
         >
-          {cells.map((cell, i) => {
-            const color =
-              cell.xp >= 100
-                ? "bg-tertiary"
-                : cell.xp >= 50
-                  ? "bg-tertiary/70"
-                  : cell.xp >= 20
-                    ? "bg-tertiary/40"
-                    : cell.xp > 0
-                      ? "bg-tertiary/20"
-                      : "bg-on-surface/5";
-            return (
-              <div
-                key={i}
-                className={`size-3 rounded-[2px] ${color}`}
-                title={`${cell.date}: ${cell.xp} XP`}
-              />
-            );
-          })}
+          {cells.map((cell) => (
+            <div
+              key={cell.date}
+              className={`size-3.5 rounded-[3px] ${HEATMAP_LEVELS[heatLevel(cell.xp)]}`}
+              title={`${cell.date}: ${cell.xp} XP`}
+            />
+          ))}
         </div>
       </div>
 
-      <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider">
-        {t("dashboard.heatmapSub")}
-      </p>
-    </div>
+      <div aria-hidden="true" className="mt-3 flex items-center gap-1.5 text-label-small text-on-surface-variant">
+        <span className="mr-1">{t("dashboard.heatmapLess")}</span>
+        {HEATMAP_LEVELS.map((level) => (
+          <span key={level} className={`size-3 rounded-[3px] ${level}`} />
+        ))}
+        <span className="ml-1">{t("dashboard.heatmapMore")}</span>
+      </div>
+    </section>
   );
 }

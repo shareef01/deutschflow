@@ -61,7 +61,7 @@ export function SegmentedTabs<T extends string>({
       ref={tabListRef}
       role="tablist"
       aria-label={ariaLabel}
-      className={`flex w-full justify-center gap-8 border-b border-on-surface/5 bg-background/50 backdrop-blur-md ${className}`}
+      className={`flex w-full shrink-0 justify-center gap-2 border-b border-outline-variant/60 px-[var(--gutter)] sm:gap-6 ${className}`}
     >
       {tabs.map((tab, index) => {
         const isSelected = value === tab.id;
@@ -76,10 +76,12 @@ export function SegmentedTabs<T extends string>({
             tabIndex={isSelected ? 0 : -1}
             onClick={() => onValueChange(tab.id)}
             onKeyDown={(e) => handleKeyDown(e, index)}
-            className={`px-6 py-4 text-sm font-bold uppercase tracking-widest transition-all focus-visible:outline-2 focus-visible:outline-azure-glow ${
+            // Sentence case at label size: a tab names a place, and two words in
+            // 0.1em-tracked capitals read louder than the page title above them.
+            className={`-mb-px min-h-12 flex-1 border-b-2 px-4 text-label-large transition-colors focus-visible:outline-2 focus-visible:outline-azure-glow sm:flex-none sm:px-6 ${
               isSelected
-                ? "border-b-2 border-primary text-primary"
-                : "text-on-surface-variant hover:text-on-surface"
+                ? "border-primary text-primary"
+                : "border-transparent text-on-surface-variant hover:text-on-surface"
             }`}
           >
             {tab.label}

@@ -15,9 +15,10 @@ interface GlassButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    * Edge + fill tint. "deep" is the electric blue default (the app's action
    * colour); "azure" is the calm cyan (transcription accents); "error", "green"
    * and "amber" carry the status set — Practice's Stop and the Study feedback
-   * grades.
+   * grades. "solid" is the screen's one primary action: a filled container
+   * rather than a tint, so it is unmistakable next to the quieter buttons.
    */
-  glow?: "deep" | "azure" | "error" | "green" | "amber";
+  glow?: "deep" | "azure" | "error" | "green" | "amber" | "solid";
 }
 
 export function GlassButton({
@@ -34,17 +35,15 @@ export function GlassButton({
         glow === "error" ? "edge-error" : "",
         glow === "green" ? "edge-green" : "",
         glow === "amber" ? "edge-amber" : "",
+        glow === "solid" ? "edge-solid" : "text-on-surface",
         "press-scale",
         "h-12",
         "select-none",
         "font-bold",
-        "text-on-surface",
         "disabled:text-on-surface-variant",
-        "transition-all",
+        "transition-[border-color,background-color,filter]",
         "duration-200",
-        "hover:shadow-lg",
-        "hover:shadow-azure-glow/20",
-        "active:shadow-md",
+        "hover:brightness-110",
         "focus-visible:outline-2",
         "focus-visible:outline-offset-2",
         "focus-visible:outline-azure-glow",

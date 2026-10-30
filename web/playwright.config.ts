@@ -45,5 +45,13 @@ export default defineConfig({
       use: { browserName: "webkit" },
       dependencies: ["chromium"],
     },
+    // Portfolio screenshots: synthetic data, run on purpose with `npm run screenshots`.
+    // CI names its projects, so this one never runs there.
+    {
+      name: "portfolio",
+      testDir: "./tests/portfolio",
+      testMatch: /capture\.portfolio\.ts/,
+      use: { browserName: "chromium" },
+    },
   ],
 });
