@@ -48,6 +48,12 @@ The web screenshots are produced by [`npm run screenshots`](web/tests/portfolio/
 
 Android screenshots are in [`docs/screenshots/android/`](docs/screenshots/android/). They were retaken on 30 October 2026 on an API 36 emulator (1080×2400), from the same synthetic library the web screenshots use, after the Library and Study dashboard changes above were carried over to Compose.
 
+<p>
+  <img src="docs/screenshots/android/emulator-api36-library.png" width="190" alt="Android Library: article beside each word, meaning and plural below" />
+  <img src="docs/screenshots/android/emulator-api36-word-detail.png" width="190" alt="Android word details: grammar, quoted example, synonyms, Edit and Delete" />
+  <img src="docs/screenshots/android/emulator-api36-study.png" width="190" alt="Android Study dashboard: cards due today, daily goal, retention bar" />
+</p>
+
 ## Architecture
 
 The two clients share **behaviour**, not code. Each is idiomatic on its platform. A JSON contract fixture that both test suites run keeps them agreeing on the things that must not drift.

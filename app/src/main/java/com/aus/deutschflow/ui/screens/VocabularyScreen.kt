@@ -533,7 +533,10 @@ private fun VocabularyItem(
                         if (plural.isNotEmpty()) {
                             withStyle(SpanStyle(color = AppTheme.colors.onSurfaceMuted)) {
                                 append("  ·  ")
-                                append(stringResource(R.string.word_sheet_plural, plural))
+                                // Non-breaking, so a long meaning wraps the whole
+                                // "Plural: Feierabende" to the next line rather than
+                                // leaving "Plural:" stranded at the end of this one.
+                                append(stringResource(R.string.word_sheet_plural, plural).replace(' ', ' '))
                             }
                         }
                     },
