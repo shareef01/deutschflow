@@ -188,10 +188,10 @@ export default function SettingsPage() {
 
       {/* Backup Freshness Reminder Banner */}
       {needsBackupReminder && (
-        <div className="glass-surface mt-6 flex items-start gap-3.5 border-l-4 border-amber-400 p-4">
-          <WarningIcon className="mt-0.5 size-5 shrink-0 text-amber-400" />
+        <div role="status" className="mt-6 flex items-start gap-3 rounded-[var(--radius-md)] bg-warning-container p-4">
+          <WarningIcon className="mt-0.5 size-5 shrink-0 text-on-warning-container" />
           <div className="flex-1">
-            <p className="text-body-small text-on-surface">
+            <p className="text-body-medium text-on-warning-container">
               {t("settings.backupReminder", [totalVocabulary])}
             </p>
           </div>
@@ -340,7 +340,7 @@ export default function SettingsPage() {
       <div className="glass-surface border border-on-surface/5 p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className={`text-body-medium font-semibold ${isPersisted ? "text-emerald-400" : "text-on-surface"}`}>
+            <p className={`text-body-medium font-semibold ${isPersisted ? "text-tertiary" : "text-on-surface"}`}>
               {isPersisted ? t("settings.storagePersisted") : t("settings.storageBestEffort")}
             </p>
             <p className="mt-1 text-label-small text-on-surface-variant">
@@ -407,14 +407,14 @@ export default function SettingsPage() {
       <button
         type="button"
         onClick={() => setShowDeleteConfirm(true)}
-        className="glass-surface flex w-full items-center gap-3 px-6 py-4 text-left border-l-4 border-error/40"
+        className="flex min-h-14 w-full items-center gap-3 rounded-[var(--radius-md)] border border-error/50 px-5 py-3 text-left transition-colors hover:bg-error-container/40"
       >
         <DeleteForeverIcon className="size-5 shrink-0 text-error" />
         <span className="text-body-large font-bold text-error">{t("settings.clear")}</span>
       </button>
 
       <div className="mt-12 text-center">
-        <p className="text-xs font-medium uppercase tracking-[0.15em] text-on-surface-variant">
+        <p className="text-label-small text-on-surface-variant">
           {t("settings.version", ["1.3.0 Obsidian"])}
         </p>
         <a
@@ -494,7 +494,7 @@ export default function SettingsPage() {
               autoComplete="new-password"
             />
             {exportError && (
-              <p className="text-body-small text-error">{exportError}</p>
+              <p className="text-body-medium text-error">{exportError}</p>
             )}
           </div>
         </ModalDialog>
@@ -530,7 +530,7 @@ export default function SettingsPage() {
               autoComplete="current-password"
             />
             {importError && (
-              <p className="text-body-small text-error">{importError}</p>
+              <p className="text-body-medium text-error">{importError}</p>
             )}
           </div>
         </ModalDialog>
@@ -547,7 +547,7 @@ export default function SettingsPage() {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h2 className="mt-12 mb-3 w-full pl-1 text-xs font-bold uppercase tracking-[0.15em] text-primary">{title}</h2>
+    <h2 className="eyebrow mb-3 mt-10 w-full pl-1">{title}</h2>
   );
 }
 
@@ -581,7 +581,7 @@ function RadioGroup<T extends string>({
                 value={option.code}
                 checked={isSelected}
                 onChange={() => onSelect(option.code)}
-                className="size-5 accent-[#00f0ff] cursor-pointer"
+                className="size-5 shrink-0 cursor-pointer accent-[var(--color-primary)]"
               />
               <span
                 className={`text-body-large font-bold ${
@@ -601,12 +601,8 @@ function RadioGroup<T extends string>({
 function StatGridItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-3xl font-black text-on-surface tracking-tight">
-        {value}
-      </p>
-      <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
-        {label}
-      </p>
+      <p className="text-headline-small text-on-surface">{value}</p>
+      <p className="text-label-medium text-on-surface-variant">{label}</p>
     </div>
   );
 }

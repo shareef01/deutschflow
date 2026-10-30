@@ -132,8 +132,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
+      {/* One row, held to the space the header leaves. An implicit grid row is
+          `auto`, which grows to the content's full height however short the
+          container is - so inside the fixed-height shell every page's own
+          scroll region was as tall as its content and never scrolled. On a
+          1440x900 desktop, a 30-word library put its last row at y=3241 with
+          nothing the mouse wheel could move. */}
       <div
-        className={`grid min-h-0 flex-1 ${
+        className={`grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] ${
           showRail ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
         }`}
       >

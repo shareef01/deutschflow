@@ -10,7 +10,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=chromium --project=firefox-smoke --project=webkit-smoke",
+    "screenshots": "playwright test --project=portfolio",
     "deploy:preview": "vercel",
     "deploy:prod": "vercel --prod"
   },

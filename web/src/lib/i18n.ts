@@ -103,6 +103,7 @@ export const STRINGS = {
     "library.dialogEditConfirm": "Save changes",
     "library.fieldGerman": "German",
     "library.fieldTranslation": "Translation",
+    "library.resultCount": "{0} of {1} words",
 
     // Word detail
     "detail.emptyTitle": "Select a word",
@@ -114,6 +115,10 @@ export const STRINGS = {
     "detail.linguisticConnections": "Linguistic Connections",
     "detail.synonyms": "Synonyms",
     "detail.antonyms": "Antonyms",
+    "detail.noRelations": "No synonyms or antonyms saved for this word yet.",
+    "detail.grammar": "Grammar",
+    "detail.plural": "Plural",
+    "detail.forms": "Forms",
 
     // Study
     "study.loadError": "Couldn't load study cards. Try again.",
@@ -157,6 +162,15 @@ export const STRINGS = {
     "dashboard.srsBadge": "Spaced repetition",
     "dashboard.allCaughtUp": "All caught up! No reviews due.",
     "dashboard.allCaughtUpBody": "Ready to practice speaking or explore your vocabulary.",
+    "dashboard.today": "Today",
+    "dashboard.practiceAnyway": "Practise anyway",
+    "dashboard.noWords": "Start your library",
+    "dashboard.noWordsBody": "Save words from a transcript or add them in the Library. They'll appear here when they're due.",
+    "dashboard.goToTranscript": "Go to Transcript",
+    "dashboard.progress": "Your progress",
+    "dashboard.wordsTotal": "{0} words in your library",
+    "dashboard.heatmapLess": "Less",
+    "dashboard.heatmapMore": "More",
     "dashboard.dailyGoal": "Daily goal",
     "dashboard.goalAchieved": "Goal achieved!",
     "dashboard.xpRemaining": "{0} XP remaining",
@@ -199,6 +213,8 @@ export const STRINGS = {
     "roleplay.speakReply": "Speak to Reply",
     "roleplay.typePlaceholder": "Type your message in German…",
     "roleplay.send": "Send",
+    "roleplay.scenario": "Scenario",
+    "roleplay.yourGoals": "Your goals",
     "roleplay.jumpToLatest": "Jump to latest",
     "roleplay.voiceUnavailable": "Voice input is unavailable in this browser. You can type your responses below.",
 
@@ -426,6 +442,7 @@ export const STRINGS = {
     "library.dialogEditConfirm": "Änderungen speichern",
     "library.fieldGerman": "Deutsch",
     "library.fieldTranslation": "Übersetzung",
+    "library.resultCount": "{0} von {1} Wörtern",
 
     "detail.emptyTitle": "Wähle ein Wort",
     "detail.emptyBody":
@@ -436,6 +453,10 @@ export const STRINGS = {
     "detail.linguisticConnections": "Sprachliche Verbindungen",
     "detail.synonyms": "Synonyme",
     "detail.antonyms": "Antonyme",
+    "detail.noRelations": "Für dieses Wort sind noch keine Synonyme oder Antonyme gespeichert.",
+    "detail.grammar": "Grammatik",
+    "detail.plural": "Plural",
+    "detail.forms": "Formen",
 
     "study.loadError": "Lernkarten konnten nicht geladen werden. Bitte erneut versuchen.",
     "study.extraPractice": "Heute ist nichts fällig — das ist zusätzliche Übung, dein Plan ändert sich dadurch nicht.",
@@ -476,6 +497,15 @@ export const STRINGS = {
     "dashboard.srsBadge": "Verteilte Wiederholung",
     "dashboard.allCaughtUp": "Alles erledigt! Keine Wiederholungen fällig.",
     "dashboard.allCaughtUpBody": "Zeit zum Sprechen üben oder um deinen Wortschatz zu entdecken.",
+    "dashboard.today": "Heute",
+    "dashboard.practiceAnyway": "Trotzdem üben",
+    "dashboard.noWords": "Leg deine Bibliothek an",
+    "dashboard.noWordsBody": "Speichere Wörter aus einem Transkript oder füge sie in der Bibliothek hinzu. Sie erscheinen hier, sobald sie fällig sind.",
+    "dashboard.goToTranscript": "Zum Transkript",
+    "dashboard.progress": "Dein Fortschritt",
+    "dashboard.wordsTotal": "{0} Wörter in deiner Bibliothek",
+    "dashboard.heatmapLess": "Weniger",
+    "dashboard.heatmapMore": "Mehr",
     "dashboard.dailyGoal": "Tagesziel",
     "dashboard.goalAchieved": "Ziel erreicht!",
     "dashboard.xpRemaining": "{0} XP verbleibend",
@@ -515,6 +545,8 @@ export const STRINGS = {
     "roleplay.speakReply": "Tippen, um zu antworten",
     "roleplay.typePlaceholder": "Schreibe deine Nachricht auf Deutsch…",
     "roleplay.send": "Senden",
+    "roleplay.scenario": "Szenario",
+    "roleplay.yourGoals": "Deine Ziele",
     "roleplay.jumpToLatest": "Zu den neuesten",
     "roleplay.voiceUnavailable": "Spracheingabe ist in diesem Browser nicht verfügbar. Du kannst deine Antworten unten eintippen.",
 

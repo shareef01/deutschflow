@@ -328,27 +328,27 @@ export default function TranscriptPage() {
 
       {/* Grammar Spotlight Section */}
       {hasResult && state.grammarNotes.length > 0 && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
-              <h2 className="text-xs font-bold tracking-[0.15em] text-primary uppercase pl-1">
+          <div className="space-y-3">
+              <h2 className="eyebrow pl-1">
                   {t("transcript.grammarSpotlight")}
               </h2>
-              <div className="flex flex-col gap-3">
+              <ul className="flex flex-col gap-3">
                   {state.grammarNotes.map((note, i) => (
-                      <div key={i} className="glass-surface p-4 border-l-4 border-primary/40">
-                          <div className="flex items-center gap-3">
-                              <span className="bg-primary/20 text-primary text-xs font-semibold px-2 py-0.5 rounded uppercase">
+                      <li key={i} className="glass-surface p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-[var(--radius-xs)] bg-secondary-container px-2 py-0.5 text-label-small text-on-secondary-container">
                                   {note.case}
                               </span>
-                              <span className="text-sm font-bold text-on-surface">{note.phrase}</span>
+                              <span lang="de" className="text-title-medium text-on-surface">{note.phrase}</span>
                           </div>
                           {note.explanation && (
-                              <p className="mt-2 text-sm text-on-surface-variant leading-relaxed">
+                              <p className="mt-2 text-body-medium text-on-surface-variant">
                                   {note.explanation}
                               </p>
                           )}
-                      </div>
+                      </li>
                   ))}
-              </div>
+              </ul>
           </div>
       )}
       </div>
@@ -356,7 +356,7 @@ export default function TranscriptPage() {
         {hasResult && (
           <aside className="mt-0 w-full min-w-0">
             <div className="flex w-full items-center justify-between">
-              <h2 className="text-label-large font-semibold text-secondary">
+              <h2 className="eyebrow">
                 {t("transcript.translation")}
               </h2>
               <button
@@ -375,7 +375,7 @@ export default function TranscriptPage() {
 
             {state.suggestedWords.length > 0 && (
               <>
-                <h2 className="mt-8 text-label-large font-semibold text-secondary">
+                <h2 className="eyebrow mt-8">
                   {t("transcript.vocabulary")}
                 </h2>
                 <div className="mt-4 flex flex-wrap gap-3">
@@ -391,7 +391,7 @@ export default function TranscriptPage() {
               </>
             )}
 
-            <GlassButton type="button" onClick={onSave} className="mt-8 w-full h-14">
+            <GlassButton type="button" glow="solid" onClick={onSave} className="mt-8 h-12 w-full">
               <span className="flex items-center justify-center gap-2">
                 <BookmarkAddIcon className="size-5" />
                 <span className="text-label-large font-bold">{t("transcript.save")}</span>
@@ -463,7 +463,7 @@ function InputModeSwitch({
           disabled={disabled}
           onClick={() => onChange(id)}
           className={`flex items-center gap-2 rounded-lg font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-            compact ? "px-3 py-1 text-label-small" : "px-4 py-1.5 text-label-medium"
+            compact ? "min-h-8 px-3 py-1 text-label-small" : "min-h-10 px-4 py-1.5 text-label-medium"
           } ${
             mode === id
               ? "bg-secondary-container text-on-secondary-container border border-outline-variant/50 shadow-sm"

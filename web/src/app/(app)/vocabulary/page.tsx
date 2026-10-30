@@ -19,6 +19,7 @@ import {
   InfoIcon,
   MoreVertIcon,
   PlayArrowIcon,
+  SearchIcon,
 } from "@/components/icons";
 import type { TFunction } from "@/lib/i18n";
 import type { VocabularyEntry } from "@/lib/db/schema";
@@ -106,6 +107,7 @@ export default function VocabularyPage() {
     onDelete: onDeleteWithUndo,
     onSpeak: speak,
     onAdd: () => setIsAdding(true),
+    selectedId: isDesktop ? selectedId : null,
     t,
   };
 
@@ -116,17 +118,22 @@ export default function VocabularyPage() {
       <ErrorBanner message={error ? t(error) : ttsError} />
 
       {isDesktop && !isLibraryEmpty ? (
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(22rem,0.9fr)_1px_minmax(0,1.1fr)]">
-          <div className="min-w-0">
+        // Two columns that scroll on their own, held to the shell's one row, so
+        // the details stay in view however far down the list the word was.
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(22rem,0.9fr)_1px_minmax(0,1.1fr)] grid-rows-[minmax(0,1fr)]">
+          <div className="min-h-0 min-w-0">
             <VocabularyListContent {...listProps} />
           </div>
-          <div className="self-stretch bg-outline-variant/30" />
-          <div className="min-w-0">
+          <div className="self-stretch bg-outline-variant/60" />
+          <div className="min-h-0 min-w-0">
             <VocabularyDetail
               item={selectedItem}
               exampleSentence={exampleSentence}
               onClose={() => setSelectedId(null)}
               onSpeak={speak}
+              onEdit={(item) => setEditingId(item.id ?? null)}
+              onDelete={onDeleteWithUndo}
+              showBack={false}
               t={t}
             />
           </div>
@@ -139,6 +146,9 @@ export default function VocabularyPage() {
           exampleSentence={exampleSentence}
           onClose={() => setSelectedId(null)}
           onSpeak={speak}
+          onEdit={(item) => setEditingId(item.id ?? null)}
+          onDelete={onDeleteWithUndo}
+          showBack
           t={t}
         />
       ) : (
@@ -197,6 +207,7 @@ function VocabularyListContent({
   onDelete,
   onSpeak,
   onAdd,
+  selectedId,
   t,
 }: {
   searchQuery: string;
@@ -210,88 +221,114 @@ function VocabularyListContent({
   onDelete: (item: VocabularyEntry) => void;
   onSpeak: (text: string) => void;
   onAdd: () => void;
+  selectedId: number | null;
   t: TFunction;
 }) {
   const words = statsList.length;
   const phrases = statsList.filter((item) => item.germanText.trim().includes(" ")).length;
   const withExample = statsList.filter((item) => item.exampleSentence.length > 0).length;
 
+  // An empty library is a first step, not a list with nothing in it: no search
+  // box, no three zeros, no sort order for nothing - one sentence and the action.
+  if (words === 0) {
+    return (
+      <EmptyState
+        icon={<AutoStoriesIcon className="size-full" />}
+        message={t("library.emptyTitle")}
+        description={t("library.emptyBody")}
+        action={
+          <GlassButton type="button" glow="solid" onClick={onAdd} className="px-6">
+            <span className="flex items-center gap-2 text-label-large font-bold">
+              <AddIcon className="size-5" />
+              {t("library.addWord")}
+            </span>
+          </GlassButton>
+        }
+      />
+    );
+  }
+
+  const isSearching = searchQuery.trim().length > 0;
+
   return (
-    <div className="relative flex h-full min-h-0 flex-col px-5 py-4">
-      <div className="pt-2">
-        <SearchInput
-          value={searchQuery}
-          onChange={onSearchChange}
-          placeholder={t("library.searchHint")}
-        />
-      </div>
+    <div className="relative flex h-full min-h-0 flex-col px-[var(--gutter)] pt-[var(--space-4)] lg:px-[var(--space-5)]">
+      <SearchInput
+        value={searchQuery}
+        onChange={onSearchChange}
+        placeholder={t("library.searchHint")}
+      />
 
-      <div className="glass-surface mt-3 grid grid-cols-3 px-4 py-2.5">
-        <StatCell value={String(words)} label={t("library.statWords")} />
-        <StatCell value={String(phrases)} label={t("library.statPhrases")} />
-        <StatCell value={String(withExample)} label={t("library.statExamples")} />
-      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {/* The library's shape in one quiet line rather than a card of numbers. */}
+        <p className="text-label-medium text-on-surface-variant" aria-live="polite">
+          {isSearching ? (
+            t("library.resultCount", [vocabularyList.length, words])
+          ) : (
+            <>
+              <span className="text-on-surface">{words}</span> {t("library.statWords")}
+              {" · "}
+              <span className="text-on-surface">{phrases}</span> {t("library.statPhrases")}
+              {" · "}
+              <span className="text-on-surface">{withExample}</span> {t("library.statExamples")}
+            </>
+          )}
+        </p>
 
-      <fieldset className="mt-3 border-none p-0 m-0">
-        <legend className="sr-only">{t("library.sortBy")}</legend>
-        <div className="flex gap-2">
-          {(
-            [
-              ["newest", t("library.sortNewest")],
-              ["alpha", t("library.sortAlphabetical")],
-            ] as const
-          ).map(([mode, label]) => {
-            const isSelected = sortMode === mode;
-            return (
-              <label
-                key={mode}
-                className={`press-scale flex min-h-11 cursor-pointer items-center rounded-full border px-4 text-label-medium focus-within:outline-2 focus-within:outline-azure-glow ${
-                  isSelected
-                    ? "border-azure-glow/60 bg-secondary-container/60 text-on-secondary-container font-semibold"
-                    : "border-outline-variant bg-glass-fill text-on-surface-variant"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="vocab-sort"
-                  value={mode}
-                  checked={isSelected}
-                  onChange={() => onSortChange(mode)}
-                  className="sr-only"
-                />
-                <span>{label}</span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
+        <fieldset className="m-0 border-none p-0">
+          <legend className="sr-only">{t("library.sortBy")}</legend>
+          <div className="flex rounded-full border border-outline-variant p-0.5">
+            {(
+              [
+                ["newest", t("library.sortNewest")],
+                ["alpha", t("library.sortAlphabetical")],
+              ] as const
+            ).map(([mode, label]) => {
+              const isSelected = sortMode === mode;
+              return (
+                <label
+                  key={mode}
+                  className={`flex min-h-10 cursor-pointer items-center rounded-full px-4 text-label-medium transition-colors focus-within:outline-2 focus-within:outline-azure-glow ${
+                    isSelected
+                      ? "bg-secondary-container font-semibold text-on-secondary-container"
+                      : "text-on-surface-variant hover:text-on-surface"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="vocab-sort"
+                    value={mode}
+                    checked={isSelected}
+                    onChange={() => onSortChange(mode)}
+                    className="sr-only"
+                  />
+                  <span>{label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      </div>
 
       <div className="mt-3 min-h-0 flex-1">
         {vocabularyList.length === 0 ? (
-          searchQuery.trim().length > 0 ? (
-            <EmptyState
-              icon={<AutoStoriesIcon className="size-full" />}
-              message={t("library.noResults")}
-              description={t("library.noResultsBody")}
-              action={
-                <GlassButton onClick={() => onSearchChange("")}>
-                  {t("action.clearFilter")}
-                </GlassButton>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon={<AutoStoriesIcon className="size-full" />}
-              message={t("library.emptyTitle")}
-              description={t("library.emptyBody")}
-            />
-          )
+          // An empty library returned early above, so this is a search with no hits.
+          <EmptyState
+            icon={<SearchIcon className="size-full" />}
+            message={t("library.noResults")}
+            description={t("library.noResultsBody")}
+            action={
+              <GlassButton onClick={() => onSearchChange("")}>
+                {t("action.clearFilter")}
+              </GlassButton>
+            }
+          />
         ) : (
-          <ul className="flex h-full flex-col gap-3 overflow-y-auto pb-24">
+          <ul className="flex h-full flex-col gap-2 overflow-y-auto pb-24">
             {vocabularyList.map((item) => (
               <VocabularyItem
                 key={item.id}
                 item={item}
+                isSelected={item.id === selectedId}
                 onOpen={() => onItemClick(item)}
                 onEdit={() => onEdit(item)}
                 onDelete={() => onDelete(item)}
@@ -307,7 +344,8 @@ function VocabularyListContent({
         type="button"
         onClick={onAdd}
         aria-label={t("library.addWord")}
-        className="glass-button press-scale absolute bottom-6 right-6 flex size-14 items-center justify-center text-on-surface"
+        title={t("library.addWord")}
+        className="glass-button edge-solid press-scale absolute bottom-6 right-6 flex size-14 items-center justify-center shadow-[var(--shadow-raised)]"
       >
         <AddIcon className="size-6" />
       </button>
@@ -315,8 +353,14 @@ function VocabularyListContent({
   );
 }
 
+/** "der", "die", "das" - or nothing for a verb, a phrase, or the AI's "none". */
+function articleOf(item: VocabularyEntry) {
+  return item.article && item.article !== "none" ? item.article : "";
+}
+
 function VocabularyItem({
   item,
+  isSelected,
   onOpen,
   onEdit,
   onDelete,
@@ -324,6 +368,7 @@ function VocabularyItem({
   t,
 }: {
   item: VocabularyEntry;
+  isSelected: boolean;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -393,12 +438,31 @@ function VocabularyItem({
   };
 
   return (
-    <li className={`glass-surface ${menuOpen ? "" : "list-row"}`}>
-      <div className="flex items-start gap-1 p-2 pl-4">
-        <button type="button" onClick={onOpen} className="min-w-0 flex-1 py-2 pr-2 text-left">
-          <p lang="de" className="line-clamp-3 hyphens-auto break-words text-title-medium text-primary">{item.germanText}</p>
-          <p className="mt-1 line-clamp-2 text-body-medium text-on-surface-variant">
+    <li
+      className={`glass-surface transition-colors ${menuOpen ? "" : "list-row"} ${
+        isSelected ? "!border-primary bg-primary-container/40" : "hover:border-outline"
+      }`}
+    >
+      <div className="flex items-center gap-1 py-1.5 pl-4 pr-1.5">
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-current={isSelected ? "true" : undefined}
+          className="min-w-0 flex-1 py-2 pr-2 text-left"
+        >
+          {/* The German first and loudest, its article as quiet grammar beside it,
+              the meaning underneath: three things, three weights. */}
+          <p className="flex min-w-0 items-baseline gap-2">
+            {articleOf(item) && (
+              <span lang="de" className="shrink-0 text-label-large text-primary">{articleOf(item)}</span>
+            )}
+            <span lang="de" className="line-clamp-2 hyphens-auto break-words text-title-medium text-on-surface">
+              {item.germanText}
+            </span>
+          </p>
+          <p className="mt-0.5 line-clamp-2 text-body-medium text-on-surface-variant">
             {item.englishTranslation}
+            {item.plural && <span className="text-on-surface-muted"> · {t("wordSheet.plural", [item.plural])}</span>}
           </p>
         </button>
 
@@ -406,7 +470,8 @@ function VocabularyItem({
           type="button"
           onClick={onSpeak}
           aria-label={t("action.speak")}
-          className="press-scale shrink-0 rounded-full p-3 text-primary"
+          title={t("action.speak")}
+          className="press-scale grid size-11 shrink-0 place-items-center rounded-full text-primary transition-colors hover:bg-primary/10"
         >
           <PlayArrowIcon className="size-5" />
         </button>
@@ -421,7 +486,7 @@ function VocabularyItem({
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-controls={menuId}
-            className="press-scale rounded-full p-3 text-on-surface-variant"
+            className="press-scale grid size-11 place-items-center rounded-full text-on-surface-variant transition-colors hover:bg-on-surface/5"
           >
             <MoreVertIcon className="size-5" />
           </button>
@@ -476,12 +541,18 @@ function VocabularyDetail({
   exampleSentence,
   onClose,
   onSpeak,
+  onEdit,
+  onDelete,
+  showBack,
   t,
 }: {
   item: VocabularyEntry | null;
   exampleSentence: string;
   onClose: () => void;
   onSpeak: (text: string) => void;
+  onEdit: (item: VocabularyEntry) => void;
+  onDelete: (item: VocabularyEntry) => void;
+  showBack: boolean;
   t: TFunction;
 }) {
   if (!item) {
@@ -494,69 +565,103 @@ function VocabularyDetail({
     );
   }
 
-  const grammar = [item.article, item.plural, item.conjugation]
-    .filter((f) => f && f !== "none")
-    .join("  ·  ");
+  const article = articleOf(item);
+  // The article leads the headline, so it is not repeated as a fact here.
+  const grammar = [
+    item.plural && { label: t("detail.plural"), value: item.plural },
+    item.conjugation && { label: t("detail.forms"), value: item.conjugation },
+  ].filter((fact): fact is { label: string; value: string } => Boolean(fact));
+  const relations = [
+    item.synonyms && { label: t("detail.synonyms"), value: item.synonyms },
+    item.antonyms && { label: t("detail.antonyms"), value: item.antonyms },
+  ].filter((fact): fact is { label: string; value: string } => Boolean(fact));
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
-      <div className="flex items-start justify-between gap-3">
+    <article aria-labelledby="word-detail-title" className="flex h-full min-h-0 flex-col overflow-y-auto px-[var(--gutter)] py-[var(--space-5)] lg:px-[var(--space-6)]">
+      {showBack && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="-ml-2 mb-3 inline-flex min-h-11 items-center gap-1 self-start rounded-full px-2 text-label-large text-primary"
+        >
+          <span aria-hidden="true">←</span> {t("detail.back")}
+        </button>
+      )}
+
+      <header className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h2 lang="de" className="hyphens-auto break-words text-headline-medium text-primary">{item.germanText}</h2>
-          {grammar && (
-            <p className="mt-1 text-label-large text-on-surface-variant">{grammar}</p>
-          )}
-          <p className="mt-1 text-title-medium text-on-surface-variant">{item.englishTranslation}</p>
+          <h2 id="word-detail-title" lang="de" className="hyphens-auto break-words text-headline-medium text-on-surface">
+            {article && <span className="mr-2 font-semibold text-primary">{article}</span>}
+            {item.germanText}
+          </h2>
+          <p className="mt-1 text-title-medium font-normal text-on-surface-variant">{item.englishTranslation}</p>
         </div>
 
         <button
           type="button"
           onClick={() => onSpeak(item.germanText)}
           aria-label={t("action.speak")}
-          className="glass-button press-scale flex size-14 shrink-0 items-center justify-center text-primary"
+          title={t("action.speak")}
+          className="glass-button press-scale flex size-12 shrink-0 items-center justify-center text-primary"
         >
-          <PlayArrowIcon className="size-7" />
+          <PlayArrowIcon className="size-6" />
         </button>
+      </header>
+
+      {grammar.length > 0 && (
+        <section className="mt-6">
+          <h3 className="eyebrow">{t("detail.grammar")}</h3>
+          <dl className="mt-2 grid gap-2 sm:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]">
+            {grammar.map((fact) => (
+              <div key={fact.label} className="glass-raised px-4 py-3">
+                <dt className="text-label-small text-on-surface-variant">{fact.label}</dt>
+                <dd lang="de" className="mt-0.5 break-words text-body-large text-on-surface">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      <section className="mt-6">
+        <h3 className="eyebrow">{t("detail.context")}</h3>
+        <blockquote lang="de" className="mt-2 border-l-2 border-primary/60 py-1 pl-4 text-body-large text-on-surface hyphens-auto break-words">
+          {exampleSentence}
+        </blockquote>
+      </section>
+
+      <section className="mt-6">
+        <h3 className="eyebrow">{t("detail.linguisticConnections")}</h3>
+        {relations.length > 0 ? (
+          <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+            {relations.map((fact) => (
+              <div key={fact.label} className="glass-raised px-4 py-3">
+                <dt className="text-label-small text-on-surface-variant">{fact.label}</dt>
+                <dd lang="de" className="mt-0.5 break-words text-body-large text-on-surface">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          // A sentence, not two boxes of em dashes.
+          <p className="mt-2 text-body-medium text-on-surface-variant">{t("detail.noRelations")}</p>
+        )}
+      </section>
+
+      <div className="mt-auto flex flex-wrap gap-2 pt-8">
+        <GlassButton type="button" onClick={() => onEdit(item)} className="px-5">
+          <span className="flex items-center gap-2 text-label-large font-bold">
+            <EditIcon className="size-4.5" />
+            {t("action.edit")}
+          </span>
+        </GlassButton>
+        <GlassButton type="button" glow="error" onClick={() => onDelete(item)} className="px-5">
+          <span className="flex items-center gap-2 text-label-large font-bold">
+            <DeleteIcon className="size-4.5" />
+            {t("action.delete")}
+          </span>
+        </GlassButton>
       </div>
-
-      <div className="mt-8">
-        <h3 className="text-label-small font-bold text-primary uppercase tracking-wider">{t("detail.linguisticConnections")}</h3>
-        <div className="mt-2 mb-4 h-px bg-surface-variant" />
-
-        <div className="grid grid-cols-2 gap-4">
-            <LinguisticBox title={t("detail.synonyms")} content={item.synonyms} />
-            <LinguisticBox title={t("detail.antonyms")} content={item.antonyms} />
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="text-label-large font-bold text-primary">{t("detail.context")}</h3>
-        <div className="mt-2 mb-2 h-px bg-surface-variant" />
-
-        <div className="glass-surface p-6">
-          <p className="text-label-medium font-bold text-primary">{t("detail.example")}</p>
-          <p className="mt-2 text-body-large text-on-surface hyphens-auto break-words">{exampleSentence}</p>
-        </div>
-      </div>
-
-      <div className="flex-1" />
-
-      <GlassButton type="button" onClick={onClose} className="mt-6 w-full">
-        <span className="text-label-large font-bold uppercase">{t("detail.back")}</span>
-      </GlassButton>
-    </div>
+    </article>
   );
-}
-
-function LinguisticBox({ title, content }: { title: string; content: string }) {
-    return (
-        <div className="glass-surface p-4 flex flex-col gap-1 min-w-0">
-            <span className="text-xs font-bold uppercase tracking-wider text-primary">{title}</span>
-            <p className={`text-sm hyphens-auto break-words ${content ? 'text-on-surface' : 'text-on-surface-variant opacity-70'}`}>
-                {content || "—"}
-            </p>
-        </div>
-    )
 }
 
 function VocabularyEditorDialog({
@@ -645,16 +750,5 @@ function VocabularyEditorDialog({
         disabled={isSaving}
       />
     </ModalDialog>
-  );
-}
-
-function StatCell({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="flex flex-col items-center">
-      <p className="text-title-medium text-on-surface">{value}</p>
-      <p className="max-w-full truncate text-label-small text-on-surface-variant">
-        {label}
-      </p>
-    </div>
   );
 }

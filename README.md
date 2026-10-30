@@ -1,211 +1,173 @@
 # DeutschFlow
 
-A local-first, privacy-respecting German language practice app for Android and the Web. Speak or type German, translate it with Groq AI, retain useful vocabulary, and master it with spaced repetition.
+**Speak or type German, understand it, and keep the words worth keeping.** A local-first German learning app with a native Android client and an installable web PWA.
 
 [![Build](https://github.com/shareef01/deutschflow/actions/workflows/build.yml/badge.svg)](https://github.com/shareef01/deutschflow/actions/workflows/build.yml)
-![Android: API 31+](https://img.shields.io/badge/Android-API%2031%2B%20(12%2B)-3DDC84?logo=android&logoColor=white)
-![Web: Next.js PWA](https://img.shields.io/badge/Web-Next.js%2016%20PWA-black?logo=next.js&logoColor=white)
+![Android 12+](https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white)
+![Next.js PWA](https://img.shields.io/badge/Web-Next.js%20PWA-0b62c4?logo=next.js&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-| Native Android (Jetpack Compose) | Responsive Web PWA (Next.js 16) |
-| :---: | :---: |
-| <img src="docs/screenshots/dashboard.png" width="220" alt="DeutschFlow Android Dashboard" /> | <img src="docs/screenshots/web/transcript-desktop-1440.png" width="460" alt="DeutschFlow Web PWA Transcript" /> |
-
-DeutschFlow bridges the gap between passive consumption and active speaking. It pairs instant on-device speech transcription with low-latency Groq AI translations, deep grammatical breakdowns, interactive situational roleplay, and an SM-2 spaced repetition review deck.
-
-The project features two independent, production-grade clients—a native **Android** app (Jetpack Compose & Room) and an installable **Web PWA** (Next.js & IndexedDB)—both adhering to a shared cross-platform domain contract without shared runtime source code.
+<p align="center">
+  <img src="docs/screenshots/portfolio/transcript-result-desktop-dark.png" width="600" alt="DeutschFlow web: a German sentence with its translation, the words worth keeping, and a grammar spotlight" />
+  &nbsp;
+  <img src="docs/screenshots/android/pixel7-transcript.png" width="170" alt="DeutschFlow on Android: the Transcript screen" />
+</p>
 
 ---
 
-## 📸 Key Interfaces
+## The problem
 
-| Real-Time Transcription | Vocabulary Library | Linguistic Word Detail | Spaced Repetition Study |
-| :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/transcript.png" width="220" alt="DeutschFlow German transcription interface" /><br><sub><b>Transcription & Translation</b><br>Real-time speech capture with dialect selection</sub> | <img src="docs/screenshots/library.png" width="220" alt="DeutschFlow vocabulary library" /><br><sub><b>Vocabulary Library</b><br>Saved words, search, and German audio playback</sub> | <img src="docs/screenshots/word-detail.png" width="220" alt="DeutschFlow linguistic word detail" /><br><sub><b>Word Spotlight</b><br>Grammar gender, forms, synonyms & example context</sub> | <img src="docs/screenshots/study.png" width="220" alt="DeutschFlow flashcard study session" /><br><sub><b>Spaced Repetition</b><br>SM-2 scheduling with 4-tier retention grading</sub> |
+Learners who live with German meet far more of it than a course gives them: on a menu, at a station, in a meeting. Most of it is forgotten by evening. DeutschFlow turns those moments into study material. Say or type the sentence, read what it means and why the grammar works, save the words that matter, and let spaced repetition bring them back before they fade.
 
-| Pronunciation Shadowing | AI Situational Roleplay | Progress Dashboard | Privacy & Settings |
-| :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/practice.png" width="220" alt="DeutschFlow speech repetition and shadowing" /><br><sub><b>Pronunciation Shadowing</b><br>Sentence repetition with intelligibility scoring</sub> | <img src="docs/screenshots/roleplay.png" width="220" alt="DeutschFlow situational AI roleplay" /><br><sub><b>AI Roleplay</b><br>Contextual dialogues (e.g. bakery, clinic, transit)</sub> | <img src="docs/screenshots/dashboard.png" width="220" alt="DeutschFlow study dashboard and heatmap" /><br><sub><b>Learning Dashboard</b><br>Daily XP goal, streak tracking & activity heatmap</sub> | <img src="docs/screenshots/settings.png" width="220" alt="DeutschFlow preferences and privacy settings" /><br><sub><b>Settings & Privacy</b><br>On-device voice selection, CEFR level & key vault</sub> |
+It is deliberately **local-first**. The library, review history and streak live on the device. Translation uses the learner's own Groq API key, and the app collects nothing.
 
----
+## The learning loop
 
-## ✨ Core Features
+```mermaid
+flowchart LR
+  A[Speak or type<br/>a German sentence] --> B[Translate<br/>with grammar notes]
+  B --> C[Tap a word:<br/>article, plural, example]
+  C --> D[Save to<br/>the library]
+  D --> E[Review with<br/>SM-2 flashcards]
+  E -->|due again| E
+  D --> F[Practise aloud:<br/>repetition and roleplay]
+```
 
-- **🎙️ Speech Transcription**: Multi-dialect German recognition (`de-DE`, `de-AT`, `de-CH`). Android explicitly binds the on-device recognizer for offline transcription privacy.
-- **⚡ AI Intelligence & Grammar Breakdown**: Groq-powered translations (`openai/gpt-oss-120b`), grammatical gender indicators (`der`, `die`, `das`), case identification (`Nominativ`, `Akkusativ`, `Dativ`, `Genitiv`), contextual examples, and configurable CEFR levels (`A1` through `C1+`).
-- **💬 Situational AI Roleplay**: 8 curated real-world conversational scenarios (Bakery, Café, Hotel, Doctor, Train Station, Apartment Viewing, Job Interview, Small Talk) with automatic opening prompts and contextual translations.
-- **🧠 Spaced Repetition (SRS)**: SuperMemo-2 (SM-2) derived algorithm with 4-tier grading (*Again*, *Hard*, *Good*, *Easy*), daily XP goals, streak calculations, and immutable review event history.
-- **🗣️ Pronunciation Shadowing**: Word-level intelligibility comparison with Unicode-aware tokenization and automatic German letter folding (`ü` $\rightarrow$ `ue`, `ß` $\rightarrow$ `ss`, apostrophe contractions).
-- **📚 Local Vocabulary Library**: Additive vocabulary storage, fast search, audio pronunciation playback, and custom phrase management.
-- **🔒 Privacy-First Architecture**: Audio never leaves the phone on Android; API credentials stay encrypted at rest via hardware-backed Android Keystore or WebCrypto IndexedDB. Zero third-party telemetry, ads, or analytics.
-- **📱 Android Integrations**: Glance home-screen widget and periodic daily-word notification via WorkManager.
-- **🌐 Offline-Ready PWA**: Responsive application shell with service-worker caching, keyboard navigation, password-gated deployment, and JSON backup export/import.
+## A walkthrough
 
----
+The web screenshots are produced by [`npm run screenshots`](web/tests/portfolio/capture.portfolio.ts) against the production build. It uses a synthetic library, restored through the app's own backup import, and a stubbed AI reply. No real learner data or API key is involved. Every screen is captured in dark and light themes, on a phone and on a desktop, in [`docs/screenshots/portfolio/`](docs/screenshots/portfolio/).
 
-## 🏗️ Architecture
+| | |
+| :-- | :-- |
+| <img src="docs/screenshots/portfolio/transcript-empty-mobile-light.png" width="220" alt="Transcript first use: dialect, Speak/Type switch, microphone" /> | **1. Transcript.** One unmistakable action, the microphone. Typing is one press away and feeds the same pipeline, and the recognition dialect is a tap on the chip above. |
+| <img src="docs/screenshots/portfolio/word-detail-desktop-dark.png" width="420" alt="Library with a word's details: article, plural, example, synonyms" /> | **2. Library.** The German word leads, with its article as quiet grammar beside it and the meaning underneath. Details show the plural, verb forms, an example in context and any saved synonyms, and say so plainly when there are none. |
+| <img src="docs/screenshots/portfolio/study-dashboard-desktop-light.png" width="420" alt="Study dashboard: cards due today, daily goal, retention, activity" /> | **3. Study dashboard.** First what to do today (cards due, one click from a review), then how today is going, then how the library is doing over time. Every figure comes from stored data. |
+| <img src="docs/screenshots/portfolio/flashcard-front-mobile-dark.png" width="190" alt="Flashcard front" /> <img src="docs/screenshots/portfolio/flashcard-back-mobile-dark.png" width="190" alt="Flashcard back with grades and interval previews" /> | **4. Flashcards.** Grades stay locked until the answer is showing, and each grade previews its next interval. Space flips the card and 1–4 grade it from the keyboard. |
+| <img src="docs/screenshots/portfolio/practice-mobile-light.png" width="190" alt="Pronunciation practice: listen, then speak" /> <img src="docs/screenshots/portfolio/roleplay-mobile-dark.png" width="190" alt="Roleplay conversation at a bakery" /> | **5. Practice.** Listen, then speak. The result counts the words the recogniser heard and says outright that this is recognition, not an accent score. Roleplay keeps the scenario and its goals in view, with a one-row voice-or-type composer. |
+| <img src="docs/screenshots/portfolio/settings-mobile-dark.png" width="190" alt="Settings: backup, AI key, progress, speech" /> | **6. Settings.** Encrypted or plain backups, the API key, learner level, recognition dialect and storage durability, plus a confirmed reset. |
 
-DeutschFlow maintains two independent clients that share domain behavior and test contracts rather than runtime source code:
+Android screenshots taken on a Pixel 7 are in [`docs/screenshots/android/`](docs/screenshots/android/). They come from the 22 October redesign and predate later fixes, such as the reveal gate on flashcards.
+
+## Architecture
+
+The two clients share **behaviour**, not code. Each is idiomatic on its platform. A JSON contract fixture that both test suites run keeps them agreeing on the things that must not drift.
+
+```mermaid
+flowchart TB
+  subgraph Android["Android — Kotlin, Jetpack Compose, Hilt"]
+    AUI[Compose screens<br/>MVVM / UDF] --> AVM[ViewModels]
+    AVM --> AROOM[(Room · SQLite)]
+    AVM --> AKS[Keystore AES-GCM<br/>API key]
+    AVM --> ASR[On-device<br/>SpeechRecognizer]
+  end
+
+  subgraph Web["Web PWA — Next.js, React, TypeScript"]
+    WUI[App Router pages] --> WH[Hooks]
+    WH --> WDB[(IndexedDB · Dexie)]
+    WH --> WV[WebCrypto AES-GCM<br/>non-extractable key]
+    WH --> WSR[Web Speech API<br/>browser-provided]
+    GATE[Password gate<br/>HMAC session cookie] -.-> WUI
+  end
+
+  CONTRACT[[cross-platform-contract.json<br/>SM-2 · German key folding · tokenisation · AI payload limits]]
+  CONTRACT -. tested by .-> AVM
+  CONTRACT -. tested by .-> WH
+  BACKUP[[One backup format<br/>plain or passphrase-encrypted]]
+  AROOM <-. export / import .-> BACKUP
+  WDB <-. export / import .-> BACKUP
+
+  AVM -- text only, user's key --> GROQ[(Groq API)]
+  WH -- text only, user's key --> GROQ
+```
 
 ```text
-deutschflow/
-├── app/                        Android native application (Kotlin, Jetpack Compose, Room)
-│   ├── schemas/                Versioned Room database schemas (versions 2–18)
-│   └── src/test/resources/     Shared cross-platform behavioral contract fixtures
-├── web/                        Progressive Web App (Next.js 16, React 19, TypeScript, Dexie)
-│   └── tests/                  Vitest unit/contract tests and Playwright E2E suites
-├── docs/screenshots/           Curated mobile screenshots and Playwright visual baselines
-└── tools/                      Static repository audit, WCAG contrast, and palette parity tools
+app/                Android client (Kotlin, Compose, Room schema v18, minSdk 31)
+web/                Web PWA (Next.js 16, React 19, Tailwind CSS 4, Dexie schema v9)
+  tests/            Vitest unit and contract tests; Playwright e2e, axe and visual suites
+  tests/portfolio/  On-demand screenshot capture with synthetic data
+docs/               Case study, design system, security model, backup format, audits
+tools/              Repository audit: string parity, palette parity, WCAG contrast
 ```
 
-### Android Architecture
-- **Language & Toolchain**: Kotlin 2.4, Android Gradle Plugin 9.4, KSP 2.3, compileSdk 37, targetSdk 37, minSdk 31 (Android 12+).
-- **UI & Architecture**: 100% Jetpack Compose with Material 3, MVVM / Unidirectional Data Flow (UDF), Hilt dependency injection, Navigation Compose with adaptive navigation bar/rail.
-- **Persistence**: Room 2.8 database (version 18) with strict migrations and immutable entity representations. Settings stored via Jetpack DataStore Preferences.
-- **Speech & Audio**: Android `SpeechRecognizer` using `createOnDeviceSpeechRecognizer` with `EXTRA_PREFER_OFFLINE`; platform `TextToSpeech` with automatic preference for on-device voices (`!voice.isNetworkConnectionRequired`).
-- **Security**: AES-GCM encryption under Android Keystore for API keys.
+## Key decisions and trade-offs
 
-### Web Architecture
-- **Framework & Libraries**: Next.js 16 (App Router), React 19, TypeScript 5.8, Tailwind CSS 4.
-- **Persistence**: IndexedDB via Dexie 4 (schema version 9) supporting additive merge and JSON backup portability.
-- **Authentication**: Zero-external-dependency access gate via `src/proxy.ts` (Next.js 16) with timing-safe HMAC-SHA256 session tokens, session revocation key derivation, and global epoch invalidation.
-- **Security & Audio**: AES-GCM encryption with non-extractable WebCrypto keys; Web Speech API with automatic local voice preference (`voice.localService === true`).
-- **Testing**: Vitest for unit/contract tests; Playwright for cross-browser (Chromium, Firefox, WebKit) and visual regression testing.
+- **Two native clients, not one cross-platform app.** On Android, on-device speech recognition, Keystore-backed encryption and a home-screen widget are first-class. An installable PWA reaches everyone else without an app store. The cost is two codebases, kept in step by a shared behavioural contract rather than shared code.
+- **Local-first storage.** There are no accounts, no server database and no sync, so learning data cannot leak from a server that never holds it. Browser storage can be evicted, so both clients export and import one portable backup format (plain or passphrase-encrypted), and the web app asks the browser for persistent storage.
+- **Bring-your-own AI key.** The key is encrypted at rest on the device and sent only to Groq. No proxy could ever see it.
+- **Honest feedback.** Pronunciation practice reports how many words the speech recogniser heard, never a "pronunciation score": recognition returns a transcript, not phonetic data.
+- **Grade only after reveal.** The scheduler never records a guess as recall.
 
-### Shared Behavioral Contract
-Both clients execute identical test suites against a shared JSON contract fixture (`app/src/test/resources/cross-platform-contract.json`). This ensures parity across:
-- SuperMemo-2 mathematical scheduling intervals, review counts, and ease factors.
-- German key folding and Unicode normalization (`NFC`, umlauts, eszett, apostrophes).
-- Practice tokenization and word intelligibility evaluation.
-- Groq AI payload constraints, token thresholds, and strict JSON output parsing.
+The reasoning, including the problems that shaped it, is in the **[engineering case study](docs/portfolio-case-study.md)**. The visual rules are in [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
----
+## Privacy and security
 
-## 🔒 Privacy & Security Model
+| | Android | Web |
+| :-- | :-- | :-- |
+| Learning data | Room database on the device; excluded from OS cloud backup and device transfer | IndexedDB in the browser |
+| Portability | Manual export/import, plain or passphrase-encrypted | Same format and the same choices |
+| API key | AES-GCM under Android Keystore; never exported | AES-GCM with a non-extractable WebCrypto key; never exported |
+| Speech recognition | Requests the on-device recogniser; with the German offline model installed, audio stays on the phone | Web Speech API, which the browser vendor's service implements (for example Google in Chrome, Apple in Safari); Settings says so |
+| Sent to Groq | Text only: the sentence, word or roleplay turn | Same |
+| Analytics and ads | None | None |
+| Access | — | Password gate: HMAC session tokens, login rate limiting, revocable sessions |
 
-DeutschFlow is designed around local-first data ownership:
+The threat model and deployment checklist are in [`docs/SECURITY.md`](docs/SECURITY.md), and the backup envelope in [`docs/BACKUP_FORMAT.md`](docs/BACKUP_FORMAT.md).
 
-- **Audio Privacy (Android)**: Speech recognition explicitly requests `createOnDeviceSpeechRecognizer`. When the device has the German offline speech pack installed, audio is transcribed on-device and never transmitted over the network.
-- **Audio Privacy (Web)**: Browser speech recognition uses the platform's Web Speech API, which delegates to the browser vendor (Google for Chrome/Edge, Apple for Safari; Firefox falls back to text input). The in-app Settings screen clearly documents this difference.
-- **Speech Synthesis (TTS)**: Both clients query available voices and prioritize on-device voices to ensure synthesized German audio remains local whenever possible.
-- **AI Processing**: When configured with a user-provided Groq API key, only text prompts (transcriptions, sentences, or roleplay lines) are sent to Groq via HTTPS. Audio is never sent to Groq.
-- **Local Storage**: All learning history, flashcards, transcripts, and stats reside on your device (Room SQLite on Android; IndexedDB on Web).
-- **Encrypted Keys**: API keys are encrypted at rest with AES-GCM—using hardware-backed Android Keystore on Android, and a non-extractable WebCrypto key in IndexedDB on Web.
-- **Zero Telemetry**: No analytics SDKs, advertising libraries, tracking pixels, or third-party crash reporters are bundled in either client.
+## Verification
 
----
+Every push runs [GitHub Actions](.github/workflows/build.yml):
 
-## 🚀 Getting Started
+- **Repository audit** (`python tools/audit_repo.py`): English/German string parity on both clients, Kotlin↔CSS palette parity, and WCAG contrast for every token pairing in both themes.
+- **Android:** unit and contract tests, Android lint and a release build, plus instrumented tests on API 31 (full suite) and API 35 (platform smoke), including a Room migration walk.
+- **Web:** ESLint with zero warnings, `tsc`, Vitest and a production build. Playwright covers functional flows, axe-core WCAG 2.1 AA scans of every route, navigation-structure checks at 360, 390, 768 and 1440 px, scroll-region regressions, and compatibility smoke tests in WebKit and Firefox. Pixel baselines in `docs/screenshots/web/` are a local design-review aid, because font rasterisation differs between machines.
 
-### Prerequisites
+## Getting started
 
-- **Git**
-- **JDK 21** (Temurin recommended)
-- **Android Studio** (Ladybug / Meerkat or newer) with **Android SDK Platform 37**
-- **Node.js 22+** and **npm** (for web development)
-- **Groq API Key**: Optional for core UI and practice; required for AI translation, grammar notes, and roleplay. Obtain a free key at [console.groq.com](https://console.groq.com/).
+**Prerequisites:** Node.js 22+, JDK 21, and Android Studio with SDK Platform 37. A free [Groq API key](https://console.groq.com/) enables translation, word details and roleplay; everything else works without one.
 
----
-
-### Android Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/shareef01/deutschflow.git
-   cd deutschflow
-   ```
-
-2. **Build and install:**
-   ```bash
-   ./gradlew assembleDebug
-   ```
-   Open the repository in Android Studio or install `app/build/outputs/apk/debug/app-debug.apk` directly onto an Android 12+ (API 31+) device or emulator.
-
-3. **Configure API Key:**
-   - Tap the Settings icon (`⚙️`) in the top bar.
-   - Enter your Groq API key.
-   - *(Optional)* Select your preferred CEFR level (`A1`–`C1+`) and recognition dialect (`de-DE`, `de-AT`, `de-CH`).
-
-#### Useful Android Commands
+### Web
 
 ```bash
-./gradlew testDebugUnitTest          # Run unit and contract tests
-./gradlew lintDebug                  # Run Android lint
-./gradlew assembleRelease            # Compile unsigned release APK
-./gradlew connectedDebugAndroidTest  # Run on-device instrumentation tests (API 31+ required)
+cd web
+npm ci
+cp .env.example .env.local   # then set SITE_PASSWORD and SESSION_SECRET
+npm run dev                  # http://localhost:3000
 ```
 
----
-
-### Web PWA Setup
-
-1. **Navigate to the web workspace:**
-   ```bash
-   cd web
-   npm ci
-   ```
-
-2. **Configure environment:**
-   Create a `.env.local` file inside `web/`:
-   ```dotenv
-   SITE_PASSWORD=choose-a-long-random-password
-   SESSION_SECRET=replace-with-at-least-32-random-bytes
-   ```
-   *Tip: Generate a random secret with `openssl rand -base64 32`.*
-
-3. **Run development server:**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000), enter your `SITE_PASSWORD`, and enter your Groq API key in Settings.
-
-#### Deploying to Vercel
-
-When importing this repository into Vercel:
-
-1. **Root Directory**: In Vercel Project Settings $\rightarrow$ **General**, set **Root Directory** to `web`.
-2. **Framework Preset**: Ensure **Next.js** is selected.
-3. **Environment Variables**: In Vercel Project Settings $\rightarrow$ **Environment Variables**, configure:
-   - `SITE_PASSWORD`: The access password to unlock the web app.
-   - `SESSION_SECRET`: A 32+ character random string for cryptographically signing session cookies (e.g. generated via `openssl rand -base64 32`).
+Sign in with your `SITE_PASSWORD`, then add your Groq key under **Settings → AI & Translation**.
 
 ```bash
-npm run lint         # ESLint check (zero-warning policy enforced)
-npm run typecheck    # TypeScript compiler check (tsc --noEmit)
-npm test             # Vitest unit and domain contract tests
-npm run build        # Production Next.js build
-npm run test:e2e     # Playwright cross-browser tests
+npm run lint && npm run typecheck && npm test   # static checks and unit tests
+npm run test:e2e                                 # Playwright (builds first)
+npm run screenshots                              # regenerate docs/screenshots/portfolio
 ```
 
----
+**Deploying to Vercel:** set the project's Root Directory to `web` and configure the environment variables listed in [`docs/SECURITY.md`](docs/SECURITY.md).
 
-## 🧪 Quality & Verification
+> **About a public demo.** The hosted PWA is password-protected and stays that way. A separate public demo would be fairly low-risk, since each visitor's data lives in their own browser and the server holds no learner data or AI keys. But it means deploying and operating a second, ungated build, which is the owner's decision; this repository doesn't do it by default. The walkthrough above stands in for it.
 
-Every push and pull request is validated by [GitHub Actions](.github/workflows/build.yml):
+### Android
 
-- **Static Repository Audit**: `python tools/audit_repo.py` enforces:
-  - 1:1 parity between English and German strings across Android (`strings.xml`) and Web (`i18n.ts`).
-  - Palette parity between Kotlin and Tailwind color definitions.
-  - WCAG 2.1 contrast compliance for all light and dark theme token pairings (`tools/contrast.py`).
-  - Repository hygiene rules (detecting accidental temporary files or debug artifacts).
-- **Android Quality**: Automated unit tests, domain contract tests, Room migration walk (v2 through v16), and Android lint.
-- **Web Quality**: ESLint, TypeScript compiler checks, Vitest test suite, production build, and Playwright browser regression tests.
+```bash
+./gradlew assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest lintDebug
+./gradlew connectedDebugAndroidTest   # on an API 31+ device or emulator
+```
 
----
+Add your Groq key under **Settings** in the app.
 
-## 💾 Backup & Data Portability
+## Backup and data portability
 
-- **Web Library Backup**: In the Web app under **Settings $\rightarrow$ Backup**, export your entire learning history (vocabulary, transcripts, review events, XP, and streaks) to a versioned JSON file.
-- **Backup format v2**: Includes saved transcript translations/analysis and the current roleplay conversation, with review events linked to the restored vocabulary IDs. Version 1 backups remain supported. Backups are limited to 50 MB; an oversized export is reported before downloading a file, and no library data is removed.
-- **Additive Import**: Importing a backup file safely merges records:
-  - Existing local cards and transcripts are preserved.
-  - Matching German vocabulary entries merge linguistic metadata without resetting SRS progress.
-  - XP never decreases, and activity streaks are deterministically recomputed.
-  - Review events merge by stable identity. An existing roleplay conversation is preserved; the backup conversation is restored when no local conversation exists.
-- **Android Backup**: Learning data, transcripts, roleplay conversations, and encrypted settings are excluded from Android OS cloud backup and device-to-device transfer, so sensitive learning content never leaves the device through a platform channel. Manual portability is provided instead: **Settings $\rightarrow$ Backup & Recovery** exports the whole library to a plain JSON file or a passphrase-encrypted one, and imports it back on this or another device (the file is the same format the web client reads and writes).
+Both clients export the whole library (vocabulary, transcripts, review history, XP, streak and the current roleplay) as plain JSON or as a passphrase-encrypted envelope. Each can import what the other wrote. The import is **validated before anything is written, then additive**: existing cards keep their schedules, matching words merge metadata without resetting progress, XP never decreases, and streaks are recomputed. API keys are never part of a backup. Details are in [`docs/BACKUP_FORMAT.md`](docs/BACKUP_FORMAT.md).
 
----
+## Limitations and next steps
 
-## 📄 License
+- Web speech recognition depends on the browser and is unavailable in Firefox; the app falls back to typing.
+- Practice measures recognition, not pronunciation. A phoneme-level score would need a different engine.
+- The Android screenshots predate the latest fixes and should be retaken.
+- This round's web refinements (dashboard hierarchy, Library rows and details, the roleplay composer) are not yet mirrored in Compose.
+- A public synthetic-data demo is possible (see above) but has not been set up.
 
-DeutschFlow is open-source software licensed under the [MIT License](LICENSE).
+## License
+
+[MIT](LICENSE)
