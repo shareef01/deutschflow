@@ -46,12 +46,13 @@ The web screenshots are produced by [`npm run screenshots`](web/tests/portfolio/
 | <img src="docs/screenshots/portfolio/practice-mobile-light.png" width="190" alt="Pronunciation practice: listen, then speak" /> <img src="docs/screenshots/portfolio/roleplay-mobile-dark.png" width="190" alt="Roleplay conversation at a bakery" /> | **5. Practice.** Listen, then speak. The result counts the words the recogniser heard and says outright that this is recognition, not an accent score. Roleplay keeps the scenario and its goals in view, with a one-row voice-or-type composer. |
 | <img src="docs/screenshots/portfolio/settings-mobile-dark.png" width="190" alt="Settings: backup, AI key, progress, speech" /> | **6. Settings.** Encrypted or plain backups, the API key, learner level, recognition dialect and storage durability, plus a confirmed reset. |
 
-Android screenshots are in [`docs/screenshots/android/`](docs/screenshots/android/). They were retaken on 30 October 2026 on an API 36 emulator (1080×2400), from the same synthetic library the web screenshots use, after the Library and Study dashboard changes above were carried over to Compose.
+Android screenshots are in [`docs/screenshots/android/`](docs/screenshots/android/). They were retaken on 30 October 2026 on an API 36 emulator (1080×2400), from the same synthetic library the web screenshots use, after the Library, Study dashboard, Practice and roleplay changes above were carried over to Compose.
 
 <p>
   <img src="docs/screenshots/android/emulator-api36-library.png" width="190" alt="Android Library: article beside each word, meaning and plural below" />
   <img src="docs/screenshots/android/emulator-api36-word-detail.png" width="190" alt="Android word details: grammar, quoted example, synonyms, Edit and Delete" />
   <img src="docs/screenshots/android/emulator-api36-study.png" width="190" alt="Android Study dashboard: cards due today, daily goal, retention bar" />
+  <img src="docs/screenshots/android/emulator-api36-roleplay.png" width="190" alt="Android roleplay: scenario, goals, conversation and a one-row voice-or-type composer" />
 </p>
 
 ## Architecture
@@ -170,7 +171,6 @@ Both clients export the whole library (vocabulary, transcripts, review history, 
 
 - Web speech recognition depends on the browser and is unavailable in Firefox; the app falls back to typing.
 - Practice measures recognition, not pronunciation. A phoneme-level score would need a different engine.
-- The web's roleplay composer and Practice refinements are not yet mirrored in Compose; the Library and Study dashboard are.
 - Nothing checks the two clients against each other visually yet; the screenshots are a review aid, not a gate.
 - A public synthetic-data demo is possible (see above) but has not been set up.
 

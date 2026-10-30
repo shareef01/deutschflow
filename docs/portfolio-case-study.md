@@ -145,12 +145,12 @@ This round refined the system rather than replacing it:
 
 - Web recognition quality and privacy depend on the browser vendor.
 - Practice feedback measures recognition, not pronunciation.
-- The Library and Study dashboard hierarchy now exists in Compose too, but the roleplay composer and Practice refinements are still web-only.
+- The Library, Study dashboard, Practice and roleplay refinements now exist in Compose too. The two clients still differ on purpose where the platforms do: Android hides a roleplay translation behind a toggle, and the web shows it.
 - The hosted PWA is password-gated, so there is no public demo.
 
 ## 13. Future improvements
 
-- **Carry the Practice and roleplay refinements to Compose**, and add screenshot tests (Compose `captureToImage` or Roborazzi) so the two clients cannot drift visually unnoticed.
+- **Add screenshot tests** (Compose `captureToImage` or Roborazzi) so the two clients cannot drift visually unnoticed.
 - **A public demo deployment.** Each visitor's data stays in their own browser and the server holds no learner data or keys, so a separate ungated build is low-risk. Deploying and operating it is the owner's decision.
 - **Pixel baselines generated in CI's own image**, so they can become a gate rather than a review aid.
 - **Phoneme-level pronunciation feedback**, if an on-device engine that can provide it becomes practical.

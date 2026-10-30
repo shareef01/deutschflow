@@ -4,24 +4,25 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,18 +32,20 @@ import com.aus.deutschflow.data.model.RoleplayScenarioCatalog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aus.deutschflow.R
+import com.aus.deutschflow.ui.components.GlassTextField
 import com.aus.deutschflow.ui.components.GlassmorphicCard
 import com.aus.deutschflow.ui.components.isAtConversationBottom
 import kotlinx.coroutines.launch
@@ -165,7 +168,8 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
         viewModel.openScenarioIfEmpty(selectedScenario.id)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // imePadding: the composer is at the bottom, and the keyboard would cover it.
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // Scenario Header Bar
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -260,6 +264,8 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
                 }
             }
         }
+
+        ScenarioBrief(selectedScenario)
 
         // Conversation Chat Timeline
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -369,90 +375,177 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
             }
         }
 
-        // Voice Input Control Footer
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
+        RoleplayComposer(
+            isListening = isListening,
+            isProcessing = isProcessing,
+            partialText = partialText,
+            onMicClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (isListening) viewModel.stopListeningAndSend()
+                else if (!permissionRequestInProgress) requestMicThenListen()
+            },
+            onSend = { text ->
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                viewModel.sendInput(text)
+            }
+        )
+    }
+}
+
+/**
+ * Where the learner is and what they are trying to do. One line until it is asked
+ * for, so a long conversation keeps the room.
+ */
+@Composable
+private fun ScenarioBrief(scenario: RoleplayScenario) {
+    // Keyed by scenario: a new scene starts with its brief folded again.
+    var expanded by rememberSaveable(scenario.id) { mutableStateOf(false) }
+    val goalsLabel = stringResource(R.string.roleplay_your_goals)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = goalsLabel) { expanded = !expanded }
+            .heightIn(min = 48.dp)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(scenario.contextRes),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = if (expanded) Int.MAX_VALUE else 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(Spacing.sm))
+            Text(
+                text = goalsLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.padding(top = Spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs)
             ) {
-                if (isListening && partialText.isNotBlank()) {
+                scenario.goalRes.forEach { goal ->
                     Text(
-                        text = partialText,
+                        text = "• " + stringResource(goal),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = Spacing.sm)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
+            }
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
 
-                Box(contentAlignment = Alignment.Center) {
-                    if (isListening && !LocalReducedMotion.current) {
-                        val pulseScale by rememberInfiniteTransition(label = "roleplayMicPulse").animateFloat(
-                            initialValue = 1f,
-                            targetValue = 1.6f,
-                            animationSpec = infiniteRepeatable(
-                                tween(Motion.PULSE_PERIOD, easing = Motion.Standard),
-                                RepeatMode.Restart
-                            ),
-                            label = "pulse"
-                        )
-                        Box(
-                            Modifier
-                                .size(64.dp)
-                                .scale(pulseScale)
-                                .alpha(0.25f)
-                                .background(MaterialTheme.colorScheme.error, CircleShape)
-                        )
-                    }
+/**
+ * One row: microphone, text field, send. Speaking used to be the only way to take a
+ * turn, so a learner in a quiet office, or with no German recognition pack installed,
+ * could not take part at all; everything after recognition only needs a string.
+ *
+ * The field stays editable while the reply is on its way, so the next line can be
+ * drafted; only sending waits. It locks while listening, because a typed turn and a
+ * spoken one would otherwise race to the same slot.
+ */
+@Composable
+private fun RoleplayComposer(
+    isListening: Boolean,
+    isProcessing: Boolean,
+    partialText: String,
+    onMicClick: () -> Unit,
+    onSend: (String) -> Unit
+) {
+    var typedText by rememberSaveable { mutableStateOf("") }
+    val canSend = typedText.isNotBlank() && !isProcessing && !isListening
+    val send = {
+        if (canSend) {
+            onSend(typedText)
+            typedText = ""
+        }
+    }
+    val placeholder = stringResource(R.string.roleplay_type_placeholder)
+    val micLabel = stringResource(
+        if (isListening) R.string.roleplay_send_turn else R.string.roleplay_start_speaking
+    )
 
-                    val micLabel = stringResource(
-                        if (isListening) R.string.roleplay_send_turn else R.string.roleplay_start_speaking
-                    )
-
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (isListening) viewModel.stopListeningAndSend()
-                            else if (!permissionRequestInProgress) requestMicThenListen()
-                        },
-                        enabled = !isProcessing,
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isListening) {
-                                    Brush.linearGradient(
-                                        listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer)
-                                    )
-                                } else {
-                                    Brush.linearGradient(listOf(AppTheme.colors.azureGlow, MaterialTheme.colorScheme.primary))
-                                }
-                            )
-                    ) {
-                        Icon(
-                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                            contentDescription = micLabel,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+        ) {
+            if (isListening) {
                 Text(
-                    text = stringResource(
-                        if (isListening) R.string.roleplay_tap_to_send else R.string.roleplay_tap_to_speak
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = Spacing.xs)
+                    text = partialText.ifBlank { stringResource(R.string.practice_waiting) },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (partialText.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = Spacing.sm)
                 )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                FilledIconButton(
+                    onClick = onMicClick,
+                    enabled = !isProcessing,
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = if (isListening) MaterialTheme.colorScheme.errorContainer
+                        else MaterialTheme.colorScheme.primary,
+                        contentColor = if (isListening) MaterialTheme.colorScheme.onErrorContainer
+                        else MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                        contentDescription = micLabel
+                    )
+                }
+                GlassTextField(
+                    value = typedText,
+                    onValueChange = { typedText = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = placeholder },
+                    placeholder = placeholder,
+                    enabled = !isListening,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Send
+                    ),
+                    keyboardActions = KeyboardActions(onSend = { send() }),
+                    minHeight = 48.dp
+                )
+                IconButton(
+                    onClick = send,
+                    enabled = canSend,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = stringResource(R.string.roleplay_send)
+                    )
+                }
             }
         }
     }
@@ -534,21 +627,21 @@ private fun ChatBubble(message: ChatMessage, onSpeak: (String) -> Unit) {
                 }
 
                 if (!message.translation.isNullOrBlank()) {
-                    Text(
-                        text = stringResource(
-                            if (showTranslation) R.string.roleplay_hide_translation
-                            else R.string.roleplay_show_translation
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                showTranslation = !showTranslation
-                            }
-                            .padding(horizontal = Spacing.xs, vertical = 4.dp)
-                    )
+                    TextButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showTranslation = !showTranslation
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) {
+                        Text(
+                            text = stringResource(
+                                if (showTranslation) R.string.roleplay_hide_translation
+                                else R.string.roleplay_show_translation
+                            ),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
             }
         }
