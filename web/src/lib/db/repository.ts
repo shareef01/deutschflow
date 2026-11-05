@@ -247,10 +247,11 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
       synonyms: input.synonyms ?? editing?.synonyms ?? "",
       antonyms: input.antonyms ?? editing?.antonyms ?? "",
 
-      nextReview: input.nextReview ?? editing?.nextReview ?? NEW_CARD_SCHEDULE.nextReview,
-      interval: input.interval ?? editing?.interval ?? NEW_CARD_SCHEDULE.interval,
-      easeFactor: input.easeFactor ?? editing?.easeFactor ?? NEW_CARD_SCHEDULE.easeFactor,
-      reviewCount: input.reviewCount ?? editing?.reviewCount ?? NEW_CARD_SCHEDULE.reviewCount,
+      // Content edits carry full UI snapshots; only the stored row owns its schedule.
+      nextReview: editing?.nextReview ?? input.nextReview ?? NEW_CARD_SCHEDULE.nextReview,
+      interval: editing?.interval ?? input.interval ?? NEW_CARD_SCHEDULE.interval,
+      easeFactor: editing?.easeFactor ?? input.easeFactor ?? NEW_CARD_SCHEDULE.easeFactor,
+      reviewCount: editing?.reviewCount ?? input.reviewCount ?? NEW_CARD_SCHEDULE.reviewCount,
 
       // `||`, not `??`: rows migrated from before the sync columns carry an
       // empty string, which needs a real id just as much as a missing one.
@@ -718,18 +719,10 @@ export async function clearAllProgress(db: DeutschFlowDB): Promise<void> {
 
 // --- roleplay conversation --------------------------------------------------
 //
-// Mirrors RoleplayDao. Only the current conversation is stored; starting a new
-// scenario clears it. Every one of these swallows its own failure: a chat that
-// cannot be saved is a chat the user still has in front of them, and throwing
-// out of a turn to report it would cost them the turn as well as the copy.
-
-/** The saved conversation, oldest turn first — the order the chat renders in. */
+// A read failure must stay distinct from an empty chat: the latter permits a
+// new scene to clear the table. The hook owns the retry/error surface.
 export async function loadConversation(db: DeutschFlowDB): Promise<RoleplayMessageEntry[]> {
-  try {
-    return await db.roleplayMessages.orderBy("position").toArray();
-  } catch {
-    return [];
-  }
+  return db.roleplayMessages.orderBy("position").toArray();
 }
 
 /** Writes one turn. `put`, so a resent turn replaces the row at its position. */
@@ -745,9 +738,5 @@ export async function saveConversationTurn(
 }
 
 export async function clearConversation(db: DeutschFlowDB): Promise<void> {
-  try {
-    await db.roleplayMessages.clear();
-  } catch {
-    // As above.
-  }
+  await db.roleplayMessages.clear();
 }

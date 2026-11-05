@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getApiKey, getCefrLevel } from "@/lib/db/settings";
 import { insertTranscript, saveVocabulary, updateTranscriptAnalysis } from "@/lib/db/repository";
 import { isRecognitionSupported, recognizer, type RecognizerState } from "@/lib/speech/recognizer";
-import { resolveRecognitionDialect } from "@/lib/speech/dialect";
+import { useMicrophoneStart } from "./useMicrophoneStart";
 import { vocabularyProcessor } from "@/lib/ai/processor";
 import { t } from "@/lib/i18n";
 import type { WordDetails, GrammarNote } from "@/lib/ai/groq";
@@ -197,7 +197,7 @@ export function useTranscript() {
     });
   }, [handleUtterance]);
 
-  const isStarting = useRef(false);
+  const { startListening: startMicrophone, cancelListening } = useMicrophoneStart();
 
   useEffect(() => {
     return () => {
@@ -208,29 +208,11 @@ export function useTranscript() {
     };
   }, []);
 
-  const startListening = useCallback(async () => {
-    if (isStarting.current || recognizer.getSnapshot().isListening) return;
-    isStarting.current = true;
-    // A new session clears the screen; an older utterance still in flight would
-    // otherwise repopulate it with a result for text that is no longer shown.
+  const startListening = useCallback(() => startMicrophone(() => {
     utteranceToken.current++;
     utteranceAbort.current?.abort();
     setState((prev) => ({ ...prev, finalText: "", translation: "", suggestedWords: [], grammarNotes: [], example: "", aiError: null }));
-
-    try {
-      const granted = await recognizer.requestMicrophonePermission();
-      if (!granted) {
-        recognizer.reportPermissionDenied();
-        return;
-      }
-      const dialect = await resolveRecognitionDialect();
-      recognizer.startListening(dialect);
-    } catch {
-      recognizer.reportPermissionDenied();
-    } finally {
-      isStarting.current = false;
-    }
-  }, []);
+  }), [startMicrophone]);
 
   /**
    * Runs a typed sentence through the same path an utterance takes.
@@ -249,7 +231,6 @@ export function useTranscript() {
   );
 
   const stopListening = useCallback(() => recognizer.stopListening(), []);
-  const cancelListening = useCallback(() => recognizer.cancel(), []);
 
   /**
    * @returns true only once the row is committed, so the snackbar that follows is a

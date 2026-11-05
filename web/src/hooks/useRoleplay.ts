@@ -5,7 +5,7 @@ import { startRoleplay, continueRoleplay } from "@/lib/ai/groq";
 import { DEFAULT_SCENARIO_TITLE } from "@/lib/ai/scenarios";
 import { t } from "@/lib/i18n";
 import { recognizer, isRecognitionSupported, type RecognizerState } from "@/lib/speech/recognizer";
-import { resolveRecognitionDialect } from "@/lib/speech/dialect";
+import { useMicrophoneStart } from "./useMicrophoneStart";
 import { tts } from "@/lib/speech/tts";
 
 export interface ChatMessage {
@@ -58,6 +58,14 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [scenario, setScenario] = useState(DEFAULT_SCENARIO);
+    const foreground = useRef(active);
+    const restoredOk = useRef(false);
+    const sceneGeneration = useRef(0);
+    const { startListening: startMicrophone } = useMicrophoneStart(active);
+    useEffect(() => {
+        foreground.current = active;
+        return () => { foreground.current = false; };
+    }, [active]);
 
     const recognizerState = useSyncExternalStore(
         recognizer.subscribe,
@@ -107,7 +115,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
     }, []);
 
     const runOpening = useCallback(async () => {
-        if (inFlight.current) return;
+        if (!foreground.current || !restoredOk.current || inFlight.current) return;
         inFlight.current = true;
         setIsProcessing(true);
         setError(null);
@@ -124,6 +132,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         try {
             const apiKey = (await getApiKey(db)) ?? "";
             const cefr = await getCefrLevel(db);
+            if (controller.signal.aborted || !foreground.current) return;
             const result = await startRoleplay(scenarioRef.current, [], apiKey, cefr, controller.signal);
 
             if (controller.signal.aborted) return;
@@ -136,20 +145,23 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
                 historyRef.current = [reply];
                 setMessages(historyRef.current);
                 persist(reply, 0);
-                if (await getAutoPlay(db)) tts.speak(result.aiResponse);
+                const autoPlay = await getAutoPlay(db);
+                if (!controller.signal.aborted && foreground.current && autoPlay) tts.speak(result.aiResponse);
             } else {
                 setError(result.message);
             }
         } catch {
-            setError(t("ai.noKey"));
+            if (!controller.signal.aborted && foreground.current) setError(t("ai.noKey"));
         } finally {
-            inFlight.current = false;
-            setIsProcessing(false);
+            if (turnAbort.current === controller) {
+                inFlight.current = false;
+                setIsProcessing(false);
+            }
         }
     }, [persist]);
 
     const runTurn = useCallback(async (userInput: string, appendUser = true) => {
-        if (inFlight.current) return;
+        if (!foreground.current || !restoredOk.current || inFlight.current) return;
         const trimmed = userInput.trim();
         if (!trimmed && appendUser) {
             return;
@@ -182,6 +194,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
             const inputToSend = appendUser
                 ? trimmed
                 : (historyRef.current[historyRef.current.length - 1]?.content ?? trimmed);
+            if (controller.signal.aborted || !foreground.current) return;
             const result = await continueRoleplay(inputToSend, history, scenarioRef.current, apiKey, cefr, controller.signal);
 
             if (controller.signal.aborted) return;
@@ -195,15 +208,18 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
                 historyRef.current = [...historyRef.current, reply];
                 setMessages(historyRef.current);
                 persist(reply, historyRef.current.length - 1);
-                if (await getAutoPlay(db)) tts.speak(result.aiResponse);
+                const autoPlay = await getAutoPlay(db);
+                if (!controller.signal.aborted && foreground.current && autoPlay) tts.speak(result.aiResponse);
             } else {
                 setError(result.message);
             }
         } catch {
-            setError(t("ai.noKey"));
+            if (!controller.signal.aborted && foreground.current) setError(t("ai.noKey"));
         } finally {
-            inFlight.current = false;
-            setIsProcessing(false);
+            if (turnAbort.current === controller) {
+                inFlight.current = false;
+                setIsProcessing(false);
+            }
         }
     }, [persist]);
 
@@ -221,37 +237,18 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
      * to leave it open, so the next spoken sentence went to whatever screen was
      * listening now. RepetitionMode applies the same discipline on its own unmount.
      */
+    const cancelTurn = useCallback(() => {
+        sceneGeneration.current++;
+        turnAbort.current?.abort();
+        turnAbort.current = null;
+        inFlight.current = false;
+        setIsProcessing(false);
+        tts.stop();
+    }, []);
     useEffect(() => {
-        if (!active) {
-            recognizer.cancel();
-            // The mode is off screen: an answer that arrives now would be spoken and
-            // persisted under a conversation nobody is looking at.
-            turnAbort.current?.abort();
-        }
-    }, [active]);
-    useEffect(
-        () => () => {
-            recognizer.cancel();
-            turnAbort.current?.abort();
-        },
-        []
-    );
-
-    const startSession = useCallback(
-        async (newScenario?: string) => {
-            const activeScenario = newScenario ?? scenarioRef.current;
-            // A new scene cancels the old one's turn before the rows are cleared, so a
-            // late answer cannot be persisted into a conversation that no longer exists.
-            turnAbort.current?.abort();
-            setScenario(activeScenario);
-            scenarioRef.current = activeScenario;
-            historyRef.current = [];
-            setMessages([]);
-            await clearConversation(db);
-            await runOpening();
-        },
-        [runOpening]
-    );
+        if (!active) cancelTurn();
+        return cancelTurn;
+    }, [active, cancelTurn]);
 
     /**
      * Reads the saved conversation back, once per mount.
@@ -260,26 +257,57 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
      * *wait* for it, and a flag would leave the caller reading `messages` and
      * "have we restored yet" as two independently-timed pieces of state.
      */
-    const restored = useRef<Promise<void> | null>(null);
+    const restored = useRef<Promise<boolean> | null>(null);
     const restore = useCallback(() => {
         restored.current ??= (async () => {
-            const saved = await loadConversation(db);
-            if (saved.length === 0 || historyRef.current.length > 0) return;
-            historyRef.current = saved.map((m) => ({
-                role: m.role,
-                content: m.content,
-                translation: m.translation,
-            }));
-            setMessages(historyRef.current);
-            setScenario(saved[0].scenario);
-            scenarioRef.current = saved[0].scenario;
+            try {
+                const saved = await loadConversation(db);
+                if (saved.length > 0 && historyRef.current.length === 0) {
+                    historyRef.current = saved.map((m) => ({
+                        role: m.role, content: m.content, translation: m.translation,
+                    }));
+                    setMessages(historyRef.current);
+                    setScenario(saved[0].scenario);
+                    scenarioRef.current = saved[0].scenario;
+                }
+                restoredOk.current = true;
+                return true;
+            } catch {
+                restored.current = null;
+                if (foreground.current) setError(t("ai.storageFailed"));
+                return false;
+            }
         })();
         return restored.current;
     }, []);
 
-    useEffect(() => {
-        void restore();
-    }, [restore]);
+    const startSession = useCallback(async (newScenario?: string) => {
+        if (!foreground.current || !await restore() || !foreground.current) return;
+        const generation = ++sceneGeneration.current;
+        turnAbort.current?.abort();
+        turnAbort.current = null;
+        inFlight.current = true;
+        setIsProcessing(true);
+        try {
+            // Do not replace the visible chat unless its stored predecessor was cleared.
+            await clearConversation(db);
+            if (generation !== sceneGeneration.current || !foreground.current) return;
+            const activeScenario = newScenario ?? scenarioRef.current;
+            setScenario(activeScenario);
+            scenarioRef.current = activeScenario;
+            historyRef.current = [];
+            setMessages([]);
+            inFlight.current = false;
+            await runOpening();
+        } catch {
+            if (generation === sceneGeneration.current && foreground.current) setError(t("ai.storageFailed"));
+        } finally {
+            if (generation === sceneGeneration.current) {
+                inFlight.current = false;
+                setIsProcessing(false);
+            }
+        }
+    }, [restore, runOpening]);
 
     /**
      * Opens [scenario] only if there is nothing to come back to.
@@ -290,7 +318,8 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
      */
     const openScenarioIfEmpty = useCallback(
         async (newScenario?: string) => {
-            await restore();
+            if (!foreground.current || !await restore() || !foreground.current) return;
+            setError(null);
             if (historyRef.current.length === 0 && !inFlight.current) {
                 await startSession(newScenario);
             }
@@ -298,7 +327,10 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
         [restore, startSession]
     );
 
-    const isStarting = useRef(false);
+    // Hidden panels stay mounted; only activation may request a new greeting.
+    useEffect(() => {
+        if (active) void openScenarioIfEmpty();
+    }, [active, openScenarioIfEmpty]);
 
     /**
      * When "stop" was last tapped, so the utterance-delivery window can be bounded.
@@ -323,23 +355,9 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
             state.isProcessing &&
             stopRequestedAt.current > 0 &&
             Date.now() - stopRequestedAt.current < STOP_GRACE_MS;
-        if (isStarting.current || state.isListening || closingUtterance) return;
-        isStarting.current = true;
-        setError(null);
-        try {
-            const granted = await recognizer.requestMicrophonePermission();
-            if (!granted) {
-                recognizer.reportPermissionDenied();
-                return;
-            }
-            const dialect = await resolveRecognitionDialect();
-            recognizer.startListening(dialect);
-        } catch {
-            recognizer.reportPermissionDenied();
-        } finally {
-            isStarting.current = false;
-        }
-    }, []);
+        if (state.isListening || closingUtterance) return;
+        await startMicrophone(() => setError(null));
+    }, [startMicrophone]);
 
     /** Ends the utterance; `onUtterance` above delivers it and sends the turn. */
     const stopAndSend = useCallback(() => {
@@ -353,13 +371,17 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
      * since a failed greeting otherwise leaves the screen permanently blank.
      */
     const retry = useCallback(() => {
+        if (!restoredOk.current) {
+            void openScenarioIfEmpty();
+            return;
+        }
         const last = historyRef.current[historyRef.current.length - 1];
         if (last?.role === "user") {
             void runTurn(last.content, false);
         } else {
             void runOpening();
         }
-    }, [runTurn, runOpening]);
+    }, [runTurn, runOpening, openScenarioIfEmpty]);
 
     return {
         speechSupported,

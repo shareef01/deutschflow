@@ -222,7 +222,7 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
     const {
         messages, isProcessing, isListening, partialText, speechSupported,
         error, retry, scenario,
-        openScenarioIfEmpty, startSession, startListening, stopAndSend, speak, sendMessage
+        startSession, startListening, stopAndSend, speak, sendMessage
     } = roleplay;
 
     const [typedText, setTypedText] = useState("");
@@ -248,11 +248,6 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
      * short for a real scroll of the user's own to be missed.
      */
     const suppressPinUpdate = useRef(false);
-
-    // Open a scene only if there is nothing to come back to.
-    useEffect(() => {
-        void openScenarioIfEmpty();
-    }, [openScenarioIfEmpty]);
 
     const metricsOf = (el: HTMLDivElement) => ({
         scrollTop: el.scrollTop,

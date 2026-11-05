@@ -206,7 +206,14 @@ interface VocabularyDao {
         // from germanText, and `copy(germanText = ...)` on the edit path would
         // otherwise carry the old word's key into the new one.
         val now = System.currentTimeMillis()
+        // An edit owns content, not the schedule committed by a concurrent review.
+        val stored = if (entry.id != 0) findById(entry.id) else null
         val vocabulary = entry.copy(
+            nextReview = stored?.nextReview ?: entry.nextReview,
+            interval = stored?.interval ?: entry.interval,
+            easeFactor = stored?.easeFactor ?: entry.easeFactor,
+            reviewCount = stored?.reviewCount ?: entry.reviewCount,
+            remoteId = stored?.remoteId ?: entry.remoteId,
             germanTextKey = key,
             lastModifiedAt = maxOf(entry.lastModifiedAt, now)
         )

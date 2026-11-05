@@ -185,7 +185,7 @@ class RoleplayViewModel @Inject constructor(
         // into the mic, and a turn still waiting on the model. Abandoned, not delivered
         // - a sentence meant for the baker is not the first line said to the doctor.
         cancelListening()
-        turnGeneration++
+        val sceneGeneration = ++turnGeneration
         turnJob?.cancel()
         turnJob = null
         _isProcessing.value = false
@@ -199,6 +199,7 @@ class RoleplayViewModel @Inject constructor(
             // snapped back - and this scene's opening line was then written under the
             // old id, while the rows it had already deleted stayed deleted.
             restore.join()
+            if (sceneGeneration != turnGeneration) return@launchGuarded
 
             currentScenarioId = scenarioId
             RoleplayScenarioCatalog.SCENARIOS.find { it.id == scenarioId }?.let {
@@ -211,7 +212,7 @@ class RoleplayViewModel @Inject constructor(
             // both touch this table, and a delete that landed second would take the
             // new scene's opening line with it.
             write { roleplayDao.deleteAll() }
-            startOpeningTurn()
+            if (sceneGeneration == turnGeneration) startOpeningTurn()
         }
     }
 
@@ -292,6 +293,18 @@ class RoleplayViewModel @Inject constructor(
         speechRecognizerHelper.cancel()
     }
 
+    /** Abandon pending replies as well as current audio when this screen leaves. */
+    fun onLeavingScreen() {
+        cancelListening()
+        val interrupted = _isProcessing.value
+        turnGeneration++
+        turnJob?.cancel()
+        turnJob = null
+        _isProcessing.value = false
+        if (interrupted) _error.value = context.getString(R.string.ai_cancelled)
+        ttsHelper.stop()
+    }
+
     /**
      * Requests the final result. The results collector sends it whether recognition
      * finishes automatically or the user presses Stop, without rereading old finalText.
@@ -348,7 +361,8 @@ class RoleplayViewModel @Inject constructor(
                         )
                         _messages.value += reply
                         persist(reply, _messages.value.size - 1)
-                        if (preferenceManager.isAutoPlayEnabled.first()) {
+                        val autoPlay = preferenceManager.isAutoPlayEnabled.first()
+                        if (turn == turnGeneration && autoPlay) {
                             ttsHelper.speak(result.aiResponse)
                         }
                     }
@@ -396,7 +410,8 @@ class RoleplayViewModel @Inject constructor(
                         )
                         _messages.value += reply
                         persist(reply, _messages.value.size - 1)
-                        if (preferenceManager.isAutoPlayEnabled.first()) {
+                        val autoPlay = preferenceManager.isAutoPlayEnabled.first()
+                        if (turn == turnGeneration && autoPlay) {
                             ttsHelper.speak(result.aiResponse)
                         }
                     }

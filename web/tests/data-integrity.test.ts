@@ -188,3 +188,17 @@ it("rejects malformed new collections atomically and still accepts version 1", a
   await importLibrary(target, { ...backup, version: 1, reviewEvents: undefined, roleplayMessages: undefined });
   expect(await target.vocabulary.count()).toBe(1);
 });
+
+for (const renamed of [false, true]) {
+  it(`a stale ${renamed ? "rename" : "content edit"} preserves a committed review`, async () => {
+    const db = fresh(), snapshot = await seed(db);
+    const reviewed = await recordReview(db, snapshot, ReviewQuality.GOOD, false);
+    await saveVocabulary(db, { ...snapshot, germanText: renamed ? "Gebäude" : snapshot.germanText,
+      englishTranslation: "a house" });
+    const edited = await db.vocabulary.get(snapshot.id!);
+    expect(edited).toMatchObject({ englishTranslation: "a house", reviewCount: reviewed.reviewCount,
+      nextReview: reviewed.nextReview, interval: reviewed.interval, easeFactor: reviewed.easeFactor,
+      remoteId: reviewed.remoteId, lastStudiedAt: reviewed.lastStudiedAt });
+    expect(await db.reviewEvents.count()).toBe(1);
+  });
+}

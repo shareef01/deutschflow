@@ -87,13 +87,11 @@ describe("roleplay conversation storage", () => {
     db.close();
   });
 
-  it("returns an empty conversation rather than throwing on a closed database", async () => {
-    // A chat that cannot be read is a chat you start fresh; it must not take the
-    // screen down. The hook awaits this before deciding whether to open a scene.
+  it("propagates a failed read so the hook cannot replace an unread conversation", async () => {
     const db = freshDb();
     await db.open();
     db.close();
-    await expect(loadConversation(db)).resolves.toEqual([]);
+    await expect(loadConversation(db)).rejects.toThrow();
   });
 
   it("is wiped by clear-all-progress, which promises exactly that", async () => {

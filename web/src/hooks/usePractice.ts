@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getAllVocabulary } from "@/lib/db/repository";
 import { recognizer, isRecognitionSupported } from "@/lib/speech/recognizer";
 import { tts } from "@/lib/speech/tts";
-import { resolveRecognitionDialect } from "@/lib/speech/dialect";
+import { useMicrophoneStart } from "./useMicrophoneStart";
 import { evaluateMatch, type PracticeFeedback, type WordResult } from "@/lib/scoring";
 
 /**
@@ -81,7 +81,7 @@ export function usePractice({ active = true }: { active?: boolean } = {}) {
    * only [loadRandomTarget], so the scorer always sees the current sentence.
    */
   const targetRef = useRef(targetSentence);
-  const isStarting = useRef(false);
+  const { startListening: startMicrophone, cancelListening } = useMicrophoneStart(active);
 
   /** One error surface: whichever of the microphone or the voice engine last
    * had something to say — recognition preferred, like the Android combine. */
@@ -146,33 +146,15 @@ export function usePractice({ active = true }: { active?: boolean } = {}) {
     recognizer.cancel();
   }, [active]);
 
-  const startPractice = useCallback(async () => {
-    if (isStarting.current || recognizer.getSnapshot().isListening) return;
-    isStarting.current = true;
+  const startPractice = useCallback(() => startMicrophone(() => {
     setWordResults([]);
     setFeedback("NONE");
-    // Stop any German playback before the microphone opens.
     tts.stop();
-
-    try {
-      const granted = await recognizer.requestMicrophonePermission();
-      if (!granted) {
-        recognizer.reportPermissionDenied();
-        return;
-      }
-      const dialect = await resolveRecognitionDialect();
-      recognizer.startListening(dialect);
-    } catch {
-      recognizer.reportPermissionDenied();
-    } finally {
-      isStarting.current = false;
-    }
-  }, []);
+  }), [startMicrophone]);
 
   const stopPractice = useCallback(() => recognizer.stopListening(), []);
 
   /** Called when the screen leaves composition — the OnLeavingScreen port. */
-  const cancelListening = useCallback(() => recognizer.cancel(), []);
 
   const speak = useCallback((text: string) => {
     // The recognizer's error outlives the attempt that caused it; the banner

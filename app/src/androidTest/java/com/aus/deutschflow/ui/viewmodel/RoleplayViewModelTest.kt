@@ -152,4 +152,57 @@ class RoleplayViewModelTest {
             database.close()
         }
     }
+    @Test
+    fun leavingMidReplyCancelsTheTurnAndRetryStillWorks() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val owner = ViewModelStore()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val started = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val pendingReply = CompletableDeferred<GroqHelper.RoleplayResult>()
+        var calls = 0
+        var tts: TTSHelper? = null
+        lateinit var viewModel: RoleplayViewModel
+        preferences.preferences.setAutoPlayEnabled(true)
+        val processor = object : VocabularyProcessor(GroqHelper(context)) {
+            override suspend fun continueRoleplay(userInput: String, history: List<Pair<String, String>>,
+                scenario: String, apiKey: String, learnerLevel: String?): GroqHelper.RoleplayResult {
+                if (++calls == 1) {
+                    started.complete(Unit)
+                    try { return pendingReply.await() }
+                    finally { cancelled.complete(Unit) }
+                }
+                return GroqHelper.RoleplayResult.Success("Recovered reply", "Recovered")
+            }
+        }
+        try {
+            instrumentation.runOnMainSync {
+                tts = TTSHelper(context)
+                viewModel = RoleplayViewModel(context, GroqHelper(context), SpeechRecognizerHelper(context),
+                    preferences.preferences, requireNotNull(tts), processor, database.roleplayDao())
+                owner.put("roleplay", viewModel)
+                viewModel.sendInput("Ein Brot bitte")
+            }
+            assertTrue(awaitCondition { started.isCompleted })
+            instrumentation.runOnMainSync { viewModel.onLeavingScreen() }
+            assertTrue(awaitCondition { cancelled.isCompleted })
+            assertTrue(!viewModel.isProcessing.value)
+            assertEquals(context.getString(com.aus.deutschflow.R.string.ai_cancelled), viewModel.error.value)
+            pendingReply.complete(GroqHelper.RoleplayResult.Success("STALE", "must not speak"))
+            delay(100)
+            assertEquals(listOf("Ein Brot bitte"), viewModel.messages.value.map { it.content })
+            assertTrue(database.roleplayDao().getConversation().none { it.content == "STALE" })
+            // The saved user turn remains available for the existing Retry action.
+            preferences.preferences.setAutoPlayEnabled(false)
+            instrumentation.runOnMainSync { viewModel.retry() }
+            assertTrue(awaitCondition { viewModel.messages.value.lastOrNull()?.content == "Recovered reply" && !viewModel.isProcessing.value })
+            assertEquals(2, calls)
+        } finally {
+            instrumentation.runOnMainSync { owner.clear(); tts?.shutdown() }
+            instrumentation.waitForIdleSync()
+            database.close()
+        }
+    }
+
 }

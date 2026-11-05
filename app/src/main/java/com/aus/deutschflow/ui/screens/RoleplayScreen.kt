@@ -114,12 +114,7 @@ fun RoleplayScreen(viewModel: RoleplayViewModel = hiltViewModel()) {
     // The ViewModel is scoped to the saved back stack entry, so tab switches and
     // backgrounding would otherwise leave the recogniser holding the microphone
     // behind whatever screen the user moved on to.
-    OnLeavingScreen {
-        viewModel.cancelListening()
-        // The reply is spoken automatically, so leaving mid-sentence used to carry
-        // the voice into whatever screen came next.
-        viewModel.stopSpeaking()
-    }
+    OnLeavingScreen { viewModel.onLeavingScreen() }
 
     /**
      * Whether the conversation should follow its own tail.

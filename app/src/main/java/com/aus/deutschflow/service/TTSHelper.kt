@@ -285,6 +285,7 @@ class TTSHelper @Inject constructor(
      */
     fun stop() {
         synchronized(lock) {
+            pendingText = null
             abandonAudioFocus()
             tts?.stop()
         }

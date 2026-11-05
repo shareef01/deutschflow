@@ -58,6 +58,27 @@ class VocabularyDaoTest {
         assertTrue(allItems.isEmpty())
     }
 
+    @Test
+    fun staleContentEditsAndRenamesKeepTheCommittedSchedule() = runBlocking {
+        dao.save(VocabularyEntity(germanText = "Haus", englishTranslation = "house"))
+        val snapshot = dao.getAllVocabularyList().single()
+        dao.updateSchedule(snapshot.id, 2_000_000_000_000L, 6, 2.4f, 2, 10_000L)
+        dao.save(snapshot.copy(englishTranslation = "a house"))
+        val edited = requireNotNull(dao.findById(snapshot.id))
+        assertEquals("a house", edited.englishTranslation)
+        assertEquals(2, edited.reviewCount)
+        assertEquals(6, edited.interval)
+        assertEquals(2_000_000_000_000L, edited.nextReview)
+        assertEquals(2.4f, edited.easeFactor, 0.001f)
+        dao.save(snapshot.copy(germanText = "Gebäude", englishTranslation = "building"))
+        val renamed = requireNotNull(dao.findById(snapshot.id))
+        assertEquals("Gebäude", renamed.germanText)
+        assertEquals(edited.nextReview, renamed.nextReview)
+        assertEquals(edited.interval, renamed.interval)
+        assertEquals(edited.reviewCount, renamed.reviewCount)
+        assertEquals(snapshot.remoteId, renamed.remoteId)
+    }
+
     // --- save: the one way a word enters or changes -----------------------------
 
     @Test
