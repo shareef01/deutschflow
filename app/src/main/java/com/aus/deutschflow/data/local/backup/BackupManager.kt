@@ -1,6 +1,9 @@
 package com.aus.deutschflow.data.local.backup
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.aus.deutschflow.data.local.AppDatabase
 import com.aus.deutschflow.data.local.dao.*
 import com.aus.deutschflow.data.local.entities.*
@@ -31,7 +34,7 @@ class BackupManager @Inject constructor(
     private val reviewEventDao: ReviewEventDao
 ) {
 
-    suspend fun exportBackup(passphrase: CharArray? = null): String {
+    suspend fun exportBackup(passphrase: CharArray? = null): String = withContext(Dispatchers.IO) {
         val vocabulary = vocabularyDao.getAllVocabularyList()
         val transcripts = transcriptDao.getAllTranscriptsList()
         val userStats = userStatsDao.getUserStatsOnce()
@@ -148,26 +151,26 @@ class BackupManager @Inject constructor(
         if (plainJson.toByteArray(Charsets.UTF_8).size > MAX_PLAINTEXT_BACKUP_BYTES) {
             throw BackupException.CapacityExceeded("Plaintext backup exceeds maximum supported size (50 MB).")
         }
-        return if (passphrase != null && passphrase.isNotEmpty()) {
+        if (passphrase != null && passphrase.isNotEmpty()) {
             BackupCrypto.encrypt(plainJson, passphrase)
         } else {
             plainJson
         }
     }
 
-    suspend fun exportToStream(outputStream: OutputStream, passphrase: CharArray? = null) {
+    suspend fun exportToStream(outputStream: OutputStream, passphrase: CharArray? = null): Unit = withContext(Dispatchers.IO) {
         val content = exportBackup(passphrase)
         outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(content) }
     }
 
-    suspend fun importFromStream(inputStream: InputStream, passphrase: CharArray? = null): BackupImportResult {
+    suspend fun importFromStream(inputStream: InputStream, passphrase: CharArray? = null): BackupImportResult = withContext(Dispatchers.IO) {
         // readBackupText owns the raw bytes, so by the time JSON parsing starts only the
         // decoded String is still reachable and the byte buffer can be collected.
         val content = readBackupText(inputStream)
-        return importBackup(content, passphrase)
+        importBackup(content, passphrase)
     }
 
-    suspend fun importBackup(content: String, passphrase: CharArray? = null): BackupImportResult {
+    suspend fun importBackup(content: String, passphrase: CharArray? = null): BackupImportResult = withContext(Dispatchers.IO) {
         if (content.isBlank()) {
             throw BackupException.InvalidFormat("Backup content is empty.")
         }
@@ -207,10 +210,12 @@ class BackupManager @Inject constructor(
 
         validateBackupJson(backupObj)
 
-        return try {
+        try {
             database.withTransaction {
                 applyImport(backupObj)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: BackupException) {
             throw e
         } catch (e: Exception) {

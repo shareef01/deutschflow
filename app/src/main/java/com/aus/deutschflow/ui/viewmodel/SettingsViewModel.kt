@@ -15,6 +15,9 @@ import com.aus.deutschflow.data.local.entities.UserStatsEntity
 import com.aus.deutschflow.service.DailyWordNotification
 import com.aus.deutschflow.ui.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
@@ -216,16 +219,26 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun exportBackup(outputStream: java.io.OutputStream, passphrase: String? = null) {
+    // Open lazily inside the coroutine: a stream opened by the screen's use block
+    // is already closed when a suspended Room query returns. Opening, using and
+    // closing it on IO also keeps document-provider calls off the main looper.
+    fun exportBackup(openOutputStream: () -> java.io.OutputStream?, passphrase: String? = null) {
         launchGuarded(TAG, onError = { _message.value = R.string.message_backup_failed }) {
             val passChars = passphrase?.takeIf { it.isNotBlank() }?.toCharArray()
-            backupManager.exportToStream(outputStream, passChars)
+            try {
+                withContext(Dispatchers.IO) {
+                    val stream = openOutputStream() ?: throw java.io.IOException("Unable to open backup output")
+                    stream.use { backupManager.exportToStream(it, passChars) }
+                }
+            } finally {
+                passChars?.fill('\u0000')
+            }
             _message.value = R.string.message_backup_exported
         }
     }
 
     fun importBackup(
-        inputStream: java.io.InputStream,
+        openInputStream: () -> java.io.InputStream?,
         passphrase: String? = null,
         onSuccess: (() -> Unit)? = null,
         onPassphraseNeeded: (() -> Unit)? = null
@@ -233,7 +246,14 @@ class SettingsViewModel @Inject constructor(
         launchGuarded(TAG, onError = { _message.value = R.string.message_backup_import_failed }) {
             try {
                 val passChars = passphrase?.takeIf { it.isNotBlank() }?.toCharArray()
-                backupManager.importFromStream(inputStream, passChars)
+                try {
+                    withContext(Dispatchers.IO) {
+                        val stream = openInputStream() ?: throw java.io.IOException("Unable to open backup input")
+                        stream.use { backupManager.importFromStream(it, passChars) }
+                    }
+                } finally {
+                    passChars?.fill('\u0000')
+                }
                 widgetUpdater.refresh()
                 _message.value = R.string.message_backup_imported
                 onSuccess?.invoke()
@@ -245,6 +265,8 @@ class SettingsViewModel @Inject constructor(
                 onPassphraseNeeded?.invoke()
             } catch (e: com.aus.deutschflow.data.local.backup.BackupException.UnsupportedVersion) {
                 _message.value = R.string.message_backup_unsupported_version
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _message.value = R.string.message_backup_import_failed
             }

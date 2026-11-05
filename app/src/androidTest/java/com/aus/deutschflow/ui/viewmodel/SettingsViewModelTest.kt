@@ -1,6 +1,13 @@
 package com.aus.deutschflow.ui.viewmodel
 
 import android.content.Context
+import android.os.Looper
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -129,6 +136,100 @@ class SettingsViewModelTest {
             widgetUpdater = WidgetUpdater(context),
             backupManager = backupManager
         )
+    }
+
+    private fun assertOffMainThread() {
+        assertFalse("document IO must not run on the main looper", Looper.myLooper() == Looper.getMainLooper())
+    }
+
+    @Test
+    fun encryptedBackupOwnsStreamsAcrossSuspensionAndRestoresData() = runBlocking {
+        seedEverything()
+        val outputClosed = AtomicBoolean(false)
+        val output = object : ByteArrayOutputStream() {
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                assertOffMainThread()
+                check(!outputClosed.get()) { "write after close" }
+                super.write(bytes, offset, length)
+            }
+            override fun close() {
+                assertOffMainThread()
+                outputClosed.set(true)
+                super.close()
+            }
+        }
+        withContext(Dispatchers.Main) {
+            viewModel.exportBackup(openOutputStream = {
+                assertOffMainThread()
+                output
+            }, passphrase = "backup-test-passphrase")
+        }
+        // The real PBKDF2 runs on the emulator; a cold emulator may need more
+        // than the short polling budget used by the non-cryptographic tests.
+        assertTrue("export did not finish: ${viewModel.message.value}", awaitCondition(timeoutMs = 30_000) {
+            viewModel.message.value == R.string.message_backup_exported
+        })
+        assertTrue(outputClosed.get())
+        assertTrue(output.size() > 0)
+
+        viewModel.clearAllProgress()
+        assertTrue(awaitCondition { viewModel.message.value == R.string.message_progress_cleared })
+        val inputClosed = AtomicBoolean(false)
+        val input = object : ByteArrayInputStream(output.toByteArray()) {
+            override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                assertOffMainThread()
+                check(!inputClosed.get()) { "read after close" }
+                return super.read(bytes, offset, length)
+            }
+            override fun close() {
+                assertOffMainThread()
+                inputClosed.set(true)
+                super.close()
+            }
+        }
+        val callbackRan = AtomicBoolean(false)
+        withContext(Dispatchers.Main) {
+            viewModel.importBackup(openInputStream = {
+                assertOffMainThread()
+                input
+            }, passphrase = "backup-test-passphrase", onSuccess = {
+                assertEquals(Looper.getMainLooper(), Looper.myLooper())
+                assertTrue(inputClosed.get())
+                callbackRan.set(true)
+            })
+        }
+        assertTrue("import did not finish: ${viewModel.message.value}", awaitCondition(timeoutMs = 30_000) { callbackRan.get() })
+        assertEquals(R.string.message_backup_imported, viewModel.message.value)
+        assertEquals(2, database.vocabularyDao().getAllVocabularyList().size)
+        assertEquals(1, database.transcriptDao().getAllTranscriptsList().size)
+        assertEquals(250, database.userStatsDao().getUserStatsOnce()?.xp)
+        assertEquals(1, database.roleplayDao().getConversation().size)
+    }
+
+    @Test
+    fun backupOpenFailuresAreReported() = runBlocking {
+        viewModel.exportBackup(openOutputStream = { throw IOException("provider refused") })
+        assertTrue(awaitCondition { viewModel.message.value == R.string.message_backup_failed })
+        viewModel.importBackup(openInputStream = { null })
+        assertTrue(awaitCondition { viewModel.message.value == R.string.message_backup_import_failed })
+    }
+
+    @Test
+    fun invalidImportClosesItsStreamAndKeepsExistingData() = runBlocking {
+        seedEverything()
+        val closed = AtomicBoolean(false)
+        viewModel.importBackup(openInputStream = {
+            object : ByteArrayInputStream("not json".toByteArray()) {
+                override fun close() {
+                    assertOffMainThread()
+                    closed.set(true)
+                    super.close()
+                }
+            }
+        })
+        assertTrue(awaitCondition { viewModel.message.value == R.string.message_backup_import_failed })
+        assertTrue(closed.get())
+        assertEquals(2, database.vocabularyDao().getAllVocabularyList().size)
     }
 
     /** A stored key is announced, so the screen can clear what was typed. */

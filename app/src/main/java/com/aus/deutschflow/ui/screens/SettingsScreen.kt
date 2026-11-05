@@ -101,19 +101,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     ) { uri ->
         if (uri != null) {
             pendingImportUri = uri
-            try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    viewModel.importBackup(
-                        inputStream = stream,
-                        passphrase = null,
-                        onPassphraseNeeded = {
-                            showImportPassphraseDialog = true
-                        }
-                    )
+            viewModel.importBackup(
+                openInputStream = { context.contentResolver.openInputStream(uri) },
+                passphrase = null,
+                onPassphraseNeeded = {
+                    showImportPassphraseDialog = true
                 }
-            } catch (e: Exception) {
-                // Handled in ViewModel
-            }
+            )
         }
     }
 
@@ -645,13 +639,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         showExportPassphraseDialog = false
                         exportPassphrase = ""
                         if (uri != null) {
-                            try {
-                                context.contentResolver.openOutputStream(uri)?.use { stream ->
-                                    viewModel.exportBackup(stream, pass)
-                                }
-                            } catch (e: Exception) {
-                                // Handled in ViewModel
-                            }
+                            viewModel.exportBackup(
+                                openOutputStream = { context.contentResolver.openOutputStream(uri) },
+                                passphrase = pass
+                            )
                         }
                     }
                 ) {
@@ -700,13 +691,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         showImportPassphraseDialog = false
                         importPassphrase = ""
                         if (uri != null && pass.isNotBlank()) {
-                            try {
-                                context.contentResolver.openInputStream(uri)?.use { stream ->
-                                    viewModel.importBackup(stream, pass)
-                                }
-                            } catch (e: Exception) {
-                                // Handled in ViewModel
-                            }
+                            viewModel.importBackup(
+                                openInputStream = { context.contentResolver.openInputStream(uri) },
+                                passphrase = pass
+                            )
                         }
                     }
                 ) {
