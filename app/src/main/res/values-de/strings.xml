@@ -21,7 +21,6 @@
     <string name="action_delete">Löschen</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_save">Speichern</string>
-    <string name="action_saving">Wird gespeichert…</string>
     <string name="action_copied">In die Zwischenablage kopiert</string>
     <string name="action_open_settings">Einstellungen öffnen</string>
     <string name="action_close">Schließen</string>
@@ -193,14 +192,11 @@
     <string name="roleplay_show_translation">Übersetzung zeigen</string>
     <string name="roleplay_hide_translation">Übersetzung ausblenden</string>
     <string name="roleplay_retry">Erneut versuchen</string>
-    <string name="roleplay_scenario_berlin_bakery">Bestellen in einer Berliner Bäckerei</string>
     <string name="roleplay_restart_session">Gespräch neu starten</string>
     <string name="roleplay_type_placeholder">Schreibe deine Nachricht auf Deutsch…</string>
     <string name="roleplay_send">Senden</string>
-    <string name="roleplay_voice_unavailable">Spracheingabe ist in diesem Browser nicht verfügbar. Du kannst deine Antworten unten eintippen.</string>
     <string name="roleplay_restore_failed">Dein gespeichertes Gespräch konnte nicht geladen werden. Öffne diesen Bildschirm erneut – es wurde nichts gelöscht.</string>
     <string name="practice_tab">Wiederholung</string>
-    <string name="practice_speech_unavailable">Mikrofon-Übungen sind in diesem Browser nicht verfügbar. Du kannst dir die Sätze weiterhin anhören.</string>
     <string name="study_skip">Vorerst überspringen</string>
     <string name="transcript_grammar_spotlight">Grammatik im Fokus</string>
     <string name="transcript_listening_for">Erkennt: %1$s</string>
@@ -332,7 +328,6 @@
     <string name="settings_cefr_level">GER-Niveau</string>
     <string name="settings_cefr_level_desc">Komplexität der KI-Gespräche und Analysen anpassen</string>
     <string name="settings_cefr_none">Keines (Standard)</string>
-    <string name="settings_tts_privacy">Datenschutz bei Sprachausgabe</string>
     <string name="settings_tts_privacy_desc">Bevorzugt geräteinterne Stimmen für mehr Datenschutz.</string>
     <string name="action_translate">Übersetzung</string>
 

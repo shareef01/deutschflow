@@ -69,3 +69,7 @@ Final remediation verification:
 - Repository static locale/palette/contrast audit and git diff whitespace check passed. No live provider request was made. The temporary isolated emulator was shut down and its workspace-local AVD/logs removed.
 
 All four confirmed code findings are closed. Dependency holds, the five remaining unused strings, startup measurement, and Play Console/handled-error diagnostics remain separate maintenance or operational work.
+
+## Maintenance follow-up
+
+See [the maintenance report](ANDROID_MAINTENANCE_2026-11-05.md) for the removal of historical dependency exclusions and five unused strings, the physical-device debug startup baseline, and the diagnostics operational handoff. Installed dependency versions are unchanged; release benchmarking and Play Console verification remain separate from the recorded debug timings.

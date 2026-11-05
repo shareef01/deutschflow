@@ -1,0 +1,53 @@
+{
+  "recordedUtc": "2026-11-05T12:22:08.803698+00:00",
+  "model": "Pixel 7",
+  "sdk": "37",
+  "package": [
+    "versionCode=10000 minSdk=31 targetSdk=37",
+    "versionName=1.0.0"
+  ],
+  "method": "am start -S -W; process-cold, installed build, not Macrobenchmark/TTFD",
+  "samplesMs": [
+    {
+      "TotalTime": 2629,
+      "WaitTime": 2637
+    },
+    {
+      "TotalTime": 2086,
+      "WaitTime": 2090
+    },
+    {
+      "TotalTime": 2132,
+      "WaitTime": 2136
+    },
+    {
+      "TotalTime": 2067,
+      "WaitTime": 2072
+    },
+    {
+      "TotalTime": 2422,
+      "WaitTime": 2426
+    },
+    {
+      "TotalTime": 1840,
+      "WaitTime": 1845
+    },
+    {
+      "TotalTime": 2266,
+      "WaitTime": 2272
+    },
+    {
+      "TotalTime": 2420,
+      "WaitTime": 2423
+    },
+    {
+      "TotalTime": 2338,
+      "WaitTime": 2344
+    },
+    {
+      "TotalTime": 2245,
+      "WaitTime": 2250
+    }
+  ],
+  "medianTotalMs": 2255.5
+}
