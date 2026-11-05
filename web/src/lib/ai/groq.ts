@@ -73,10 +73,10 @@ export function baseRequest(temperature: number, maxCompletionTokens: number) {
   };
 }
 const TIMEOUT_MS = 30_000;
-const MAX_POST_RETRIES = 2;
-const RETRY_BACKOFF_MS = [300, 600];
+export const MAX_POST_RETRIES = 2;
+export const RETRY_BACKOFF_MS = [300, 600];
 
-function isRetryableStatus(status: number): boolean {
+export function isRetryableStatus(status: number): boolean {
   return status === 500 || status === 502 || status === 503 || status === 504;
 }
 

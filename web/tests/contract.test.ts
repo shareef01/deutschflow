@@ -14,6 +14,9 @@ import { XP_PER_CARD, DAILY_XP_GOAL } from "@/lib/db/repository";
 import { importLibrary } from "@/lib/db/backup";
 import {
   GROQ_MODEL,
+  MAX_POST_RETRIES,
+  RETRY_BACKOFF_MS,
+  isRetryableStatus,
   REASONING_EFFORT,
   MAX_AI_INPUT_CHARS,
   MAX_ROLEPLAY_USER_CHARS,
@@ -46,6 +49,7 @@ interface ContractFixture {
     MAX_ROLEPLAY_REPLY_CHARS: number;
     MAX_ROLEPLAY_CONTEXT_CHARS: number;
   };
+  retryPolicy: { maxRetries: number; backoffMs: number[]; retryableStatuses: number[]; nonRetryableStatuses: number[] };
   practiceScoringCases: {
     name: string;
     target: string;
@@ -81,6 +85,13 @@ const contract: ContractFixture = JSON.parse(
 );
 
 describe("Cross-Platform Behavioral Contract", () => {
+  it("pins HTTP retry policy to the shared fixture", () => {
+    expect(MAX_POST_RETRIES).toBe(contract.retryPolicy.maxRetries);
+    expect(RETRY_BACKOFF_MS).toEqual(contract.retryPolicy.backoffMs);
+    for (const status of contract.retryPolicy.retryableStatuses) expect(isRetryableStatus(status)).toBe(true);
+    for (const status of contract.retryPolicy.nonRetryableStatuses) expect(isRetryableStatus(status)).toBe(false);
+  });
+
   // The identity fold and the scoring fold are deliberately NOT the same function, and
   // this block is what keeps them from quietly drifting apart again. Identity keeps the
   // sharp s (see lib/db/schema.ts for why: folding it merged "Maße" into "Masse" and

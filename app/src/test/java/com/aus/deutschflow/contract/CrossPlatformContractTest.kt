@@ -67,6 +67,20 @@ class CrossPlatformContractTest {
     }
 
     @Test
+    fun `retry policy matches the cross-platform fixture`() {
+        val policy = loadContract().getJSONObject("retryPolicy")
+        assertEquals(policy.getInt("maxRetries"), GroqHelper.MAX_POST_RETRIES)
+        val delays = policy.getJSONArray("backoffMs")
+        assertEquals((0 until delays.length()).map { delays.getLong(it) }, GroqHelper.RETRY_BACKOFF_MS)
+        for ((key, expected) in listOf("retryableStatuses" to true, "nonRetryableStatuses" to false)) {
+            val statuses = policy.getJSONArray(key)
+            for (i in 0 until statuses.length()) {
+                assertEquals("HTTP ${statuses.getInt(i)}", expected, GroqHelper.isRetryableStatus(statuses.getInt(i)))
+            }
+        }
+    }
+
+    @Test
     fun `practice scoring matches contract fixture`() {
         val contract = loadContract()
         val cases = contract.getJSONArray("practiceScoringCases")

@@ -10,11 +10,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Reader
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
@@ -519,6 +522,53 @@ class GroqHelper @Inject constructor(
 
         private const val TIMEOUT_MS = 30_000
 
+        internal const val MAX_POST_RETRIES = 2
+        internal val RETRY_BACKOFF_MS = listOf(300L, 600L)
+
+        internal fun isRetryableStatus(status: Int): Boolean =
+            status == 500 || status == 502 || status == 503 || status == 504
+
+        private class HttpStatusException(val status: Int, message: String) : IllegalStateException(message)
+
+        /** Same bounded policy as the web client; cancellation and timeouts never retry. */
+        @VisibleForTesting
+        internal suspend fun postTo(
+            endpoint: String,
+            body: String,
+            apiKey: String,
+            errorMessage: (Int, String?) -> String,
+            timeoutMs: Int = TIMEOUT_MS,
+            waitBeforeRetry: suspend (Long) -> Unit = { delay(it) }
+        ): String = retryPost(waitBeforeRetry) {
+            postAttempt(endpoint, body, apiKey, errorMessage, timeoutMs)
+        }
+
+        @VisibleForTesting
+        internal suspend fun retryPost(
+            waitBeforeRetry: suspend (Long) -> Unit,
+            request: suspend () -> String
+        ): String {
+            var retries = 0
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                try {
+                    return request()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    val retryable = when (e) {
+                        is HttpStatusException -> isRetryableStatus(e.status)
+                        is SocketTimeoutException -> false
+                        is IOException -> true
+                        else -> false
+                    }
+                    if (!retryable || retries >= MAX_POST_RETRIES) throw e
+                    waitBeforeRetry(RETRY_BACKOFF_MS[retries++])
+                }
+            }
+        }
+
         /**
          * The HTTP round trip, aborted the moment the calling coroutine is cancelled.
          *
@@ -537,8 +587,7 @@ class GroqHelper @Inject constructor(
          * In the companion, with the endpoint and the error wording passed in, so a
          * JVM test can point it at a local socket that never answers.
          */
-        @VisibleForTesting
-        internal suspend fun postTo(
+        private suspend fun postAttempt(
             endpoint: String,
             body: String,
             apiKey: String,
@@ -574,7 +623,7 @@ class GroqHelper @Inject constructor(
                     // rate limit - and all of them are worth putting in front of the user.
                     val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)
                         ?.use { it.readBounded(MAX_ERROR_CHARS) }
-                    throw IllegalStateException(errorMessage(connection.responseCode, errBody))
+                    throw HttpStatusException(connection.responseCode, errorMessage(connection.responseCode, errBody))
                 }
             } catch (e: Exception) {
                 // A read that failed because the abort above closed the socket is a

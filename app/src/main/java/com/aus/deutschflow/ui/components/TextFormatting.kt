@@ -2,6 +2,10 @@ package com.aus.deutschflow.ui.components
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ClipDescription
+import android.os.Build
+import android.os.PersistableBundle
+import com.aus.deutschflow.R
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -22,13 +26,24 @@ val WORD_SPLIT = Regex("\\s+")
 fun wordCount(text: String): Int =
     if (text.isBlank()) 0 else text.trim().split(WORD_SPLIT).count { it.isNotBlank() }
 
-/** One clip label for every copy action, so paste sheets agree about the source. */
-const val TRANSCRIPT_CLIP_LABEL = "German Transcript"
+/** Localized metadata and sensitive-preview marking for every transcript copy. */
+internal fun transcriptClip(context: Context, text: String): ClipData =
+    ClipData.newPlainText(context.getString(R.string.transcript_clip_label), text).apply {
+        description.extras = PersistableBundle().apply {
+            // The same metadata key is supported before the public API 33 constant.
+            val sensitiveKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ClipDescription.EXTRA_IS_SENSITIVE
+            } else {
+                "android.content.extra.IS_SENSITIVE"
+            }
+            putBoolean(sensitiveKey, true)
+        }
+    }
 
-/** The copy action, duplicated verbatim in two screens before it moved here. */
+/** The copy action shared by transcript and history screens. */
 fun copyToClipboard(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText(TRANSCRIPT_CLIP_LABEL, text))
+    clipboard.setPrimaryClip(transcriptClip(context, text))
 }
 
 /**

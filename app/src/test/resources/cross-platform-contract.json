@@ -44,6 +44,12 @@
     "MAX_ROLEPLAY_REPLY_CHARS": 1000,
     "MAX_ROLEPLAY_CONTEXT_CHARS": 1000
   },
+  "retryPolicy": {
+    "maxRetries": 2,
+    "backoffMs": [300, 600],
+    "retryableStatuses": [500, 502, 503, 504],
+    "nonRetryableStatuses": [400, 401, 403, 404, 429]
+  },
   "practiceScoringCases": [
     {
       "name": "correct sentence",

@@ -240,7 +240,7 @@ private fun StudySessionContent(
                             border = BorderStroke(1.dp, AppTheme.colors.azureDeep.copy(alpha = 0.3f))
                         ) {
                             Text(
-                                text = stringResource(R.string.study_reviewed_stat, reviewedTotal),
+                                text = pluralStringResource(R.plurals.study_reviewed_stat, reviewedTotal, reviewedTotal),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = AppTheme.colors.azureGlow,
