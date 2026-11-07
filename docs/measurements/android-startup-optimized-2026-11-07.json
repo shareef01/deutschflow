@@ -1,0 +1,55 @@
+{
+  "recordedUtc": "2026-11-07T06:49:16.517817+00:00",
+  "model": "Pixel 7",
+  "sdk": "37",
+  "applicationId": "com.aus.deutschflow.benchmark",
+  "buildLabel": "PR90+93+94 benchmark APK SHA256 F1B5C6547909B0C9497A1994A663B4FB0A15FC54E4764E6F8D48BB8CEF6E1406",
+  "package": [
+    "versionCode=10000 minSdk=31 targetSdk=37",
+    "versionName=1.0.0"
+  ],
+  "method": "am start -S -W; process-cold, installed build, not Macrobenchmark/TTFD",
+  "samplesMs": [
+    {
+      "TotalTime": 364,
+      "WaitTime": 366
+    },
+    {
+      "TotalTime": 283,
+      "WaitTime": 285
+    },
+    {
+      "TotalTime": 278,
+      "WaitTime": 280
+    },
+    {
+      "TotalTime": 304,
+      "WaitTime": 306
+    },
+    {
+      "TotalTime": 275,
+      "WaitTime": 278
+    },
+    {
+      "TotalTime": 261,
+      "WaitTime": 264
+    },
+    {
+      "TotalTime": 275,
+      "WaitTime": 277
+    },
+    {
+      "TotalTime": 272,
+      "WaitTime": 274
+    },
+    {
+      "TotalTime": 275,
+      "WaitTime": 277
+    },
+    {
+      "TotalTime": 264,
+      "WaitTime": 266
+    }
+  ],
+  "medianTotalMs": 275.0
+}

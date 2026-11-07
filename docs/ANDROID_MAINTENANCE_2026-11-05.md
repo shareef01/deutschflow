@@ -86,3 +86,9 @@ or release-runtime performance claim is made.
 - [Android startup timing](https://developer.android.com/topic/performance/issues/launch-time)
 - [Macrobenchmark setup and startup measurement](https://developer.android.com/topic/performance/benchmarking/macrobenchmark-overview)
 - [Android vitals and consent-dependent coverage](https://developer.android.com/google/play/vitals)
+
+## Subsequent follow-up
+
+See [6 November follow-up](FOLLOW_UP_2026-11-06.md) for the combined dependency
+proposal validation, optimized measurement build, and requested remote reporting
+proposal. Play Console metrics remain unverified.

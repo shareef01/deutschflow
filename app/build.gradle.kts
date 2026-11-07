@@ -95,6 +95,15 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Optimized local measurement build, isolated from the user's app/data.
+        // Debug signing makes it installable without production credentials.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".benchmark"
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
