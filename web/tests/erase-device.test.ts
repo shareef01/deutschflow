@@ -78,6 +78,8 @@ describe("eraseDeviceData", () => {
     const result = await eraseDeviceData(db, { storage, cacheStorage });
 
     expect(result).toEqual({ complete: true, failed: [] });
+    expect(await databaseNames()).not.toContain(db.name);
+    await db.open();
     for (const table of db.tables) {
       expect(await table.count(), table.name).toBe(0);
     }
@@ -101,6 +103,24 @@ describe("eraseDeviceData", () => {
     await eraseDeviceData(db, { storage: new MemoryStorage(), cacheStorage: cacheStorageWith([]) });
 
     expect(await databaseNames()).toContain("deutschflow-session");
+  });
+
+  it("reports incomplete erasure while a library connection still allows writes", async () => {
+    const held = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(db.name);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    try {
+      const result = await eraseDeviceData(db, {
+        storage: new MemoryStorage(),
+        cacheStorage: cacheStorageWith([]),
+      });
+      expect(result).toEqual({ complete: false, failed: ["library"] });
+    } finally {
+      held.close();
+    }
   });
 
   /**
@@ -214,11 +234,15 @@ describe("performLogout with eraseLocalData", () => {
     expect(erase).not.toHaveBeenCalled();
   });
 
-  it("erases, then navigates to /login", async () => {
+  it("notifies other tabs before erasing and navigating", async () => {
     const order: string[] = [];
     const result = await performLogout({
       ...base,
       fetchFn: ok,
+      broadcastChannelFactory: () => ({
+        postMessage: () => order.push("logout"),
+        close() {},
+      }) as unknown as BroadcastChannel,
       eraseLocalData: async () => {
         order.push("erase");
         return true;
@@ -226,7 +250,7 @@ describe("performLogout with eraseLocalData", () => {
       onNavigate: (url) => order.push(url),
     });
     expect(result.localDataErased).toBe(true);
-    expect(order).toEqual(["erase", "/login"]);
+    expect(order).toEqual(["logout", "erase", "/login"]);
   });
 
   it("stays on the page when the erase was incomplete, so the user can be told", async () => {

@@ -29,7 +29,7 @@ export default function TranscriptPage() {
     submitTypedText,
     startListening,
     stopListening,
-    cancelListening,
+    cancelPendingStart,
     saveToVocabulary,
     interrogateWord,
     saveWordDetails,
@@ -94,7 +94,10 @@ export default function TranscriptPage() {
     }
   }, [state.wordDetailError, dismissWordDetailError]);
 
-  useEffect(() => () => cancelListening(), [cancelListening]);
+  const changeInputMode = (mode: InputMode) => {
+    if (mode === "type") cancelPendingStart();
+    setInputMode(mode);
+  };
 
   const hasTranscript = state.partialText.length > 0 || state.finalText.length > 0;
   const isEmpty = !hasTranscript && !state.isListening && !state.isTranslating && !state.errorState;
@@ -136,7 +139,7 @@ export default function TranscriptPage() {
         {speechSupported && (
           <InputModeSwitch
             mode={inputMode}
-            onChange={setInputMode}
+            onChange={changeInputMode}
             disabled={state.isListening}
             className="mt-6"
             t={t}
@@ -283,7 +286,7 @@ export default function TranscriptPage() {
         {speechSupported && (
           <InputModeSwitch
             mode={inputMode}
-            onChange={setInputMode}
+            onChange={changeInputMode}
             // Typing mid-recording would hide the mic, the only stop control,
             // while recognition carried on.
             disabled={state.isListening}

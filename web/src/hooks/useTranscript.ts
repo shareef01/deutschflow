@@ -197,7 +197,7 @@ export function useTranscript() {
     });
   }, [handleUtterance]);
 
-  const { startListening: startMicrophone, cancelListening } = useMicrophoneStart();
+  const { startListening: startMicrophone, cancelPendingStart } = useMicrophoneStart();
 
   useEffect(() => {
     return () => {
@@ -352,7 +352,7 @@ export function useTranscript() {
     submitTypedText,
     startListening,
     stopListening,
-    cancelListening,
+    cancelPendingStart,
     saveToVocabulary,
     interrogateWord,
     saveWordDetails,
