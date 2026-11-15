@@ -5,11 +5,14 @@ import { resolveRecognitionDialect } from "@/lib/speech/dialect";
 /** A permission or settings read must not acquire the mic after its owner leaves. */
 export function useMicrophoneStart(active = true) {
   const owner = useRef({ active, generation: 0, starting: false });
-  const cancelListening = useCallback(() => {
+  const cancelPendingStart = useCallback(() => {
     owner.current.generation++;
     owner.current.starting = false;
-    recognizer.cancel();
   }, []);
+  const cancelListening = useCallback(() => {
+    cancelPendingStart();
+    recognizer.cancel();
+  }, [cancelPendingStart]);
 
   useEffect(() => {
     const state = owner.current;
@@ -44,5 +47,5 @@ export function useMicrophoneStart(active = true) {
     }
   }, []);
 
-  return { startListening, cancelListening };
+  return { startListening, cancelListening, cancelPendingStart };
 }

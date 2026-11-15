@@ -8,8 +8,9 @@ async function configure(page: Page) {
   await page.getByRole("dialog").getByRole("button", { name: "OK", exact: true }).click();
 }
 
-for (const mode of ["transcript", "repetition", "roleplay"] as const) {
+for (const mode of ["transcript", "transcript-type", "repetition", "roleplay"] as const) {
   test(`${mode}: late permission does not acquire the microphone after departure`, async ({ page }) => {
+    const isTranscript = mode === "transcript" || mode === "transcript-type";
     await page.addInitScript(() => {
       const state = { requests: 0, starts: 0, grant: () => {} };
       Object.defineProperty(window, "__micAudit", { value: state });
@@ -25,9 +26,9 @@ for (const mode of ["transcript", "repetition", "roleplay"] as const) {
         stop() {}
       } });
     });
-    await page.goto(mode === "transcript" ? "/transcript" : "/practice");
+    await page.goto(isTranscript ? "/transcript" : "/practice");
     if (mode === "roleplay") await page.getByRole("tab", { name: "Roleplay", exact: true }).click();
-    const buttonName = mode === "transcript" ? "Start recording" : mode === "roleplay" ? "Speak to Reply" : "Speak";
+    const buttonName = isTranscript ? "Start recording" : mode === "roleplay" ? "Speak to Reply" : "Speak";
     await page.getByRole("button", { name: buttonName, exact: true }).click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __micAudit: { requests: number } }).__micAudit.requests)).toBe(1);
     // Client navigation keeps the pending promise alive; a full page load would hide the bug.
@@ -35,6 +36,9 @@ for (const mode of ["transcript", "repetition", "roleplay"] as const) {
       await page.getByRole("link", { name: "Library", exact: true }).click();
       await expect(page).toHaveURL(/\/vocabulary$/);
       await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
+    } else if (mode === "transcript-type") {
+      await page.getByRole("button", { name: "Type", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Start recording" })).toHaveCount(0);
     } else {
       const destination = page.getByRole("tab", { name: mode === "repetition" ? "Roleplay" : "Repetition", exact: true });
       await destination.click();
@@ -50,6 +54,7 @@ for (const mode of ["transcript", "repetition", "roleplay"] as const) {
     expect(starts).toBe(0);
     // Returning creates a new owner that can still acquire the microphone.
     if (mode === "transcript") await page.getByRole("link", { name: "Transcript", exact: true }).click();
+    else if (mode === "transcript-type") await page.getByRole("button", { name: "Speak", exact: true }).click();
     else await page.getByRole("tab", { name: mode === "repetition" ? "Repetition" : "Roleplay", exact: true }).click();
     await page.getByRole("button", { name: buttonName, exact: true }).click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __micAudit: { requests: number } }).__micAudit.requests)).toBe(2);

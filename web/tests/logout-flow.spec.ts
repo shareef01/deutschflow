@@ -1,5 +1,63 @@
 import { expect, test } from "@playwright/test";
 
+test("device erase removes a write racing from a second tab", async ({ page, context }) => {
+  await page.goto("/settings");
+  await page.waitForFunction(async () =>
+    (await indexedDB.databases()).some(({ name }) => name === "deutschflow")
+  );
+
+  // This same-origin tab holds native connections and has no AppShell logout listener.
+  const otherTab = await context.newPage();
+  await otherTab.goto("/privacy");
+  await otherTab.evaluate(async () => {
+    const open = (name: string) => new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const library = await open("deutschflow");
+    const vault = await open("deutschflow-vault");
+    let writing = false;
+    const writeAndClose = () => {
+      if (writing) return;
+      writing = true;
+      const tx = library.transaction("settings", "readwrite");
+      tx.objectStore("settings").put({ key: "late-erase-write", value: "sentinel" });
+      tx.oncomplete = () => { document.documentElement.dataset.lateWriteCommitted = "true"; };
+      library.close();
+    };
+    library.onversionchange = writeAndClose;
+    vault.onversionchange = () => {
+      // With a clear-only library erase, this fires after the clear and repopulates it.
+      writeAndClose();
+      vault.close();
+    };
+  });
+
+  await page.getByRole("button", { name: "Log out and erase this device", exact: true }).click();
+  await page.getByRole("button", { name: "Log out and erase", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(otherTab.locator("html")).toHaveAttribute("data-late-write-committed", "true");
+  const lateWrite = await otherTab.evaluate(async () => {
+    const names = (await indexedDB.databases()).map(({ name }) => name);
+    // The login screen may reopen an empty library to read its language setting.
+    return names.includes("deutschflow")
+      ? await new Promise<unknown>((resolve, reject) => {
+          const open = indexedDB.open("deutschflow");
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const db = open.result;
+            const read = db.transaction("settings").objectStore("settings").get("late-erase-write");
+            read.onsuccess = () => resolve(read.result);
+            read.onerror = () => reject(read.error);
+            db.close();
+          };
+        })
+      : undefined;
+  });
+  expect(lateWrite).toBeUndefined();
+});
+
 /**
  * Real-browser Playwright test for verified logout, service worker cache invalidation,
  * multi-tab synchronization, and IndexedDB learning data preservation.

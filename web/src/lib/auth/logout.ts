@@ -281,8 +281,8 @@ export interface LogoutOptions {
   timeoutMs?: number;
   /**
    * "Log out and erase this device": run after the server has ended the session,
-   * before other tabs are told and this one leaves. Resolves true when everything
-   * was erased. Omitted for a plain logout, which keeps the library.
+   * after other tabs are told to close their database and before this tab leaves.
+   * Resolves true when everything was erased. Plain logout keeps the library.
    */
   eraseLocalData?: () => Promise<boolean>;
 }
@@ -358,14 +358,7 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
   const cleanupWarning = !privacyCleanupComplete ? "Local cache purge incomplete" : undefined;
   const totalPurgedCount = cachePurgeResult.purgedCount + (swPurgeResult.purgedCount ?? 0);
 
-  // Only after the server confirmed the logout: an erase that ran and then found
-  // the session still alive would leave a logged-in, empty app.
-  let localDataErased: boolean | undefined;
-  if (options.eraseLocalData) {
-    localDataErased = await options.eraseLocalData().catch(() => false);
-  }
-
-  // Step 5: Broadcast session termination to other tabs
+  // Ask the other tabs to close before the erase starts.
   try {
     if (options.broadcastChannelFactory) {
       const channel = options.broadcastChannelFactory(AUTH_BROADCAST_CHANNEL);
@@ -378,6 +371,11 @@ export async function performLogout(options: LogoutOptions = {}): Promise<Logout
     }
   } catch (err) {
     console.warn("Failed to broadcast logout to other tabs:", err);
+  }
+
+  let localDataErased: boolean | undefined;
+  if (options.eraseLocalData) {
+    localDataErased = await options.eraseLocalData().catch(() => false);
   }
 
   // Step 6: Navigate initiating tab to /login

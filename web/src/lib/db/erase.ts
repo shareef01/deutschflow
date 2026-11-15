@@ -90,7 +90,8 @@ function clearDatabaseContents(factory: IDBFactory, name: string): Promise<void>
  * whichever way the delete request ends: what survives a blocked delete is an
  * empty database, not a usable key.
  */
-function deleteDatabase(factory: IDBFactory, name: string): Promise<void> {
+function deleteVault(factory: IDBFactory): Promise<void> {
+  const name = VAULT_DB_NAME;
   return clearDatabaseContents(factory, name).then(
     () =>
       new Promise<void>((resolve, reject) => {
@@ -102,20 +103,29 @@ function deleteDatabase(factory: IDBFactory, name: string): Promise<void> {
   );
 }
 
+/**
+ * IndexedDB waits for existing connections and their transactions before deleting.
+ * Other app tabs close on logout or versionchange, including tabs that miss the
+ * broadcast. A connection that stays open makes the erase incomplete.
+ */
+function deleteLibrary(db: DeutschFlowDB): Promise<void> {
+  db.close();
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(db.name);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("LibraryDeleteBlocked"));
+  });
+}
+
 export async function eraseDeviceData(db: DeutschFlowDB, deps: EraseDeps = {}): Promise<EraseResult> {
   const failed: EraseStep[] = [];
   const idbFactory = deps.idbFactory ?? (typeof indexedDB !== "undefined" ? indexedDB : undefined);
   const storage = deps.storage ?? (typeof localStorage !== "undefined" ? localStorage : undefined);
   const cacheStorage = deps.cacheStorage ?? (typeof caches !== "undefined" ? caches : undefined);
 
-  // Every table, not the list "Clear all progress" uses: settings hold the
-  // encrypted Groq key, the CEFR level and the UI language as well.
-  // Cleared rather than deleted so other open tabs' Dexie connections cannot
-  // block it.
   try {
-    await db.transaction("rw", db.tables, async () => {
-      await Promise.all(db.tables.map((table) => table.clear()));
-    });
+    await deleteLibrary(db);
   } catch {
     failed.push("library");
   }
@@ -123,10 +133,11 @@ export async function eraseDeviceData(db: DeutschFlowDB, deps: EraseDeps = {}): 
   // The key that decrypts the stored Groq key. Without it the ciphertext above
   // would be unreadable anyway, but nothing should outlive an erase.
   try {
-    if (idbFactory) await deleteDatabase(idbFactory, VAULT_DB_NAME);
-    forgetVaultKey();
+    if (idbFactory) await deleteVault(idbFactory);
   } catch {
     failed.push("vault");
+  } finally {
+    forgetVaultKey();
   }
 
   try {

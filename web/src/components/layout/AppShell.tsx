@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { isUpgradeBlocked, subscribeUpgradeBlocked } from "@/lib/db";
+import { db, forgetVaultKey, isUpgradeBlocked, subscribeUpgradeBlocked } from "@/lib/db";
 import type { ReactNode } from "react";
 import { useHasRail } from "@/hooks/useViewport";
 import { useI18n } from "@/hooks/useI18n";
@@ -30,6 +30,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    const endLocalSession = () => {
+      db.close();
+      forgetVaultKey();
+      window.location.href = "/login";
+    };
     // 1. Cross-tab session listener via BroadcastChannel
     let authChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -37,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         authChannel = new BroadcastChannel("deutschflow_auth");
         authChannel.onmessage = (event) => {
           if (event.data?.type === "LOGOUT") {
-            window.location.href = "/login";
+            endLocalSession();
           }
         };
       } catch {
@@ -48,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     // 2. Service worker session listener
     const handleSwMessage = (event: MessageEvent) => {
       if (event.data?.type === "SESSION_TERMINATED") {
-        window.location.href = "/login";
+        endLocalSession();
       }
     };
     if (typeof navigator !== "undefined" && navigator.serviceWorker) {
