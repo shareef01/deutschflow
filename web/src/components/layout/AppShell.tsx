@@ -107,43 +107,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           {t("db.upgradeBlocked")}
         </p>
       )}
-      {/* Top bar — full-width, like the Android bar: a transparent bar lets
-          content scroll straight through the title. */}
-      <header className="sticky top-0 z-30 border-b border-outline-variant/55 bg-surface-container-low pt-[env(safe-area-inset-top)]">
-        <div className="flex h-[var(--header-height)] items-center">
-          {showRail && (
-            <div className="flex h-full w-[var(--nav-rail-width)] shrink-0 items-center gap-2.5 border-r border-outline-variant/55 px-5">
-              <Image src="/icons/icon-192.png" alt="" width={32} height={32} className="rounded-[10px]" loading="eager" unoptimized />
-              <span className="text-title-medium tracking-tight">DeutschFlow</span>
-            </div>
-          )}
-          <div className="flex w-full items-center gap-[var(--space-3)] px-[var(--gutter)]">
-            {isOnSettings && (
-              <button
-                type="button"
-                onClick={goBack}
-                aria-label={t("action.back")}
-                className="flex size-11 shrink-0 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow"
-              >
-                <ArrowBackIcon className="size-5" />
-              </button>
-            )}
-            <h1 className="min-w-0 flex-1 truncate text-left text-title-large">
-              <span>{title}</span>
-            </h1>
-            {!isOnSettings && (
-              <Link
-                href={SETTINGS_ROUTE}
-                aria-label={t("nav.settings")}
-                className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-outline-variant/60 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow"
-              >
-                <SettingsIcon className="size-5" />
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
-
       {/* One row, held to the space the header leaves. An implicit grid row is
           `auto`, which grows to the content's full height however short the
           container is - so inside the fixed-height shell every page's own
@@ -155,49 +118,80 @@ export function AppShell({ children }: { children: ReactNode }) {
           showRail ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
         }`}
       >
-        {/* Desktop rail — hugs the screen's left edge, like the Android
-            NavigationRail; the content column is centred in what remains. */}
         {showRail && (
-          <nav
-            aria-label={t("nav.primary")}
-            className="flex min-h-0 w-[var(--nav-rail-width)] shrink-0 flex-col gap-1.5 overflow-y-auto border-r border-outline-variant/55 bg-surface-container-low px-3 py-5"
-          >
-            {TABS.map((tab) => {
-              const selected = pathname === tab.route;
-              const label = t(tab.title);
-              return (
-                <Link
-                  key={tab.route}
-                  href={tab.route}
-                  aria-current={selected ? "page" : undefined}
-                  className={`relative flex min-h-11 w-full shrink-0 items-center gap-3 rounded-xl border px-3 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow ${
-                    selected
-                      ? "border-azure-glow/30 bg-secondary-container text-on-secondary-container"
-                      : "border-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                  }`}
-                >
-                  {/* Not colour alone: the selected row carries a marker. */}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-azure-glow transition-opacity duration-150 ${
-                      selected ? "opacity-100" : "opacity-0"
-                    }`}
-                  />
-                  <tab.icon
-                    className={`size-5 shrink-0 transition-colors duration-150 ${
-                      selected ? "text-azure-glow" : "text-current"
-                    }`}
-                  />
-                  <span className="min-w-0 truncate text-label-large">{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <aside className="flex min-h-0 w-[var(--nav-rail-width)] flex-col border-r border-outline-variant/60 bg-surface-container-low pt-[env(safe-area-inset-top)]">
+            <div className="mx-3 flex min-h-[var(--header-height)] shrink-0 items-center gap-2 border-b border-outline-variant/55 px-2 py-3 lg:mx-4 lg:min-h-19 lg:gap-3">
+              <Image src="/icons/icon-192.png" alt="" width={36} height={36} className="size-7 shrink-0 rounded-lg lg:size-9 lg:rounded-[10px]" loading="eager" unoptimized />
+              <span className="min-w-0 truncate text-label-large font-bold tracking-tight lg:text-title-medium">DeutschFlow</span>
+            </div>
+            <nav aria-label={t("nav.primary")} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-5 lg:px-4">
+              {[
+                { label: t("nav.capture"), tabs: TABS.slice(0, 2) },
+                { label: t("nav.learn"), tabs: TABS.slice(2) },
+              ].map(({ label, tabs }) => (
+                <div key={label} role="group" aria-label={label} className="space-y-1">
+                  <p aria-hidden="true" className="px-2.5 pb-1 text-label-small font-semibold text-on-surface-variant">{label}</p>
+                  {tabs.map((tab) => {
+                    const selected = pathname === tab.route;
+                    return (
+                      <Link
+                        key={tab.route}
+                        href={tab.route}
+                        aria-current={selected ? "page" : undefined}
+                        className={`flex min-h-11 items-center gap-2.5 rounded-xl border px-2.5 py-1.5 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-azure-glow ${
+                          selected
+                            ? "border-azure-glow/30 bg-secondary-container font-bold text-on-secondary-container"
+                            : "border-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                        }`}
+                      >
+                        <span className={`grid size-7 shrink-0 place-items-center rounded-lg ${selected ? "bg-azure-glow/15 text-azure-glow" : ""}`}>
+                          <tab.icon className="size-[18px]" />
+                        </span>
+                        <span className="min-w-0 break-words text-label-large">{t(tab.title)}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
+          </aside>
         )}
 
-        {/* The content column — left-aligned to match the title; the max width
-            the cards may use. */}
         <div className="flex w-full min-w-0 min-h-0 flex-1 flex-col">
+          <header className="z-30 shrink-0 border-b border-outline-variant/55 bg-surface pt-[env(safe-area-inset-top)]">
+            <div className="flex min-h-[var(--header-height)] items-center gap-3 px-[var(--gutter)] py-2 lg:min-h-19">
+              {isOnSettings ? (
+                <button
+                  type="button"
+                  onClick={goBack}
+                  aria-label={t("action.back")}
+                  className="grid size-11 shrink-0 place-items-center rounded-xl border border-outline-variant/65 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow"
+                >
+                  <ArrowBackIcon className="size-5" />
+                </button>
+              ) : currentTab && (
+                <div className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-secondary-container text-on-secondary-container lg:size-11">
+                  <currentTab.icon className="size-5" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h1 className="break-words text-title-large tracking-tight lg:text-headline-small">{title}</h1>
+                {currentTab && (
+                  <p className="hidden text-body-medium text-on-surface-variant lg:block">{t(currentTab.description)}</p>
+                )}
+              </div>
+              {!isOnSettings && (
+                <Link
+                  href={SETTINGS_ROUTE}
+                  aria-label={t("nav.settings")}
+                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-outline-variant/65 px-2.5 text-label-large text-on-surface-variant transition-colors duration-150 hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow sm:px-3"
+                >
+                  <SettingsIcon className="size-[18px]" />
+                  <span className="hidden sm:inline">{t("nav.settings")}</span>
+                </Link>
+              )}
+            </div>
+          </header>
           <main
             id="main"
             tabIndex={-1}

@@ -22,15 +22,16 @@ import type { TKey } from "@/lib/i18n";
 export interface TabConfig {
   route: string;
   title: TKey;
+  description: TKey;
   icon: ComponentType<{ className?: string }>;
 }
 
 export const TABS: TabConfig[] = [
-  { route: "/transcript", title: "nav.transcript", icon: MicIcon },
-  { route: "/history", title: "nav.history", icon: HistoryIcon },
-  { route: "/vocabulary", title: "nav.library", icon: BookIcon },
-  { route: "/study", title: "nav.study", icon: SchoolIcon },
-  { route: "/practice", title: "nav.practice", icon: RecordVoiceOverIcon },
+  { route: "/transcript", title: "nav.transcript", description: "nav.transcriptDescription", icon: MicIcon },
+  { route: "/history", title: "nav.history", description: "nav.historyDescription", icon: HistoryIcon },
+  { route: "/vocabulary", title: "nav.library", description: "nav.libraryDescription", icon: BookIcon },
+  { route: "/study", title: "nav.study", description: "nav.studyDescription", icon: SchoolIcon },
+  { route: "/practice", title: "nav.practice", description: "nav.practiceDescription", icon: RecordVoiceOverIcon },
 ];
 
 export const SETTINGS_ROUTE = "/settings";
