@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranscript } from "@/hooks/useTranscript";
 import { useDialect } from "@/hooks/useSettings";
 import { useClipboard } from "@/hooks/useClipboard";
@@ -19,6 +19,8 @@ import { GlassTextField } from "@/components/ui/GlassTextField";
 import type { TKey } from "@/lib/i18n";
 import { BookmarkAddIcon, ContentCopyIcon, EditIcon, MicIcon, StopIcon, VolumeUpIcon } from "@/components/icons";
 import { tts } from "@/lib/speech/tts";
+
+const EXAMPLE_SENTENCE = "Ich hätte gern einen Kaffee.";
 
 export default function TranscriptPage() {
   const { t } = useI18n();
@@ -66,6 +68,16 @@ export default function TranscriptPage() {
 
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [inputMode, setInputMode] = useState<InputMode>("speak");
+  const [typedText, setTypedText] = useState("");
+  const typedInput = useRef<HTMLInputElement | null>(null);
+  const focusExample = useRef(false);
+  const attachTypedInput = useCallback((input: HTMLInputElement | null) => {
+    typedInput.current = input;
+    if (input && focusExample.current) {
+      focusExample.current = false;
+      input.focus();
+    }
+  }, []);
 
   useEffect(() => {
     if (!state.isListening) return;
@@ -122,62 +134,61 @@ export default function TranscriptPage() {
 
   if (isEmpty) {
     return (
-      <div className="mx-auto flex min-h-0 w-full max-w-[var(--container-workspace)] flex-1 flex-col items-center justify-center px-[var(--gutter)] py-[var(--space-6)]">
-        {/* A button, not a label. Android's LanguageIndicator has always been one -
-            its comment reads "the one place you are reminded which language you are
-            speaking was the one place you could not act on it" - and the web port
-            kept the reminder without the fix. */}
-        <DialectChip selected={selectedDialect} onSelect={saveDialect} t={t} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto my-auto grid w-full max-w-[var(--container-workspace)] gap-5 px-[var(--gutter)] py-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-x-12">
+          <div className="self-end lg:col-start-1 lg:row-start-1">
+            <h2 className="max-w-[17ch] text-balance text-headline-large text-on-surface">
+              {t("transcript.emptyTitle")}
+            </h2>
+            <p className="mt-3 max-w-[42ch] text-pretty text-body-large text-on-surface-variant">
+              {t("transcript.emptyBody")}
+            </p>
+          </div>
 
-        <h2 className="mt-6 text-center text-headline-medium text-on-surface">
-          {t("transcript.emptyTitle")}
-        </h2>
-        <p className="mt-2 max-w-sm text-center text-body-medium text-on-surface-variant">
-          {t("transcript.emptyBody")}
-        </p>
+          <section aria-label={t("transcript.inputMode")} className="glass-surface accent-panel min-w-0 p-4 sm:p-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+            {speechSupported && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/50 pb-4 sm:gap-3">
+                <InputModeSwitch mode={inputMode} onChange={changeInputMode} t={t} />
+                {inputMode === "speak" && <DialectChip selected={selectedDialect} onSelect={saveDialect} t={t} />}
+              </div>
+            )}
+            {speechSupported && inputMode === "speak" ? (
+              <div className="flex flex-col items-center py-4 sm:py-7">
+                <OracleMic
+                  icon={<MicIcon className="size-full" />}
+                  label={t("transcript.startRecording")}
+                  isListening={false}
+                  isBusy={isBusy}
+                  onClick={() => void startListening()}
+                />
+                <p className="mt-1 text-label-large text-on-surface-variant">{t("transcript.hint")}</p>
+              </div>
+            ) : (
+              <div>
+                {!speechSupported && <p className="text-body-medium text-on-surface-variant">{t("speech.unavailableBody")}</p>}
+                <TypedInput text={typedText} onChange={setTypedText} onSubmit={submitTypedText} isBusy={isBusy} inputRef={attachTypedInput} t={t} />
+              </div>
+            )}
+          </section>
 
-        {speechSupported && (
-          <InputModeSwitch
-            mode={inputMode}
-            onChange={changeInputMode}
-            disabled={state.isListening}
-            className="mt-6"
-            t={t}
-          />
-        )}
-
-        {inputMode === "speak" ? (
-          speechSupported ? (
-            <>
-              <OracleMic
-                icon={state.isListening ? <StopIcon className="size-full" /> : <MicIcon className="size-full" />}
-                label={
-                  state.isListening ? t("transcript.stopRecording") : t("transcript.startRecording")
-                }
-                isListening={state.isListening}
-                isBusy={isBusy}
-                onClick={state.isListening ? stopListening : () => void startListening()}
-                large
-              />
-
-              <ErrorBanner message={state.errorState} />
-
-              <p className="mt-6 text-label-large text-on-surface-variant">{t("transcript.hint")}</p>
-            </>
-          ) : (
-            /* No Web Speech API here — Firefox. Everything downstream of recognition
-               takes a plain string, so typing gets the user the whole app rather than
-               a dead microphone. */
-            <div className="mt-6 flex flex-col items-center max-w-sm text-center">
-              <p className="mb-4 text-body-medium text-on-surface-variant">
-                {t("speech.unavailableBody")}
-              </p>
-              <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
-            </div>
-          )
-        ) : (
-          <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
-        )}
+          <div className="self-start rounded-2xl border border-outline-variant/55 bg-surface-container-low px-4 py-3.5 lg:col-start-1 lg:row-start-2">
+            <p lang="de" className="text-title-medium text-on-surface">{EXAMPLE_SENTENCE}</p>
+            <p className="mt-0.5 text-body-medium text-on-surface-variant">{t("transcript.exampleTranslation")}</p>
+            <button
+              type="button"
+              onClick={() => {
+                if (typedInput.current) typedInput.current.focus();
+                else focusExample.current = true;
+                changeInputMode("type");
+                setTypedText(EXAMPLE_SENTENCE);
+              }}
+              className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-lg text-label-large text-azure-glow hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-azure-glow"
+            >
+              <EditIcon className="size-4" />
+              {t("transcript.useExample")}
+            </button>
+          </div>
+        </div>
 
         <Snackbar message={snackbar} variant={snackbarVariant} onDismiss={() => setSnackbar(null)} />
         <WordDetailsSheet
@@ -227,6 +238,7 @@ export default function TranscriptPage() {
             visually hidden region below the copy controls. */}
         <div className="flex w-full items-start gap-3">
           <p
+            lang={hasTranscript ? "de" : undefined}
             className={`min-w-0 flex-1 leading-relaxed ${
               hasTranscript
                 ? "text-headline-small text-on-surface"
@@ -307,7 +319,7 @@ export default function TranscriptPage() {
             onClick={state.isListening ? stopListening : () => void startListening()}
           />
         ) : (
-          <TypedInput onSubmit={submitTypedText} isBusy={isBusy} t={t} />
+          <TypedInput text={typedText} onChange={setTypedText} onSubmit={submitTypedText} isBusy={isBusy} t={t} />
         )}
 
         {(state.isListening || isBusy) && (
@@ -482,42 +494,47 @@ function InputModeSwitch({
 }
 
 function TypedInput({
+  text,
+  onChange,
   onSubmit,
   isBusy,
+  inputRef,
   t,
 }: {
+  text: string;
+  onChange: (text: string) => void;
   onSubmit: (text: string) => void;
   isBusy: boolean;
+  inputRef?: (input: HTMLInputElement | null) => void;
   t: (key: TKey, params?: (string | number)[]) => string;
 }) {
-  const [text, setText] = useState("");
-
   const submit = () => {
     if (!text.trim() || isBusy) return;
     onSubmit(text);
-    setText("");
+    onChange("");
   };
 
   return (
-    <div className="mt-4 w-full max-w-md">
+    <form className="mt-4 w-full max-w-md" onSubmit={(event) => { event.preventDefault(); submit(); }}>
       <GlassTextField
+        inputRef={inputRef}
+        lang="de"
+        autoComplete="off"
         value={text}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") submit();
-        }}
+        onChange={(event) => onChange(event.target.value)}
         label={t("transcript.typeInstead")}
         placeholder={t("transcript.typePlaceholder")}
         disabled={isBusy}
       />
       <GlassButton
+        type="submit"
+        glow="solid"
         className="mt-3 h-12 w-full min-h-[48px]"
-        onClick={submit}
         disabled={isBusy || text.trim().length === 0}
       >
-        <span className="font-bold text-azure-glow">{t("transcript.translateTyped")}</span>
+        {t("transcript.translateTyped")}
       </GlassButton>
-    </div>
+    </form>
   );
 }
 
@@ -531,8 +548,8 @@ const DIALECT_LABELS: Record<Dialect, TKey> = {
 /**
  * Which German the recogniser is listening for, and a way to change it.
  *
- * Shows the country rather than the tag: "German · de-DE" told the user the value
- * of a variable, where Android has always shown "Listening for Germany".
+ * A native select keeps the dialect accessible without changing the control's
+ * layout when it receives keyboard focus.
  */
 function DialectChip({
   selected,
@@ -544,23 +561,12 @@ function DialectChip({
   t: (key: TKey, params?: (string | number)[]) => string;
 }) {
   return (
-    <div className="relative inline-flex items-center">
-      <label htmlFor="transcript-dialect-select" className="sr-only">
-        {t("settings.dialectHeader")}
-      </label>
-      <div className="press-scale pointer-events-none flex items-center gap-2 rounded-xl bg-secondary-container px-4 py-1.5 text-label-medium text-on-secondary-container">
-        <span className="size-2 rounded-full bg-secondary" />
-        <span>{t("transcript.listeningFor", [t(DIALECT_LABELS[selected])])}</span>
-        <svg className="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M7 10l5 5 5-5z" />
-        </svg>
-      </div>
+    <div className="relative inline-flex max-w-full items-center">
       <select
-        id="transcript-dialect-select"
         value={selected}
         onChange={(e) => onSelect(e.target.value as Dialect)}
         aria-label={t("settings.dialectHeader")}
-        className="absolute inset-0 cursor-pointer opacity-0 focus-visible:opacity-100 focus-visible:relative focus-visible:rounded-xl focus-visible:outline-2 focus-visible:outline-azure-glow"
+        className="min-h-11 max-w-full cursor-pointer appearance-none rounded-xl border border-outline-variant/55 bg-surface-container-high py-1.5 pl-3 pr-9 text-label-medium text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow"
       >
         {DIALECTS.map((dialect) => (
           <option key={dialect} value={dialect} className="bg-surface text-on-surface">
@@ -568,6 +574,9 @@ function DialectChip({
           </option>
         ))}
       </select>
+      <svg className="pointer-events-none absolute right-2.5 size-4 text-on-surface-variant" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M7 10l5 5 5-5z" />
+      </svg>
     </div>
   );
 }

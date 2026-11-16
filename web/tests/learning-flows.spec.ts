@@ -10,6 +10,15 @@ async function configure(page: Page) {
   await expect(page.getByRole("radio", { name: "A1 (Beginner)", exact: true })).toBeChecked();
 }
 
+test("the transcript example prefills and focuses the typed input", async ({ page }) => {
+  await page.goto("/transcript");
+  await page.getByRole("button", { name: "Use this example" }).click();
+  const input = page.getByRole("textbox", { name: "Type a German sentence" });
+  await expect(input).toHaveValue("Ich hätte gern einen Kaffee.");
+  await expect(input).toBeFocused();
+  await expect(page.getByRole("button", { name: "Translate", exact: true })).toBeEnabled();
+});
+
 test("typed translation stays visible, saves its source, and passes CEFR to word details", async ({ page }) => {
   await page.addInitScript(() => {
     delete (window as unknown as Record<string, unknown>).SpeechRecognition;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type InputHTMLAttributes, type ReactNode } from "react";
+import { useId, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
 import { CloseIcon, SearchIcon } from "@/components/icons";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -15,12 +15,14 @@ interface GlassTextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>
   label?: string;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
+  inputRef?: Ref<HTMLInputElement>;
 }
 
 export function GlassTextField({
   label,
   leadingIcon,
   trailingIcon,
+  inputRef,
   placeholder,
   className = "",
   ...rest
@@ -39,6 +41,7 @@ export function GlassTextField({
       <div className="glass-input group flex items-center gap-3 px-5">
         {leadingIcon}
         <input
+          ref={inputRef}
           id={id}
           placeholder={placeholder}
           className="h-14 w-full bg-transparent text-base text-on-surface placeholder:text-on-surface-variant focus:outline-none"
