@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { db, forgetVaultKey, isUpgradeBlocked, subscribeUpgradeBlocked } from "@/lib/db";
 import type { ReactNode } from "react";
@@ -15,7 +16,7 @@ import { ArrowBackIcon, SettingsIcon } from "@/components/icons";
  *
  * Below 768px the five destinations live in a fixed bottom bar (the Compose
  * NavigationBar, with the hairline above it); at 768px and above the bar
- * transforms into a glassmorphic left-hand rail (the NavigationRail). Settings
+ * transforms into a left-hand rail (the NavigationRail). Settings
  * is a pushed detail destination: it keeps the back arrow and sheds both bars.
  */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -108,27 +109,33 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
       {/* Top bar — full-width, like the Android bar: a transparent bar lets
           content scroll straight through the title. */}
-      <header className="sticky top-0 z-30 border-b border-azure-glow/15 bg-background/95 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-30 border-b border-outline-variant/55 bg-surface-container-low pt-[env(safe-area-inset-top)]">
         <div className="flex h-[var(--header-height)] items-center">
+          {showRail && (
+            <div className="flex h-full w-[var(--nav-rail-width)] shrink-0 items-center gap-2.5 border-r border-outline-variant/55 px-5">
+              <Image src="/icons/icon-192.png" alt="" width={32} height={32} className="rounded-[10px]" loading="eager" unoptimized />
+              <span className="text-title-medium tracking-tight">DeutschFlow</span>
+            </div>
+          )}
           <div className="flex w-full items-center gap-[var(--space-3)] px-[var(--gutter)]">
             {isOnSettings && (
               <button
                 type="button"
                 onClick={goBack}
                 aria-label={t("action.back")}
-                className="glass-button flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-all duration-200 hover:text-azure-glow hover:shadow-lg hover:shadow-azure-glow/20 active:scale-95"
+                className="flex size-11 shrink-0 items-center justify-center rounded-xl text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow"
               >
                 <ArrowBackIcon className="size-5" />
               </button>
             )}
-            <h1 className="min-w-0 flex-1 truncate text-left text-headline-small md:text-headline-medium">
+            <h1 className="min-w-0 flex-1 truncate text-left text-title-large">
               <span>{title}</span>
             </h1>
             {!isOnSettings && (
               <Link
                 href={SETTINGS_ROUTE}
                 aria-label={t("nav.settings")}
-                className="glass-button flex size-11 shrink-0 items-center justify-center text-on-surface-variant transition-all duration-200 hover:text-azure-glow hover:shadow-lg hover:shadow-azure-glow/20 active:scale-95"
+                className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-outline-variant/60 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-azure-glow"
               >
                 <SettingsIcon className="size-5" />
               </Link>
@@ -153,26 +160,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         {showRail && (
           <nav
             aria-label={t("nav.primary")}
-            className="sticky top-[var(--header-height)] flex h-[calc(100dvh-var(--header-height))] w-[var(--nav-rail-width)] shrink-0 flex-col gap-[var(--space-1)] overflow-y-auto border-r border-on-surface/[0.06] bg-on-surface/[0.02] px-[var(--space-3)] py-[var(--space-5)] backdrop-blur-xl"
+            className="flex min-h-0 w-[var(--nav-rail-width)] shrink-0 flex-col gap-1.5 overflow-y-auto border-r border-outline-variant/55 bg-surface-container-low px-3 py-5"
           >
             {TABS.map((tab) => {
               const selected = pathname === tab.route;
               const label = t(tab.title);
               return (
-                // Label beside the icon, one consistent 44px row. The vertical
-                // icon-over-label tile was shaped for a 128px column and made
-                // each destination as tall as a card, which is what spread the
-                // five of them down the whole screen. The active state is a
-                // filled row plus an edge marker rather than a heavy pill, so
-                // it reads at a glance without shouting.
                 <Link
                   key={tab.route}
                   href={tab.route}
                   aria-current={selected ? "page" : undefined}
-                  className={`group relative flex h-11 w-full items-center gap-[var(--space-3)] rounded-xl px-[var(--space-3)] text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow ${
+                  className={`relative flex min-h-11 w-full shrink-0 items-center gap-3 rounded-xl border px-3 text-left transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-azure-glow ${
                     selected
-                      ? "bg-azure-glow/10 text-on-surface"
-                      : "text-on-surface-variant hover:bg-on-surface/[0.05] hover:text-on-surface"
+                      ? "border-azure-glow/30 bg-secondary-container text-on-secondary-container"
+                      : "border-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                   }`}
                 >
                   {/* Not colour alone: the selected row carries a marker. */}
@@ -201,7 +202,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             id="main"
             tabIndex={-1}
             className={`flex min-w-0 min-h-0 flex-1 flex-col outline-none ${
-              !isDesktop && !isOnSettings ? "pb-[calc(6rem+env(safe-area-inset-bottom))]" : ""
+              !isDesktop && !isOnSettings ? "pb-[calc(var(--nav-bar-height)+env(safe-area-inset-bottom))]" : ""
             }`}
           >
             {children}
@@ -213,10 +214,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       {!isDesktop && !isOnSettings && (
         <nav
           aria-label={t("nav.primary")}
-          className="fixed inset-x-0 bottom-0 z-30 bg-background pb-[env(safe-area-inset-bottom)]"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-outline-variant/55 bg-surface-container-low pb-[env(safe-area-inset-bottom)]"
         >
-          <div className="hairline-azure" />
-          <div className="grid grid-cols-5">
+          <div className="grid min-h-[var(--nav-bar-height)] grid-cols-5 gap-1 px-1">
             {TABS.map((tab) => {
               const selected = pathname === tab.route;
               const label = t(tab.title);
@@ -225,11 +225,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   key={tab.route}
                   href={tab.route}
                   aria-current={selected ? "page" : undefined}
-                  className="flex flex-col items-center gap-0.5 py-2 transition-colors focus-visible:outline-2 focus-visible:outline-azure-glow focus-visible:rounded-lg"
+                  className="flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-azure-glow"
                 >
-                  <tab.icon
-                    className={selected ? "size-6 text-azure-glow" : "size-6 text-on-surface-variant"}
-                  />
+                  <span className={`grid h-7 w-11 place-items-center rounded-full ${selected ? "bg-secondary-container text-on-secondary-container" : "text-on-surface-variant"}`}>
+                    <tab.icon className="size-5" />
+                  </span>
                   <span
                     className={`max-w-full truncate text-label-small ${
                       selected ? "font-bold text-azure-glow" : "text-on-surface-variant"

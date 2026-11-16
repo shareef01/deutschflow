@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.accent-panel {
+  background-image: radial-gradient(ellipse at bottom right, color-mix(in srgb, var(--color-azure-glow) 8%, transparent), transparent 70%);
+}
+
 /* ============================================================================
    DeutschFlow design system — the refined dark palette, as Tailwind v4
    CSS-first configuration. One-to-one port of the Android app's ui/theme/
