@@ -105,10 +105,8 @@
   --container-workspace: 64rem; /* 1024px — transcript, study, practice */
   --container-wide: 90rem;      /* 1440px — history, library, split views */
 
-  /* ---- Shell dimensions --------------------------------------------------
-     The rail was w-32 (128px) with labels under icons; 240px lets the label
-     sit beside the icon, which is the shape a navigation column wants. */
-  --nav-rail-width: 15rem;      /* 240px */
+  /* ---- Shell dimensions -------------------------------------------------- */
+  --nav-rail-width: clamp(10.75rem, 17vw, 14rem);
   --nav-bar-height: 4rem;       /* 64px — mobile bottom bar */
   --header-height: 4rem;
 
