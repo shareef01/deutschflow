@@ -2,8 +2,8 @@ import { defineConfig } from "@playwright/test";
 import { STORAGE_STATE, TEST_PASSWORD, TEST_SESSION_SECRET } from "./tests/global-setup";
 
 /**
- * Playwright smoke — five tabs, the responsive breakpoint, and offline boot.
- * Serves the production build (the service worker only registers there).
+ * Browser tests and screenshot capture use the production build so they can
+ * exercise the service worker.
  */
 export default defineConfig({
   testDir: "./tests",
@@ -24,8 +24,7 @@ export default defineConfig({
       ? "npx next start -H 127.0.0.1 -p 3200"
       : "npm run build && npx next start -H 127.0.0.1 -p 3200",
     url: "http://localhost:3200",
-    // Local: reuse a server you already have running. CI: never - a leftover
-    // server from a previous run would serve the old build to this one's tests.
+    // Start a fresh server to avoid testing a stale build.
     reuseExistingServer: false,
     timeout: 180_000,
     // The gate is real in the smoke run: the server checks this signature.
