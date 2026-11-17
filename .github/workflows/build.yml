@@ -135,7 +135,7 @@ jobs:
       run:
         working-directory: web
     container:
-      image: mcr.microsoft.com/playwright:v1.64.0-noble
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
       # --init reaps the browser processes Playwright leaves behind; --ipc=host is
       # Playwright's own recommendation for its image.
       options: --init --ipc=host
