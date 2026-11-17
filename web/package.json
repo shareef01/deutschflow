@@ -2,7 +2,7 @@
   "name": "deutschflow-pwa",
   "version": "0.1.0",
   "private": true,
-  "description": "DeutschFlow PWA — a pixel-perfect web replica of the Android app: speak German, get it translated, keep what you learn. Obsidian & Azure.",
+  "description": "DeutschFlow web app for German translation, vocabulary, spaced repetition and speaking practice.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
