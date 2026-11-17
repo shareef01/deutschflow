@@ -1,4 +1,30 @@
 import { expect, test } from "@playwright/test";
+import { createTestStorageState, TEST_PASSWORD } from "./global-setup";
+import { SESSION_COOKIE } from "../src/lib/auth/session";
+
+// Playwright requires fixtures to declare dependencies with a destructured parameter.
+// eslint-disable-next-line no-empty-pattern
+test.use({ storageState: async ({}, use) => {
+  await use(await createTestStorageState());
+} });
+
+test("logout rejects replay of the copied session while another session stays valid", async ({ request, browser }) => {
+  const login = await request.post("/api/login", { form: { password: TEST_PASSWORD } });
+  expect(login.ok()).toBe(true);
+  const copied = (await request.storageState()).cookies.find(({ name }) => name === SESSION_COOKIE)!;
+  const independent = await browser.newContext({ storageState: await createTestStorageState() });
+  try {
+    const cookie = `${copied.name}=${copied.value}`;
+    expect((await request.get("/study", { maxRedirects: 0 })).status()).toBe(200);
+    expect((await request.post("/api/logout")).ok()).toBe(true);
+    const replay = await request.get("/study", { headers: { cookie }, maxRedirects: 0 });
+    expect(replay.status()).toBe(307);
+    expect(replay.headers().location).toContain("/login");
+    expect((await independent.request.get("http://localhost:3200/study", { maxRedirects: 0 })).status()).toBe(200);
+  } finally {
+    await independent.close();
+  }
+});
 
 test("device erase removes a write racing from a second tab", async ({ page, context }) => {
   await page.goto("/settings");

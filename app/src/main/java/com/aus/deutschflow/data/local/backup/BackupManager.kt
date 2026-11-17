@@ -23,6 +23,42 @@ import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private fun normalizeBackupEase(value: Double): Double =
+    if (value == 1.3f.toDouble()) 1.3 else value
+
+private const val MAX_DAILY_XP = 100_000
+private const val MAX_LIFETIME_XP = 10_000_000
+private const val MAX_STUDY_CLOCK_SKEW_MS = 86_400_000L
+private val xpAwardId = Regex("[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}")
+
+private fun JSONObject.awardTotal(): Int = keys().asSequence().sumOf { getInt(it) }
+
+private fun mergeActivity(existing: ActivityEntity, incoming: ActivityEntity): ActivityEntity {
+    val awards = existing.xpAwardsJson?.let(::JSONObject) ?: JSONObject()
+    val incomingAwards = incoming.xpAwardsJson?.let(::JSONObject) ?: JSONObject()
+    val legacyXp = maxOf(existing.xpGained - awards.awardTotal(), incoming.xpGained - incomingAwards.awardTotal())
+    for (id in incomingAwards.keys()) {
+        val amount = incomingAwards.getInt(id)
+        if (awards.has(id) && awards.getInt(id) != amount) {
+            throw BackupException.InvalidFormat("Conflicting XP award amounts.")
+        }
+        awards.put(id, amount)
+    }
+    val mergedXp = legacyXp + awards.awardTotal()
+    if (mergedXp > MAX_DAILY_XP) {
+        throw BackupException.InvalidFormat("Merged daily XP exceeds the backup limit.")
+    }
+    return existing.copy(
+        xpGained = mergedXp,
+        timestamp = when {
+            mergedXp == existing.xpGained && existing.xpGained > incoming.xpGained -> existing.timestamp
+            mergedXp == incoming.xpGained && incoming.xpGained > existing.xpGained -> incoming.timestamp
+            else -> maxOf(existing.timestamp, incoming.timestamp)
+        },
+        xpAwardsJson = awards.takeIf { it.length() > 0 }?.toString(),
+    )
+}
+
 @Singleton
 class BackupManager @Inject constructor(
     private val database: AppDatabase,
@@ -33,14 +69,29 @@ class BackupManager @Inject constructor(
     private val roleplayDao: RoleplayDao,
     private val reviewEventDao: ReviewEventDao
 ) {
+    private data class ExportSnapshot(
+        val vocabulary: List<VocabularyEntity>,
+        val transcripts: List<TranscriptEntity>,
+        val userStats: UserStatsEntity?,
+        val activityLog: List<ActivityEntity>,
+        val roleplay: List<RoleplayMessageEntity>,
+        val reviewEvents: List<ReviewEventEntity>,
+        val archivedVocabId: Int?,
+    )
 
     suspend fun exportBackup(passphrase: CharArray? = null): String = withContext(Dispatchers.IO) {
-        val vocabulary = vocabularyDao.getAllVocabularyList()
-        val transcripts = transcriptDao.getAllTranscriptsList()
-        val userStats = userStatsDao.getUserStatsOnce()
-        val activityLog = activityDao.getAllActivity()
-        val roleplay = roleplayDao.getConversation()
-        val reviewEvents = reviewEventDao.getAllEventsList()
+        val (vocabulary, transcripts, userStats, activityLog, roleplay, reviewEvents, archivedVocabId) =
+            database.withTransaction {
+                ExportSnapshot(
+                    vocabularyDao.getAllVocabularyList(),
+                    transcriptDao.getAllTranscriptsList(),
+                    userStatsDao.getUserStatsOnce(),
+                    activityDao.getAllActivity(),
+                    roleplayDao.getConversation(),
+                    reviewEventDao.getAllEventsList(),
+                    vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id,
+                )
+            }
 
         val backupObj = JSONObject().apply {
             put("format", BACKUP_FORMAT)
@@ -66,7 +117,7 @@ class BackupManager @Inject constructor(
                         put("antonyms", item.antonyms)
                         put("nextReview", item.nextReview)
                         put("interval", item.interval)
-                        put("easeFactor", item.easeFactor.toDouble())
+                        put("easeFactor", normalizeBackupEase(item.easeFactor.toDouble()))
                         put("reviewCount", item.reviewCount)
                         put("remoteId", item.remoteId)
                         put("lastModifiedAt", item.lastModifiedAt)
@@ -105,11 +156,11 @@ class BackupManager @Inject constructor(
                         put("date", item.date)
                         put("xpGained", item.xpGained)
                         put("timestamp", item.timestamp)
+                        item.xpAwardsJson?.let { put("xpAwards", JSONObject(it)) }
                     })
                 }
             })
 
-            val archivedVocabId = vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id
             put("reviewEvents", JSONArray().apply {
                 reviewEvents.forEach { item ->
                     put(JSONObject().apply {
@@ -225,6 +276,7 @@ class BackupManager @Inject constructor(
 
     private suspend fun applyImport(backup: JSONObject): BackupImportResult {
         val now = System.currentTimeMillis()
+        val latestStudyTime = minOf(MAX_FUTURE_TIMESTAMP, now + MAX_STUDY_CLOCK_SKEW_MS)
         var vocabularyAdded = 0
         var vocabularyMerged = 0
         var transcriptsAdded = 0
@@ -240,7 +292,7 @@ class BackupManager @Inject constructor(
                 val r = revArr.getJSONObject(i)
                 val vId = r.optInt("vocabularyId", 0)
                 val ts = r.optLong("reviewedAtTimestamp", 0L)
-                if (vId > 0 && ts > 0L) {
+                if (vId > 0 && ts in 1L..latestStudyTime) {
                     incomingLatestReviewByVocabId[vId] = maxOf(incomingLatestReviewByVocabId[vId] ?: 0L, ts)
                 }
             }
@@ -280,7 +332,7 @@ class BackupManager @Inject constructor(
 
             val existing = vocabularyDao.findByKey(incoming.germanTextKey)
             if (existing != null) {
-                val thisLastStudied = reviewEventDao.latestReviewTimestamp(existing.id) ?: 0L
+                val thisLastStudied = reviewEventDao.latestReviewTimestamp(existing.id, latestStudyTime) ?: 0L
                 val incomingReviewTimestamp = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
                 val incomingStudyField = row.optLong("lastStudiedAt", 0L)
                 val otherLastStudied = maxOf(incomingStudyField, incomingReviewTimestamp)
@@ -348,24 +400,27 @@ class BackupManager @Inject constructor(
         for (i in 0 until activityArray.length()) {
             val row = activityArray.getJSONObject(i)
             val date = row.getString("date")
-            val xpGained = row.getInt("xpGained")
-            val ts = row.optLong("timestamp", now)
-
+            val incomingActivity = ActivityEntity(
+                date = date,
+                xpGained = row.optInt("xpGained", 0),
+                timestamp = row.optLong("timestamp", 0L),
+                xpAwardsJson = row.optJSONObject("xpAwards")?.toString(),
+            )
             val existingActivity = activityDao.getActivityForDate(date)
-            if (existingActivity != null) {
-                activityDao.insertOrUpdate(existingActivity.copy(xpGained = maxOf(existingActivity.xpGained, xpGained)))
-            } else {
-                activityDao.insertOrUpdate(ActivityEntity(date = date, xpGained = xpGained, timestamp = ts))
-            }
+            activityDao.insertOrUpdate(
+                if (existingActivity == null) incomingActivity else mergeActivity(existingActivity, incomingActivity)
+            )
         }
 
-        val allDates = activityDao.getAllActivity().map { it.date }
+        val allActivity = activityDao.getAllActivity()
+        val allDates = allActivity.map { it.date }
+        val loggedXp = allActivity.sumOf { it.xpGained.toLong() }.coerceAtMost(MAX_LIFETIME_XP.toLong()).toInt()
         val calculatedStreak = calculateStreakFromDates(allDates)
         val finalStreak = maxOf(currentStats.streak, calculatedStreak)
 
         userStatsDao.insertOrUpdate(
             currentStats.copy(
-                xp = mergedXp,
+                xp = maxOf(mergedXp, loggedXp),
                 streak = finalStreak,
                 lastActivityTimestamp = mergedLastActivity
             )
@@ -667,10 +722,20 @@ class BackupManager @Inject constructor(
                 val interval = row.optInt("interval", 0)
                 val reviewCount = row.optInt("reviewCount", 0)
                 val nextReview = row.optLong("nextReview", 0L)
-                val easeFactor = row.optDouble("easeFactor", 2.5)
+                val easeFactor = if (row.has("easeFactor")) {
+                    (row.opt("easeFactor") as? Number)?.toDouble()?.let(::normalizeBackupEase)
+                        ?: throw BackupException.InvalidFormat("Invalid ease factor.")
+                } else 2.5
+                if (row.has("lastStudiedAt")) {
+                    val studiedAt = (row.opt("lastStudiedAt") as? Number)?.toDouble()
+                    val latestStudyTime = minOf(MAX_FUTURE_TIMESTAMP, System.currentTimeMillis() + MAX_STUDY_CLOCK_SKEW_MS)
+                    if (studiedAt == null || studiedAt !in 0.0..latestStudyTime.toDouble() || studiedAt % 1 != 0.0) {
+                        throw BackupException.InvalidFormat("Invalid lastStudiedAt timestamp.")
+                    }
+                }
 
                 if (interval < 0 || interval > 365) throw BackupException.InvalidFormat("Invalid SRS interval.")
-                if (easeFactor < 1.3 || easeFactor > 3.0) throw BackupException.InvalidFormat("Invalid ease factor.")
+                if (easeFactor !in 1.3..3.0) throw BackupException.InvalidFormat("Invalid ease factor.")
                 if (reviewCount < 0 || reviewCount > 100_000) throw BackupException.InvalidFormat("Invalid review count.")
                 if (nextReview < 0 || nextReview > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid nextReview timestamp.")
 
@@ -711,7 +776,7 @@ class BackupManager @Inject constructor(
                 val xp = row.optInt("xp", 0)
                 val streak = row.optInt("streak", 0)
                 val ts = row.optLong("lastActivityTimestamp", 0L)
-                if (xp < 0 || xp > 10_000_000) throw BackupException.InvalidFormat("Invalid XP in stats.")
+                if (xp < 0 || xp > MAX_LIFETIME_XP) throw BackupException.InvalidFormat("Invalid XP in stats.")
                 if (streak < 0 || streak > 10_000) throw BackupException.InvalidFormat("Invalid streak in stats.")
                 if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid timestamp in stats.")
             }
@@ -726,7 +791,22 @@ class BackupManager @Inject constructor(
                 }
                 val xpGained = row.optInt("xpGained", 0)
                 val ts = row.optLong("timestamp", 0L)
-                if (xpGained < 0 || xpGained > 100_000) throw BackupException.InvalidFormat("Invalid xpGained in activity log.")
+                if (xpGained < 0 || xpGained > MAX_DAILY_XP) throw BackupException.InvalidFormat("Invalid xpGained in activity log.")
+                if (row.has("xpAwards")) {
+                    val awards = row.optJSONObject("xpAwards")?.takeIf { version >= 3 }
+                        ?: throw BackupException.InvalidFormat("Invalid XP awards.")
+                    var awardXp = 0
+                    for (id in awards.keys()) {
+                        val amount = (awards.opt(id) as? Number)?.toDouble()
+                        if (!xpAwardId.matches(id) || amount == null ||
+                            amount !in 1.0..MAX_DAILY_XP.toDouble() || amount % 1 != 0.0
+                        ) {
+                            throw BackupException.InvalidFormat("Invalid XP award.")
+                        }
+                        awardXp += amount.toInt()
+                        if (awardXp > xpGained) throw BackupException.InvalidFormat("XP awards exceed daily XP.")
+                    }
+                }
                 if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid timestamp in activity log.")
             }
 

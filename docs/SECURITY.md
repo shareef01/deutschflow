@@ -6,11 +6,14 @@ This document outlines the security architecture, cryptographic controls, authen
 
 ## 1. Authentication & Session Security
 
-### 1.1 Stateless HMAC Token Model
-DeutschFlow uses a signed, stateless session token architecture stored in an `HttpOnly`, `SameSite=Lax` cookie (`df_access`).
-The token format is `<expiresAt>.<hmacSignature>`, where:
+### 1.1 Signed tokens and individual revocation
+DeutschFlow stores a signed session token in an `HttpOnly`, `SameSite=Lax` cookie (`df_access`). Public production cookies also carry `Secure`.
+The token format is `<expiresAt>.<nonce>.<hmacSignature>`, where:
 - `expiresAt`: Millisecond epoch timestamp when the session expires.
-- `hmacSignature`: Base64URL-encoded HMAC-SHA256 signature generated over `expiresAt`.
+- `nonce`: Random UUID that gives simultaneous sessions distinct tokens.
+- `hmacSignature`: Base64URL-encoded HMAC-SHA256 signature over the expiry and nonce.
+
+The proxy validates the signature and checks the shared Redis revocation store through a primary-routed command so a lagging read replica cannot admit a copied cookie after logout. Older token formats require signing in again. The store must support Redis `SET` with `GET`, `XX`, `KEEPTTL` and `PXAT`. [Upstash replication](https://upstash.com/docs/common/concepts/global-replication)
 
 ### 1.2 Multi-Factor Signing Key Derivation
 To prevent hardcoded or static key material, the active signing key is derived dynamically:
@@ -28,10 +31,10 @@ This multi-factor derivation guarantees:
 - **Safety Bounds**: Enforced between 1 hour (`3,600` seconds) and 90 days (`7,776,000` seconds). Out-of-bound values safely default to 30 days.
 
 ### 1.4 State-Changing Logout & CSRF Protection
-- The logout endpoint (`POST /api/logout`) strictly requires a POST method and rejects a request whose `Origin` header names another origin (`isAllowedOrigin` in `src/app/api/logout/route.ts`). A request that carries no `Origin` header is allowed: the endpoint only clears this browser's own cookie, so the worst case is a self-inflicted logout, and a non-browser client that omits `Origin` has nothing to forge.
+- The logout endpoint (`POST /api/logout`) requires POST and rejects a request whose `Origin` header names another origin. Clients that omit `Origin` can revoke only a verified token they present in the cookie.
 - `SameSite=Lax` on `df_access` is the second line of defence: a cross-site form POST does not carry the cookie at all, so a third-party page cannot even reach a state change here.
 - `GET /api/logout` is strictly disabled: it returns HTTP 405 Method Not Allowed (`Allow: POST`) and executes no state changes, preventing prefetch logouts and unauthorized GET CSRF.
-- Upon logout, the `df_access` cookie is cleared with `maxAge: 0` and `expires: Epoch 0`, alongside cache-invalidation headers (`Cache-Control: no-store`).
+- Logout stores a digest of the verified token in Redis until the token expires, then clears the cookie. Store failure returns HTTP 503 so the browser can retry without falsely reporting a successful logout.
 
 ---
 
@@ -50,7 +53,7 @@ To mitigate brute-force password guessing against the gate:
   - *Pipeline Non-Atomicity*: Note that per official Upstash documentation, `/pipeline` batches commands over a single HTTP connection but does **not** execute them atomically or isolate them from concurrent operations.
   - *Atomic State Decisions*: To eliminate read-modify-write race conditions when evaluating lockout thresholds, `recordFailure` executes an atomic Lua script over `POST /` (`["EVAL", script, <key count>, countKey, lastKey, ...]`). The script atomically inspects the current attempt count, increments it, applies lockout cooldowns, and updates the sliding expiration in a single isolated step.
   - *Transactional Batching*: For operations without conditional dependencies (e.g. setting records, checking counters, and clearing keys), the engine uses `/multi-exec` to guarantee atomic multi-command execution.
-- **Configurable Failure Policy (`THROTTLE_FAILURE_POLICY`)**:
+- **Failure policy**: Public production fails closed when Redis is unavailable. Single-process development and local smoke tests can use the following throttle policies (`THROTTLE_FAILURE_POLICY`):
   - `fail-secure-fallback` (default): If Redis times out or is unreachable, the system falls back to an in-memory LRU rate limiter. This provides local burst defense per node while keeping the application accessible.
   - `fail-closed`: If Redis fails or is unreachable, the endpoint strictly rejects authentication requests with HTTP 503 Service Unavailable (`ThrottleStoreError`), ensuring no attacker can bypass distributed lockouts during a store outage.
 - **Distributed Protection vs Local Fallback Distinction**: Local LRU fallback protects individual instances from rapid flooding, but cannot synchronize lockouts globally across ephemeral serverless instances. For full production-grade distributed enforcement, a highly available Upstash Redis cluster with valid credentials and network egress is required.
@@ -63,8 +66,7 @@ To mitigate brute-force password guessing against the gate:
   - When inspecting `x-forwarded-for`, incoming reverse proxies append the connecting IP to the end of the chain. To prevent callers from evading rate limits by prepending spoofed IPs to their own request headers, the validator selects the edge-appended rightmost hop.
 - **Clarification on `x-vercel-id`**: `x-vercel-id` is an internal routing trace header generated by Vercel for diagnostic and deployment identification, **not** an authenticated cryptographic edge signature.
 - **Non-Vercel / Multi-Proxy Limitations**: If deployed outside Vercel (or behind arbitrary untrusted reverse proxies), `x-forwarded-for` can easily be forged by clients if the ingress proxy does not strip or overwrite incoming forwarding headers. In unverified or untrusted environments, caller identities default to a safe shared fallback bucket (`unknown`) to prevent attackers from arbitrarily evading rate limits by spoofing random IP headers.
-  - **Consequence of the shared bucket**: one attacker's failed guesses put *every* user into the cooldown, and any user's successful login resets the bucket, giving the attacker fresh free attempts. The reset can't simply be skipped: admission counts successful logins too, so without it any three correct logins within the window would lock everyone out. A strong `SITE_PASSWORD` is the real defence here, or set `TRUSTED_PROXY_HEADER`.
-  - **Opt-in for self-hosting behind your own proxy**: set `TRUSTED_PROXY_HEADER` to the header your ingress proxy sets or appends (for example `X-Forwarded-For` for nginx `proxy_add_x_forwarded_for`, or `X-Real-IP`). The rightmost valid address in it becomes the caller key. Only set it if that proxy is the only way to reach the app and it overwrites or appends the header; otherwise clients can pick their own throttle identity.
+  - **Public production**: Requests with unknown identity receive HTTP 503 before admission. Set `TRUSTED_PROXY_HEADER` on self-hosted production to a header the sole ingress overwrites with the client address (for example `X-Real-IP`). Keep the app origin inaccessible directly. The shared bucket is for local development.
 
 ---
 
@@ -123,10 +125,10 @@ Permissions-Policy: microphone=(self), camera=(), geolocation=()
 | :--- | :--- | :--- | :--- |
 | **`SITE_PASSWORD`** | **YES** | None | **Critical**: The site access gate is rendered inaccessible or fails to unlock. Authentication cannot succeed. Under 16 characters, the server logs a warning at startup (`src/instrumentation.ts`): the throttle still allows about 2,880 guesses a day per caller. |
 | **`SESSION_SECRET`** | **YES** | None — there is no fallback | **Critical**: Session tokens cannot be signed, so `/api/login` returns 503 and the gate redirects every request to `/login`. Only `SESSION_SECRET` is read (an `AUTH_SECRET` variable is not), and a value under 32 bytes is treated as unset. |
-| **`UPSTASH_REDIS_REST_URL`** | **RECOMMENDED** | `undefined` (Local in-memory Map) | **Medium (Security/Availability)**: Without Upstash Redis, rate-limiting runs in local in-memory fallback mode. Each serverless instance tracks attempts independently, allowing distributed attackers to rotate across instances. No shared state exists between containers. |
-| **`UPSTASH_REDIS_REST_TOKEN`** | **RECOMMENDED** | `undefined` | Same as above. If URL is present without valid token, requests to Redis return HTTP 401/403. Under `fail-secure-fallback` mode, it falls back to in-memory limiting; under `fail-closed` mode, it blocks all logins with HTTP 503. |
-| **`TRUSTED_PROXY_HEADER`** | NO (self-hosted only) | `undefined` (one shared throttle bucket) | Ignored on Vercel. Self-hosted, it names the header your reverse proxy sets with the client address, giving each client its own throttle bucket. Set it only behind a proxy that overwrites or appends that header, or clients can choose their own identity. |
-| **`THROTTLE_FAILURE_POLICY`** | NO | `"fail-secure-fallback"` | If set to `"fail-closed"` and Redis is unreachable, **all login attempts return HTTP 503 Service Unavailable**. If set to `"fail-secure-fallback"`, logins remain available protected by local process-level rate limiting. |
+| **`UPSTASH_REDIS_REST_URL`** | Public production | None | HTTPS Redis REST store for distributed throttle and individual token revocation. Use persistent storage with eviction disabled. |
+| **`UPSTASH_REDIS_REST_TOKEN`** | Public production | None | Redis REST credential. Missing or unavailable public production storage yields HTTP 503. |
+| **`TRUSTED_PROXY_HEADER`** | Public self-hosting | None | Header the sole trusted ingress overwrites with the actual client IP. Ignored on Vercel. |
+| **`DEUTSCHFLOW_LOCAL_AUTH`** | Local smoke tests only | Unset | Set to `1` only on a loopback-bound, single-process local production-mode server. Revocations kept in its memory are lost at restart. Vercel always requires public production controls. |
 | **`SESSION_MAX_AGE_SECONDS`** | NO | `2592000` (30 days) | Defaults to 30 days. Clamped to `[3600, 7776000]` (1 hour to 90 days) to prevent unsafe infinite or microscopic session windows. |
 | **`SESSION_EPOCH`** | NO | `"1"` | Defaults to version `"1"`. Incrementing this value invalidates all active sessions globally without changing passwords. |
 | **`GROQ_API_KEY`** | NO | None — not read by the app | There is no server-side AI key: every AI request is made from the browser with the user's own key from the in-app Key Vault, which the client encrypts at rest. Setting this variable has no effect. |

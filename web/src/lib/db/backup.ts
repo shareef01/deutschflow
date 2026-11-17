@@ -28,7 +28,7 @@ import { withFurthestScheduleOf } from "./repository";
  */
 
 /** Bumped only if the shape changes in a way an older import cannot read. */
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 
 export const ENCRYPTED_BACKUP_FORMAT = "deutschflow-library-encrypted";
 export const ENCRYPTED_BACKUP_VERSION = 1;
@@ -89,7 +89,10 @@ export async function exportLibrary(db: DeutschFlowDB): Promise<LibraryBackup> {
       format: "deutschflow-library",
       version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
-      vocabulary,
+      vocabulary: vocabulary.map((row) =>
+        row.lastStudiedAt === undefined || validStudyTimestamp(row.lastStudiedAt)
+          ? row
+          : { ...row, lastStudiedAt: undefined }),
       transcripts,
       userStats,
       activityLog,
@@ -150,6 +153,51 @@ export const MAX_USER_STATS_ROWS = 1;
 export const MAX_REMOTE_ID_LENGTH = 100;
 
 const MAX_FUTURE_TIMESTAMP = 4_102_444_800_000; // 2100-01-01T00:00:00Z
+const MAX_STUDY_CLOCK_SKEW_MS = 86_400_000;
+
+function validStudyTimestamp(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value)
+    && value >= 0 && value <= Math.min(MAX_FUTURE_TIMESTAMP, Date.now() + MAX_STUDY_CLOCK_SKEW_MS);
+}
+
+function normalizeBackupEase(value: number): number {
+  return value === Math.fround(1.3) ? 1.3 : value;
+}
+
+const XP_AWARD_ID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
+const MAX_DAILY_XP = 100_000;
+const MAX_LIFETIME_XP = 10_000_000;
+
+function awardTotal(awards: Record<string, number> | undefined): number {
+  return Object.values(awards ?? {}).reduce((sum, amount) => sum + amount, 0);
+}
+
+function mergeActivity(existing: ActivityEntry, incoming: ActivityEntry): ActivityEntry {
+  const xpAwards = { ...existing.xpAwards };
+  for (const [id, amount] of Object.entries(incoming.xpAwards ?? {})) {
+    if (xpAwards[id] !== undefined && xpAwards[id] !== amount) {
+      throw new ImportError("invalid", "Conflicting XP award amounts.");
+    }
+    xpAwards[id] = amount;
+  }
+  const legacyXp = Math.max(
+    existing.xpGained - awardTotal(existing.xpAwards),
+    incoming.xpGained - awardTotal(incoming.xpAwards),
+  );
+  const xpGained = legacyXp + awardTotal(xpAwards);
+  if (xpGained > MAX_DAILY_XP) {
+    throw new ImportError("invalid", "Merged daily XP exceeds the backup limit.");
+  }
+  return {
+    date: existing.date, xpGained,
+    timestamp: xpGained === existing.xpGained && existing.xpGained > incoming.xpGained
+      ? existing.timestamp
+      : xpGained === incoming.xpGained && incoming.xpGained > existing.xpGained
+        ? incoming.timestamp
+        : Math.max(existing.timestamp, incoming.timestamp),
+    ...(Object.keys(xpAwards).length ? { xpAwards } : {}),
+  };
+}
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isValidCalendarDate(dateStr: string): boolean {
@@ -362,8 +410,11 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     if (row.interval !== undefined && (!Number.isSafeInteger(row.interval) || (row.interval as number) < 0 || (row.interval as number) > 365)) {
       throw new ImportError("invalid", "Invalid vocabulary SRS interval (must be 0-365).");
     }
-    if (row.easeFactor !== undefined && (typeof row.easeFactor !== "number" || !Number.isFinite(row.easeFactor) || (row.easeFactor as number) < 1.3 || (row.easeFactor as number) > 3.0)) {
+    if (row.easeFactor !== undefined && (typeof row.easeFactor !== "number" || !Number.isFinite(row.easeFactor) || normalizeBackupEase(row.easeFactor) < 1.3 || row.easeFactor > 3.0)) {
       throw new ImportError("invalid", "Invalid vocabulary easeFactor (must be 1.3-3.0).");
+    }
+    if (row.lastStudiedAt !== undefined && !validStudyTimestamp(row.lastStudiedAt)) {
+      throw new ImportError("invalid", "Invalid lastStudiedAt timestamp.");
     }
     if (row.reviewCount !== undefined && (!Number.isSafeInteger(row.reviewCount) || (row.reviewCount as number) < 0 || (row.reviewCount as number) > 100_000)) {
       throw new ImportError("invalid", "Invalid vocabulary reviewCount.");
@@ -424,7 +475,7 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     if (!isRecord(row)) {
       throw new ImportError("invalid", "User stats entry must be an object.");
     }
-    if (row.xp !== undefined && (!Number.isSafeInteger(row.xp) || (row.xp as number) < 0 || (row.xp as number) > 10_000_000)) {
+    if (row.xp !== undefined && (!Number.isSafeInteger(row.xp) || (row.xp as number) < 0 || (row.xp as number) > MAX_LIFETIME_XP)) {
       throw new ImportError("invalid", "Invalid user stats XP.");
     }
     if (row.streak !== undefined && (!Number.isSafeInteger(row.streak) || (row.streak as number) < 0 || (row.streak as number) > 10_000)) {
@@ -443,8 +494,21 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     if (!isValidCalendarDate(date)) {
       throw new ImportError("invalid", `Invalid calendar date in activity log: "${date}".`);
     }
-    if (row.xpGained !== undefined && (!Number.isSafeInteger(row.xpGained) || (row.xpGained as number) < 0 || (row.xpGained as number) > 100_000)) {
+    if (row.xpGained !== undefined && (!Number.isSafeInteger(row.xpGained) || (row.xpGained as number) < 0 || (row.xpGained as number) > MAX_DAILY_XP)) {
       throw new ImportError("invalid", "Invalid activity log xpGained.");
+    }
+    if (row.xpAwards !== undefined) {
+      if (backup.version < 3 || !isRecord(row.xpAwards)) {
+        throw new ImportError("invalid", "Invalid XP awards.");
+      }
+      let sum = 0;
+      for (const [id, amount] of Object.entries(row.xpAwards)) {
+        if (!XP_AWARD_ID.test(id) || typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+          throw new ImportError("invalid", "Invalid XP award.");
+        }
+        sum += amount;
+        if (sum > num(row.xpGained, 0)) throw new ImportError("invalid", "XP awards exceed daily XP.");
+      }
     }
     if (row.timestamp !== undefined && (!Number.isSafeInteger(row.timestamp) || (row.timestamp as number) < 0 || (row.timestamp as number) > MAX_FUTURE_TIMESTAMP)) {
       throw new ImportError("invalid", "Invalid activity log timestamp.");
@@ -575,7 +639,7 @@ async function applyImport(
   // Pre-index latest reviewedAtTimestamp per vocabulary ID from incoming review events
   const incomingMaxReviewByVocabId = new Map<number, number>();
   for (const event of backup.reviewEvents ?? []) {
-    if (isRecord(event) && typeof event.vocabularyId === "number" && typeof event.reviewedAtTimestamp === "number") {
+    if (isRecord(event) && typeof event.vocabularyId === "number" && validStudyTimestamp(event.reviewedAtTimestamp)) {
       const cur = incomingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
       if (event.reviewedAtTimestamp > cur) {
         incomingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
@@ -587,7 +651,7 @@ async function applyImport(
   const existingReviewEvents = await db.reviewEvents.toArray();
   const existingMaxReviewByVocabId = new Map<number, number>();
   for (const event of existingReviewEvents) {
-    if (typeof event.vocabularyId === "number" && typeof event.reviewedAtTimestamp === "number") {
+    if (typeof event.vocabularyId === "number" && validStudyTimestamp(event.reviewedAtTimestamp)) {
       const cur = existingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
       if (event.reviewedAtTimestamp > cur) {
         existingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
@@ -624,19 +688,22 @@ async function applyImport(
     if (existing) {
       result.vocabularyMerged++;
       const existingMaxReview = existing.id !== undefined ? (existingMaxReviewByVocabId.get(existing.id) ?? 0) : 0;
-      const existingLastStudiedAt = Math.max(existing.lastStudiedAt || 0, existingMaxReview);
+      const existingLastStudiedAt = Math.max(
+        validStudyTimestamp(existing.lastStudiedAt) ? existing.lastStudiedAt : 0,
+        existingMaxReview,
+      );
 
       const incomingIsNewer = incomingLastModifiedAt > (existing.lastModifiedAt || 0);
 
       const incomingSchedule = {
         nextReview: num(row.nextReview, 0),
         interval: num(row.interval, 0),
-        easeFactor: num(row.easeFactor, 2.5),
+        easeFactor: normalizeBackupEase(num(row.easeFactor, 2.5)),
         reviewCount: num(row.reviewCount, 0),
         lastModifiedAt: incomingLastModifiedAt,
         lastStudiedAt: incomingLastStudiedAt || undefined,
       };
-      const scheduleWinner = withFurthestScheduleOf(existing, incomingSchedule, Date.now(), {
+      const scheduleWinner = withFurthestScheduleOf({ ...existing, lastStudiedAt: existingLastStudiedAt || undefined }, incomingSchedule, Date.now(), {
         survivorLastStudiedAt: existingLastStudiedAt,
         otherLastStudiedAt: incomingLastStudiedAt,
       });
@@ -696,7 +763,7 @@ async function applyImport(
         antonyms: str(row.antonyms),
         nextReview: num(row.nextReview, 0),
         interval: num(row.interval, 0),
-        easeFactor: num(row.easeFactor, 2.5),
+        easeFactor: normalizeBackupEase(num(row.easeFactor, 2.5)),
         reviewCount: num(row.reviewCount, 0),
         remoteId: incomingRemoteId,
         lastModifiedAt: incomingLastModifiedAt,
@@ -833,22 +900,15 @@ async function applyImport(
       const date = str(row.date);
       if (!isValidCalendarDate(date)) continue;
       const existing = existingByDate.get(date);
-      const incomingActivity = {
+      const incomingActivity: ActivityEntry = {
         date,
         xpGained: num(row.xpGained, 0),
         timestamp: num(row.timestamp, 0),
+        ...(row.xpAwards ? { xpAwards: row.xpAwards as Record<string, number> } : {}),
       };
-      if (!existing || incomingActivity.xpGained > existing.xpGained) {
-        activityToPut.push(incomingActivity);
-        existingByDate.set(date, incomingActivity);
-      } else if (incomingActivity.xpGained === existing.xpGained) {
-        const merged = {
-          ...existing,
-          timestamp: Math.max(existing.timestamp, incomingActivity.timestamp),
-        };
-        activityToPut.push(merged);
-        existingByDate.set(date, merged);
-      }
+      const merged = existing ? mergeActivity(existing, incomingActivity) : incomingActivity;
+      activityToPut.push(merged);
+      existingByDate.set(date, merged);
     }
     for (let i = 0; i < activityToPut.length; i += CHUNK_SIZE) {
       await db.activityLog.bulkPut(activityToPut.slice(i, i + CHUNK_SIZE));
@@ -886,7 +946,11 @@ async function applyImport(
 
   await db.userStats.put({
     id: 1,
-    xp: Math.max(current?.xp ?? 0, num(incoming?.xp, 0)),
+    xp: Math.max(
+      current?.xp ?? 0,
+      num(incoming?.xp, 0),
+      Math.min(MAX_LIFETIME_XP, allActivities.reduce((total, day) => total + day.xpGained, 0)),
+    ),
     streak: mergedStreak,
     lastActivityTimestamp: mergedLastActivity,
   });

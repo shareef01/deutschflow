@@ -13,6 +13,9 @@ import {
   verifySessionToken,
 } from "@/lib/auth/session";
 import { GET as logoutGet, POST as logoutPost } from "@/app/api/logout/route";
+import { POST as loginPost } from "@/app/api/login/route";
+import { proxy } from "@/proxy";
+import { NextRequest } from "next/server";
 
 /**
  * Security & session revocation test suite.
@@ -37,7 +40,85 @@ const PASSWORD = "correct-horse-battery-staple";
 const NOW = 1_700_000_000_000;
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+});
+
+describe("public production authentication", () => {
+  function configureProduction() {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("DEUTSCHFLOW_LOCAL_AUTH", "");
+    vi.stubEnv("SITE_PASSWORD", PASSWORD);
+    vi.stubEnv("SESSION_SECRET", "test-session-secret-at-least-32-bytes");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://redis.example.invalid");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "fixture");
+  }
+
+  it("rejects untrusted identity before charging a shared login bucket", async () => {
+    configureProduction();
+    vi.stubEnv("TRUSTED_PROXY_HEADER", "");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const request = new NextRequest("https://site.test/api/login", {
+      method: "POST",
+      headers: { "x-real-ip": "192.0.2.1" },
+      body: new URLSearchParams({ password: PASSWORD }),
+    });
+    expect((await loginPost(request)).status).toBe(503);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects sessions and leaves the cookie intact when Redis is down", async () => {
+    configureProduction();
+    const signingKey = await deriveSessionSigningSecret(process.env.SESSION_SECRET!, PASSWORD);
+    const token = await createSessionToken(signingKey);
+    const cookie = `${SESSION_COOKIE}=${token}`;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));
+    const protectedPage = new NextRequest("https://site.test/study", { headers: { cookie } });
+    const logout = new Request("https://site.test/api/logout", {
+      method: "POST", headers: { cookie, origin: "https://site.test" },
+    });
+    expect((await proxy(protectedPage)).status).toBe(503);
+    const response = await logoutPost(logout);
+    expect(response.status).toBe(503);
+    expect(response.headers.has("set-cookie")).toBe(false);
+  });
+
+  it("checks revocations through the primary and writes them with the token expiry", async () => {
+    configureProduction();
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("REDIS_REST_URL", "");
+    vi.stubEnv("REDIS_REST_TOKEN", "");
+    vi.stubEnv("KV_REST_API_URL", "https://redis.example.invalid");
+    vi.stubEnv("KV_REST_API_TOKEN", "vercel-fixture");
+    const signingKey = await deriveSessionSigningSecret(process.env.SESSION_SECRET!, PASSWORD);
+    const token = await createSessionToken(signingKey);
+    const cookie = `${SESSION_COOKIE}=${token}`;
+    let stored: string | null = null;
+    const fetch = vi.fn(async (_url: string, options: RequestInit) => {
+      expect(new Headers(options.headers).get("Authorization")).toBe("Bearer vercel-fixture");
+      const [, key, value, ...args] = JSON.parse(String(options.body));
+      expect(key).toMatch(/^deutschflow:revoked:[a-f0-9]{64}$/);
+      expect(value).toBe("1");
+      if (args[0] === "PXAT") {
+        expect(args[1]).toBe(Number(token.split(".")[0]));
+        stored = value;
+        return Response.json({ result: "OK" });
+      }
+      expect(args).toEqual(["XX", "KEEPTTL", "GET"]);
+      return Response.json({ result: stored });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const request = new NextRequest("https://site.test/study", { headers: { cookie } });
+    expect((await proxy(request)).status).toBe(200);
+    expect((await logoutPost(new Request("https://site.test/api/logout", {
+      method: "POST", headers: { cookie },
+    }))).status).toBe(200);
+    expect((await proxy(request)).status).toBe(307);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe("sessionSecret", () => {

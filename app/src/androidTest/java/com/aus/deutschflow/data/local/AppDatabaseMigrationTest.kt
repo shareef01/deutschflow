@@ -567,10 +567,10 @@ class AppDatabaseMigrationTest {
     }
 
     /**
-     * The whole run a real install takes, 7 to 18 in one go.
+     * The whole run a real install takes, from 7 to the current schema.
      *
      * The per-step tests each start from a hand-written fixture; this one is the only
-     * check that the steps compose - that a row written by version 7 survives all eleven
+     * check that the steps compose - that a row written by version 7 survives them
      * and still reads correctly through the release configuration.
      */
     @Test
@@ -586,10 +586,10 @@ class AppDatabaseMigrationTest {
         }
 
         helper.runMigrationsAndValidate(
-            TEST_DB, 18, true,
+            TEST_DB, DATABASE_VERSION, true,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
             MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
-            MIGRATION_16_17, MIGRATION_17_18
+            MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19
         )
 
         val database = openAsReleaseWould()
@@ -1213,6 +1213,20 @@ class AppDatabaseMigrationTest {
             assertEquals("cafe", conversation.first { it.position == 1 }.scenario)
         } finally {
             database.close()
+        }
+    }
+
+    @Test
+    fun migrationKeepsExistingActivityAsLegacyXp() {
+        helper.createDatabase(TEST_DB, 18).use { db ->
+            db.execSQL("INSERT INTO activity_log (date, xpGained, timestamp) VALUES ('2026-11-16', 15, 1)")
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 19, true, MIGRATION_18_19).use { db ->
+            db.query("SELECT xpGained, xpAwardsJson FROM activity_log").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(15, cursor.getInt(0))
+                assertTrue(cursor.isNull(1))
+            }
         }
     }
 

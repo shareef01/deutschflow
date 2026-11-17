@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { DeutschFlowDB } from "@/lib/db/schema";
-import { exportLibrary, importLibrary, MAX_BACKUP_FILE_BYTES } from "@/lib/db/backup";
+import { BACKUP_VERSION, exportLibrary, importLibrary, MAX_BACKUP_FILE_BYTES } from "@/lib/db/backup";
 import { clearAllProgress, deleteTranscript, insertTranscript, restoreTranscript,
-  saveVocabulary, updateTranscriptAnalysis } from "@/lib/db/repository";
+  rewardXp, saveVocabulary, updateTranscriptAnalysis } from "@/lib/db/repository";
 import { recordReview, StaleReviewError } from "@/lib/db/review";
 import { ReviewQuality } from "@/lib/ai/srs";
 
@@ -16,6 +16,45 @@ async function seed(db: DeutschFlowDB, germanText = "Haus") {
   await saveVocabulary(db, { germanText, englishTranslation: "house" });
   return (await db.vocabulary.toArray())[0];
 }
+
+it("accepts the Android ease floor and rejects corrupt study metadata before writes", async () => {
+  const source = fresh();
+  const target = fresh();
+  const word = await seed(source);
+  const backup = await exportLibrary(source);
+  await importLibrary(target, { ...backup, vocabulary: [{ ...word, easeFactor: Math.fround(1.3) }] });
+  expect((await target.vocabulary.toArray())[0].easeFactor).toBe(1.3);
+
+  await expect(importLibrary(target, {
+    ...backup, vocabulary: [{ ...word, lastStudiedAt: Number.MAX_SAFE_INTEGER }],
+  })).rejects.toThrow("Invalid lastStudiedAt timestamp");
+  expect((await target.vocabulary.toArray())[0].easeFactor).toBe(1.3);
+});
+
+it("merges same-day independent XP while deduping shared awards and repeated imports", async () => {
+  const base = fresh();
+  const a = fresh();
+  const b = fresh();
+  vi.setSystemTime(new Date(2026, 10, 16, 12));
+  try {
+    await rewardXp(base, 10);
+    const shared = await exportLibrary(base);
+    await importLibrary(a, shared);
+    await importLibrary(b, shared);
+    await rewardXp(a, 10);
+    await rewardXp(b, 15);
+
+    const divergent = await exportLibrary(a);
+    await importLibrary(b, divergent);
+    await importLibrary(b, divergent);
+    expect((await b.userStats.get(1))?.xp).toBe(35);
+    const [day] = await b.activityLog.toArray();
+    expect(day.xpGained).toBe(35);
+    expect(Object.keys(day.xpAwards ?? {})).toHaveLength(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const db of databases) db.close();
@@ -121,7 +160,7 @@ it("round-trips long phrases, analyzed transcripts, review links, and a conversa
   await source.roleplayMessages.add(turn);
   await seed(target, "Hund"); // Source and destination IDs deliberately differ.
   const backup = await exportLibrary(source);
-  expect(backup.version).toBe(2);
+  expect(backup.version).toBe(BACKUP_VERSION);
   await importLibrary(target, backup);
   await importLibrary(target, backup);
   const restored = await target.vocabulary.where("germanTextKey").equals(card.germanTextKey).first();

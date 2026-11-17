@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/throttle";
 
 import { isIP } from "node:net";
+import { authRedisCredentials, requiresPublicAuthInfrastructure } from "@/lib/auth/revocation";
 
 /**
  * Standards-compliant IPv4 / IPv6 syntax validator using Node.js libuv parser (node:net.isIP).
@@ -105,12 +106,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const formData = await request.formData();
-  const password = typeof formData.get("password") === "string"
-    ? String(formData.get("password")).trim()
-    : "";
-  const target = safeRedirectTarget(formData.get("from"));
   const caller = extractCallerKey(request.headers);
+  if (requiresPublicAuthInfrastructure() && (caller === SHARED_CALLER_KEY || !authRedisCredentials())) {
+    return NextResponse.json({ error: "Authentication ingress or Redis is unavailable." }, {
+      status: 503,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
 
   let admission;
   try {
@@ -136,6 +138,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Invalid login form." }, { status: 400 });
+  }
+  const candidate = formData.get("password");
+  const password = typeof candidate === "string" ? candidate.trim() : "";
+  const target = safeRedirectTarget(formData.get("from"));
+
   if (!(await passwordMatches(password, masterPassword))) {
     return NextResponse.json(
       { error: "That key doesn't match. Check for stray spaces and try again." },
@@ -147,7 +159,7 @@ export async function POST(request: NextRequest) {
   const isHttps = forwardedProto
     ? forwardedProto.split(",")[0].trim().toLowerCase() === "https"
     : request.url.startsWith("https://");
-  const isSecure = process.env.NODE_ENV === "production" && isHttps;
+  const isSecure = requiresPublicAuthInfrastructure() || (process.env.NODE_ENV === "production" && isHttps);
 
   try {
     // Also for the shared key, though there it resets an attacker's count too.

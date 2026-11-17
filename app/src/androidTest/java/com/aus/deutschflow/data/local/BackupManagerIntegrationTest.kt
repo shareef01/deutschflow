@@ -75,6 +75,30 @@ class BackupManagerIntegrationTest {
     }
 
     @Test
+    fun roundTripMergesIndependentSameDayAwardsAndPreservesTheEaseFloor() = runBlocking {
+        val today = LocalDate.now().toString()
+        sourceDb.vocabularyDao().insertVocabulary(
+            VocabularyEntity(
+                germanText = "Haus",
+                germanTextKey = germanKey("Haus"),
+                englishTranslation = "house",
+                easeFactor = 1.3f,
+            )
+        )
+        sourceDb.activityDao().addXp(today, 10)
+        targetDb.activityDao().addXp(today, 15)
+        val backup = sourceBackupManager.exportBackup()
+
+        repeat(2) { targetBackupManager.importBackup(backup) }
+
+        assertEquals(1.3f, targetDb.vocabularyDao().findByGermanText("Haus")?.easeFactor)
+        val activity = requireNotNull(targetDb.activityDao().getActivityForDate(today))
+        assertEquals(25, activity.xpGained)
+        assertEquals(2, JSONObject(requireNotNull(activity.xpAwardsJson)).length())
+        assertEquals(25, targetDb.userStatsDao().getUserStatsOnce()?.xp)
+    }
+
+    @Test
     fun roundTripEncryptedBackup_restoresExactDataAndRelationships() = runBlocking {
         val now = System.currentTimeMillis()
         val vocabDao = sourceDb.vocabularyDao()

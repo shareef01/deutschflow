@@ -23,7 +23,7 @@ To respect user privacy, operating-system-level automatic cloud backups are expl
 ## 2. Format Specifications
 
 DeutschFlow supports two top-level backup envelopes:
-1. **Plaintext JSON**: `deutschflow-library` (Versions 1 and 2).
+1. **Plaintext JSON**: `deutschflow-library` (read versions 1–3, write version 3).
 2. **Encrypted Authenticated Envelope**: `deutschflow-library-encrypted` (Version 1).
 
 ### 2.1 Plaintext Archive (`deutschflow-library`)
@@ -31,7 +31,7 @@ DeutschFlow supports two top-level backup envelopes:
 ```json
 {
   "format": "deutschflow-library",
-  "version": 2,
+  "version": 3,
   "exportedAt": "2026-10-17T00:00:00.000Z",
   "vocabulary": [ ... ],
   "transcripts": [ ... ],
@@ -82,6 +82,7 @@ DeutschFlow supports two top-level backup envelopes:
   - `date`: string (`YYYY-MM-DD` calendar date)
   - `xpGained`: number (non-negative integer)
   - `timestamp`: number (epoch ms)
+  - `xpAwards`: optional object introduced in v3, mapping stable lowercase UUIDs to positive integer XP amounts for this date. The award sum must be at most `xpGained`.
 
 - **`reviewEvents`** (Introduced in v2):
   - `id`: number (optional)
@@ -157,7 +158,8 @@ When importing a backup into an existing library, records are merged transaction
   - No valid review events are discarded, and no misleading foreign-key references are created.
 
 ### 3.3 Activity Log & Streak Calculation
-- Activity entries for each `YYYY-MM-DD` date take `Math.max(existing.xpGained, incoming.xpGained)`.
+- Daily merges union identified awards by UUID, reject conflicting amounts for the same award, and add the larger of the two legacy daily subtotals. This makes shared and repeated imports idempotent while preserving independent awards from v3 clients. Earlier backups only carry daily aggregates, so overlapping legacy activity cannot be reconstructed. Lifetime XP retains the largest recorded lifetime total and is at least the merged logged XP within the supported range.
+- Restore v3 files with updated clients. Older clients intentionally reject the new format so they do not drop award identity during a round trip.
 - Streaks are re-calculated deterministically from contiguous active calendar dates (`xpGained > 0`).
 
 ---

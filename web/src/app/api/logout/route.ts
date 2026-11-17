@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth/session";
+import { SESSION_COOKIE, getActiveSigningSecret, verifySessionToken } from "@/lib/auth/session";
+import { requiresPublicAuthInfrastructure, revokeSession } from "@/lib/auth/revocation";
 
 /**
  * Logout Route Handler — explicit server-side session termination.
@@ -7,11 +8,7 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
  * Logout invalidates the active browser's session by clearing the HttpOnly
  * `df_access` cookie with `maxAge: 0` and `expires: Epoch 0`.
  *
- * Architecture Note on Session Revocation:
- * Because DeutschFlow session tokens are stateless signed HMAC tokens (<expiry>.<hmac>),
- * clearing the HttpOnly cookie terminates the session for this browser client.
- * Server-side revocation of all outstanding session tokens across all devices
- * requires incrementing SESSION_EPOCH or rotating SESSION_SECRET / SITE_PASSWORD.
+ * A verified token is revoked before the response clears the cookie.
  */
 function isHttpsRequest(request?: Request): boolean {
   if (!request) return false;
@@ -35,7 +32,7 @@ export function isAllowedOrigin(request: Request): boolean {
 }
 
 function clearSessionCookie(response: NextResponse, request?: Request): NextResponse {
-  const isSecure = process.env.NODE_ENV === "production" && isHttpsRequest(request);
+  const isSecure = requiresPublicAuthInfrastructure() || (process.env.NODE_ENV === "production" && isHttpsRequest(request));
   response.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
     secure: isSecure,
@@ -51,6 +48,23 @@ function clearSessionCookie(response: NextResponse, request?: Request): NextResp
 export async function POST(request: Request) {
   if (!isAllowedOrigin(request)) {
     return NextResponse.json({ error: "Forbidden: cross-origin logout request" }, { status: 403 });
+  }
+  const cookie = request.headers.get("cookie")?.split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${SESSION_COOKIE}=`));
+  const token = cookie?.slice(SESSION_COOKIE.length + 1);
+  if (token) {
+    const signingSecret = await getActiveSigningSecret();
+    if (signingSecret && await verifySessionToken(token, signingSecret)) {
+      try {
+        await revokeSession(token);
+      } catch {
+        return NextResponse.json({ error: "Session could not be revoked. Try again." }, {
+          status: 503,
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
+    }
   }
   const url = new URL("/login", request.url);
   const response = NextResponse.json({ success: true, redirect: url.pathname });
