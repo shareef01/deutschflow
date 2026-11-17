@@ -26,7 +26,7 @@ val keystoreProperties = Properties().apply {
  * hundred patch releases of room inside it, more than a line ever needs before the next
  * major. Bump [APP_VERSION_NAME] and nothing else; the code follows.
  */
-val APP_VERSION_NAME = "1.0.0"
+val APP_VERSION_NAME = "1.1.0"
 
 /** [APP_VERSION_NAME] as a Play-acceptable version code - see the scheme above. */
 fun androidVersionCode(versionName: String): Int {

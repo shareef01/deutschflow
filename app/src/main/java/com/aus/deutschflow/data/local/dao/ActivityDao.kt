@@ -3,6 +3,8 @@ package com.aus.deutschflow.data.local.dao
 import androidx.room.*
 import com.aus.deutschflow.data.local.entities.ActivityEntity
 import kotlinx.coroutines.flow.Flow
+import org.json.JSONObject
+import java.util.UUID
 
 @Dao
 interface ActivityDao {
@@ -28,10 +30,12 @@ interface ActivityDao {
     @Transaction
     suspend fun addXp(date: String, amount: Int) {
         val current = getActivityForDate(date)
+        val awards = current?.xpAwardsJson?.let(::JSONObject) ?: JSONObject()
+        awards.put(UUID.randomUUID().toString(), amount)
         if (current == null) {
-            insertOrUpdate(ActivityEntity(date = date, xpGained = amount))
+            insertOrUpdate(ActivityEntity(date = date, xpGained = amount, xpAwardsJson = awards.toString()))
         } else {
-            insertOrUpdate(current.copy(xpGained = current.xpGained + amount))
+            insertOrUpdate(current.copy(xpGained = current.xpGained + amount, xpAwardsJson = awards.toString()))
         }
     }
 

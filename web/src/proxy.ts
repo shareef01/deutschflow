@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, getActiveSigningSecret, verifySessionToken } from "@/lib/auth/session";
+import { isSessionRevoked } from "@/lib/auth/revocation";
 
 /**
  * The access gate, run by the network-boundary proxy (Next.js 16 convention; its runtime is nodejs).
@@ -44,7 +45,15 @@ export async function proxy(request: NextRequest) {
   }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  if (await verifySessionToken(token, signingSecret)) return NextResponse.next();
+  if (token && await verifySessionToken(token, signingSecret)) {
+    try {
+      if (!(await isSessionRevoked(token))) return NextResponse.next();
+    } catch {
+      return new NextResponse("Authentication temporarily unavailable.", {
+        status: 503, headers: { "Cache-Control": "no-store" },
+      });
+    }
+  }
 
   const url = request.nextUrl.clone();
   url.pathname = "/login";

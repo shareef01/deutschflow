@@ -7,7 +7,7 @@
  * stops page scripts *reading* the cookie, and has no bearing on what a client
  * chooses to send.
  *
- * A token is `<expiry>.<hmac>`, signed with a key derived from SESSION_SECRET,
+ * A token is `<expiry>.<nonce>.<hmac>`, signed with a key derived from SESSION_SECRET,
  * SITE_PASSWORD and SESSION_EPOCH (see deriveSessionSigningSecret). The password
  * is never used as the key itself — it is one input to an HMAC, so the key
  * material is a fixed-length digest rather than a human-typed value — but it is
@@ -182,7 +182,17 @@ export async function createSessionToken(
   maxAgeSeconds: number = getSessionMaxAgeSeconds()
 ): Promise<string> {
   const expiresAt = now + maxAgeSeconds * 1000;
-  return `${expiresAt}.${await sign(String(expiresAt), secret)}`;
+  const payload = `${expiresAt}.${crypto.randomUUID()}`;
+  return `${payload}.${await sign(payload, secret)}`;
+}
+
+const tokenFormat = /^(\d{1,16})\.[a-f0-9-]{36}\.[A-Za-z0-9_-]{43}$/;
+
+export function sessionTokenExpiry(token: string): number | null {
+  const match = tokenFormat.exec(token);
+  if (!match) return null;
+  const expiry = Number(match[1]);
+  return Number.isSafeInteger(expiry) ? expiry : null;
 }
 
 /**
@@ -197,13 +207,10 @@ export async function verifySessionToken(
 ): Promise<boolean> {
   if (!token) return false;
 
+  const expiresAt = sessionTokenExpiry(token);
+  if (expiresAt === null || expiresAt <= now) return false;
   const separator = token.lastIndexOf(".");
-  if (separator <= 0) return false;
-
-  const expiresAt = Number(token.slice(0, separator));
-  if (!Number.isFinite(expiresAt) || expiresAt <= now) return false;
-
-  return timingSafeEqual(token.slice(separator + 1), await sign(String(expiresAt), secret));
+  return timingSafeEqual(token.slice(separator + 1), await sign(token.slice(0, separator), secret));
 }
 
 export function timingSafeEqual(a: string, b: string): boolean {

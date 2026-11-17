@@ -1,7 +1,7 @@
 package com.aus.deutschflow.data.local.backup
 
 const val BACKUP_FORMAT = "deutschflow-library"
-const val CURRENT_BACKUP_VERSION = 2
+const val CURRENT_BACKUP_VERSION = 3
 
 /**
  * Maximum supported size of unencrypted plaintext JSON backup library data.

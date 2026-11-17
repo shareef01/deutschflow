@@ -23,11 +23,11 @@ export const TEST_PASSWORD = "smoke-suite-key";
 export const TEST_SESSION_SECRET = "smoke-suite-independent-session-secret";
 export const STORAGE_STATE = "tests/.auth/state.json";
 
-export default async function globalSetup() {
+export async function createTestStorageState() {
   const signingKey = await deriveSessionSigningSecret(TEST_SESSION_SECRET, TEST_PASSWORD, "1");
   const token = await createSessionToken(signingKey);
 
-  const state = {
+  return {
     cookies: [
       {
         name: SESSION_COOKIE,
@@ -43,7 +43,10 @@ export default async function globalSetup() {
     ],
     origins: [],
   };
+}
 
+export default async function globalSetup() {
+  const state = await createTestStorageState();
   await mkdir(dirname(STORAGE_STATE), { recursive: true });
   await writeFile(STORAGE_STATE, JSON.stringify(state, null, 2));
 }

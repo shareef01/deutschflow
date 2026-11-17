@@ -634,12 +634,16 @@ export function todayKey(now: Date = new Date()): string {
 
 export async function addActivityXp(db: DeutschFlowDB, amount: number): Promise<void> {
     const date = todayKey();
+    const award = { [crypto.randomUUID()]: amount };
     await db.transaction("rw", db.activityLog, async () => {
         const current = await db.activityLog.get(date);
         if (current) {
-            await db.activityLog.put({ ...current, xpGained: current.xpGained + amount });
+            await db.activityLog.put({
+                ...current, xpGained: current.xpGained + amount,
+                xpAwards: { ...current.xpAwards, ...award },
+            });
         } else {
-            await db.activityLog.add({ date, xpGained: amount, timestamp: Date.now() });
+            await db.activityLog.add({ date, xpGained: amount, timestamp: Date.now(), xpAwards: award });
         }
     });
 }

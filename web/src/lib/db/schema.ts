@@ -75,6 +75,7 @@ export interface ActivityEntry {
     date: string; // YYYY-MM-DD
     xpGained: number;
     timestamp: number;
+    xpAwards?: Record<string, number>;
 }
 
 /**
