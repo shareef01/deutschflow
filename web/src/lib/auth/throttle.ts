@@ -27,6 +27,8 @@
  *    Under saturation, unlocked/idle keys are evicted first.
  */
 
+import { authRedisCredentials, requiresPublicAuthInfrastructure } from "./revocation";
+
 /** Failures allowed before attempts receive an immediate retry response. */
 export const FREE_ATTEMPTS = 3;
 
@@ -643,10 +645,10 @@ let customBackend: ThrottleBackend | null = null;
 
 export function getActiveThrottleBackend(): ThrottleBackend {
   if (customBackend) return customBackend;
-  const url = process.env.UPSTASH_REDIS_REST_URL?.trim() || process.env.REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || process.env.REDIS_REST_TOKEN?.trim();
-  if (url && token) {
-    return new UpstashRedisThrottleBackend(url, token, defaultMemoryBackend);
+  const redis = authRedisCredentials();
+  if (redis) {
+    const failurePolicy = requiresPublicAuthInfrastructure() ? "fail-closed" : undefined;
+    return new UpstashRedisThrottleBackend(redis.url, redis.token, defaultMemoryBackend, undefined, failurePolicy);
   }
   return defaultMemoryBackend;
 }

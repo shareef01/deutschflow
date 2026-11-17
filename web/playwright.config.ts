@@ -21,15 +21,25 @@ export default defineConfig({
   },
   webServer: {
     command: process.env.CI
-      ? "npx next start -p 3200"
-      : "npm run build && npx next start -p 3200",
+      ? "npx next start -H 127.0.0.1 -p 3200"
+      : "npm run build && npx next start -H 127.0.0.1 -p 3200",
     url: "http://localhost:3200",
     // Local: reuse a server you already have running. CI: never - a leftover
     // server from a previous run would serve the old build to this one's tests.
     reuseExistingServer: false,
     timeout: 180_000,
     // The gate is real in the smoke run: the server checks this signature.
-    env: { SITE_PASSWORD: TEST_PASSWORD, SESSION_SECRET: TEST_SESSION_SECRET },
+    env: {
+      SITE_PASSWORD: TEST_PASSWORD,
+      SESSION_SECRET: TEST_SESSION_SECRET,
+      DEUTSCHFLOW_LOCAL_AUTH: "1",
+      UPSTASH_REDIS_REST_URL: "",
+      UPSTASH_REDIS_REST_TOKEN: "",
+      REDIS_REST_URL: "",
+      REDIS_REST_TOKEN: "",
+      KV_REST_API_URL: "",
+      KV_REST_API_TOKEN: "",
+    },
   },
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },

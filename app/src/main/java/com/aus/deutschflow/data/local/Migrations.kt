@@ -652,6 +652,12 @@ private val SCENARIO_TITLE_TO_ID = mapOf(
     "Job Interview for a Professional Role" to "job_interview"
 )
 
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `activity_log` ADD COLUMN `xpAwardsJson` TEXT")
+    }
+}
+
 /**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
@@ -671,5 +677,5 @@ val MIGRATIONS =
         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
         MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
-        MIGRATION_16_17, MIGRATION_17_18
+        MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19
     )

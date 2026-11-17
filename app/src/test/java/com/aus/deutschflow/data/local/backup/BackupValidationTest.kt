@@ -41,6 +41,23 @@ class BackupValidationTest {
     }
 
     @Test
+    fun `accepts the historical Float ease floor and rejects a poisoned study timestamp`() {
+        val card = JSONObject()
+            .put("id", 1)
+            .put("germanText", "Haus")
+            .put("englishTranslation", "house")
+            .put("easeFactor", 1.3f.toDouble())
+        val backup = createValidBackupJson(version = 2, vocabulary = JSONArray().put(card))
+        BackupManager.validateBackupJson(JSONObject(backup.toString()))
+
+        card.put("lastStudiedAt", Long.MAX_VALUE)
+        val error = assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupManager.validateBackupJson(backup)
+        }
+        assertEquals("Invalid lastStudiedAt timestamp.", error.message)
+    }
+
+    @Test
     fun `rejects invalid format`() {
         val backup = createValidBackupJson(format = "anki-deck")
         assertThrows(BackupException.InvalidFormat::class.java) {

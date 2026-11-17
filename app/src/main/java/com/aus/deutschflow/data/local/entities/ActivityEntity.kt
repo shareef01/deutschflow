@@ -11,5 +11,6 @@ import androidx.room.PrimaryKey
 data class ActivityEntity(
     @PrimaryKey val date: String,
     val xpGained: Int,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val xpAwardsJson: String? = null,
 )
