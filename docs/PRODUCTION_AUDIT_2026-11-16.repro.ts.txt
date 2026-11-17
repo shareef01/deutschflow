@@ -1,0 +1,113 @@
+// Audited commit e88d893195909cf5ab927891560e4ce38e0f07ae.
+// Copy as web/tests/production-audit-observations.test.ts in an isolated checkout.
+// In web/, run npm ci and npx vitest run tests/production-audit-observations.test.ts.
+// Assertions describe observed behavior. Invert the defect assertions after remediation.
+
+import { NextRequest } from "next/server";
+import { expect, it, vi } from "vitest";
+import { POST as login } from "@/app/api/login/route";
+import { POST as logout } from "@/app/api/logout/route";
+import { resetThrottle } from "@/lib/auth/throttle";
+import { proxy } from "@/proxy";
+import { DeutschFlowDB } from "@/lib/db/schema";
+import { exportLibrary, importLibrary } from "@/lib/db/backup";
+import { calculateNextReview, ReviewQuality } from "@/lib/ai/srs";
+
+const url = "https://example.test";
+function loginRequest(password: string) {
+  return new NextRequest(url + "/api/login", {
+    method: "POST", body: new URLSearchParams({password}),
+  });
+}
+
+it("SEC-01: copied bearer remains accepted after logout", async () => {
+  vi.stubEnv("SITE_PASSWORD", "audit-local-fixture");
+  vi.stubEnv("SESSION_SECRET", "audit-fixture-signing-material-0123456789");
+  try {
+    resetThrottle();
+    const issued = await login(loginRequest("audit-local-fixture"));
+    expect(issued.status).toBe(200);
+    const cookie = issued.headers.get("set-cookie")!.split(";")[0];
+    const response = await logout(new Request(url + "/api/logout", {
+      method: "POST", headers: { cookie, origin: url },
+    }));
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect((await proxy(new NextRequest(url + "/study", {headers: {cookie}}))).status).toBe(200);
+  } finally { vi.unstubAllEnvs(); resetThrottle(); }
+});
+
+it("SEC-02: unconfigured self-hosted caller bucket blocks correct credentials", async () => {
+  vi.stubEnv("SITE_PASSWORD", "audit-local-fixture");
+  vi.stubEnv("SESSION_SECRET", "audit-fixture-signing-material-0123456789");
+  for (const k of ["VERCEL", "TRUSTED_PROXY_HEADER", "UPSTASH_REDIS_REST_URL", "REDIS_REST_URL"]) vi.stubEnv(k, "");
+  try {
+    resetThrottle();
+    vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+    for (let i = 0; i < 3; i++) expect((await login(loginRequest("wrong"))).status).toBe(401);
+    expect((await login(loginRequest("audit-local-fixture"))).status).toBe(429);
+  } finally { vi.restoreAllMocks(); vi.unstubAllEnvs(); resetThrottle(); }
+});
+
+it("DATA-01: activity from two branches survives, independent XP does not add", async () => {
+  const a = new DeutschFlowDB("audit-a");
+  const b = new DeutschFlowDB("audit-b");
+  try {
+    await a.activityLog.put({ date: "2026-11-10", timestamp: 1794355200000, xpGained: 10 });
+    await a.userStats.put({ id: 1, xp: 10, streak: 1, lastActivityTimestamp: 1794355200000 });
+    await b.activityLog.put({ date: "2026-11-11", timestamp: 1794441600000, xpGained: 15 });
+    await b.userStats.put({ id: 1, xp: 15, streak: 1, lastActivityTimestamp: 1794441600000 });
+    const backup = await exportLibrary(a);
+    await importLibrary(b, backup);
+    await importLibrary(b, backup);
+    expect(await b.activityLog.count()).toBe(2);
+    expect((await b.userStats.get(1))?.xp).toBe(15);
+  } finally { await a.delete(); await b.delete(); }
+});
+
+it("SRS-01: search valid Easy inputs for Float and Number interval divergence", () => {
+  const f = Math.fround;
+  let witness;
+  for (let interval = 2; interval <= 365 && !witness; interval++) {
+    for (let e = 130; e <= 300; e++) {
+      const ease = e / 100;
+      const web = calculateNextReview({ interval, easeFactor: ease, reviewCount: 3 } as never, ReviewQuality.EASY).interval;
+      const android = Math.min(365, Math.max(interval + 1, Math.round(f(f(interval * f(ease)) * f(1.3)))));
+      if (web !== android) { witness = { interval, ease, web, android }; break; }
+    }
+  }
+  console.log(witness);
+  expect(witness).toBeDefined();
+});
+
+it("SEC-03: imported out-of-range study time overrides a legitimate later edit", async () => {
+  const db = new DeutschFlowDB("audit-schedule");
+  try {
+    const backup = await exportLibrary(db);
+    const base = { id: 1, germanText: "Haus", englishTranslation: "house",
+      timestamp: 1794355200000, lastModifiedAt: 1794355200000,
+      remoteId: "20000000-0000-4000-8000-000000000001",
+      nextReview: 1794441600000, interval: 1, reviewCount: 1, easeFactor: 2.5 };
+    await importLibrary(db, { ...backup, vocabulary: [{ ...base, lastStudiedAt: Number.MAX_SAFE_INTEGER }] });
+    await importLibrary(db, { ...backup, vocabulary: [{ ...base, lastModifiedAt: 1794528000000,
+      lastStudiedAt: 1794528000000, nextReview: 1795046400000, interval: 6, reviewCount: 2 }] });
+    const card = await db.vocabulary.toCollection().first();
+    expect(card?.lastStudiedAt).toBe(Number.MAX_SAFE_INTEGER);
+    expect(card?.interval).toBe(1);
+  } finally { await db.delete(); }
+});
+
+it("DATA-05: Web rejects the serialized Android Float ease floor", async () => {
+  const db = new DeutschFlowDB("audit-float-floor");
+  try {
+    const backup = await exportLibrary(db);
+    const vocabulary = [{
+      id: 1, germanText: "Haus", englishTranslation: "house",
+      nextReview: 0, interval: 0, reviewCount: 0,
+      // Android's 1.3f, widened to Double by BackupManager before JSON encoding.
+      easeFactor: Math.fround(1.3),
+    }];
+    await expect(importLibrary(db, JSON.stringify({ ...backup, vocabulary })))
+      .rejects.toThrow("Invalid vocabulary easeFactor");
+    expect(await db.vocabulary.count()).toBe(0);
+  } finally { await db.delete(); }
+});

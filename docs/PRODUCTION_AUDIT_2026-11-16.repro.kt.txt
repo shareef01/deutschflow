@@ -1,0 +1,39 @@
+// Audited commit e88d893195909cf5ab927891560e4ce38e0f07ae.
+// Copy to app/src/test/java/com/aus/deutschflow/data/local/backup/ProductionAuditObservationsTest.kt.
+// Run gradlew :app:testDebugUnitTest --tests '*ProductionAuditObservationsTest'.
+// This assertion reproduces the current defect. Invert it after remediation.
+
+package com.aus.deutschflow.data.local.backup
+
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Test
+
+class ProductionAuditObservationsTest {
+    @Test
+    fun androidRejectsItsSerializedEaseFloor() {
+        val card = JSONObject()
+            .put("id", 1)
+            .put("germanText", "Haus")
+            .put("englishTranslation", "house")
+            .put("interval", 0)
+            .put("nextReview", 0)
+            .put("reviewCount", 0)
+            .put("easeFactor", 1.3f.toDouble())
+        val backup = JSONObject()
+            .put("format", BACKUP_FORMAT)
+            .put("version", CURRENT_BACKUP_VERSION)
+            .put("vocabulary", JSONArray().put(card))
+            .put("transcripts", JSONArray())
+            .put("userStats", JSONArray())
+            .put("activityLog", JSONArray())
+            .put("reviewEvents", JSONArray())
+            .put("roleplayMessages", JSONArray())
+        val error = assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupManager.validateBackupJson(JSONObject(backup.toString()))
+        }
+        assertEquals("Invalid ease factor.", error.message)
+    }
+}
