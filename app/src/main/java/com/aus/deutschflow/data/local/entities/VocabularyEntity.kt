@@ -176,7 +176,14 @@ data class VocabularyEntity(
     val remoteId: String = UUID.randomUUID().toString(),
     /** When this record was last touched, used by deterministic merge rules. */
     @ColumnInfo(defaultValue = "0")
-    val lastModifiedAt: Long = System.currentTimeMillis()
+    val lastModifiedAt: Long = System.currentTimeMillis(),
+    /**
+     * Timestamp of the most recent schedule-governing review (or 0 if never studied).
+     * Persisted directly on the row so that backups without raw review_events and
+     * in-app renames/merges preserve recency of study without hidden placeholder state.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val lastStudiedAt: Long = 0
 ) {
 
     fun mergedWith(incoming: VocabularyEntity, now: Long = System.currentTimeMillis()): VocabularyEntity = copy(
@@ -199,7 +206,8 @@ data class VocabularyEntity(
         interval = interval,
         easeFactor = easeFactor,
         reviewCount = reviewCount,
-        lastModifiedAt = maxOf(lastModifiedAt, incoming.lastModifiedAt, now)
+        lastModifiedAt = maxOf(lastModifiedAt, incoming.lastModifiedAt, now),
+        lastStudiedAt = lastStudiedAt
     )
 
     /**
@@ -211,7 +219,7 @@ data class VocabularyEntity(
      *
      * 2. RECENCY OF STUDY (Anti-Lapse-Erasure Principle):
      *    When both cards have been studied, the schedule from the more recent interaction
-     *    (higher lastModifiedAt) is authoritative. If a learner recently failed a card (interval == 0),
+     *    (higher lastStudiedAt) is authoritative. If a learner recently failed a card (interval == 0),
      *    an older copy with a large interval MUST NOT erase the lapse.
      *
      * 3. SAFETY IN FAVOR OF RECALL (Tied Timestamps):
@@ -224,22 +232,28 @@ data class VocabularyEntity(
         thisLastStudiedAt: Long = 0L,
         otherLastStudiedAt: Long = 0L
     ): VocabularyEntity {
-        fun isUnreviewed(e: VocabularyEntity) =
-            e.reviewCount == 0 && e.interval == 0 && e.nextReview == 0L && kotlin.math.abs(e.easeFactor - 2.5f) < 0.001f
+        val survivorStudied = maxOf(this.lastStudiedAt, thisLastStudiedAt)
+        val otherStudied = maxOf(other.lastStudiedAt, otherLastStudiedAt)
+        val latestStudied = maxOf(survivorStudied, otherStudied)
 
-        val thisUnreviewed = isUnreviewed(this)
-        val otherUnreviewed = isUnreviewed(other)
+        fun isUnreviewed(e: VocabularyEntity, studiedAt: Long) =
+            studiedAt <= 0L && e.reviewCount == 0 && e.interval == 0 && e.nextReview == 0L &&
+                kotlin.math.abs(e.easeFactor - 2.5f) < 0.001f
+
+        val thisUnreviewed = isUnreviewed(this, survivorStudied)
+        val otherUnreviewed = isUnreviewed(other, otherStudied)
 
         if (thisUnreviewed && !otherUnreviewed) {
             return copy(
                 nextReview = other.nextReview,
                 interval = other.interval,
                 easeFactor = other.easeFactor,
-                reviewCount = other.reviewCount
+                reviewCount = other.reviewCount,
+                lastStudiedAt = latestStudied
             )
         }
         if (!thisUnreviewed && otherUnreviewed) {
-            return this
+            return if (survivorStudied != this.lastStudiedAt) copy(lastStudiedAt = survivorStudied) else this
         }
         if (thisUnreviewed && otherUnreviewed) {
             return this
@@ -247,17 +261,18 @@ data class VocabularyEntity(
 
         // Compare dedicated study timestamps (actual review event time or lastStudiedAt)
         // rather than lastModifiedAt, which changes on typographical or content edits.
-        if (otherLastStudiedAt > 0L || thisLastStudiedAt > 0L) {
-            if (otherLastStudiedAt > thisLastStudiedAt) {
+        if (otherStudied > 0L || survivorStudied > 0L) {
+            if (otherStudied > survivorStudied) {
                 return copy(
                     nextReview = other.nextReview,
                     interval = other.interval,
                     easeFactor = other.easeFactor,
-                    reviewCount = other.reviewCount
+                    reviewCount = other.reviewCount,
+                    lastStudiedAt = otherStudied
                 )
             }
-            if (thisLastStudiedAt > otherLastStudiedAt) {
-                return this
+            if (survivorStudied > otherStudied) {
+                return if (survivorStudied != this.lastStudiedAt) copy(lastStudiedAt = survivorStudied) else this
             }
         }
 
@@ -269,11 +284,12 @@ data class VocabularyEntity(
                 nextReview = other.nextReview,
                 interval = other.interval,
                 easeFactor = other.easeFactor,
-                reviewCount = other.reviewCount
+                reviewCount = other.reviewCount,
+                lastStudiedAt = latestStudied
             )
         }
         if (thisIsDueOrLapsed && !otherIsDueOrLapsed) {
-            return this
+            return if (latestStudied != this.lastStudiedAt) copy(lastStudiedAt = latestStudied) else this
         }
 
         if (!thisIsDueOrLapsed && !otherIsDueOrLapsed) {
@@ -282,21 +298,25 @@ data class VocabularyEntity(
                     nextReview = other.nextReview,
                     interval = other.interval,
                     easeFactor = other.easeFactor,
-                    reviewCount = other.reviewCount
+                    reviewCount = other.reviewCount,
+                    lastStudiedAt = latestStudied
                 )
             }
             if (this.nextReview < other.nextReview) {
-                return this
+                return if (latestStudied != this.lastStudiedAt) copy(lastStudiedAt = latestStudied) else this
             }
         }
 
         val otherIsFurther = compareValuesBy(other, this, { it.reviewCount }, { it.interval }) > 0
-        if (!otherIsFurther) return this
+        if (!otherIsFurther) {
+            return if (latestStudied != this.lastStudiedAt) copy(lastStudiedAt = latestStudied) else this
+        }
         return copy(
             nextReview = other.nextReview,
             interval = other.interval,
             easeFactor = other.easeFactor,
-            reviewCount = other.reviewCount
+            reviewCount = other.reviewCount,
+            lastStudiedAt = latestStudied
         )
     }
 }

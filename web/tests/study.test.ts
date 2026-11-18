@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import { DeutschFlowDB } from "@/lib/db/schema";
 import { saveVocabulary, getDueVocabulary, getAllVocabulary } from "@/lib/db/repository";
 import { ReviewQuality, calculateNextReview } from "@/lib/ai/srs";
+import { getIntervalPreview } from "@/hooks/useStudy";
 
 /**
  * The extra-practice rule, asserted against the same decision `useStudy` makes.
@@ -130,5 +131,25 @@ describe("extra practice", () => {
     const card = restartedList[0];
     const persisted = persistedFor(card, ReviewQuality.GOOD, true);
     expect(persisted.nextReview).toBe(card.nextReview);
+  });
+
+  it("getIntervalPreview shows unchanged interval for HARD/GOOD/EASY in extra practice and 0 for AGAIN", async () => {
+    await saveVocabulary(db, { germanText: "die Brücke", englishTranslation: "the bridge" });
+    const card = {
+      ...(await getAllVocabulary(db))[0],
+      interval: 15,
+      easeFactor: 2.5,
+      reviewCount: 4,
+    };
+
+    expect(getIntervalPreview(card, ReviewQuality.AGAIN, true)).toBe(0);
+    expect(getIntervalPreview(card, ReviewQuality.HARD, true)).toBe(15);
+    expect(getIntervalPreview(card, ReviewQuality.GOOD, true)).toBe(15);
+    expect(getIntervalPreview(card, ReviewQuality.EASY, true)).toBe(15);
+
+    // Normal scheduled mode computes the new SM-2 interval
+    expect(getIntervalPreview(card, ReviewQuality.GOOD, false)).toBe(
+      calculateNextReview(card, ReviewQuality.GOOD).interval
+    );
   });
 });

@@ -313,8 +313,14 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
 
       await db.vocabulary.delete(entry.id);
 
-      const departingMaxReview = departingEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0);
-      const existingMaxReview = existingEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0);
+      const departingMaxReview = departingEvents.reduce(
+        (max, e) => (!e.isExtraPractice || e.rating === "AGAIN" ? Math.max(max, e.reviewedAtTimestamp || 0) : max),
+        0
+      );
+      const existingMaxReview = existingEvents.reduce(
+        (max, e) => (!e.isExtraPractice || e.rating === "AGAIN" ? Math.max(max, e.reviewedAtTimestamp || 0) : max),
+        0
+      );
       const otherLastStudiedAt = Math.max(entry.lastStudiedAt || 0, departingMaxReview);
       const survivorLastStudiedAt = Math.max(existing.lastStudiedAt || 0, existingMaxReview);
 
@@ -331,7 +337,10 @@ export async function saveVocabulary(db: DeutschFlowDB, input: VocabularyInput):
     }
 
     const existingEvents = await db.reviewEvents.where("vocabularyId").equals(existing.id!).toArray();
-    const existingMaxReview = existingEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0);
+    const existingMaxReview = existingEvents.reduce(
+      (max, e) => (!e.isExtraPractice || e.rating === "AGAIN" ? Math.max(max, e.reviewedAtTimestamp || 0) : max),
+      0
+    );
     const survivorLastStudiedAt = Math.max(existing.lastStudiedAt || 0, existingMaxReview);
     const otherLastStudiedAt = entry.lastStudiedAt || 0;
 
@@ -420,11 +429,17 @@ export async function restoreVocabulary(db: DeutschFlowDB, entry: VocabularyEntr
 
       const survivorLastStudiedAt = Math.max(
         occupant.lastStudiedAt || 0,
-        occupantEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0)
+        occupantEvents.reduce(
+          (max, e) => (!e.isExtraPractice || e.rating === "AGAIN" ? Math.max(max, e.reviewedAtTimestamp || 0) : max),
+          0
+        )
       );
       const otherLastStudiedAt = Math.max(
         entry.lastStudiedAt || 0,
-        entryEvents.reduce((max, e) => Math.max(max, e.reviewedAtTimestamp || 0), 0)
+        entryEvents.reduce(
+          (max, e) => (!e.isExtraPractice || e.rating === "AGAIN" ? Math.max(max, e.reviewedAtTimestamp || 0) : max),
+          0
+        )
       );
 
       const merged = withFurthestScheduleOf(mergedWith(occupant, entry, now), entry, now, {
@@ -476,6 +491,14 @@ export function observeVocabulary(db: DeutschFlowDB) {
 
 export function observeTranscripts(db: DeutschFlowDB) {
   return db.transcripts.orderBy("timestamp").reverse().toArray();
+}
+
+export function countVocabulary(db: DeutschFlowDB): Promise<number> {
+  return db.vocabulary.count();
+}
+
+export function countTranscripts(db: DeutschFlowDB): Promise<number> {
+  return db.transcripts.count();
 }
 
 export async function getAllVocabulary(db: DeutschFlowDB): Promise<VocabularyEntry[]> {

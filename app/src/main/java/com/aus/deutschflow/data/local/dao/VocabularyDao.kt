@@ -125,8 +125,8 @@ interface VocabularyDao {
      */
     @Query(
         "UPDATE vocabulary SET nextReview = :nextReview, `interval` = :interval, " +
-            "easeFactor = :easeFactor, reviewCount = :reviewCount, lastModifiedAt = :lastModifiedAt " +
-            "WHERE id = :id"
+            "easeFactor = :easeFactor, reviewCount = :reviewCount, lastModifiedAt = :lastModifiedAt, " +
+            "lastStudiedAt = :lastStudiedAt WHERE id = :id"
     )
     suspend fun updateSchedule(
         id: Int,
@@ -134,7 +134,8 @@ interface VocabularyDao {
         interval: Int,
         easeFactor: Float,
         reviewCount: Int,
-        lastModifiedAt: Long
+        lastModifiedAt: Long,
+        lastStudiedAt: Long
     ): Int
 
     /**
@@ -145,6 +146,13 @@ interface VocabularyDao {
      */
     @Query("UPDATE review_events SET vocabularyId = :to WHERE vocabularyId = :from")
     suspend fun reassignReviewEvents(from: Int, to: Int)
+
+    @Query(
+        "SELECT MAX(reviewedAtTimestamp) FROM review_events " +
+            "WHERE vocabularyId = :vocabularyId AND (isExtraPractice = 0 OR rating = 'AGAIN') " +
+            "AND reviewedAtTimestamp > 0 AND reviewedAtTimestamp <= :maxTimestamp"
+    )
+    suspend fun latestStudyTimestampForVocab(vocabularyId: Int, maxTimestamp: Long): Long?
 
     /**
      * Puts a deleted word back, for the library's Undo.
@@ -177,8 +185,32 @@ interface VocabularyDao {
             occupant == null -> save(entry.copy(id = 0))
 
             else -> {
-                save(entry.copy(id = 0))
-                if (entry.id != 0) reassignReviewEvents(from = entry.id, to = occupant.id)
+                val maxStudyTime = now + 86_400_000L
+                val thisLastStudied = maxOf(
+                    occupant.lastStudiedAt,
+                    latestStudyTimestampForVocab(occupant.id, maxStudyTime) ?: 0L
+                )
+                val otherLastStudied = maxOf(
+                    entry.lastStudiedAt,
+                    if (entry.id != 0) latestStudyTimestampForVocab(entry.id, maxStudyTime) ?: 0L else 0L
+                )
+                if (entry.id != 0 && entry.id != occupant.id) {
+                    reassignReviewEvents(from = entry.id, to = occupant.id)
+                }
+                val normalized = entry.copy(
+                    id = 0,
+                    germanTextKey = key,
+                    lastModifiedAt = maxOf(entry.lastModifiedAt, now),
+                    lastStudiedAt = otherLastStudied
+                )
+                updateVocabulary(
+                    occupant.mergedWith(normalized, now).withFurthestScheduleOf(
+                        other = normalized,
+                        now = now,
+                        thisLastStudiedAt = thisLastStudied,
+                        otherLastStudiedAt = otherLastStudied
+                    )
+                )
             }
         }
     }
@@ -215,7 +247,8 @@ interface VocabularyDao {
             reviewCount = stored?.reviewCount ?: entry.reviewCount,
             remoteId = stored?.remoteId ?: entry.remoteId,
             germanTextKey = key,
-            lastModifiedAt = maxOf(entry.lastModifiedAt, now)
+            lastModifiedAt = maxOf(entry.lastModifiedAt, now),
+            lastStudiedAt = stored?.lastStudiedAt ?: entry.lastStudiedAt
         )
         val existing = findByKey(vocabulary.germanTextKey)
         if (existing != null && existing.germanTextKey == ARCHIVED_VOCABULARY_KEY) {
@@ -243,12 +276,26 @@ interface VocabularyDao {
             // survivor's schedule unconditionally threw away months of progress
             // whenever the renamed card was the one being studied.
             else -> {
+                val maxStudyTime = now + 86_400_000L
+                val thisLastStudied = maxOf(
+                    existing.lastStudiedAt,
+                    latestStudyTimestampForVocab(existing.id, maxStudyTime) ?: 0L
+                )
+                val otherLastStudied = maxOf(
+                    vocabulary.lastStudiedAt,
+                    if (vocabulary.id != 0) latestStudyTimestampForVocab(vocabulary.id, maxStudyTime) ?: 0L else 0L
+                )
                 if (vocabulary.id != 0) {
                     reassignReviewEvents(from = vocabulary.id, to = existing.id)
                     deleteById(vocabulary.id)
                 }
                 updateVocabulary(
-                    existing.mergedWith(vocabulary, now).withFurthestScheduleOf(vocabulary)
+                    existing.mergedWith(vocabulary, now).withFurthestScheduleOf(
+                        other = vocabulary,
+                        now = now,
+                        thisLastStudiedAt = thisLastStudied,
+                        otherLastStudiedAt = otherLastStudied
+                    )
                 )
             }
         }

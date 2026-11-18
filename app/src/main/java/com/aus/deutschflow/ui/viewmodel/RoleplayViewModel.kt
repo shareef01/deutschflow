@@ -128,10 +128,10 @@ class RoleplayViewModel @Inject constructor(
             return@launchGuarded
         }
         if (saved.isNotEmpty() && _messages.value.isEmpty()) {
-            currentScenarioId = saved.first().scenario
-            RoleplayScenarioCatalog.SCENARIOS.find { it.id == currentScenarioId }?.let {
-                _selectedScenario.value = it
-            }
+            val rawScenario = saved.first().scenario
+            val matched = RoleplayScenarioCatalog.findByIdOrTitle(rawScenario)
+            currentScenarioId = matched?.id ?: rawScenario
+            _selectedScenario.value = matched ?: RoleplayScenarioCatalog.DEFAULT_SCENARIO
             _messages.value = saved.map { ChatMessage(it.role, it.content, it.translation) }
         }
     }
@@ -201,10 +201,9 @@ class RoleplayViewModel @Inject constructor(
             restore.join()
             if (sceneGeneration != turnGeneration) return@launchGuarded
 
-            currentScenarioId = scenarioId
-            RoleplayScenarioCatalog.SCENARIOS.find { it.id == scenarioId }?.let {
-                _selectedScenario.value = it
-            }
+            val matched = RoleplayScenarioCatalog.findByIdOrTitle(scenarioId)
+            currentScenarioId = matched?.id ?: scenarioId
+            _selectedScenario.value = matched ?: RoleplayScenarioCatalog.DEFAULT_SCENARIO
             _messages.value = emptyList()
             _error.value = null
 
@@ -256,7 +255,7 @@ class RoleplayViewModel @Inject constructor(
      * than an empty scenario slot.
      */
     private fun promptScenario(id: String): String =
-        RoleplayScenarioCatalog.SCENARIOS.find { it.id == id }?.title ?: id
+        RoleplayScenarioCatalog.findByIdOrTitle(id)?.title ?: id
 
     fun startListening() {
         val started = startOrchestrator.start(

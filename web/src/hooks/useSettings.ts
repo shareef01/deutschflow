@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "@/lib/db";
 import {
   clearAllProgress as clearAllProgressRows,
+  countTranscripts,
+  countVocabulary,
   currentStreak,
-  observeTranscripts,
   observeUserStats,
-  observeVocabulary,
 } from "@/lib/db/repository";
 import {
+  deleteApiKey,
   getEncryptedApiKey,
   observeAutoPlay,
   observeDialect,
@@ -43,8 +44,8 @@ export function useDialect(): Dialect {
 }
 
 export function useSettings() {
-  const vocabulary = useLive(() => observeVocabulary(db), []) ?? [];
-  const transcripts = useLive(() => observeTranscripts(db), []) ?? [];
+  const totalVocabulary = useLive(() => countVocabulary(db), []) ?? 0;
+  const totalTranscripts = useLive(() => countTranscripts(db), []) ?? 0;
   const stats = useLive(() => observeUserStats(db), []);
   const encryptedKey = useLive(() => getEncryptedApiKey(db), []);
   const selectedDialect = useDialect();
@@ -134,27 +135,39 @@ export function useSettings() {
     }
   }, []);
 
-  const restoreBackup = useCallback(async (file: File, passphrase?: string): Promise<TKey> => {
-    try {
-      if (file.size > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
-        throw new ImportError("capacity", "Backup file exceeds maximum allowed size.");
+  const restoreBackup = useCallback(
+    async (
+      file: File,
+      passphrase?: string
+    ): Promise<{ key: TKey; params?: (string | number)[] }> => {
+      try {
+        if (file.size > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
+          throw new ImportError("capacity", "Backup file exceeds maximum allowed size.");
+        }
+        const text = await file.text();
+        const result = await importLibrary(db, text, passphrase);
+        if (result.roleplayMessagesSkipped && result.roleplayMessagesSkipped > 0) {
+          return {
+            key: "settings.backupCompletedRoleplaySkipped",
+            params: [result.roleplayMessagesSkipped],
+          };
+        }
+        return { key: "settings.backupCompleted" };
+      } catch (error) {
+        if (error instanceof ImportError) {
+          if (error.reason === "wrong_passphrase") return { key: "settings.backupIncorrectPassword" };
+          if (error.reason === "passphrase_required") return { key: "settings.backupPasswordRequired" };
+          if (error.reason === "corrupted") return { key: "settings.backupInvalidBackup" };
+          if (error.reason === "storage") return { key: "settings.backupStorageFailed" };
+          if (error.reason === "capacity") return { key: "settings.backupCapacity" };
+          return { key: error.reason === "newer" ? "settings.backupNewer" : "settings.backupInvalid" };
+        }
+        if (error instanceof SyntaxError) return { key: "settings.backupInvalid" };
+        return { key: "settings.backupStorageFailed" };
       }
-      const text = await file.text();
-      await importLibrary(db, text, passphrase);
-      return "settings.backupCompleted";
-    } catch (error) {
-      if (error instanceof ImportError) {
-        if (error.reason === "wrong_passphrase") return "settings.backupIncorrectPassword";
-        if (error.reason === "passphrase_required") return "settings.backupPasswordRequired";
-        if (error.reason === "corrupted") return "settings.backupInvalidBackup";
-        if (error.reason === "storage") return "settings.backupStorageFailed";
-        if (error.reason === "capacity") return "settings.backupCapacity";
-        return error.reason === "newer" ? "settings.backupNewer" : "settings.backupInvalid";
-      }
-      if (error instanceof SyntaxError) return "settings.backupInvalid";
-      return "settings.backupStorageFailed";
-    }
-  }, []);
+    },
+    []
+  );
 
   const checkIfEncrypted = useCallback(async (file: File): Promise<boolean> => {
     try {
@@ -166,8 +179,6 @@ export function useSettings() {
     }
   }, []);
 
-  const totalVocabulary = vocabulary.length;
-  const totalTranscripts = transcripts.length;
   const xp = stats?.xp ?? 0;
   const streak = currentStreak(stats);
   const hasApiKey = encryptedKey !== undefined;
@@ -180,6 +191,15 @@ export function useSettings() {
       return saved ? "message.apiKeySaved" : "message.apiKeyNotSaved";
     } catch {
       return "message.apiKeyNotSaved";
+    }
+  }, []);
+
+  const removeApiKey = useCallback(async (): Promise<TKey> => {
+    try {
+      await deleteApiKey(db);
+      return "message.apiKeyRemoved";
+    } catch {
+      return "message.apiKeyNotRemoved";
     }
   }, []);
 
@@ -232,6 +252,7 @@ export function useSettings() {
     cefrLevel,
     saveCefrLevel,
     saveApiKey,
+    removeApiKey,
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,

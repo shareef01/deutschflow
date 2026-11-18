@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useStudy } from "@/hooks/useStudy";
+import { getIntervalPreview, useStudy } from "@/hooks/useStudy";
 import { useI18n } from "@/hooks/useI18n";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { GlassButton } from "@/components/ui/GlassButton";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { CheckIcon, RefreshIcon, SchoolIcon, VolumeUpIcon } from "@/components/icons";
-import { ReviewQuality, calculateNextReview, formatSrsInterval } from "@/lib/ai/srs";
+import { ReviewQuality, formatSrsInterval } from "@/lib/ai/srs";
 import { shouldIgnoreShortcut } from "@/lib/a11y/keyboard";
 import { DashboardContent } from "@/components/ui/DashboardContent";
 
@@ -175,10 +175,10 @@ function FlashcardMode({
       } else if (canGrade && e.key === "2") {
         e.preventDefault();
         void submitReview(ReviewQuality.HARD);
-      } else if (e.key === "3") {
+      } else if (canGrade && e.key === "3") {
         e.preventDefault();
         void submitReview(ReviewQuality.GOOD);
-      } else if (e.key === "4") {
+      } else if (canGrade && e.key === "4") {
         e.preventDefault();
         void submitReview(ReviewQuality.EASY);
       } else if (e.key === "s" || e.key === "S") {
@@ -277,19 +277,19 @@ function FlashcardMode({
       : 0;
 
   const againInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.AGAIN).interval,
+    getIntervalPreview(currentItem, ReviewQuality.AGAIN, isExtraPractice),
     lang
   );
   const hardInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.HARD).interval,
+    getIntervalPreview(currentItem, ReviewQuality.HARD, isExtraPractice),
     lang
   );
   const goodInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.GOOD).interval,
+    getIntervalPreview(currentItem, ReviewQuality.GOOD, isExtraPractice),
     lang
   );
   const easyInterval = formatSrsInterval(
-    calculateNextReview(currentItem, ReviewQuality.EASY).interval,
+    getIntervalPreview(currentItem, ReviewQuality.EASY, isExtraPractice),
     lang
   );
 

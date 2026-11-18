@@ -589,7 +589,7 @@ class AppDatabaseMigrationTest {
             TEST_DB, DATABASE_VERSION, true,
             MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
             MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
-            MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19
+            MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20
         )
 
         val database = openAsReleaseWould()
@@ -1226,6 +1226,32 @@ class AppDatabaseMigrationTest {
                 assertTrue(cursor.moveToFirst())
                 assertEquals(15, cursor.getInt(0))
                 assertTrue(cursor.isNull(1))
+            }
+        }
+    }
+
+    @Test
+    fun migration19To20AddsLastStudiedAtAndBackfillsScheduleGoverningReviews() {
+        helper.createDatabase(TEST_DB, 19).use { db ->
+            db.execSQL(
+                "INSERT INTO vocabulary (id, germanText, germanTextKey, englishTranslation, timestamp) " +
+                    "VALUES (1, 'das Haus', 'das haus', 'the house', 1000)"
+            )
+            // Scheduled review at 5000 (should count)
+            db.execSQL(
+                "INSERT INTO review_events (vocabularyId, rating, scheduledDays, actualDays, reviewedAtTimestamp, isExtraPractice, remoteId) " +
+                    "VALUES (1, 'GOOD', 6, 6, 5000, 0, 'rev-1')"
+            )
+            // Non-AGAIN extra practice at 9000 (should NOT overwrite lastStudiedAt)
+            db.execSQL(
+                "INSERT INTO review_events (vocabularyId, rating, scheduledDays, actualDays, reviewedAtTimestamp, isExtraPractice, remoteId) " +
+                    "VALUES (1, 'GOOD', 6, 0, 9000, 1, 'rev-2')"
+            )
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 20, true, MIGRATION_19_20).use { db ->
+            db.query("SELECT lastStudiedAt FROM vocabulary WHERE id = 1").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(5000L, cursor.getLong(0))
             }
         }
     }

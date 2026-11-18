@@ -226,8 +226,59 @@ function failureMessage(error: unknown, signal?: AbortSignal): string {
     return t("ai.cancelled") || "Request cancelled";
   }
   if (error instanceof GroqTimeoutError) return t("ai.timeout");
-  const detail = error instanceof Error ? error.message : t(AI_MESSAGES.noResponse);
+  const detail = error instanceof Error ? redactSensitiveKey(error.message) : t(AI_MESSAGES.noResponse);
   return t("ai.failed", [detail]);
+}
+
+const MAX_SUCCESS_RESPONSE_CHARS = 1_000_000;
+const MAX_ERROR_RESPONSE_CHARS = 8_000;
+
+async function readBoundedText(response: Response, maxChars: number): Promise<string> {
+  const maxBytes = maxChars * 4;
+  const contentLengthHeader = response.headers?.get("content-length");
+  if (contentLengthHeader) {
+    const declaredBytes = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+      await response.body?.cancel().catch(() => {});
+      throw new Error("Response exceeded maximum allowed size.");
+    }
+  }
+  if (!response.body || typeof response.body.getReader !== "function") {
+    const full = await response.text();
+    if (full.length > maxChars) {
+      throw new Error("Response exceeded maximum allowed size.");
+    }
+    return full;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let result = "";
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          await reader.cancel().catch(() => {});
+          throw new Error("Response exceeded maximum allowed size.");
+        }
+        result += decoder.decode(value, { stream: true });
+      }
+      if (result.length > maxChars) {
+        await reader.cancel().catch(() => {});
+        throw new Error("Response exceeded maximum allowed size.");
+      }
+    }
+    result += decoder.decode();
+    if (result.length > maxChars) {
+      throw new Error("Response exceeded maximum allowed size.");
+    }
+    return result;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 async function post(body: string, apiKey: string, externalSignal?: AbortSignal): Promise<string> {
@@ -260,7 +311,7 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
         signal: controller.signal,
       });
 
-      if (response.ok) return await response.text();
+      if (response.ok) return await readBoundedText(response, MAX_SUCCESS_RESPONSE_CHARS);
 
       // Check if safely retryable server errors (500, 502, 503, 504)
       if (attempt < MAX_POST_RETRIES && isRetryableStatus(response.status) && !externalSignal?.aborted) {
@@ -269,7 +320,8 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
         continue;
       }
 
-      const detail = detailFrom(await response.text());
+      const errorText = await readBoundedText(response, MAX_ERROR_RESPONSE_CHARS).catch(() => "");
+      const detail = detailFrom(errorText);
       const rawMsg = detail ??
         (response.status === 401
           ? t(AI_MESSAGES.keyRejected)

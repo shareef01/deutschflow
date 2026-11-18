@@ -68,14 +68,15 @@ export function calculateNextReview(
   quality: ReviewQuality,
   now: number = Date.now()
 ): VocabularyEntry {
-  let nextEaseFactor = vocab.easeFactor;
+  const easeHundredths = Math.round(vocab.easeFactor * 100);
+  let nextEaseHundredths = easeHundredths;
   let nextInterval: number;
   let nextReviewCount = vocab.reviewCount;
 
   if (quality === ReviewQuality.AGAIN) {
     // Failed: back into this session, and the learning progress resets.
     nextInterval = 0;
-    nextEaseFactor -= AGAIN_EASE_PENALTY;
+    nextEaseHundredths -= 20;
     nextReviewCount = 0;
   } else if (quality === ReviewQuality.HARD) {
     // Correct, but a struggle. A success with a shorter next interval, not a
@@ -86,9 +87,9 @@ export function calculateNextReview(
     nextInterval = Math.max(
       1,
       vocab.interval + 1,
-      Math.round(vocab.interval * HARD_MULTIPLIER)
+      Math.floor((vocab.interval * 12 + 5) / 10)
     );
-    nextEaseFactor -= HARD_EASE_PENALTY;
+    nextEaseHundredths -= 15;
     nextReviewCount++;
   } else {
     // Recalled on schedule, or effortlessly.
@@ -97,24 +98,26 @@ export function calculateNextReview(
     } else if (vocab.reviewCount === 1) {
       nextInterval = 6;
     } else {
-      const multiplier = quality === ReviewQuality.EASY ? EASY_BONUS : 1.0;
+      const multiplierTenths = quality === ReviewQuality.EASY ? 13 : 10;
       nextInterval = Math.max(
         vocab.interval + 1,
-        Math.round(vocab.interval * vocab.easeFactor * multiplier)
+        Math.floor((vocab.interval * easeHundredths * multiplierTenths + 500) / 1000)
       );
     }
 
-    // SM-2: EF' = EF + (0.1 - (5-q)*(0.08 + (5-q)*0.02)), where GOOD is q=4 and
-    // EASY is q=5. Good works out to exactly zero, which is SM-2 as written.
-    const q = quality === ReviewQuality.EASY ? 5 : 4;
-    nextEaseFactor += 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02);
+    // SM-2: EF' = EF + (0.1 - (5-q)*(0.08 + (5-q)*0.02)), where GOOD is q=4 (+0)
+    // and EASY is q=5 (+0.10). Computed in exact hundredths to prevent float drift.
+    if (quality === ReviewQuality.EASY) {
+      nextEaseHundredths += 10;
+    }
     nextReviewCount++;
   }
 
   // The ceiling matters as much as the floor: without it, six Easy ratings put a
   // card three years out and eight put it fifty, so a word the learner found easy
   // early was silently retired from the library rather than rehearsed.
-  nextEaseFactor = Math.min(MAX_EASE_FACTOR, Math.max(MIN_EASE_FACTOR, nextEaseFactor));
+  const clampedEaseHundredths = Math.min(300, Math.max(130, nextEaseHundredths));
+  const nextEaseFactor = clampedEaseHundredths / 100;
   nextInterval = Math.min(MAX_INTERVAL_DAYS, nextInterval);
 
   // 0 is "again in this session"; otherwise due from the first minute of day N.

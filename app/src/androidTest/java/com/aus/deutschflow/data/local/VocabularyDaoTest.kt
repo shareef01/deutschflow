@@ -62,7 +62,7 @@ class VocabularyDaoTest {
     fun staleContentEditsAndRenamesKeepTheCommittedSchedule() = runBlocking {
         dao.save(VocabularyEntity(germanText = "Haus", englishTranslation = "house"))
         val snapshot = dao.getAllVocabularyList().single()
-        dao.updateSchedule(snapshot.id, 2_000_000_000_000L, 6, 2.4f, 2, 10_000L)
+        dao.updateSchedule(snapshot.id, 2_000_000_000_000L, 6, 2.4f, 2, 10_000L, 10_000L)
         dao.save(snapshot.copy(englishTranslation = "a house"))
         val edited = requireNotNull(dao.findById(snapshot.id))
         assertEquals("a house", edited.englishTranslation)

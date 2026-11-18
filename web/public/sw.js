@@ -91,36 +91,66 @@ function openSessionDb() {
         req.result.createObjectStore(SESSION_STORE_NAME);
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const opened = req.result;
+      opened.onversionchange = () => {
+        try {
+          opened.close();
+        } catch {
+          // ignore close errors
+        }
+      };
+      resolve(opened);
+    };
     req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error("IndexedDBBlocked"));
   });
 }
 
 async function setPersistentSessionLoggedOut(loggedOut) {
+  let db = null;
   try {
-    const db = await openSessionDb();
+    db = await openSessionDb();
+    const activeDb = db;
     await new Promise((resolve, reject) => {
-      const tx = db.transaction(SESSION_STORE_NAME, "readwrite");
+      const tx = activeDb.transaction(SESSION_STORE_NAME, "readwrite");
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
       tx.objectStore(SESSION_STORE_NAME).put({ loggedOut, updatedAt: Date.now() }, "state");
     });
   } catch (err) {
     console.warn("Failed to update persistent session state:", err);
+  } finally {
+    try {
+      if (db) db.close();
+    } catch {
+      // ignore close errors
+    }
   }
 }
 
 async function isPersistentSessionLoggedOut() {
+  let db = null;
   try {
-    const db = await openSessionDb();
+    db = await openSessionDb();
+    const activeDb = db;
     return await new Promise((resolve) => {
-      const tx = db.transaction(SESSION_STORE_NAME, "readonly");
+      const tx = activeDb.transaction(SESSION_STORE_NAME, "readonly");
+      tx.onabort = () => resolve(false);
+      tx.onerror = () => resolve(false);
       const req = tx.objectStore(SESSION_STORE_NAME).get("state");
       req.onsuccess = () => resolve(req.result?.loggedOut === true);
       req.onerror = () => resolve(false);
     });
   } catch {
     return false;
+  } finally {
+    try {
+      if (db) db.close();
+    } catch {
+      // ignore close errors
+    }
   }
 }
 

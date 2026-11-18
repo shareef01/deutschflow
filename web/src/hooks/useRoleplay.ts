@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { clearConversation, db, loadConversation, saveConversationTurn } from "@/lib/db";
 import { getApiKey, getAutoPlay, getCefrLevel } from "@/lib/db/settings";
 import { startRoleplay, continueRoleplay } from "@/lib/ai/groq";
-import { DEFAULT_SCENARIO_TITLE } from "@/lib/ai/scenarios";
+import { DEFAULT_SCENARIO_ID, findRoleplayScenario, normalizeScenarioId } from "@/lib/ai/scenarios";
 import { t } from "@/lib/i18n";
 import { recognizer, isRecognitionSupported, type RecognizerState } from "@/lib/speech/recognizer";
 import { useMicrophoneStart } from "./useMicrophoneStart";
@@ -14,7 +14,7 @@ export interface ChatMessage {
     translation?: string;
 }
 
-const DEFAULT_SCENARIO = DEFAULT_SCENARIO_TITLE;
+const DEFAULT_SCENARIO = DEFAULT_SCENARIO_ID;
 
 /**
  * How long after "stop" a new recording is refused, so the finished utterance can
@@ -106,7 +106,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
     const persist = useCallback((message: ChatMessage, position: number) => {
         void saveConversationTurn(db, {
             position,
-            scenario: scenarioRef.current,
+            scenario: normalizeScenarioId(scenarioRef.current),
             role: message.role,
             content: message.content,
             translation: message.translation,
@@ -131,9 +131,11 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
 
         try {
             const apiKey = (await getApiKey(db)) ?? "";
-            const cefr = await getCefrLevel(db);
+            const matchedScenario = findRoleplayScenario(scenarioRef.current);
+            const promptScenario = matchedScenario?.title ?? scenarioRef.current;
+            const cefr = (await getCefrLevel(db)).trim() || matchedScenario?.cefrLevel || "";
             if (controller.signal.aborted || !foreground.current) return;
-            const result = await startRoleplay(scenarioRef.current, [], apiKey, cefr, controller.signal);
+            const result = await startRoleplay(promptScenario, [], apiKey, cefr, controller.signal);
 
             if (controller.signal.aborted) return;
             if (result.kind === "success") {
@@ -190,12 +192,14 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
 
         try {
             const apiKey = (await getApiKey(db)) ?? "";
-            const cefr = await getCefrLevel(db);
+            const matchedScenario = findRoleplayScenario(scenarioRef.current);
+            const promptScenario = matchedScenario?.title ?? scenarioRef.current;
+            const cefr = (await getCefrLevel(db)).trim() || matchedScenario?.cefrLevel || "";
             const inputToSend = appendUser
                 ? trimmed
                 : (historyRef.current[historyRef.current.length - 1]?.content ?? trimmed);
             if (controller.signal.aborted || !foreground.current) return;
-            const result = await continueRoleplay(inputToSend, history, scenarioRef.current, apiKey, cefr, controller.signal);
+            const result = await continueRoleplay(inputToSend, history, promptScenario, apiKey, cefr, controller.signal);
 
             if (controller.signal.aborted) return;
 
@@ -267,8 +271,9 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
                         role: m.role, content: m.content, translation: m.translation,
                     }));
                     setMessages(historyRef.current);
-                    setScenario(saved[0].scenario);
-                    scenarioRef.current = saved[0].scenario;
+                    const resolvedScenario = normalizeScenarioId(saved[0].scenario);
+                    setScenario(resolvedScenario);
+                    scenarioRef.current = resolvedScenario;
                 }
                 restoredOk.current = true;
                 return true;
@@ -292,7 +297,7 @@ export function useRoleplay({ active = true }: { active?: boolean } = {}) {
             // Do not replace the visible chat unless its stored predecessor was cleared.
             await clearConversation(db);
             if (generation !== sceneGeneration.current || !foreground.current) return;
-            const activeScenario = newScenario ?? scenarioRef.current;
+            const activeScenario = normalizeScenarioId(newScenario ?? scenarioRef.current);
             setScenario(activeScenario);
             scenarioRef.current = activeScenario;
             historyRef.current = [];

@@ -284,6 +284,7 @@
     <string name="settings_backup_passphrase_confirm">Fortfahren</string>
     <string name="message_backup_exported">Backup erfolgreich exportiert.</string>
     <string name="message_backup_imported">Backup erfolgreich wiederhergestellt.</string>
+    <string name="message_backup_imported_roleplay_skipped">Backup wiederhergestellt. Übersprungene Rollenspiel-Nachrichten (%1$d), um dein aktives Gespräch zu behalten. Um stattdessen das Gespräch aus dem Backup zu laden, exportiere zuerst ein Backup, falls du deinen aktuellen Chat sichern möchtest, starte dann das Rollenspiel unter „Üben“ neu und importiere diese Datei erneut.</string>
     <string name="message_backup_failed">Backup-Export fehlgeschlagen. Bitte erneut versuchen.</string>
     <string name="message_backup_import_failed">Backup-Import fehlgeschlagen: ungültige oder beschädigte Datei.</string>
     <string name="message_backup_wrong_passphrase">Falsche Passphrase für verschlüsseltes Backup.</string>

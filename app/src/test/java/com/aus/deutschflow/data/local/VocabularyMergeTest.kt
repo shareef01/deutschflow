@@ -1,8 +1,14 @@
 package com.aus.deutschflow.data.local
 
+import com.aus.deutschflow.data.local.dao.MasteryCounts
+import com.aus.deutschflow.data.local.dao.VocabularyDao
 import com.aus.deutschflow.data.local.entities.ARCHIVED_VOCABULARY_KEY
+import com.aus.deutschflow.data.local.entities.ReviewEventEntity
 import com.aus.deutschflow.data.local.entities.VocabularyEntity
 import com.aus.deutschflow.data.local.entities.germanKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -347,5 +353,136 @@ class VocabularyMergeTest {
         val now = System.currentTimeMillis()
         assertTrue("Archived placeholder nextReview must be in the infinite future", archivedEntity.nextReview > now)
         assertTrue("Archived placeholder nextReview must never fall due in 100 years", archivedEntity.nextReview > now + 100L * 365 * 24 * 3600 * 1000)
+    }
+
+    @Test
+    fun `in-app VocabularyDao save and restore preserve recent AGAIN lapse using review_events timestamps`() = runTest {
+        val rows = mutableMapOf<Int, VocabularyEntity>()
+        val events = mutableListOf<ReviewEventEntity>()
+        var nextId = 1
+
+        val fakeDao = object : VocabularyDao {
+            override fun getAllVocabulary(): Flow<List<VocabularyEntity>> = emptyFlow()
+            override suspend fun getAllVocabularyList(): List<VocabularyEntity> = rows.values.toList()
+            override fun countVocabulary(): Flow<Int> = emptyFlow()
+            override fun getDueVocabulary(currentTime: Long): Flow<List<VocabularyEntity>> = emptyFlow()
+            override suspend fun insertVocabulary(vocabulary: VocabularyEntity) {
+                val id = if (vocabulary.id == 0) nextId++ else vocabulary.id
+                rows[id] = vocabulary.copy(id = id)
+            }
+            override suspend fun deleteVocabulary(vocabulary: VocabularyEntity) { rows.remove(vocabulary.id) }
+            override suspend fun updateVocabulary(vocabulary: VocabularyEntity) { rows[vocabulary.id] = vocabulary }
+            override suspend fun deleteAll() { rows.clear() }
+            override suspend fun findByKey(key: String): VocabularyEntity? =
+                rows.values.firstOrNull { it.germanTextKey == key }
+            override suspend fun deleteById(id: Int) { rows.remove(id) }
+            override suspend fun countOnce(): Int = rows.size
+            override suspend fun nthById(offset: Int): VocabularyEntity? = rows.values.elementAtOrNull(offset)
+            override fun masteryCounts(masteredDays: Int): Flow<MasteryCounts> = emptyFlow()
+            override suspend fun findById(id: Int): VocabularyEntity? = rows[id]
+            override suspend fun updateSchedule(
+                id: Int,
+                nextReview: Long,
+                interval: Int,
+                easeFactor: Float,
+                reviewCount: Int,
+                lastModifiedAt: Long,
+                lastStudiedAt: Long
+            ): Int = 1
+            override suspend fun reassignReviewEvents(from: Int, to: Int) {
+                for (i in events.indices) {
+                    if (events[i].vocabularyId == from) {
+                        events[i] = events[i].copy(vocabularyId = to)
+                    }
+                }
+            }
+            override suspend fun latestStudyTimestampForVocab(vocabularyId: Int, maxTimestamp: Long): Long? =
+                events.filter {
+                    it.vocabularyId == vocabularyId &&
+                        (!it.isExtraPractice || it.rating == "AGAIN") &&
+                        it.reviewedAtTimestamp in 1L..maxTimestamp
+                }.maxOfOrNull { it.reviewedAtTimestamp }
+        }
+
+        val now = System.currentTimeMillis()
+        val tenDaysAgo = now - 10 * 86_400_000L
+        val yesterday = now - 1 * 86_400_000L
+
+        // Card 1: "gehen" mastered 10 days ago, plus an extra-practice GOOD drill 1 hour ago
+        fakeDao.insertVocabulary(
+            VocabularyEntity(
+                id = 1,
+                germanText = "gehen",
+                germanTextKey = germanKey("gehen"),
+                englishTranslation = "to go",
+                timestamp = tenDaysAgo,
+                nextReview = now + 10 * 86_400_000L,
+                interval = 20,
+                easeFactor = 2.6f,
+                reviewCount = 5,
+                lastModifiedAt = now - 1_000L
+            )
+        )
+        events.add(
+            ReviewEventEntity(
+                id = 1,
+                vocabularyId = 1,
+                rating = "GOOD",
+                scheduledDays = 20,
+                actualDays = 6,
+                reviewedAtTimestamp = tenDaysAgo,
+                isExtraPractice = false
+            )
+        )
+        // Non-schedule-changing extra-practice drill after yesterday's lapse must NOT override the lapse
+        events.add(
+            ReviewEventEntity(
+                id = 2,
+                vocabularyId = 1,
+                rating = "GOOD",
+                scheduledDays = 20,
+                actualDays = 9,
+                reviewedAtTimestamp = now - 3_600_000L,
+                isExtraPractice = true
+            )
+        )
+
+        // Card 2: "laufen" lapsed yesterday with AGAIN (interval = 0, nextReview = 0)
+        fakeDao.insertVocabulary(
+            VocabularyEntity(
+                id = 2,
+                germanText = "laufen",
+                germanTextKey = germanKey("laufen"),
+                englishTranslation = "to run",
+                timestamp = tenDaysAgo,
+                nextReview = 0L,
+                interval = 0,
+                easeFactor = 2.3f,
+                reviewCount = 0,
+                lastModifiedAt = yesterday
+            )
+        )
+        events.add(
+            ReviewEventEntity(
+                id = 3,
+                vocabularyId = 2,
+                rating = "AGAIN",
+                scheduledDays = 10,
+                actualDays = 10,
+                reviewedAtTimestamp = yesterday,
+                isExtraPractice = false
+            )
+        )
+
+        // User renames Card 2 ("laufen") to "gehen", colliding with Card 1
+        val card2 = fakeDao.findById(2)!!
+        fakeDao.save(card2.copy(germanText = "gehen", englishTranslation = "to go / walk"))
+
+        val merged = fakeDao.findByKey(germanKey("gehen"))!!
+        assertEquals("Recent AGAIN lapse must win over older mastered schedule", 0, merged.interval)
+        assertEquals(0L, merged.nextReview)
+        assertEquals(0, merged.reviewCount)
+        assertEquals(2.3f, merged.easeFactor, 0.0001f)
+        assertTrue("Review events from departing card are reassigned to survivor", events.all { it.vocabularyId == 1 })
     }
 }

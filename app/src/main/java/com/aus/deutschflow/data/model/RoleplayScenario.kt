@@ -1,4 +1,4 @@
-﻿package com.aus.deutschflow.data.model
+package com.aus.deutschflow.data.model
 
 import androidx.annotation.StringRes
 import com.aus.deutschflow.R
@@ -125,4 +125,18 @@ object RoleplayScenarioCatalog {
     )
 
     val DEFAULT_SCENARIO = SCENARIOS[0]
+
+    /**
+     * Resolves a scenario by either its stable [RoleplayScenario.id] (e.g. "doctor")
+     * or its English [RoleplayScenario.title] (e.g. "Visiting a Doctor's Clinic"),
+     * including the legacy "café" spelling found in older backups.
+     */
+    fun findByIdOrTitle(keyOrTitle: String): RoleplayScenario? {
+        val trimmed = keyOrTitle.trim()
+        val normalized = if (trimmed.equals("café", ignoreCase = true)) "cafe" else trimmed
+        return SCENARIOS.find {
+            it.id.equals(normalized, ignoreCase = true) ||
+                it.title.equals(normalized, ignoreCase = true)
+        }
+    }
 }

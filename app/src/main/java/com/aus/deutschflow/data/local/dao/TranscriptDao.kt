@@ -15,6 +15,9 @@ interface TranscriptDao {
     @Query("SELECT * FROM transcripts WHERE remoteId = :remoteId LIMIT 1")
     suspend fun findByRemoteId(remoteId: String): TranscriptEntity?
 
+    @Query("SELECT * FROM transcripts WHERE fullText = :fullText AND timestamp = :timestamp LIMIT 1")
+    suspend fun findByContentAndTimestamp(fullText: String, timestamp: Long): TranscriptEntity?
+
     /**
      * How many, without reading any of them.
      *

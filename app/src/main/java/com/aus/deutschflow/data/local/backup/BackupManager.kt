@@ -60,15 +60,54 @@ private fun mergeActivity(existing: ActivityEntity, incoming: ActivityEntity): A
 }
 
 @Singleton
-class BackupManager @Inject constructor(
-    private val database: AppDatabase,
+class BackupManager private constructor(
+    private val database: AppDatabase?,
     private val vocabularyDao: VocabularyDao,
     private val transcriptDao: TranscriptDao,
     private val userStatsDao: UserStatsDao,
     private val activityDao: ActivityDao,
     private val roleplayDao: RoleplayDao,
-    private val reviewEventDao: ReviewEventDao
+    private val reviewEventDao: ReviewEventDao,
+    @Suppress("UNUSED_PARAMETER") unitTestMarker: Boolean
 ) {
+    @Inject
+    constructor(
+        database: AppDatabase,
+        vocabularyDao: VocabularyDao,
+        transcriptDao: TranscriptDao,
+        userStatsDao: UserStatsDao,
+        activityDao: ActivityDao,
+        roleplayDao: RoleplayDao,
+        reviewEventDao: ReviewEventDao
+    ) : this(
+        database,
+        vocabularyDao,
+        transcriptDao,
+        userStatsDao,
+        activityDao,
+        roleplayDao,
+        reviewEventDao,
+        false
+    )
+
+    internal constructor(
+        vocabularyDao: VocabularyDao,
+        transcriptDao: TranscriptDao,
+        userStatsDao: UserStatsDao,
+        activityDao: ActivityDao,
+        roleplayDao: RoleplayDao,
+        reviewEventDao: ReviewEventDao
+    ) : this(
+        null,
+        vocabularyDao,
+        transcriptDao,
+        userStatsDao,
+        activityDao,
+        roleplayDao,
+        reviewEventDao,
+        true
+    )
+
     private data class ExportSnapshot(
         val vocabulary: List<VocabularyEntity>,
         val transcripts: List<TranscriptEntity>,
@@ -79,19 +118,32 @@ class BackupManager @Inject constructor(
         val archivedVocabId: Int?,
     )
 
+    private suspend fun readExportSnapshot(): ExportSnapshot = ExportSnapshot(
+        vocabularyDao.getAllVocabularyList().filter { it.germanTextKey != ARCHIVED_VOCABULARY_KEY },
+        transcriptDao.getAllTranscriptsList(),
+        userStatsDao.getUserStatsOnce(),
+        activityDao.getAllActivity(),
+        roleplayDao.getConversation(),
+        reviewEventDao.getAllEventsList(),
+        vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id,
+    )
+
     suspend fun exportBackup(passphrase: CharArray? = null): String = withContext(Dispatchers.IO) {
         val (vocabulary, transcripts, userStats, activityLog, roleplay, reviewEvents, archivedVocabId) =
-            database.withTransaction {
-                ExportSnapshot(
-                    vocabularyDao.getAllVocabularyList(),
-                    transcriptDao.getAllTranscriptsList(),
-                    userStatsDao.getUserStatsOnce(),
-                    activityDao.getAllActivity(),
-                    roleplayDao.getConversation(),
-                    reviewEventDao.getAllEventsList(),
-                    vocabularyDao.findByKey(ARCHIVED_VOCABULARY_KEY)?.id,
-                )
+            if (database != null) {
+                database.withTransaction { readExportSnapshot() }
+            } else {
+                readExportSnapshot()
             }
+
+        val latestStudyTime = minOf(MAX_FUTURE_TIMESTAMP, System.currentTimeMillis() + MAX_STUDY_CLOCK_SKEW_MS)
+        val lastStudiedByVocabId = mutableMapOf<Int, Long>()
+        for (ev in reviewEvents) {
+            if ((!ev.isExtraPractice || ev.rating == "AGAIN") && ev.reviewedAtTimestamp in 1L..latestStudyTime) {
+                lastStudiedByVocabId[ev.vocabularyId] =
+                    maxOf(lastStudiedByVocabId[ev.vocabularyId] ?: 0L, ev.reviewedAtTimestamp)
+            }
+        }
 
         val backupObj = JSONObject().apply {
             put("format", BACKUP_FORMAT)
@@ -121,6 +173,13 @@ class BackupManager @Inject constructor(
                         put("reviewCount", item.reviewCount)
                         put("remoteId", item.remoteId)
                         put("lastModifiedAt", item.lastModifiedAt)
+                        val exportedLastStudied = maxOf(
+                            item.lastStudiedAt,
+                            lastStudiedByVocabId[item.id] ?: 0L
+                        )
+                        if (exportedLastStudied > 0L) {
+                            put("lastStudiedAt", exportedLastStudied)
+                        }
                     })
                 }
             })
@@ -262,7 +321,11 @@ class BackupManager @Inject constructor(
         validateBackupJson(backupObj)
 
         try {
-            database.withTransaction {
+            if (database != null) {
+                database.withTransaction {
+                    applyImport(backupObj)
+                }
+            } else {
                 applyImport(backupObj)
             }
         } catch (e: CancellationException) {
@@ -274,17 +337,19 @@ class BackupManager @Inject constructor(
         }
     }
 
-    private suspend fun applyImport(backup: JSONObject): BackupImportResult {
+    internal suspend fun applyImport(backup: JSONObject): BackupImportResult {
         val now = System.currentTimeMillis()
         val latestStudyTime = minOf(MAX_FUTURE_TIMESTAMP, now + MAX_STUDY_CLOCK_SKEW_MS)
         var vocabularyAdded = 0
         var vocabularyMerged = 0
         var transcriptsAdded = 0
         var reviewEventsAdded = 0
+        var roleplayMessagesAdded = 0
+        var roleplayMessagesSkipped = 0
 
         val backupIdToPersistedId = mutableMapOf<Int, Int>()
 
-        // Pre-index latest incoming review timestamp per vocabulary id to compare actual study recency
+        // Pre-index latest schedule-governing incoming review timestamp per vocabulary id
         val incomingLatestReviewByVocabId = mutableMapOf<Int, Long>()
         if (backup.has("reviewEvents")) {
             val revArr = backup.getJSONArray("reviewEvents")
@@ -292,7 +357,9 @@ class BackupManager @Inject constructor(
                 val r = revArr.getJSONObject(i)
                 val vId = r.optInt("vocabularyId", 0)
                 val ts = r.optLong("reviewedAtTimestamp", 0L)
-                if (vId > 0 && ts in 1L..latestStudyTime) {
+                val isExtra = r.optBoolean("isExtraPractice", false)
+                val rating = r.optString("rating", "")
+                if (vId > 0 && (!isExtra || rating == "AGAIN") && ts in 1L..latestStudyTime) {
                     incomingLatestReviewByVocabId[vId] = maxOf(incomingLatestReviewByVocabId[vId] ?: 0L, ts)
                 }
             }
@@ -309,6 +376,11 @@ class BackupManager @Inject constructor(
             val oldBackupId = row.optInt("id", 0)
             val remoteId = row.optString("remoteId").ifBlank { UUID.randomUUID().toString() }
             val lastModifiedAt = row.optLong("lastModifiedAt", row.optLong("timestamp", now))
+
+            val incomingReviewTimestamp = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
+            val rawStudyField = row.optLong("lastStudiedAt", 0L)
+            val incomingStudyField = if (rawStudyField in 1L..latestStudyTime) rawStudyField else 0L
+            val otherLastStudied = maxOf(incomingStudyField, incomingReviewTimestamp)
 
             val incoming = VocabularyEntity(
                 id = 0,
@@ -327,15 +399,14 @@ class BackupManager @Inject constructor(
                 easeFactor = row.optDouble("easeFactor", 2.5).toFloat(),
                 reviewCount = row.optInt("reviewCount", 0),
                 remoteId = remoteId,
-                lastModifiedAt = lastModifiedAt
+                lastModifiedAt = lastModifiedAt,
+                lastStudiedAt = otherLastStudied
             )
 
             val existing = vocabularyDao.findByKey(incoming.germanTextKey)
             if (existing != null) {
-                val thisLastStudied = reviewEventDao.latestReviewTimestamp(existing.id, latestStudyTime) ?: 0L
-                val incomingReviewTimestamp = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
-                val incomingStudyField = row.optLong("lastStudiedAt", 0L)
-                val otherLastStudied = maxOf(incomingStudyField, incomingReviewTimestamp)
+                val existingEventTimestamp = reviewEventDao.latestReviewTimestamp(existing.id, latestStudyTime) ?: 0L
+                val thisLastStudied = maxOf(existing.lastStudiedAt, existingEventTimestamp)
                 val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(
                     other = incoming,
                     now = now,
@@ -362,13 +433,16 @@ class BackupManager @Inject constructor(
             val fullText = row.getString("fullText").trim()
             if (fullText.isBlank()) continue
 
-            val remoteId = row.optString("remoteId").ifBlank { UUID.randomUUID().toString() }
-            val lastModifiedAt = row.optLong("lastModifiedAt", row.optLong("timestamp", now))
+            val timestamp = row.optLong("timestamp", now)
+            val remoteId = row.optString("remoteId").trim().ifBlank {
+                deterministicTranscriptId(fullText, timestamp)
+            }
+            val lastModifiedAt = row.optLong("lastModifiedAt", timestamp)
 
             val incoming = TranscriptEntity(
                 id = 0,
                 fullText = fullText,
-                timestamp = row.optLong("timestamp", now),
+                timestamp = timestamp,
                 remoteId = remoteId,
                 lastModifiedAt = lastModifiedAt,
                 translation = row.optString("translation", ""),
@@ -376,11 +450,28 @@ class BackupManager @Inject constructor(
             )
 
             val existing = transcriptDao.findByRemoteId(remoteId)
+                ?: transcriptDao.findByContentAndTimestamp(fullText, timestamp)
             if (existing == null) {
                 transcriptDao.insertTranscript(incoming)
                 transcriptsAdded++
             } else if (incoming.lastModifiedAt > existing.lastModifiedAt) {
-                transcriptDao.insertTranscript(incoming.copy(id = existing.id))
+                transcriptDao.insertTranscript(
+                    incoming.copy(
+                        id = existing.id,
+                        translation = incoming.translation.ifBlank { existing.translation },
+                        analysisJson = incoming.analysisJson.ifBlank { existing.analysisJson }
+                    )
+                )
+            } else if (
+                (existing.translation.isBlank() && incoming.translation.isNotBlank()) ||
+                (existing.analysisJson.isBlank() && incoming.analysisJson.isNotBlank())
+            ) {
+                transcriptDao.insertTranscript(
+                    existing.copy(
+                        translation = existing.translation.ifBlank { incoming.translation },
+                        analysisJson = existing.analysisJson.ifBlank { incoming.analysisJson }
+                    )
+                )
             }
         }
 
@@ -389,11 +480,13 @@ class BackupManager @Inject constructor(
         val currentStats = userStatsDao.getUserStatsOnce() ?: UserStatsEntity(id = 1, xp = 0, streak = 0, lastActivityTimestamp = 0L)
         var mergedXp = currentStats.xp
         var mergedLastActivity = currentStats.lastActivityTimestamp
+        var incomingStreak = 0
 
         if (statsArray.length() > 0) {
             val statsObj = statsArray.getJSONObject(0)
             mergedXp = maxOf(currentStats.xp, statsObj.optInt("xp", 0))
             mergedLastActivity = maxOf(currentStats.lastActivityTimestamp, statsObj.optLong("lastActivityTimestamp", 0L))
+            incomingStreak = statsObj.optInt("streak", 0)
         }
 
         val activityArray = backup.getJSONArray("activityLog")
@@ -413,10 +506,16 @@ class BackupManager @Inject constructor(
         }
 
         val allActivity = activityDao.getAllActivity()
-        val allDates = allActivity.map { it.date }
+        val activeActivity = allActivity.filter { it.xpGained > 0 }
+        val allDates = activeActivity.map { it.date }
         val loggedXp = allActivity.sumOf { it.xpGained.toLong() }.coerceAtMost(MAX_LIFETIME_XP.toLong()).toInt()
-        val calculatedStreak = calculateStreakFromDates(allDates)
-        val finalStreak = maxOf(currentStats.streak, calculatedStreak)
+        val latestActiveTimestamp = activeActivity.maxOfOrNull { it.timestamp } ?: 0L
+        mergedLastActivity = maxOf(mergedLastActivity, latestActiveTimestamp)
+        val finalStreak = if (allDates.isNotEmpty()) {
+            calculateStreakFromDates(allDates)
+        } else {
+            maxOf(currentStats.streak, incomingStreak)
+        }
 
         userStatsDao.insertOrUpdate(
             currentStats.copy(
@@ -430,20 +529,38 @@ class BackupManager @Inject constructor(
         if (backup.has("roleplayMessages")) {
             val roleplayArray = backup.getJSONArray("roleplayMessages")
             if (roleplayArray.length() > 0) {
+                val incomingRoleplay = (0 until roleplayArray.length()).map { i ->
+                    val row = roleplayArray.getJSONObject(i)
+                    RoleplayMessageEntity(
+                        position = row.getInt("position"),
+                        scenario = row.getString("scenario"),
+                        role = row.getString("role"),
+                        content = row.getString("content"),
+                        translation = if (row.isNull("translation")) null else row.optString("translation"),
+                        timestamp = row.optLong("timestamp", now)
+                    )
+                }
                 val currentConv = roleplayDao.getConversation()
-                if (currentConv.isEmpty()) {
-                    for (i in 0 until roleplayArray.length()) {
-                        val row = roleplayArray.getJSONObject(i)
-                        roleplayDao.insert(
-                            RoleplayMessageEntity(
-                                position = row.getInt("position"),
-                                scenario = row.getString("scenario"),
-                                role = row.getString("role"),
-                                content = row.getString("content"),
-                                translation = if (row.isNull("translation")) null else row.optString("translation"),
-                                timestamp = row.optLong("timestamp", now)
-                            )
-                        )
+                val isSameConversation =
+                    currentConv.size == incomingRoleplay.size &&
+                        currentConv.indices.all { idx ->
+                            currentConv[idx].position == incomingRoleplay[idx].position &&
+                                currentConv[idx].role == incomingRoleplay[idx].role &&
+                                currentConv[idx].content == incomingRoleplay[idx].content &&
+                                currentConv[idx].scenario == incomingRoleplay[idx].scenario
+                        }
+                if (!isSameConversation) {
+                    val hasLocalUserTurns = currentConv.any { it.role == "user" }
+                    if (currentConv.isEmpty() || !hasLocalUserTurns) {
+                        if (currentConv.isNotEmpty()) {
+                            roleplayDao.deleteAll()
+                        }
+                        for (msg in incomingRoleplay) {
+                            roleplayDao.insert(msg)
+                        }
+                        roleplayMessagesAdded = incomingRoleplay.size
+                    } else {
+                        roleplayMessagesSkipped = incomingRoleplay.size
                     }
                 }
             }
@@ -489,7 +606,9 @@ class BackupManager @Inject constructor(
             vocabularyAdded = vocabularyAdded,
             vocabularyMerged = vocabularyMerged,
             transcriptsAdded = transcriptsAdded,
-            reviewEventsAdded = reviewEventsAdded
+            reviewEventsAdded = reviewEventsAdded,
+            roleplayMessagesAdded = roleplayMessagesAdded,
+            roleplayMessagesSkipped = roleplayMessagesSkipped
         )
     }
 
@@ -637,7 +756,10 @@ class BackupManager @Inject constructor(
             }
         }
 
-        fun calculateStreakFromDates(dates: List<String>, today: LocalDate = LocalDate.now(ZoneOffset.UTC)): Int {
+        fun deterministicTranscriptId(fullText: String, timestamp: Long): String =
+            UUID.nameUUIDFromBytes("transcript:$fullText:$timestamp".toByteArray(Charsets.UTF_8)).toString()
+
+        fun calculateStreakFromDates(dates: List<String>, today: LocalDate = LocalDate.now()): Int {
             val validDates = dates.filter { isValidCalendarDate(it) }
                 .map { LocalDate.parse(it) }
                 .distinct()
@@ -647,9 +769,10 @@ class BackupManager @Inject constructor(
 
             val todayEpoch = today.toEpochDay()
             val yesterdayEpoch = todayEpoch - 1
+            val tomorrowEpoch = todayEpoch + 1
             val latestEpoch = validDates.first().toEpochDay()
 
-            if (latestEpoch != todayEpoch && latestEpoch != yesterdayEpoch) {
+            if (latestEpoch != todayEpoch && latestEpoch != yesterdayEpoch && latestEpoch != tomorrowEpoch) {
                 return 0
             }
 

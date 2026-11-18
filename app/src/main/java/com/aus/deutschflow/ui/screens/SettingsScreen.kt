@@ -60,6 +60,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val selectedCefrLevel by viewModel.selectedCefrLevel.collectAsStateWithLifecycle()
     val isAutoPlay by viewModel.isAutoPlayEnabled.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val messageArgs by viewModel.messageArgs.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Granted or denied, the button still has to do something visible: on grant we post
@@ -147,7 +148,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = stringResource(currentMessage),
+                        text = if (messageArgs.isEmpty()) {
+                            stringResource(currentMessage)
+                        } else {
+                            stringResource(currentMessage, *messageArgs.toTypedArray())
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
