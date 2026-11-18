@@ -175,7 +175,9 @@ class GroqHelper @Inject constructor(
         if (isTimeout(e)) {
             context.getString(R.string.ai_timeout)
         } else {
-            context.getString(R.string.ai_failed, e.message ?: context.getString(R.string.ai_no_response))
+            val detail = e.message?.let { redactSensitiveKey(it) }
+                ?: context.getString(R.string.ai_no_response)
+            context.getString(R.string.ai_failed, detail)
         }
 
     private suspend fun post(body: String, apiKey: String): String =
@@ -794,6 +796,14 @@ class GroqHelper @Inject constructor(
                 ?.optString("content")
                 .orEmpty()
 
+        private val GSK_KEY_REGEX = Regex("""gsk_[A-Za-z0-9_-]+""")
+        private val BEARER_TOKEN_REGEX = Regex("""Bearer\s+[A-Za-z0-9._-]+""", RegexOption.IGNORE_CASE)
+
+        /** Scrubs API keys and bearer tokens from upstream error strings before display or logging. */
+        internal fun redactSensitiveKey(text: String): String =
+            text.replace(GSK_KEY_REGEX, "gsk_***")
+                .replace(BEARER_TOKEN_REGEX, "Bearer ***")
+
         /** The provider's own error sentence, when the body carries one. */
         internal fun detailFrom(body: String?): String? = body
             ?.let { runCatching {
@@ -801,7 +811,7 @@ class GroqHelper @Inject constructor(
                 val msg = err?.optString("message")?.trim()
                 val code = err?.optString("code")?.trim()
                 if (!msg.isNullOrBlank()) {
-                    if (code == "model_decommissioned" || code == "model_not_found" ||
+                    val raw = if (code == "model_decommissioned" || code == "model_not_found" ||
                         msg.contains("decommissioned", ignoreCase = true) ||
                         msg.contains("does not exist or you do not have access to it", ignoreCase = true)
                     ) {
@@ -809,6 +819,7 @@ class GroqHelper @Inject constructor(
                     } else {
                         msg
                     }
+                    redactSensitiveKey(raw)
                 } else null
             } }
             ?.getOrNull()

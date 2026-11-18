@@ -27,7 +27,10 @@ interface ReviewEventDao {
     @Query("SELECT * FROM review_events WHERE vocabularyId = :vocabId ORDER BY reviewedAtTimestamp DESC")
     fun getEventsForWord(vocabId: Int): Flow<List<ReviewEventEntity>>
 
-    @Query("SELECT MAX(reviewedAtTimestamp) FROM review_events WHERE vocabularyId = :vocabId AND reviewedAtTimestamp <= :atOrBefore")
+    @Query(
+        "SELECT MAX(reviewedAtTimestamp) FROM review_events " +
+            "WHERE vocabularyId = :vocabId AND (isExtraPractice = 0 OR rating = 'AGAIN') AND reviewedAtTimestamp <= :atOrBefore"
+    )
     suspend fun latestReviewTimestamp(vocabId: Int, atOrBefore: Long = Long.MAX_VALUE): Long?
 
     @Query("DELETE FROM review_events")

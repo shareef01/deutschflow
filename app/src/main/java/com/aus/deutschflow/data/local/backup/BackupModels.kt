@@ -51,7 +51,9 @@ data class BackupImportResult(
     val vocabularyAdded: Int,
     val vocabularyMerged: Int,
     val transcriptsAdded: Int,
-    val reviewEventsAdded: Int
+    val reviewEventsAdded: Int,
+    val roleplayMessagesAdded: Int = 0,
+    val roleplayMessagesSkipped: Int = 0
 )
 
 sealed class BackupException(message: String, cause: Throwable? = null) : Exception(message, cause) {

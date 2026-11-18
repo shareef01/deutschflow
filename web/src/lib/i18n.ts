@@ -246,6 +246,8 @@ export const STRINGS = {
     "settings.backupInvalidBackup": "Invalid backup file.",
     "settings.backupCreated": "Backup created.",
     "settings.backupCompleted": "Import completed.",
+    "settings.backupCompletedRoleplaySkipped":
+      "Import completed. Skipped roleplay messages ({0}) to keep your active conversation. To load the backup's conversation instead, export a backup first if you want to save your current chat, then restart Roleplay in Practice and re-import this file.",
     "settings.backupEncryptedWarning": "Unencrypted backups contain your vocabulary, transcripts, and AI conversation history in plaintext. Encrypted backups protect this data with a password.",
     "settings.backupDownloaded": "Backup downloaded.",
     "settings.backupRestored": "Library restored. Existing words were merged, not replaced.",
@@ -272,6 +274,7 @@ export const STRINGS = {
     "settings.apiKeyNone": "No key saved — translation is unavailable.",
     "settings.showKey": "Show API key",
     "settings.hideKey": "Hide API key",
+    "settings.apiKeyRemove": "Remove saved key",
     "settings.progressHeader": "Learning progress",
     "settings.statVocabulary": "Vocabulary",
     "settings.statSessions": "Sessions",
@@ -317,6 +320,8 @@ export const STRINGS = {
     // Settings outcomes
     "message.apiKeySaved": "API key saved.",
     "message.apiKeyNotSaved": "The key couldn't be stored. Try again, or restart the device.",
+    "message.apiKeyRemoved": "API key removed. AI features stay off until you save a key again.",
+    "message.apiKeyNotRemoved": "The key couldn't be removed. Try again.",
     "message.progressCleared": "Library, history and stats cleared.",
     "message.progressClearFailed": "Couldn't clear data. Try again.",
 
@@ -589,6 +594,8 @@ export const STRINGS = {
     "settings.backupInvalidBackup": "Ungültige Backup-Datei.",
     "settings.backupCreated": "Backup erstellt.",
     "settings.backupCompleted": "Import abgeschlossen.",
+    "settings.backupCompletedRoleplaySkipped":
+      "Import abgeschlossen. Übersprungene Rollenspiel-Nachrichten ({0}), um dein aktives Gespräch zu behalten. Um stattdessen das Gespräch aus dem Backup zu laden, exportiere zuerst ein Backup, falls du deinen aktuellen Chat sichern möchtest, starte dann das Rollenspiel unter „Üben“ neu und importiere diese Datei erneut.",
     "settings.backupEncryptedWarning": "Unverschlüsselte Backups enthalten deinen Wortschatz, Transkripte und Konversationen im Klartext. Verschlüsselte Backups schützen diese Daten mit einem Passwort.",
     "settings.backupDownloaded": "Sicherung heruntergeladen.",
     "settings.backupRestored": "Bibliothek wiederhergestellt. Vorhandene Wörter wurden zusammengeführt, nicht ersetzt.",
@@ -615,6 +622,7 @@ export const STRINGS = {
     "settings.apiKeyNone": "Kein Schlüssel gespeichert — Übersetzung nicht verfügbar.",
     "settings.showKey": "API-Schlüssel anzeigen",
     "settings.hideKey": "API-Schlüssel verbergen",
+    "settings.apiKeyRemove": "Gespeicherten Schlüssel entfernen",
     "settings.progressHeader": "Lernfortschritt",
     "settings.statVocabulary": "Wörter",
     "settings.statSessions": "Sitzungen",
@@ -660,6 +668,9 @@ export const STRINGS = {
     "message.apiKeySaved": "API-Schlüssel gespeichert.",
     "message.apiKeyNotSaved":
       "Der Schlüssel konnte nicht gespeichert werden. Versuche es erneut oder starte das Gerät neu.",
+    "message.apiKeyRemoved":
+      "API-Schlüssel entfernt. KI-Funktionen bleiben aus, bis du wieder einen Schlüssel speicherst.",
+    "message.apiKeyNotRemoved": "Der Schlüssel konnte nicht entfernt werden. Versuche es erneut.",
     "message.progressCleared": "Bibliothek, Verlauf und Statistiken gelöscht.",
     "message.progressClearFailed": "Daten konnten nicht gelöscht werden. Versuche es erneut.",
 

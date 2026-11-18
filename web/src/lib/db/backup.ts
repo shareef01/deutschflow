@@ -116,6 +116,8 @@ export interface ImportResult {
   vocabularyMerged: number;
   transcriptsAdded: number;
   reviewEventsAdded?: number;
+  roleplayMessagesAdded?: number;
+  roleplayMessagesSkipped?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -611,6 +613,8 @@ export async function importLibrary(
     vocabularyMerged: 0,
     transcriptsAdded: 0,
     reviewEventsAdded: 0,
+    roleplayMessagesAdded: 0,
+    roleplayMessagesSkipped: 0,
   };
 
   try {
@@ -636,10 +640,15 @@ async function applyImport(
   const vocabulary = Array.isArray(backup.vocabulary) ? backup.vocabulary : [];
   const vocabularyIds = new Map<number, number>();
 
-  // Pre-index latest reviewedAtTimestamp per vocabulary ID from incoming review events
+  // Pre-index latest schedule-governing reviewedAtTimestamp per vocabulary ID from incoming review events
   const incomingMaxReviewByVocabId = new Map<number, number>();
   for (const event of backup.reviewEvents ?? []) {
-    if (isRecord(event) && typeof event.vocabularyId === "number" && validStudyTimestamp(event.reviewedAtTimestamp)) {
+    if (
+      isRecord(event) &&
+      typeof event.vocabularyId === "number" &&
+      (!event.isExtraPractice || event.rating === "AGAIN") &&
+      validStudyTimestamp(event.reviewedAtTimestamp)
+    ) {
       const cur = incomingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
       if (event.reviewedAtTimestamp > cur) {
         incomingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
@@ -647,11 +656,15 @@ async function applyImport(
     }
   }
 
-  // Pre-index latest reviewedAtTimestamp per vocabulary ID from existing review events
+  // Pre-index latest schedule-governing reviewedAtTimestamp per vocabulary ID from existing review events
   const existingReviewEvents = await db.reviewEvents.toArray();
   const existingMaxReviewByVocabId = new Map<number, number>();
   for (const event of existingReviewEvents) {
-    if (typeof event.vocabularyId === "number" && validStudyTimestamp(event.reviewedAtTimestamp)) {
+    if (
+      typeof event.vocabularyId === "number" &&
+      (!event.isExtraPractice || event.rating === "AGAIN") &&
+      validStudyTimestamp(event.reviewedAtTimestamp)
+    ) {
       const cur = existingMaxReviewByVocabId.get(event.vocabularyId) ?? 0;
       if (event.reviewedAtTimestamp > cur) {
         existingMaxReviewByVocabId.set(event.vocabularyId, event.reviewedAtTimestamp);
@@ -871,7 +884,7 @@ async function applyImport(
   }
   result.reviewEventsAdded = eventsToAdd.length;
 
-  if (await db.roleplayMessages.count() === 0 && backup.roleplayMessages?.length) {
+  if (backup.roleplayMessages?.length) {
     const roleplayToAdd: Omit<RoleplayMessageEntry, "id">[] = [];
     for (const row of backup.roleplayMessages) {
       if (!isRecord(row)) continue;
@@ -884,8 +897,31 @@ async function applyImport(
         timestamp: row.timestamp as number,
       });
     }
-    for (let i = 0; i < roleplayToAdd.length; i += CHUNK_SIZE) {
-      await db.roleplayMessages.bulkAdd(roleplayToAdd.slice(i, i + CHUNK_SIZE));
+
+    const existingRoleplay = await db.roleplayMessages.orderBy("position").toArray();
+    const isSameConversation =
+      existingRoleplay.length === roleplayToAdd.length &&
+      existingRoleplay.every(
+        (existing, idx) =>
+          existing.position === roleplayToAdd[idx].position &&
+          existing.role === roleplayToAdd[idx].role &&
+          existing.content === roleplayToAdd[idx].content &&
+          existing.scenario === roleplayToAdd[idx].scenario
+      );
+
+    if (!isSameConversation) {
+      const hasLocalUserTurns = existingRoleplay.some((m) => m.role === "user");
+      if (existingRoleplay.length === 0 || !hasLocalUserTurns) {
+        if (existingRoleplay.length > 0) {
+          await db.roleplayMessages.clear();
+        }
+        for (let i = 0; i < roleplayToAdd.length; i += CHUNK_SIZE) {
+          await db.roleplayMessages.bulkAdd(roleplayToAdd.slice(i, i + CHUNK_SIZE));
+        }
+        result.roleplayMessagesAdded = roleplayToAdd.length;
+      } else {
+        result.roleplayMessagesSkipped = roleplayToAdd.length;
+      }
     }
   }
 

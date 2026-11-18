@@ -11,7 +11,7 @@ import { MicIcon, NavigateNextIcon, RefreshIcon, StopIcon, VolumeUpIcon } from "
 import { PRACTICE_FEEDBACK_KEYS } from "@/lib/scoring";
 
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
-import { ROLEPLAY_SCENARIOS } from "@/lib/ai/scenarios";
+import { ROLEPLAY_SCENARIOS, findRoleplayScenario } from "@/lib/ai/scenarios";
 import { settleScrollToEnd, shouldFollowConversation } from "@/lib/ui/scroll-follow";
 
 export default function PracticePage() {
@@ -330,7 +330,9 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
         }
     };
 
-    const current = ROLEPLAY_SCENARIOS.find((s) => s.title === scenario) ?? ROLEPLAY_SCENARIOS[0];
+    const matched = findRoleplayScenario(scenario);
+    const current = matched ?? ROLEPLAY_SCENARIOS[0];
+    const selectValue = matched ? matched.id : scenario;
     const busy = isProcessing || isSending;
 
     return (
@@ -343,16 +345,21 @@ function RoleplayMode({ roleplay }: { roleplay: Roleplay }) {
                     </label>
                     <select
                         id="roleplay-scenario-select"
-                        value={scenario}
+                        value={selectValue}
                         onChange={(e) => void startSession(e.target.value)}
                         disabled={busy}
                         className="h-11 w-full rounded-[var(--radius-sm)] border border-outline-variant bg-glass-fill px-3 text-label-large text-on-surface focus:border-azure-glow focus:outline-none"
                     >
                         {ROLEPLAY_SCENARIOS.map((s) => (
-                            <option key={s.id} value={s.title} className="bg-background text-on-surface">
+                            <option key={s.id} value={s.id} className="bg-background text-on-surface">
                                 {s.title} ({s.cefrLevel})
                             </option>
                         ))}
+                        {!matched && scenario && (
+                            <option value={scenario} className="bg-background text-on-surface">
+                                {scenario}
+                            </option>
+                        )}
                     </select>
                 </div>
                 <button

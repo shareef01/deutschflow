@@ -87,6 +87,19 @@ class GroqHelperTest {
     }
 
     @Test
+    fun `redacts gsk_ API keys and Bearer tokens from upstream error messages`() {
+        val bodyWithKey = """{"error":{"message":"Incorrect API key provided: gsk_secret1234567890abcdef. Check your key."}}"""
+        val detail = GroqHelper.detailFrom(bodyWithKey)
+        assertNotNull(detail)
+        assertFalse(detail!!.contains("gsk_secret1234567890abcdef"))
+        assertTrue(detail.contains("gsk_***"))
+
+        val bearerString = "Authorization failed for Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        val redacted = GroqHelper.redactSensitiveKey(bearerString)
+        assertEquals("Authorization failed for Bearer ***", redacted)
+    }
+
+    @Test
     fun `formats actionable guidance when model is decommissioned or not found`() {
         val decommissionedBody = """{"error":{"message":"The model `mixtral-8x7b-32768` has been decommissioned.","code":"model_decommissioned"}}"""
         val notFoundBody = """{"error":{"message":"The model does not exist or you do not have access to it","code":"model_not_found"}}"""

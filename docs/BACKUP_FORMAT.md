@@ -8,7 +8,7 @@ This document defines the data structures, cryptographic envelopes, validation r
 
 DeutschFlow is a local-first German learning application. User data is stored on-device in:
 - **Android**: Room SQLite database (`deutschflow-db`) and Jetpack DataStore.
-- **Web PWA**: IndexedDB via Dexie (`deutschflow-pwa`).
+- **Web PWA**: IndexedDB via Dexie (`deutschflow`, plus `deutschflow-vault` and `deutschflow-session`).
 
 To respect user privacy, operating-system-level automatic cloud backups are explicitly excluded via `app/src/main/res/xml/data_extraction_rules.xml`. Recovery is user-controlled via manual, portable, and optional password-encrypted backup archives.
 
@@ -112,7 +112,7 @@ Encrypted backups wrap the plaintext JSON representation using standard, authent
 {
   "format": "deutschflow-library-encrypted",
   "version": 1,
-  "kdf": "PBKDF2-HMAC-SHA256",
+  "kdf": "PBKDF2WithHmacSHA256",
   "iterations": 210000,
   "salt": "<base64-encoded 16 bytes>",
   "iv": "<base64-encoded 12 bytes>",
@@ -124,7 +124,7 @@ Encrypted backups wrap the plaintext JSON representation using standard, authent
 | Parameter | Value | Rationale |
 | :--- | :--- | :--- |
 | **Cipher** | `AES-256-GCM` | Authenticated encryption prevents tampering and truncation attacks. |
-| **Key Derivation (KDF)** | `PBKDF2-HMAC-SHA256` | Universally supported across Android JCA and WebCrypto. |
+| **Key Derivation (KDF)** | `PBKDF2WithHmacSHA256` | Universally supported across Android JCA and WebCrypto. |
 | **KDF Iterations** | `210,000` | Strengthened OWASP work factor for PBKDF2-HMAC-SHA256. Decryption range `50,000` to `1,000,000` preserves full backward compatibility with existing `100,000`-iteration backups. |
 | **Salt Length** | 16 bytes (128 bits) | Cryptographically secure random bytes generated per export. |
 | **IV / Nonce Length** | 12 bytes (96 bits) | Standard GCM nonce length; fresh random nonce generated per export. |
@@ -179,6 +179,6 @@ To protect memory and prevent DoS / zip-bomb vectors while accommodating large l
 
 ## 5. Compatibility & Versioning Guarantees
 
-- **Backward Compatibility**: Current implementations fully accept `version: 1` archives (upgrading them with default values for new tables) and `version: 2` archives.
-- **Forward Compatibility**: Backups with `version > 2` (or encrypted `version > 1`) are rejected with explicit, user-friendly `unsupported_version` messages without modifying local storage.
+- **Backward Compatibility**: Current implementations fully accept `version: 1` archives (upgrading them with default values for new tables), `version: 2` archives, and `version: 3` archives.
+- **Forward Compatibility**: Backups with `version > 3` (or encrypted `version > 1`) are rejected with explicit, user-friendly `unsupported_version` messages without modifying local storage.
 - **Cross-Platform Interoperability**: Plaintext and encrypted backups adhere to the shared contract fixtures. Both platforms can export and restore each other's data collections, including German special characters, nullable review event references, and study event timestamps.

@@ -83,6 +83,9 @@ class SettingsViewModel @Inject constructor(
     private val _message = MutableStateFlow<Int?>(null)
     val message: StateFlow<Int?> = _message
 
+    private val _messageArgs = MutableStateFlow<List<Any>>(emptyList())
+    val messageArgs: StateFlow<List<Any>> = _messageArgs.asStateFlow()
+
     init {
         // Settings is the only screen that reads the key, so it is the one place
         // worth paying a Keystore round trip to re-encrypt one left in the clear by
@@ -108,6 +111,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun dismissMessage() {
+        _messageArgs.value = emptyList()
         _message.value = null
     }
 
@@ -243,10 +247,13 @@ class SettingsViewModel @Inject constructor(
         onSuccess: (() -> Unit)? = null,
         onPassphraseNeeded: (() -> Unit)? = null
     ) {
-        launchGuarded(TAG, onError = { _message.value = R.string.message_backup_import_failed }) {
+        launchGuarded(TAG, onError = {
+            _messageArgs.value = emptyList()
+            _message.value = R.string.message_backup_import_failed
+        }) {
             try {
                 val passChars = passphrase?.takeIf { it.isNotBlank() }?.toCharArray()
-                try {
+                val importResult = try {
                     withContext(Dispatchers.IO) {
                         val stream = openInputStream() ?: throw java.io.IOException("Unable to open backup input")
                         stream.use { backupManager.importFromStream(it, passChars) }
@@ -255,19 +262,29 @@ class SettingsViewModel @Inject constructor(
                     passChars?.fill('\u0000')
                 }
                 widgetUpdater.refresh()
-                _message.value = R.string.message_backup_imported
+                if (importResult.roleplayMessagesSkipped > 0) {
+                    _messageArgs.value = listOf(importResult.roleplayMessagesSkipped)
+                    _message.value = R.string.message_backup_imported_roleplay_skipped
+                } else {
+                    _messageArgs.value = emptyList()
+                    _message.value = R.string.message_backup_imported
+                }
                 onSuccess?.invoke()
             } catch (e: com.aus.deutschflow.data.local.backup.BackupException.WrongPassphrase) {
+                _messageArgs.value = emptyList()
                 _message.value = R.string.message_backup_wrong_passphrase
                 onPassphraseNeeded?.invoke()
             } catch (e: com.aus.deutschflow.data.local.backup.BackupException.PassphraseRequired) {
+                _messageArgs.value = emptyList()
                 _message.value = R.string.message_backup_passphrase_required
                 onPassphraseNeeded?.invoke()
             } catch (e: com.aus.deutschflow.data.local.backup.BackupException.UnsupportedVersion) {
+                _messageArgs.value = emptyList()
                 _message.value = R.string.message_backup_unsupported_version
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                _messageArgs.value = emptyList()
                 _message.value = R.string.message_backup_import_failed
             }
         }

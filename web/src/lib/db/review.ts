@@ -20,19 +20,28 @@ export async function recordReview(
       throw new StaleReviewError();
     }
     const now = Date.now();
-    const scheduled = !isExtraPractice || quality === ReviewQuality.AGAIN
-      ? calculateNextReview(current, quality) : current;
-    const persisted = { ...scheduled, lastModifiedAt: Math.max(now, current.lastModifiedAt + 1), lastStudiedAt: now };
-    const previous = await db.reviewEvents.where("vocabularyId").equals(current.id!)
-      .sortBy("reviewedAtTimestamp");
-    const lastReview = previous.at(-1)?.reviewedAtTimestamp;
+    const scheduleChanged = !isExtraPractice || quality === ReviewQuality.AGAIN;
+    const scheduled = scheduleChanged ? calculateNextReview(current, quality) : current;
+    const nextLastStudiedAt = scheduleChanged ? now : current.lastStudiedAt;
+    const persisted = {
+      ...scheduled,
+      lastModifiedAt: Math.max(now, current.lastModifiedAt + 1),
+      lastStudiedAt: nextLastStudiedAt,
+    };
+    const previous = await db.reviewEvents.where("vocabularyId").equals(current.id!).toArray();
+    let lastReview = current.lastStudiedAt;
+    for (const ev of previous) {
+      if (lastReview === undefined || ev.reviewedAtTimestamp > lastReview) {
+        lastReview = ev.reviewedAtTimestamp;
+      }
+    }
     // A first review has no preceding review interval.
     const actualDays = lastReview === undefined ? 0 : Math.max(0, Math.floor((now - lastReview) / 86_400_000));
     await db.vocabulary.update(current.id!, {
       nextReview: persisted.nextReview, interval: persisted.interval,
       easeFactor: persisted.easeFactor, reviewCount: persisted.reviewCount,
       lastModifiedAt: persisted.lastModifiedAt,
-      lastStudiedAt: now,
+      lastStudiedAt: nextLastStudiedAt,
     });
     // Hard is a correct answer (the scheduler grows its interval), so it earns XP and
     // keeps the streak like Good and Easy. Mirrors StudyViewModel.submitReview.

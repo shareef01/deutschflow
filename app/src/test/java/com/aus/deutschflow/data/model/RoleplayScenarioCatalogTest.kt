@@ -17,4 +17,14 @@ class RoleplayScenarioCatalogTest {
             assertEquals(scenario.id, scenario.learnerGoals.size, scenario.goalRes.size)
         }
     }
+
+    @Test
+    fun resolvesScenarioByIdTitleAndLegacyCafeSpelling() {
+        RoleplayScenarioCatalog.SCENARIOS.forEach { scenario ->
+            assertEquals(scenario, RoleplayScenarioCatalog.findByIdOrTitle(scenario.id))
+            assertEquals(scenario, RoleplayScenarioCatalog.findByIdOrTitle(scenario.title))
+        }
+        val cafe = RoleplayScenarioCatalog.SCENARIOS.first { it.id == "cafe" }
+        assertEquals(cafe, RoleplayScenarioCatalog.findByIdOrTitle("café"))
+    }
 }

@@ -31,6 +31,7 @@ export default function SettingsPage() {
     cefrLevel,
     saveCefrLevel,
     saveApiKey,
+    removeApiKey,
     saveDialect,
     setAutoPlayEnabled,
     clearAllProgress,
@@ -105,7 +106,7 @@ export default function SettingsPage() {
       setImportError(null);
     } else {
       const result = await restoreBackup(file);
-      setMessage(t(result));
+      setMessage(t(result.key, result.params));
     }
   };
 
@@ -133,16 +134,24 @@ export default function SettingsPage() {
       return;
     }
     const result = await restoreBackup(pendingRestoreFile, importPass);
-    if (result === "settings.backupIncorrectPassword") {
+    if (result.key === "settings.backupIncorrectPassword") {
       setImportError(t("settings.backupIncorrectPassword"));
     } else {
       setPendingRestoreFile(null);
-      setMessage(t(result));
+      setMessage(t(result.key, result.params));
     }
   };
 
   const onSaveKey = () => {
     void saveApiKey(typedKey).then((result) => {
+      setMessage(t(result));
+      setTypedKey("");
+      setIsKeyVisible(false);
+    });
+  };
+
+  const onRemoveKey = () => {
+    void removeApiKey().then((result) => {
       setMessage(t(result));
       setTypedKey("");
       setIsKeyVisible(false);
@@ -292,9 +301,20 @@ export default function SettingsPage() {
         />
       </div>
 
-      <p className={`mt-2 pl-1 text-label-medium ${hasApiKey ? "text-on-surface-variant" : "text-error"}`}>
-        {hasApiKey ? t("settings.apiKeySavedState") : t("settings.apiKeyNone")}
-      </p>
+      <div className="mt-2 flex items-center justify-between gap-2 pl-1">
+        <p className={`text-label-medium ${hasApiKey ? "text-on-surface-variant" : "text-error"}`}>
+          {hasApiKey ? t("settings.apiKeySavedState") : t("settings.apiKeyNone")}
+        </p>
+        {hasApiKey && (
+          <button
+            type="button"
+            onClick={onRemoveKey}
+            className="press-scale rounded-[var(--radius-sm)] px-2 py-1 text-label-medium font-semibold text-error hover:bg-error/10"
+          >
+            {t("settings.apiKeyRemove")}
+          </button>
+        )}
+      </div>
 
       {/* ---- Learning progress (2x2 Grid) ----------------------------------- */}
       <SectionHeader title={t("settings.progressHeader")} />

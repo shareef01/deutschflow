@@ -237,6 +237,8 @@ class StudyViewModel @Inject constructor(
                     val rescheduled = srsEngine.calculateNextReview(fresh, quality)
                     val schedule = scheduleFor(fresh, rescheduled, quality, extraPractice)
                     val actualDays = elapsedReviewDays(database.reviewEventDao().latestReviewTimestamp(fresh.id), now)
+                    val nextLastStudiedAt =
+                        if (!extraPractice || quality == ReviewQuality.AGAIN) now else fresh.lastStudiedAt
                     // The schedule only: the word, its translation and its grammar are
                     // the library's, and whatever the library holds now is what stays.
                     vocabularyDao.updateSchedule(
@@ -245,7 +247,8 @@ class StudyViewModel @Inject constructor(
                         interval = schedule.interval,
                         easeFactor = schedule.easeFactor,
                         reviewCount = schedule.reviewCount,
-                        lastModifiedAt = maxOf(fresh.lastModifiedAt, now)
+                        lastModifiedAt = maxOf(fresh.lastModifiedAt, now),
+                        lastStudiedAt = nextLastStudiedAt
                     )
                     // Hard counts. It is a correct answer - SRSEngine treats it as a
                     // success and grows the interval - but it used to earn nothing and

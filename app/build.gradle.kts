@@ -84,6 +84,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Isolated from the release package so debug builds and connectedDebugAndroidTest
+            // can run side-by-side on a device without conflicting with or touching the
+            // user's installed release app, database, or Android Keystore namespace.
+            applicationIdSuffix = ".debug"
+        }
         release {
             // Null when there is no keystore.properties, which leaves the output
             // unsigned instead of breaking the build for anyone without the key.

@@ -1,26 +1,48 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
-import { getAllVocabulary, getDueVocabulary } from "@/lib/db/repository";
+import { countVocabulary, getAllVocabulary, getDueVocabulary } from "@/lib/db/repository";
 import { recordReview, StaleReviewError } from "@/lib/db/review";
 import { getAutoPlay } from "@/lib/db/settings";
 import { tts } from "@/lib/speech/tts";
 import type { VocabularyEntry } from "@/lib/db/schema";
 import type { TKey } from "@/lib/i18n";
-import { ReviewQuality } from "@/lib/ai/srs";
+import { calculateNextReview, ReviewQuality } from "@/lib/ai/srs";
 
 export type StudyStatus = "loading" | "ready" | "error";
 
 export async function loadStudySession(database = db, now = Date.now()) {
-  const all = await getAllVocabulary(database);
   const due = await getDueVocabulary(database, now);
-  const isExtra = due.length === 0;
-  const list = isExtra ? all : due;
+  if (due.length > 0) {
+    const totalWords = await countVocabulary(database);
+    return {
+      totalWords,
+      dueCount: due.length,
+      isExtraPractice: false,
+      studyList: shuffle(due),
+    };
+  }
+  const all = await getAllVocabulary(database);
   return {
     totalWords: all.length,
-    dueCount: due.length,
-    isExtraPractice: isExtra,
-    studyList: shuffle(list),
+    dueCount: 0,
+    isExtraPractice: true,
+    studyList: shuffle(all),
   };
+}
+
+/**
+ * Preview interval for a grading button, matching StudyViewModel.getIntervalPreview on Android.
+ * During extra practice, HARD/GOOD/EASY leave the card's schedule untouched.
+ */
+export function getIntervalPreview(
+  card: VocabularyEntry,
+  quality: ReviewQuality,
+  isExtraPractice: boolean
+): number {
+  if (isExtraPractice && quality !== ReviewQuality.AGAIN) {
+    return card.interval;
+  }
+  return calculateNextReview(card, quality).interval;
 }
 
 /**

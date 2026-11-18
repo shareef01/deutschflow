@@ -73,26 +73,46 @@ const SESSION_STORE_NAME = "auth";
  */
 export async function setPersistentSessionLoggedOut(loggedOut: boolean): Promise<void> {
   if (typeof indexedDB === "undefined") return;
+  let db: IDBDatabase | null = null;
   try {
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    db = await new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open(SESSION_DB_NAME, 1);
       req.onupgradeneeded = () => {
         if (!req.result.objectStoreNames.contains(SESSION_STORE_NAME)) {
           req.result.createObjectStore(SESSION_STORE_NAME);
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const opened = req.result;
+        opened.onversionchange = () => {
+          try {
+            opened.close();
+          } catch {
+            // ignore close errors
+          }
+        };
+        resolve(opened);
+      };
       req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error("IndexedDBBlocked"));
     });
 
+    const activeDb = db;
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(SESSION_STORE_NAME, "readwrite");
+      const tx = activeDb.transaction(SESSION_STORE_NAME, "readwrite");
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
       tx.objectStore(SESSION_STORE_NAME).put({ loggedOut, updatedAt: Date.now() }, "state");
     });
   } catch (err) {
     console.warn("Failed to set persistent session state from window context:", err);
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // ignore close errors
+    }
   }
 }
 

@@ -1,9 +1,13 @@
 package com.aus.deutschflow.ui.components
 
+import android.os.SystemClock
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -12,8 +16,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.aus.deutschflow.ui.theme.DeutschflowTheme
 import org.junit.After
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,8 +24,7 @@ import org.junit.runner.RunWith
  * Verifies that ErrorBanner exposes correct accessibility semantics to screen readers:
  * - When message is null, no error banner node is rendered in the accessibility tree.
  * - When message appears, an accessibility node carrying the error text is exposed.
- * - The node declares a polite live region (liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE)
- *   so screen readers announce it when it appears.
+ * - The message is inside a polite live region.
  * - When message is cleared, the node disappears from the accessibility tree.
  */
 @RunWith(AndroidJUnit4::class)
@@ -33,6 +34,7 @@ class ErrorBannerAnnouncementTest {
     private lateinit var scenario: ActivityScenario<ComponentActivity>
 
     private val message = "Microphone permission is required."
+    private val hostLabel = "Error banner test host"
 
     @After
     fun tearDown() {
@@ -57,67 +59,72 @@ class ErrorBannerAnnouncementTest {
             )
             activity.setContent {
                 val msg by state
-                DeutschflowTheme { ErrorBanner(msg) }
+                DeutschflowTheme {
+                    Column {
+                        Text(hostLabel)
+                        ErrorBanner(msg)
+                    }
+                }
             }
         }
-        instrumentation.waitForIdleSync()
 
-        fun getAppRoot(): AccessibilityNodeInfo? {
-            val appWindow = instrumentation.uiAutomation.windows
-                .firstOrNull { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION }
-            return appWindow?.root ?: instrumentation.uiAutomation.rootInActiveWindow
+        fun hasNode(
+            node: AccessibilityNodeInfo?,
+            predicate: (AccessibilityNodeInfo) -> Boolean
+        ): Boolean {
+            if (node == null) return false
+            return predicate(node) || (0 until node.childCount).any { hasNode(node.getChild(it), predicate) }
         }
 
-        fun findNodes(node: AccessibilityNodeInfo?, predicate: (AccessibilityNodeInfo) -> Boolean): List<AccessibilityNodeInfo> {
-            if (node == null) return emptyList()
-            val list = mutableListOf<AccessibilityNodeInfo>()
-            if (predicate(node)) list.add(node)
-            for (i in 0 until node.childCount) {
-                list.addAll(findNodes(node.getChild(i), predicate))
-            }
-            return list
+        fun containsMessage(root: AccessibilityNodeInfo): Boolean =
+            hasNode(root) { it.text?.contains(message) == true }
+
+        val automation = instrumentation.uiAutomation
+        fun getHostRoot(): AccessibilityNodeInfo? {
+            // Another app can also have an application window, such as in split screen.
+            val applicationRoots = automation.windows.asSequence()
+                .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                .map { it.root }
+            return (sequenceOf(automation.rootInActiveWindow) + applicationRoots)
+                .filterNotNull()
+                .firstOrNull { root -> hasNode(root) { it.text?.toString() == hostLabel } }
         }
 
-        // 1. When message is null, no accessibility node carrying the error message exists
-        val initialRoot = getAppRoot()
-        val initialTextNodes = findNodes(initialRoot) { it.text?.contains(message) == true }
-        assertTrue("No error banner node should exist when message is null", initialTextNodes.isEmpty())
-
-        // 2. When message appears, the accessibility tree exposes the message and marks it polite
-        // Polled, not read once after a fixed sleep. The accessibility tree reaches
-        // UiAutomation asynchronously - after the enter animation, and after the
-        // platform's own accessibility event throttling - so a single read a second
-        // later saw a stale tree whenever the device was busy, and failed on a node
-        // that was there moments afterwards.
-        fun awaitTree(timeoutMs: Long = 10_000L, condition: (AccessibilityNodeInfo?) -> Boolean): Boolean {
-            val deadline = System.currentTimeMillis() + timeoutMs
-            while (System.currentTimeMillis() < deadline) {
+        // UiAutomation observes Compose animations and accessibility updates asynchronously.
+        fun awaitHostTree(condition: (AccessibilityNodeInfo) -> Boolean): Boolean {
+            val deadline = SystemClock.elapsedRealtime() + 10_000L
+            while (SystemClock.elapsedRealtime() < deadline) {
                 instrumentation.waitForIdleSync()
-                if (condition(getAppRoot())) return true
+                val root = getHostRoot()
+                if (root != null && condition(root)) return true
                 Thread.sleep(200L)
             }
             return false
         }
 
-        scenario.onActivity { state.value = message }
-
         assertTrue(
-            "Accessibility node with banner message must exist",
-            awaitTree { root -> findNodes(root) { it.text?.contains(message) == true }.isNotEmpty() }
+            "The test activity's accessibility tree must be readable before showing the banner",
+            awaitHostTree { true }
         )
-        val activeRoot = getAppRoot()
-        assertNotNull("Root accessibility node should not be null", activeRoot)
+        assertTrue(
+            "No error banner node should exist when message is null",
+            awaitHostTree { root -> !containsMessage(root) }
+        )
 
-        val liveNodes = findNodes(activeRoot) { it.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE }
-        assertTrue("Accessibility node with polite live region must exist", liveNodes.isNotEmpty())
+        scenario.onActivity { state.value = message }
+        assertTrue(
+            "The banner message must appear in a polite live region in the test activity",
+            awaitHostTree { root ->
+                hasNode(root) { node ->
+                    node.liveRegion == View.ACCESSIBILITY_LIVE_REGION_POLITE && containsMessage(node)
+                }
+            }
+        )
 
-        // 3. When message is dismissed, the error node exits
         scenario.onActivity { state.value = null }
-
         assertTrue(
             "Error banner node should be removed after dismissal",
-            // A real tree that lacks the node - an unreadable one proves nothing.
-            awaitTree { root -> root != null && findNodes(root) { it.text?.contains(message) == true }.isEmpty() }
+            awaitHostTree { root -> !containsMessage(root) }
         )
     }
 }

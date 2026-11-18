@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec
  * Portable, passphrase-based encryption for DeutschFlow library backups.
  *
  * Uses standard, widely-supported primitives:
- * - PBKDF2 with HMAC-SHA256 (100,000 iterations, 16-byte random salt, 256-bit key)
+ * - PBKDF2 with HMAC-SHA256 (210,000 iterations, 16-byte random salt, 256-bit key)
  * - AES-256-GCM (12-byte random IV, 128-bit authentication tag)
  *
  * Deliberately does NOT use the device Android Keystore key, so that backups can be

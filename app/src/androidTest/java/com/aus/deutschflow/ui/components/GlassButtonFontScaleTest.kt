@@ -30,6 +30,8 @@ import org.junit.runner.RunWith
  * Hosted in a plain ComponentActivity, like ErrorBannerAnnouncementTest: this
  * project's test APK can't use createComposeRule's runTest.
  */
+import java.util.concurrent.atomic.AtomicInteger
+
 @RunWith(AndroidJUnit4::class)
 class GlassButtonFontScaleTest {
 
@@ -42,10 +44,19 @@ class GlassButtonFontScaleTest {
 
     /** Lays out one narrow GlassButton at [fontScale] and returns its height in dp. */
     private fun measuredHeightDp(fontScale: Float, label: String): Float {
-        var heightPx = 0
+        val heightPx = AtomicInteger(0)
         var density = 1f
         scenario = ActivityScenario.launch(ComponentActivity::class.java).also {
             it.onActivity { activity ->
+                activity.setShowWhenLocked(true)
+                activity.setTurnScreenOn(true)
+                @Suppress("DEPRECATION")
+                activity.window.addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                        android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                        android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
                 density = activity.resources.displayMetrics.density
                 activity.setContent {
                     CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
@@ -55,7 +66,7 @@ class GlassButtonFontScaleTest {
                                 // About a quarter of a phone's width, as in the Study row.
                                 modifier = Modifier
                                     .width(80.dp)
-                                    .onGloballyPositioned { coords -> heightPx = coords.size.height }
+                                    .onGloballyPositioned { coords -> heightPx.set(coords.size.height) }
                             ) {
                                 Text(label, textAlign = TextAlign.Center, maxLines = 2)
                             }
@@ -64,8 +75,12 @@ class GlassButtonFontScaleTest {
                 }
             }
         }
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-        return heightPx / density
+        val deadline = System.currentTimeMillis() + 5_000L
+        while (heightPx.get() == 0 && System.currentTimeMillis() < deadline) {
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            if (heightPx.get() == 0) Thread.sleep(50L)
+        }
+        return heightPx.get() / density
     }
 
     @Test

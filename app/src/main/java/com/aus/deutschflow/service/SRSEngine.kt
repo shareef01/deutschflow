@@ -32,8 +32,10 @@ class SRSEngine @Inject constructor() {
         zone: ZoneId = ZoneId.systemDefault()
     ): VocabularyEntity {
         
-        // SM-2 logic
-        var nextEaseFactor = vocab.easeFactor
+        // SM-2 logic — computed in exact integer hundredths to match web/src/lib/ai/srs.ts
+        // without IEEE-754 float/double accumulation drift across repeated reviews.
+        val easeHundredths = Math.round(vocab.easeFactor.toString().toDouble() * 100.0).toInt()
+        var nextEaseHundredths = easeHundredths
         var nextInterval: Int
         var nextReviewCount = vocab.reviewCount
 
@@ -41,7 +43,7 @@ class SRSEngine @Inject constructor() {
             // Failed: back into this session, and the learning progress resets.
             ReviewQuality.AGAIN -> {
                 nextInterval = 0
-                nextEaseFactor -= AGAIN_EASE_PENALTY
+                nextEaseHundredths -= 20
                 nextReviewCount = 0
             }
 
@@ -56,10 +58,10 @@ class SRSEngine @Inject constructor() {
             // and it should shorten the step by the same proportion whatever the card's
             // history.
             ReviewQuality.HARD -> {
-                nextInterval = Math.round(vocab.interval * HARD_MULTIPLIER)
+                nextInterval = ((vocab.interval * 12 + 5) / 10)
                     .coerceAtLeast(vocab.interval + 1)
                     .coerceAtLeast(1)
-                nextEaseFactor -= HARD_EASE_PENALTY
+                nextEaseHundredths -= 15
                 nextReviewCount++
             }
 
@@ -69,33 +71,22 @@ class SRSEngine @Inject constructor() {
                     0 -> 1 // First successful review -> 1 day
                     1 -> 6 // Second successful review -> 6 days
                     else -> {
-                        // Subsequent reviews -> prev_interval * ease.
-                        //
-                        // Rounded, not truncated: the web engine is documented as a
-                        // mirror of this one and rounds, so 6 * 2.6 scheduled 15 days
-                        // here and 16 there - the same card, two answers, on one synced
-                        // library.
-                        val multiplier = if (quality == ReviewQuality.EASY) EASY_BONUS else 1.0f
-                        Math.round(vocab.interval * vocab.easeFactor * multiplier)
-                            .coerceAtLeast(vocab.interval + 1)
+                        val multiplierTenths = if (quality == ReviewQuality.EASY) 13 else 10
+                        val rounded = (vocab.interval * easeHundredths * multiplierTenths + 500) / 1000
+                        rounded.coerceAtLeast(vocab.interval + 1)
                     }
                 }
 
-                // SM-2: EF' = EF + (0.1 - (5-q)*(0.08 + (5-q)*0.02)), where GOOD is q=4
-                // and EASY is q=5. Good works out to exactly zero, which is SM-2 as
-                // written.
-                val q = if (quality == ReviewQuality.EASY) 5 else 4
-                nextEaseFactor += (0.1f - (5 - q) * (0.08f + (5 - q) * 0.02f))
+                // SM-2: EF' = EF + (0.1 - (5-q)*(0.08 + (5-q)*0.02)), where GOOD is q=4 (+0)
+                // and EASY is q=5 (+0.10).
+                if (quality == ReviewQuality.EASY) {
+                    nextEaseHundredths += 10
+                }
                 nextReviewCount++
             }
         }
 
-        // Constraints. The ceiling matters as much as the floor: without it, six Easy
-        // ratings put a card three years out and eight put it fifty, so a word the
-        // learner found easy early was silently retired from the library rather than
-        // rehearsed. A year is the longest gap worth calling spaced repetition for
-        // vocabulary, which decays.
-        nextEaseFactor = nextEaseFactor.coerceIn(MIN_EASE_FACTOR, MAX_EASE_FACTOR)
+        val clampedEaseFactor = (nextEaseHundredths.coerceIn(130, 300) / 100.0).toFloat()
         nextInterval = nextInterval.coerceAtMost(MAX_INTERVAL_DAYS)
         
         // Interval 0 means "review again in this session" (handled by ViewModel);
@@ -109,7 +100,7 @@ class SRSEngine @Inject constructor() {
         return vocab.copy(
             nextReview = nextReviewTimestamp,
             interval = nextInterval,
-            easeFactor = nextEaseFactor,
+            easeFactor = clampedEaseFactor,
             reviewCount = nextReviewCount
         )
     }

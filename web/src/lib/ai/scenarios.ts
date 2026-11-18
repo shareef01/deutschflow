@@ -83,4 +83,29 @@ export const ROLEPLAY_SCENARIOS: RoleplayScenario[] = [
   },
 ];
 
+export const DEFAULT_SCENARIO_ID = ROLEPLAY_SCENARIOS[0].id;
 export const DEFAULT_SCENARIO_TITLE = ROLEPLAY_SCENARIOS[0].title;
+
+/**
+ * Resolves a roleplay scenario by its stable ID (e.g. "doctor", "cafe") or
+ * its English display title (e.g. "Visiting a Doctor's Clinic"), including
+ * the legacy "café" spelling from older backups.
+ */
+export function findRoleplayScenario(keyOrTitle: string): RoleplayScenario | undefined {
+  const trimmed = keyOrTitle.trim();
+  const normalized = trimmed.toLowerCase() === "café" ? "cafe" : trimmed;
+  return ROLEPLAY_SCENARIOS.find(
+    (s) =>
+      s.id.toLowerCase() === normalized.toLowerCase() ||
+      s.title.toLowerCase() === normalized.toLowerCase()
+  );
+}
+
+/**
+ * Normalizes a scenario identifier to its canonical ID ("bakery", "doctor", etc.)
+ * when recognized, or preserves the trimmed custom/unknown identifier explicitly.
+ */
+export function normalizeScenarioId(keyOrTitle: string): string {
+  const matched = findRoleplayScenario(keyOrTitle);
+  return matched ? matched.id : keyOrTitle.trim();
+}

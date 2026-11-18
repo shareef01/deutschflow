@@ -659,6 +659,24 @@ val MIGRATION_18_19 = object : Migration(18, 19) {
 }
 
 /**
+ * Adds a first-class `lastStudiedAt` column to `vocabulary` and backfills it from
+ * existing schedule-governing rows in `review_events` (`isExtraPractice = 0 OR rating = 'AGAIN'`).
+ */
+val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `vocabulary` ADD COLUMN `lastStudiedAt` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+            "UPDATE `vocabulary` SET `lastStudiedAt` = COALESCE((" +
+                "SELECT MAX(`reviewedAtTimestamp`) FROM `review_events` " +
+                "WHERE `review_events`.`vocabularyId` = `vocabulary`.`id` " +
+                "AND (`review_events`.`isExtraPractice` = 0 OR `review_events`.`rating` = 'AGAIN') " +
+                "AND `review_events`.`reviewedAtTimestamp` > 0" +
+                "), 0)"
+        )
+    }
+}
+
+/**
  * Every migration the app has ever needed, in order. Declared last: top-level
  * properties initialise in file order, so it has to follow what it references.
  *
@@ -677,5 +695,5 @@ val MIGRATIONS =
         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
         MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
         MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
-        MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19
+        MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20
     )

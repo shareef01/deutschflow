@@ -583,4 +583,127 @@ describe("Audit Hardening & Data Integrity Regressions", () => {
       }
     });
   });
+
+  describe("8. Roleplay Scenario Lookup & Backup Restore Compatibility (DF-001 & DF-005)", () => {
+    it("resolves scenarios by stable ID, display title, legacy 'café' spelling, and preserves unknown IDs", async () => {
+      const { findRoleplayScenario, normalizeScenarioId, ROLEPLAY_SCENARIOS } = await import("@/lib/ai/scenarios");
+      for (const s of ROLEPLAY_SCENARIOS) {
+        expect(findRoleplayScenario(s.id)).toEqual(s);
+        expect(findRoleplayScenario(s.title)).toEqual(s);
+        expect(normalizeScenarioId(s.title)).toBe(s.id);
+      }
+      expect(findRoleplayScenario("café")?.id).toBe("cafe");
+      expect(normalizeScenarioId("café")).toBe("cafe");
+      expect(findRoleplayScenario("custom_unknown_scene")).toBeUndefined();
+      expect(normalizeScenarioId("custom_unknown_scene")).toBe("custom_unknown_scene");
+    });
+
+    it("restores roleplay backup when local DB only has an untouched auto-greeting, preserves local user turns, and reports added/skipped counts", async () => {
+      // Seed a single assistant greeting (no user turns)
+      await db.roleplayMessages.add({
+        position: 0,
+        scenario: "Ordering at a Berlin Bakery",
+        role: "assistant",
+        content: "Guten Morgen! Was darf es sein?",
+        timestamp: 1000,
+      });
+
+      const backupWithRoleplay = {
+        format: "deutschflow-library",
+        version: 3,
+        exportedAt: new Date().toISOString(),
+        vocabulary: [],
+        transcripts: [],
+        userStats: [],
+        activityLog: [],
+        reviewEvents: [],
+        roleplayMessages: [
+          {
+            position: 0,
+            scenario: "doctor",
+            role: "assistant",
+            content: "Guten Tag, was fehlt Ihnen?",
+            timestamp: 2000,
+          },
+          {
+            position: 1,
+            scenario: "doctor",
+            role: "user",
+            content: "Ich habe Kopfschmerzen.",
+            timestamp: 2500,
+          },
+        ],
+      };
+
+      const res1 = await importLibrary(db, backupWithRoleplay);
+      expect(res1.roleplayMessagesAdded).toBe(2);
+      expect(res1.roleplayMessagesSkipped).toBe(0);
+
+      const afterFirstImport = await db.roleplayMessages.orderBy("position").toArray();
+      expect(afterFirstImport).toHaveLength(2);
+      expect(afterFirstImport[0].scenario).toBe("doctor");
+      expect(afterFirstImport[1].content).toBe("Ich habe Kopfschmerzen.");
+
+      // Repeated import of identical conversation is idempotent (0 added, 0 skipped)
+      const resRepeat = await importLibrary(db, backupWithRoleplay);
+      expect(resRepeat.roleplayMessagesAdded).toBe(0);
+      expect(resRepeat.roleplayMessagesSkipped).toBe(0);
+
+      // Now local DB has a user turn: a subsequent backup with different roleplay must NOT overwrite it and reports skipped
+      const anotherBackup = {
+        ...backupWithRoleplay,
+        roleplayMessages: [
+          {
+            position: 0,
+            scenario: "bakery",
+            role: "assistant",
+            content: "Andere Bäckerei",
+            timestamp: 3000,
+          },
+        ],
+      };
+      const res2 = await importLibrary(db, anotherBackup);
+      expect(res2.roleplayMessagesAdded).toBe(0);
+      expect(res2.roleplayMessagesSkipped).toBe(1);
+
+      const afterSecondImport = await db.roleplayMessages.orderBy("position").toArray();
+      expect(afterSecondImport).toHaveLength(2);
+      expect(afterSecondImport[0].scenario).toBe("doctor");
+
+      const { translate } = await import("@/lib/i18n");
+      const enMsg = translate("en", "settings.backupCompletedRoleplaySkipped", [res2.roleplayMessagesSkipped ?? 0]);
+      const deMsg = translate("de", "settings.backupCompletedRoleplaySkipped", [res2.roleplayMessagesSkipped ?? 0]);
+      expect(enMsg).toContain("export a backup first if you want to save your current chat");
+      expect(deMsg).toContain("exportiere zuerst ein Backup, falls du deinen aktuellen Chat sichern möchtest");
+    });
+  });
+
+  describe("9. API Key Deletion & Error Redaction (DF-007 & DF-010)", () => {
+    it("saves and removes encrypted API key without affecting vocabulary", async () => {
+      const { saveApiKey, deleteApiKey, hasApiKey } = await import("@/lib/db/settings");
+      await saveVocabulary(db, { germanText: "der Baum", englishTranslation: "the tree" });
+      expect(await hasApiKey(db)).toBe(false);
+
+      const saved = await saveApiKey(db, "gsk_test_key_123456");
+      expect(saved).toBe(true);
+      expect(await hasApiKey(db)).toBe(true);
+
+      await deleteApiKey(db);
+      expect(await hasApiKey(db)).toBe(false);
+      expect(await db.vocabulary.count()).toBe(1);
+    });
+
+    it("redacts sensitive gsk_ keys in generic network Error messages", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockRejectedValue(new Error("Proxy failed for key gsk_secret987654321"))
+      );
+      const res = await translateAndExtract("Hallo", "gsk_secret987654321");
+      expect(res.kind).toBe("failure");
+      if (res.kind === "failure") {
+        expect(res.message).not.toContain("gsk_secret987654321");
+        expect(res.message).toContain("gsk_***");
+      }
+    });
+  });
 });
