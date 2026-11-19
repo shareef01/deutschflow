@@ -7,7 +7,7 @@ agp = "9.5.1"
 kotlin = "2.4.21"
 # KSP2. The old "<kotlin>-<ksp>" scheme is gone, and so is ksp.useKSP2=false in
 # gradle.properties, which pinned the build to a KSP1 that no longer ships.
-ksp = "2.3.13"
+ksp = "2.3.14"
 hilt = "2.60.1"
 room = "2.8.5"
 composeBom = "2026.09.00"
@@ -27,7 +27,7 @@ archCoreTesting = "2.2.0"
 # lifecycle-viewmodel-savedstate drags this to 1.7.3, and AGP forces that onto the
 # androidTest classpath too, where room-testing 2.8.4 then dies at runtime with an
 # AbstractMethodError on FieldBundle$$serializer. Held forward for everyone.
-kotlinxSerialization = "1.12.0"
+kotlinxSerialization = "1.13.0"
 json = "20260814"
 hiltNavigationCompose = "1.4.0"
 glance = "1.1.1"
