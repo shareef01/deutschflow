@@ -7,7 +7,7 @@ agp = "9.5.3"
 kotlin = "2.4.21"
 # KSP2. The old "<kotlin>-<ksp>" scheme is gone, and so is ksp.useKSP2=false in
 # gradle.properties, which pinned the build to a KSP1 that no longer ships.
-ksp = "2.3.13"
+ksp = "2.3.14"
 hilt = "2.60.1"
 room = "2.8.5"
 composeBom = "2026.09.00"
@@ -77,7 +77,6 @@ kotlinx-serialization-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
