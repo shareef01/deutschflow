@@ -54,9 +54,14 @@ plugins {
 
 android {
     namespace = "com.aus.deutschflow"
-    // 37 because androidx now requires it: core 1.19, lifecycle 2.11 and
-    // hilt-navigation-compose 1.4 all refuse to be compiled against less.
-    compileSdk = 37
+    // 37.1 because androidx now requires it: core 1.19, lifecycle 2.11 and
+    // hilt-navigation-compose 1.4 require 37+, and Compose 1.13 (BOM 2026.11.01)
+    // requires minor API level 37.1.
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "com.aus.deutschflow"
