@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   description: "What DeutschFlow stores, what it sends, and to whom.",
 };
 
-const LAST_UPDATED = "21 October 2026";
+const LAST_UPDATED = "27 November 2026";
 
 /** Where to send privacy questions: the owner's address, set by the owner. */
 const CONTACT: string | null = "shareef2189@gmail.com";
@@ -106,7 +106,9 @@ export default function PrivacyPage() {
           The web version is hosted on Vercel and protected by a site password. Signing in sets a
           session cookie that only proves you entered the password. To slow down password guessing,
           the server briefly records failed sign-in attempts against your IP address, and forgets
-          them after 15 minutes. Like any web host, Vercel processes your IP address and request
+          them after 15 minutes. When you log out, a one-way cryptographic digest (SHA-256) of that
+          ended session token is stored in Redis until the token&apos;s scheduled expiry so a copied
+          cookie cannot be reused. Like any web host, Vercel processes your IP address and request
           details to serve the site.
         </p>
       </Section>

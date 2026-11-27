@@ -235,4 +235,26 @@ describe("service worker session lifecycle (executes public/sw.js)", () => {
     await sw.message({ type: "SESSION_ESTABLISHED" });
     expect(await persistedLoggedOut(indexedDB)).toBe(false);
   });
+
+  it("does not clear the logged-out fail-safe when visiting public /privacy while logged out (AUD-01)", async () => {
+    const sw = startWorker(caches, indexedDB);
+    await sw.navigate("/vocabulary");
+    await sw.message({ type: "LOGOUT" });
+    expect(await persistedLoggedOut(indexedDB)).toBe(true);
+
+    // Simulate a lingering protected cache entry (e.g. partial purge failure)
+    const cache = await caches.open("deutschflow-test");
+    await cache.put(`${ORIGIN}/vocabulary`, page(`${ORIGIN}/vocabulary`));
+
+    // Navigating to public /privacy returns 200 OK without a session cookie
+    const privacyRes = await sw.navigate("/privacy");
+    expect(privacyRes.status).toBe(200);
+    expect(caches.has("/privacy")).toBe(false);
+    expect(await persistedLoggedOut(indexedDB)).toBe(true);
+
+    // Going offline must still refuse protected cached pages
+    sw.setNetwork(offline);
+    const offlineProtected = await sw.navigate("/vocabulary");
+    expect(offlineProtected.status).toBe(503);
+  });
 });

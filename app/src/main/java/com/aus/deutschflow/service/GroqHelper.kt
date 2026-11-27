@@ -104,7 +104,9 @@ class GroqHelper @Inject constructor(
             return AIResult.Failure(context.getString(R.string.ai_unreadable))
         }
         if (trimmed.length > MAX_AI_INPUT_CHARS) {
-            return AIResult.Failure(context.getString(R.string.ai_input_too_long, MAX_AI_INPUT_CHARS))
+            return AIResult.Failure(
+                context.resources.getQuantityString(R.plurals.ai_input_too_long, MAX_AI_INPUT_CHARS, MAX_AI_INPUT_CHARS)
+            )
         }
 
         return withContext(Dispatchers.IO) {
@@ -139,7 +141,9 @@ class GroqHelper @Inject constructor(
             return WordDetailsResult.Failure(context.getString(R.string.ai_unreadable))
         }
         if (trimmed.length > MAX_AI_INPUT_CHARS) {
-            return WordDetailsResult.Failure(context.getString(R.string.ai_input_too_long, MAX_AI_INPUT_CHARS))
+            return WordDetailsResult.Failure(
+                context.resources.getQuantityString(R.plurals.ai_input_too_long, MAX_AI_INPUT_CHARS, MAX_AI_INPUT_CHARS)
+            )
         }
 
         return withContext(Dispatchers.IO) {
@@ -181,7 +185,7 @@ class GroqHelper @Inject constructor(
         }
 
     private suspend fun post(body: String, apiKey: String): String =
-        postTo(ENDPOINT, body, apiKey, ::errorMessage)
+        postTo(ENDPOINT, body, apiKey, ::errorMessageWithRetryAfter)
 
     /**
      * Two messages, not one: the instructions are a system message and the user's
@@ -249,10 +253,14 @@ class GroqHelper @Inject constructor(
      * language the API speaks, and inventing a German rendering of a sentence we did
      * not write would be worse than showing the original.
      */
-    private fun errorMessage(status: Int, body: String?): String =
+    private fun errorMessageWithRetryAfter(status: Int, body: String?, retryAfterSeconds: Long?): String =
         detailFrom(body) ?: when (status) {
             401 -> context.getString(R.string.ai_key_rejected)
-            429 -> context.getString(R.string.ai_rate_limited)
+            429 -> if (retryAfterSeconds != null) {
+                context.getString(R.string.ai_rate_limited_seconds, retryAfterSeconds)
+            } else {
+                context.getString(R.string.ai_rate_limited)
+            }
             else -> context.getString(R.string.ai_status, status)
         }
 
@@ -310,7 +318,9 @@ class GroqHelper @Inject constructor(
             return RoleplayResult.Failure(context.getString(R.string.ai_input_blank))
         }
         if (trimmedInput.length > MAX_ROLEPLAY_USER_CHARS) {
-            return RoleplayResult.Failure(context.getString(R.string.ai_message_too_long, MAX_ROLEPLAY_USER_CHARS))
+            return RoleplayResult.Failure(
+                context.resources.getQuantityString(R.plurals.ai_message_too_long, MAX_ROLEPLAY_USER_CHARS, MAX_ROLEPLAY_USER_CHARS)
+            )
         }
         val safeScenario = safeSubstring(scenario.trim(), MAX_ROLEPLAY_SCENARIO_CHARS)
         val safeHistory = filterAndTrimHistory(history)
@@ -530,7 +540,38 @@ class GroqHelper @Inject constructor(
         internal fun isRetryableStatus(status: Int): Boolean =
             status == 500 || status == 502 || status == 503 || status == 504
 
-        private class HttpStatusException(val status: Int, message: String) : IllegalStateException(message)
+        private class HttpStatusException(
+            val status: Int,
+            message: String,
+            val retryAfterSeconds: Long? = null
+        ) : IllegalStateException(message)
+
+        /**
+         * Parses an HTTP `Retry-After` header (integer delta-seconds or RFC 1123 HTTP-date)
+         * into a bounded positive number of seconds (1..3600), or null if absent/invalid.
+         */
+        @VisibleForTesting
+        internal fun parseRetryAfterSeconds(
+            header: String?,
+            nowMs: Long = System.currentTimeMillis()
+        ): Long? {
+            val trimmed = header?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            if (trimmed.all { it.isDigit() }) {
+                val secs = trimmed.toLongOrNull() ?: return null
+                if (secs <= 0L) return null
+                return secs.coerceAtMost(3_600L)
+            }
+            return try {
+                val targetMs = java.time.ZonedDateTime
+                    .parse(trimmed, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                    .toInstant()
+                    .toEpochMilli()
+                val deltaMs = targetMs - nowMs
+                if (deltaMs <= 0L) null else ((deltaMs + 999L) / 1_000L).coerceAtMost(3_600L)
+            } catch (_: Exception) {
+                null
+            }
+        }
 
         /** Same bounded policy as the web client; cancellation and timeouts never retry. */
         @VisibleForTesting
@@ -539,6 +580,23 @@ class GroqHelper @Inject constructor(
             body: String,
             apiKey: String,
             errorMessage: (Int, String?) -> String,
+            timeoutMs: Int = TIMEOUT_MS,
+            waitBeforeRetry: suspend (Long) -> Unit = { delay(it) }
+        ): String = postTo(
+            endpoint = endpoint,
+            body = body,
+            apiKey = apiKey,
+            errorMessage = { status, errBody, _ -> errorMessage(status, errBody) },
+            timeoutMs = timeoutMs,
+            waitBeforeRetry = waitBeforeRetry
+        )
+
+        @JvmName("postToWithRetryAfter")
+        private suspend fun postTo(
+            endpoint: String,
+            body: String,
+            apiKey: String,
+            errorMessage: (Int, String?, Long?) -> String,
             timeoutMs: Int = TIMEOUT_MS,
             waitBeforeRetry: suspend (Long) -> Unit = { delay(it) }
         ): String = retryPost(waitBeforeRetry) {
@@ -593,7 +651,7 @@ class GroqHelper @Inject constructor(
             endpoint: String,
             body: String,
             apiKey: String,
-            errorMessage: (Int, String?) -> String,
+            errorMessage: (Int, String?, Long?) -> String,
             timeoutMs: Int = TIMEOUT_MS
         ): String = coroutineScope {
             val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -625,7 +683,14 @@ class GroqHelper @Inject constructor(
                     // rate limit - and all of them are worth putting in front of the user.
                     val errBody = connection.errorStream?.bufferedReader(Charsets.UTF_8)
                         ?.use { it.readBounded(MAX_ERROR_CHARS) }
-                    throw HttpStatusException(connection.responseCode, errorMessage(connection.responseCode, errBody))
+                    val retryAfterSeconds = if (connection.responseCode == 429) {
+                        parseRetryAfterSeconds(connection.getHeaderField("Retry-After"))
+                    } else null
+                    throw HttpStatusException(
+                        connection.responseCode,
+                        errorMessage(connection.responseCode, errBody, retryAfterSeconds),
+                        retryAfterSeconds
+                    )
                 }
             } catch (e: Exception) {
                 // A read that failed because the abort above closed the socket is a

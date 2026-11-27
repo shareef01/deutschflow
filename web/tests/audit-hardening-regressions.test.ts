@@ -706,4 +706,209 @@ describe("Audit Hardening & Data Integrity Regressions", () => {
       }
     });
   });
+
+  describe("10. Audit 2026-11-27 Regressions (AUD-03, AUD-05, AUD-06, AUD-07)", () => {
+    it("matches Android +1 day streak tolerance, ignores far-future dates, and anchors timestamp: 0 (AUD-03)", async () => {
+      const { calculateStreakFromDates } = await import("@/lib/db/backup");
+      const { currentStreak } = await import("@/lib/db/repository");
+
+      // +1 day eastward timezone shift matches Android BackupManager
+      const dates = ["2026-10-15", "2026-10-14", "2026-10-13"];
+      expect(calculateStreakFromDates(dates, new Date(2026, 9, 14, 12, 0))).toBe(3);
+
+      // Stray far-future activity date does not wipe out a valid active streak
+      expect(
+        calculateStreakFromDates(["2099-01-01", "2026-10-15", "2026-10-14"], new Date(2026, 9, 15, 12, 0))
+      ).toBe(2);
+
+      // Active day with timestamp: 0 still produces a non-zero currentStreak()
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      await importLibrary(db, {
+        format: "deutschflow-library",
+        version: 3,
+        exportedAt: today.toISOString(),
+        vocabulary: [],
+        transcripts: [],
+        userStats: [],
+        activityLog: [{ date: todayStr, xpGained: 20, timestamp: 0 }],
+        reviewEvents: [],
+        roleplayMessages: [],
+      });
+      const stats = await db.userStats.get(1);
+      expect(stats?.streak).toBe(1);
+      expect(stats?.lastActivityTimestamp).toBeGreaterThan(0);
+      expect(currentStreak(stats)).toBe(1);
+    });
+
+    it("rejects array xpAwards and duplicate activityLog dates (AUD-05)", () => {
+      const base = {
+        format: "deutschflow-library",
+        version: 3,
+        exportedAt: new Date().toISOString(),
+        vocabulary: [],
+        transcripts: [],
+        userStats: [],
+        activityLog: [],
+        reviewEvents: [],
+        roleplayMessages: [],
+      };
+
+      expect(() =>
+        validateBackup({
+          ...base,
+          activityLog: [{ date: "2026-11-27", xpGained: 10, timestamp: 1000, xpAwards: [] }],
+        })
+      ).toThrow(ImportError);
+
+      expect(() =>
+        validateBackup({
+          ...base,
+          activityLog: [
+            { date: "2026-11-27", xpGained: 10, timestamp: 1000 },
+            { date: "2026-11-27", xpGained: 20, timestamp: 2000 },
+          ],
+        })
+      ).toThrow(ImportError);
+    });
+
+    it("passes cache: 'no-store' and redirect: 'error' on Upstash throttle requests (AUD-06)", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ result: [1, 0, 1, 0] }), { status: 200 })
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const backend = new UpstashRedisThrottleBackend(
+        "https://example.upstash.io",
+        "mock-token",
+        new InMemoryThrottleBackend(),
+        1000,
+        "fail-closed"
+      );
+      await backend.admit("198.51.100.7", Date.now());
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://example.upstash.io/",
+        expect.objectContaining({ cache: "no-store", redirect: "error" })
+      );
+    });
+
+    it("cancels unread 5xx response bodies before retrying Groq requests (AUD-07)", async () => {
+      const cancelSpy = vi.fn().mockResolvedValue(undefined);
+      let attempt = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () => {
+          attempt++;
+          if (attempt === 1) {
+            return {
+              ok: false,
+              status: 503,
+              headers: new Headers(),
+              body: { cancel: cancelSpy },
+            } as unknown as Response;
+          }
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      translation: "Hello",
+                      keywords: ["Hallo"],
+                      example: "Hallo!",
+                      grammar: [],
+                    }),
+                  },
+                },
+              ],
+            }),
+            { status: 200 }
+          );
+        })
+      );
+      const res = await translateAndExtract("Hallo", "gsk_test_key");
+      expect(res.kind).toBe("success");
+      expect(cancelSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("parses Retry-After headers on 429 responses and surfaces wait time", async () => {
+      const { parseRetryAfterSeconds } = await import("@/lib/ai/groq");
+      expect(parseRetryAfterSeconds("45")).toBe(45);
+      expect(parseRetryAfterSeconds("99999")).toBe(3600);
+      expect(parseRetryAfterSeconds("0")).toBeNull();
+      expect(parseRetryAfterSeconds("invalid")).toBeNull();
+
+      const now = Date.parse("Fri, 27 Nov 2026 05:00:00 GMT");
+      expect(parseRetryAfterSeconds("Fri, 27 Nov 2026 05:00:25 GMT", now)).toBe(25);
+      expect(parseRetryAfterSeconds("Fri, 27 Nov 2026 04:59:00 GMT", now)).toBeNull();
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response("", { status: 429, headers: { "Retry-After": "18" } })
+        )
+      );
+      const res = await translateAndExtract("Hallo", "gsk_test_key");
+      expect(res.kind).toBe("failure");
+      if (res.kind === "failure") {
+        expect(res.message).toContain("18s");
+      }
+    });
+
+    it("uses Dexie v11 compound index in recordReview to compute actualDays from latest review (PERF-01)", async () => {
+      const { recordReview } = await import("@/lib/db/review");
+      const { ReviewQuality } = await import("@/lib/ai/srs");
+      const now = Date.now();
+      const threeDaysAgo = now - 3 * 86_400_000;
+      const tenDaysAgo = now - 10 * 86_400_000;
+
+      const cardId = (await db.vocabulary.add({
+        germanText: "der Fluss",
+        germanTextKey: foldGermanKey("der Fluss"),
+        englishTranslation: "the river",
+        timestamp: tenDaysAgo,
+        exampleSentence: "",
+        article: "der",
+        plural: "Flüsse",
+        conjugation: "",
+        synonyms: "",
+        antonyms: "",
+        nextReview: 0,
+        interval: 0,
+        easeFactor: 2.5,
+        reviewCount: 0,
+        remoteId: "11111111-2222-4333-8444-555555555555",
+        lastModifiedAt: tenDaysAgo,
+      })) as number;
+
+      await db.reviewEvents.bulkAdd([
+        {
+          vocabularyId: cardId,
+          rating: "GOOD",
+          scheduledDays: 0,
+          actualDays: 0,
+          reviewedAtTimestamp: tenDaysAgo,
+          isExtraPractice: false,
+          remoteId: "aaaa1111-2222-4333-8444-555555555551",
+        },
+        {
+          vocabularyId: cardId,
+          rating: "GOOD",
+          scheduledDays: 1,
+          actualDays: 7,
+          reviewedAtTimestamp: threeDaysAgo,
+          isExtraPractice: false,
+          remoteId: "aaaa1111-2222-4333-8444-555555555552",
+        },
+      ]);
+
+      const card = (await db.vocabulary.get(cardId))!;
+      await recordReview(db, card, ReviewQuality.GOOD, false);
+
+      const latest = await db.reviewEvents
+        .where("[vocabularyId+reviewedAtTimestamp]")
+        .between([cardId, 0], [cardId, Number.MAX_SAFE_INTEGER], true, true)
+        .last();
+      expect(latest?.actualDays).toBe(3);
+    });
+  });
 });

@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  delayForNextAttempt,
-  getTrackedCount,
+  getActiveThrottleBackend,
   getThrottleDelay,
   MAX_TRACKED,
-  recordFailure,
-  recordSuccess,
   recordThrottleFailure,
   recordThrottleSuccess,
   resetThrottle,
@@ -26,132 +23,132 @@ import { extractCallerKey, isValidIp } from "@/app/api/login/route";
 beforeEach(() => resetThrottle());
 
 describe("login throttle", () => {
-  it("lets the first few honest mistakes through free", () => {
+  it("lets the first few honest mistakes through free", async () => {
     for (let i = 0; i < 3; i++) {
-      expect(delayForNextAttempt("1.2.3.4")).toBe(0);
-      recordFailure("1.2.3.4");
+      expect(await getThrottleDelay("1.2.3.4")).toBe(0);
+      await recordThrottleFailure("1.2.3.4");
     }
-    expect(delayForNextAttempt("1.2.3.4")).toBeGreaterThan(0);
+    expect(await getThrottleDelay("1.2.3.4")).toBeGreaterThan(0);
   });
 
-  it("doubles the wait with each further failure", () => {
+  it("doubles the wait with each further failure", async () => {
     const now = 1_000_000;
-    for (let i = 0; i < 4; i++) recordFailure("1.2.3.4", now);
-    const first = delayForNextAttempt("1.2.3.4", now);
-    recordFailure("1.2.3.4", now);
-    const second = delayForNextAttempt("1.2.3.4", now);
+    for (let i = 0; i < 4; i++) await recordThrottleFailure("1.2.3.4", now);
+    const first = await getThrottleDelay("1.2.3.4", now);
+    await recordThrottleFailure("1.2.3.4", now);
+    const second = await getThrottleDelay("1.2.3.4", now);
 
     expect(second).toBe(first * 2);
   });
 
-  it("counts a cooldown down instead of holding the caller for the whole window", () => {
+  it("counts a cooldown down instead of holding the caller for the whole window", async () => {
     const start = 1_000_000;
-    for (let i = 0; i < 3; i++) recordFailure("1.2.3.4", start);
+    for (let i = 0; i < 3; i++) await recordThrottleFailure("1.2.3.4", start);
 
-    expect(delayForNextAttempt("1.2.3.4", start)).toBe(1_000);
-    expect(delayForNextAttempt("1.2.3.4", start + 400)).toBe(600);
-    expect(delayForNextAttempt("1.2.3.4", start + 1_000)).toBe(0);
+    expect(await getThrottleDelay("1.2.3.4", start)).toBe(1_000);
+    expect(await getThrottleDelay("1.2.3.4", start + 400)).toBe(600);
+    expect(await getThrottleDelay("1.2.3.4", start + 1_000)).toBe(0);
   });
 
-  it("caps the wait so a legitimate user is not locked out forever", () => {
+  it("caps the wait so a legitimate user is not locked out forever", async () => {
     // Pinned clock: with Date.now() a slow runner sees a few ms elapse between the
     // last failure and the check, and the wait reads 29998 instead of the cap.
     const now = 1_000_000;
-    for (let i = 0; i < 40; i++) recordFailure("1.2.3.4", now);
-    expect(delayForNextAttempt("1.2.3.4", now)).toBe(30_000);
+    for (let i = 0; i < 40; i++) await recordThrottleFailure("1.2.3.4", now);
+    expect(await getThrottleDelay("1.2.3.4", now)).toBe(30_000);
   });
 
-  it("throttles each caller separately", () => {
-    for (let i = 0; i < 10; i++) recordFailure("1.2.3.4");
-    expect(delayForNextAttempt("1.2.3.4")).toBeGreaterThan(0);
-    expect(delayForNextAttempt("5.6.7.8")).toBe(0);
+  it("throttles each caller separately", async () => {
+    for (let i = 0; i < 10; i++) await recordThrottleFailure("1.2.3.4");
+    expect(await getThrottleDelay("1.2.3.4")).toBeGreaterThan(0);
+    expect(await getThrottleDelay("5.6.7.8")).toBe(0);
   });
 
-  it("forgives a caller after a quiet window", () => {
+  it("forgives a caller after a quiet window", async () => {
     const start = 1_000_000;
-    for (let i = 0; i < 10; i++) recordFailure("1.2.3.4", start);
-    expect(delayForNextAttempt("1.2.3.4", start)).toBeGreaterThan(0);
+    for (let i = 0; i < 10; i++) await recordThrottleFailure("1.2.3.4", start);
+    expect(await getThrottleDelay("1.2.3.4", start)).toBeGreaterThan(0);
     // Sixteen minutes later.
-    expect(delayForNextAttempt("1.2.3.4", start + 16 * 60_000)).toBe(0);
+    expect(await getThrottleDelay("1.2.3.4", start + 16 * 60_000)).toBe(0);
   });
 
-  it("clears the record once the caller proves who they are", () => {
-    for (let i = 0; i < 10; i++) recordFailure("1.2.3.4");
-    recordSuccess("1.2.3.4");
-    expect(delayForNextAttempt("1.2.3.4")).toBe(0);
+  it("clears the record once the caller proves who they are", async () => {
+    for (let i = 0; i < 10; i++) await recordThrottleFailure("1.2.3.4");
+    await recordThrottleSuccess("1.2.3.4");
+    expect(await getThrottleDelay("1.2.3.4")).toBe(0);
   });
 
-  it("normalizes malformed and empty keys safely", () => {
-    recordFailure("");
-    recordFailure("   ");
-    expect(delayForNextAttempt("")).toBe(0); // 2 failures on "unknown"
-    recordFailure("");
+  it("normalizes malformed and empty keys safely", async () => {
+    await recordThrottleFailure("");
+    await recordThrottleFailure("   ");
+    expect(await getThrottleDelay("")).toBe(0); // 2 failures on "unknown"
+    await recordThrottleFailure("");
     // 3rd failure on "unknown" triggers cooldown
-    expect(delayForNextAttempt("")).toBeGreaterThan(0);
-    expect(delayForNextAttempt("unknown")).toBeGreaterThan(0);
+    expect(await getThrottleDelay("")).toBeGreaterThan(0);
+    expect(await getThrottleDelay("unknown")).toBeGreaterThan(0);
   });
 
-  it("handles excessively long keys without breaking", () => {
+  it("handles excessively long keys without breaking", async () => {
     const longKey = "a".repeat(1000);
-    for (let i = 0; i < 4; i++) recordFailure(longKey);
-    expect(delayForNextAttempt(longKey)).toBeGreaterThan(0);
+    for (let i = 0; i < 4; i++) await recordThrottleFailure(longKey);
+    expect(await getThrottleDelay(longKey)).toBeGreaterThan(0);
   });
 
-  it("evicts oldest entries without wiping active throttled attackers on key flood", () => {
+  it("evicts oldest entries without wiping active throttled attackers on key flood", async () => {
     const now = 1_000_000;
     const attackerIp = "bad-actor-ip";
-    for (let i = 0; i < 5; i++) recordFailure(attackerIp, now);
-    expect(delayForNextAttempt(attackerIp, now)).toBeGreaterThan(0);
+    for (let i = 0; i < 5; i++) await recordThrottleFailure(attackerIp, now);
+    expect(await getThrottleDelay(attackerIp, now)).toBeGreaterThan(0);
 
     // Flood with distinct keys newer than attackerIp
     for (let i = 0; i < 10_005; i++) {
-      recordFailure(`fake-ip-${i}`, now + 10);
+      await recordThrottleFailure(`fake-ip-${i}`, now + 10);
     }
 
     // Active map size is bounded
-    expect(getTrackedCount()).toBeLessThanOrEqual(MAX_TRACKED);
+    expect(getActiveThrottleBackend().getTrackedCount?.()).toBeLessThanOrEqual(MAX_TRACKED);
 
     // CRITICAL: Attacker must STILL be locked out; eviction must not have freed them!
-    expect(delayForNextAttempt(attackerIp, now + 10)).toBeGreaterThan(0);
+    expect(await getThrottleDelay(attackerIp, now + 10)).toBeGreaterThan(0);
   }, 15_000);
 
-  it("adversarial flood of unthrottled keys purges unlocked keys first, retaining active lockouts", () => {
+  it("adversarial flood of unthrottled keys purges unlocked keys first, retaining active lockouts", async () => {
     const now = 2_000_000;
     const lockedIp = "locked-target";
     // 6 failures -> locked out for several seconds
-    for (let i = 0; i < 6; i++) recordFailure(lockedIp, now);
-    expect(delayForNextAttempt(lockedIp, now)).toBeGreaterThan(0);
+    for (let i = 0; i < 6; i++) await recordThrottleFailure(lockedIp, now);
+    expect(await getThrottleDelay(lockedIp, now)).toBeGreaterThan(0);
 
     // Adversary attempts to clear lockout by flooding dummy keys (1 failure each, 0 cooldown)
     for (let i = 0; i < MAX_TRACKED + 500; i++) {
-      recordFailure(`dummy-${i}`, now + 1);
+      await recordThrottleFailure(`dummy-${i}`, now + 1);
     }
 
     // Locked IP must still be in cooldown at now + 100ms
-    expect(delayForNextAttempt(lockedIp, now + 100)).toBeGreaterThan(0);
+    expect(await getThrottleDelay(lockedIp, now + 100)).toBeGreaterThan(0);
   }, 15_000);
 
   // O(n²) by nature: (MAX_TRACKED + 100) keys × 5 failures each, with an eviction
   // sweep per insert. It takes ~10s alone and tips over the old 15s budget once the
   // suite runs more files in parallel, so the budget is the thing that is wrong, not
   // the assertion. The test still fails if the eviction guarantee breaks.
-  it("evicts earliest-expiring lockouts when all tracked entries are actively locked", () => {
+  it("evicts earliest-expiring lockouts when all tracked entries are actively locked", async () => {
     const now = 3_000_000;
     // Saturate the map with entries that are ALL actively locked out
     // Give each distinct failure counts so their nextAllowed values differ
     for (let i = 0; i < MAX_TRACKED + 100; i++) {
       // 5 failures -> exponential backoff
       for (let f = 0; f < 5; f++) {
-        recordFailure(`all-locked-${i}`, now + i);
+        await recordThrottleFailure(`all-locked-${i}`, now + i);
       }
     }
 
     // Size must be bounded to MAX_TRACKED
-    expect(getTrackedCount()).toBeLessThanOrEqual(MAX_TRACKED);
+    expect(getActiveThrottleBackend().getTrackedCount?.()).toBeLessThanOrEqual(MAX_TRACKED);
 
     // The most recently added entry with a longer future lockout must still be tracked and locked
     const recentKey = `all-locked-${MAX_TRACKED + 50}`;
-    expect(delayForNextAttempt(recentKey, now + MAX_TRACKED + 50)).toBeGreaterThan(0);
+    expect(await getThrottleDelay(recentKey, now + MAX_TRACKED + 50)).toBeGreaterThan(0);
   }, 60_000);
 });
 

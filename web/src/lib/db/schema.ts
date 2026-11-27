@@ -194,6 +194,21 @@ export class DeutschFlowDB extends Dexie {
     super(name);
 
     /**
+     * Version 11: Compound index `[vocabularyId+reviewedAtTimestamp]` on reviewEvents
+     * so `recordReview` reads a card's latest review timestamp in O(log n) without
+     * loading its entire review history into memory (PERF-01).
+     */
+    this.version(11).stores({
+      vocabulary: "++id, timestamp, &germanTextKey, nextReview",
+      transcripts: "++id, timestamp",
+      userStats: "id",
+      activityLog: "date",
+      roleplayMessages: "position",
+      settings: "key",
+      reviewEvents: "++id, vocabularyId, reviewedAtTimestamp, [vocabularyId+reviewedAtTimestamp]",
+    });
+
+    /**
      * Version 10: Nullable review event vocabulary references.
      * Migrates legacy orphan review events with vocabularyId 0 to null,
      * ensuring no fake references to non-existent rows exist.

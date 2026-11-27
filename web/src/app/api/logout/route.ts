@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, getActiveSigningSecret, verifySessionToken } from "@/lib/auth/session";
 import { requiresPublicAuthInfrastructure, revokeSession } from "@/lib/auth/revocation";
+import { isAllowedOrigin } from "@/lib/auth/origin";
+
+export { isAllowedOrigin };
 
 /**
  * Logout Route Handler — explicit server-side session termination.
@@ -19,15 +22,19 @@ function isHttpsRequest(request?: Request): boolean {
   return request.url.startsWith("https://");
 }
 
-export function isAllowedOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
+function readSessionCookie(request: NextRequest | Request): string | undefined {
+  if ("cookies" in request && request.cookies && typeof request.cookies.get === "function") {
+    return request.cookies.get(SESSION_COOKIE)?.value;
+  }
+  const cookie = request.headers.get("cookie")?.split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${SESSION_COOKIE}=`));
+  const raw = cookie?.slice(SESSION_COOKIE.length + 1);
+  if (!raw) return undefined;
   try {
-    const originUrl = new URL(origin);
-    const requestUrl = new URL(request.url);
-    return originUrl.origin === requestUrl.origin;
+    return decodeURIComponent(raw);
   } catch {
-    return false;
+    return raw;
   }
 }
 
@@ -45,14 +52,11 @@ function clearSessionCookie(response: NextResponse, request?: Request): NextResp
   return response;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest | Request) {
   if (!isAllowedOrigin(request)) {
     return NextResponse.json({ error: "Forbidden: cross-origin logout request" }, { status: 403 });
   }
-  const cookie = request.headers.get("cookie")?.split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${SESSION_COOKIE}=`));
-  const token = cookie?.slice(SESSION_COOKIE.length + 1);
+  const token = readSessionCookie(request);
   if (token) {
     const signingSecret = await getActiveSigningSecret();
     if (signingSecret && await verifySessionToken(token, signingSecret)) {

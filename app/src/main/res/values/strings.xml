@@ -325,10 +325,17 @@
     <string name="ai_cut_off">The answer was cut off before it finished. Try a shorter sentence.</string>
     <string name="ai_key_rejected">The API key was rejected. Please check it in Settings.</string>
     <string name="ai_rate_limited">Too many requests right now. Try again in a minute.</string>
+    <string name="ai_rate_limited_seconds">Too many requests right now. Try again in %1$ds.</string>
     <string name="ai_status">The service answered with code %1$d.</string>
     <string name="ai_input_blank">Input cannot be blank</string>
-    <string name="ai_input_too_long">Input is too long (maximum %1$d characters)</string>
-    <string name="ai_message_too_long">Message is too long (maximum %1$d characters)</string>
+    <plurals name="ai_input_too_long">
+        <item quantity="one">Input is too long (maximum %1$d character)</item>
+        <item quantity="other">Input is too long (maximum %1$d characters)</item>
+    </plurals>
+    <plurals name="ai_message_too_long">
+        <item quantity="one">Message is too long (maximum %1$d character)</item>
+        <item quantity="other">Message is too long (maximum %1$d characters)</item>
+    </plurals>
     <string name="ai_cancelled">Request cancelled</string>
     <string name="ai_timeout">Groq didn\'t answer in time. Check your connection and try again.</string>
     <string name="settings_cefr_level">CEFR Level</string>

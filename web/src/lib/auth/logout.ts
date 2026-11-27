@@ -38,6 +38,7 @@ export function isProtectedAppRoute(pathname: string): boolean {
     pathname !== "/manifest.json" &&
     pathname !== "/sw.js" &&
     pathname !== "/login" &&
+    pathname !== "/privacy" &&
     !pathname.startsWith("/api/")
   ) {
     return true;

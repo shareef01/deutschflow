@@ -353,6 +353,7 @@ export const STRINGS = {
     "ai.storageFailed": "Your data could not be saved or read. Free up space or try again.",
     "ai.keyRejected": "That API key was rejected. Check it in Settings.",
     "ai.rateLimited": "Too many requests for now. Try again in a minute.",
+    "ai.rateLimitedSeconds": "Too many requests for now. Try again in {0}s.",
     "ai.status": "The service answered with {0}.",
     "ai.inputBlank": "Input cannot be blank",
     "ai.inputTooLong": "Input is too long (maximum {0} characters)",
@@ -368,6 +369,10 @@ export const STRINGS = {
     "settings.languageHeader": "Language",
     "language.english": "English",
     "language.german": "Deutsch",
+
+    // App error boundary (web-only)
+    "error.title": "Something went wrong",
+    "error.body": "This screen encountered an unexpected error. Your local library is safe.",
   },
   de: {
     // Navigation — "du" throughout, like the Android German resources.
@@ -701,6 +706,7 @@ export const STRINGS = {
     "ai.storageFailed": "Deine Daten konnten nicht gespeichert oder gelesen werden. Gib Speicherplatz frei oder versuche es erneut.",
     "ai.keyRejected": "Dieser API-Schlüssel wurde abgelehnt. Prüfe ihn in den Einstellungen.",
     "ai.rateLimited": "Zu viele Anfragen im Moment. Versuche es in einer Minute erneut.",
+    "ai.rateLimitedSeconds": "Zu viele Anfragen im Moment. Versuche es in {0} s erneut.",
     "ai.status": "Der Dienst antwortete mit {0}.",
     "ai.inputBlank": "Eingabe darf nicht leer sein",
     "ai.inputTooLong": "Eingabe ist zu lang (maximal {0} Zeichen)",
@@ -714,6 +720,9 @@ export const STRINGS = {
     "settings.languageHeader": "Sprache",
     "language.english": "English",
     "language.german": "Deutsch",
+
+    "error.title": "Etwas ist schiefgelaufen",
+    "error.body": "Auf diesem Bildschirm ist ein unerwarteter Fehler aufgetreten. Deine lokale Bibliothek ist sicher.",
   },
 } as const;
 

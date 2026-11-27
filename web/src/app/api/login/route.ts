@@ -16,6 +16,9 @@ import {
 
 import { isIP } from "node:net";
 import { authRedisCredentials, requiresPublicAuthInfrastructure } from "@/lib/auth/revocation";
+import { isAllowedOrigin } from "@/lib/auth/origin";
+
+const MAX_LOGIN_BODY_BYTES = 16_384;
 
 /**
  * Standards-compliant IPv4 / IPv6 syntax validator using Node.js libuv parser (node:net.isIP).
@@ -97,6 +100,21 @@ export function extractCallerKey(
 }
 
 export async function POST(request: NextRequest) {
+  if (!isAllowedOrigin(request)) {
+    return NextResponse.json(
+      { error: "Forbidden: cross-origin login request." },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
+  const contentLength = Number.parseInt(request.headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(contentLength) && contentLength > MAX_LOGIN_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "Login request payload is too large." },
+      { status: 413, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   const masterPassword = sitePassword();
   const signingSecret = await getActiveSigningSecret();
   if (!masterPassword || !signingSecret) {

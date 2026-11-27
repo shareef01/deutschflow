@@ -262,6 +262,14 @@ describe("upgrade 9 → 10 — nullable review event vocabulary references", () 
     expect(event3?.vocabularyId).toBeNull();
     expect(event3?.rating).toBe("AGAIN");
 
+    // Version 11 compound index lookup returns the latest review for vocabularyId 42 directly
+    const latest42 = await db.reviewEvents
+      .where("[vocabularyId+reviewedAtTimestamp]")
+      .between([42, 0], [42, Number.MAX_SAFE_INTEGER], true, true)
+      .last();
+    expect(latest42?.id).toBe(2);
+    expect(latest42?.reviewedAtTimestamp).toBe(2000);
+
     db.close();
   });
 });

@@ -545,4 +545,204 @@ class BackupValidationTest {
             hauptbahnhofJson.getLong("lastStudiedAt")
         )
     }
+
+    @Test
+    fun `sanitizes poisoned local lastStudiedAt on export and import merge (AUD-02)`() = runTest {
+        val now = System.currentTimeMillis()
+        val yesterday = now - 86_400_000L
+        val futureDue = now + 6 * 86_400_000L
+        val poisonedTs = Long.MAX_VALUE
+
+        val vocabMap = mutableMapOf(
+            1 to VocabularyEntity(
+                id = 1,
+                germanText = "die Brücke",
+                germanTextKey = "die bruecke",
+                englishTranslation = "the bridge",
+                timestamp = 1000L,
+                nextReview = now + 86_400_000L,
+                interval = 1,
+                easeFactor = 2.5f,
+                reviewCount = 1,
+                lastModifiedAt = 1000L,
+                lastStudiedAt = poisonedTs
+            )
+        )
+        var storedStats: UserStatsEntity? = null
+        val activityMap = mutableMapOf<String, ActivityEntity>()
+
+        val manager = BackupManager(
+            vocabularyDao = object : VocabularyDao {
+                override fun getAllVocabulary(): Flow<List<VocabularyEntity>> = emptyFlow()
+                override suspend fun getAllVocabularyList(): List<VocabularyEntity> = vocabMap.values.toList()
+                override fun countVocabulary(): Flow<Int> = emptyFlow()
+                override fun getDueVocabulary(currentTime: Long): Flow<List<VocabularyEntity>> = emptyFlow()
+                override suspend fun insertVocabulary(vocabulary: VocabularyEntity) { vocabMap[vocabulary.id] = vocabulary }
+                override suspend fun deleteVocabulary(vocabulary: VocabularyEntity) { vocabMap.remove(vocabulary.id) }
+                override suspend fun updateVocabulary(vocabulary: VocabularyEntity) { vocabMap[vocabulary.id] = vocabulary }
+                override suspend fun deleteAll() { vocabMap.clear() }
+                override suspend fun findByKey(key: String): VocabularyEntity? =
+                    vocabMap.values.firstOrNull { it.germanTextKey == key }
+                override suspend fun deleteById(id: Int) { vocabMap.remove(id) }
+                override suspend fun countOnce(): Int = vocabMap.size
+                override suspend fun nthById(offset: Int): VocabularyEntity? = vocabMap.values.elementAtOrNull(offset)
+                override fun masteryCounts(masteredDays: Int): Flow<MasteryCounts> = emptyFlow()
+                override suspend fun findById(id: Int): VocabularyEntity? = vocabMap[id]
+                override suspend fun updateSchedule(
+                    id: Int, nextReview: Long, interval: Int, easeFactor: Float,
+                    reviewCount: Int, lastModifiedAt: Long, lastStudiedAt: Long
+                ): Int = 1
+                override suspend fun reassignReviewEvents(from: Int, to: Int) {}
+                override suspend fun latestStudyTimestampForVocab(vocabularyId: Int, maxTimestamp: Long): Long? = null
+            },
+            transcriptDao = object : TranscriptDao {
+                override fun getAllTranscripts(): Flow<List<TranscriptEntity>> = emptyFlow()
+                override suspend fun getAllTranscriptsList(): List<TranscriptEntity> = emptyList()
+                override suspend fun findByRemoteId(remoteId: String): TranscriptEntity? = null
+                override suspend fun findByContentAndTimestamp(fullText: String, timestamp: Long): TranscriptEntity? = null
+                override fun countTranscripts(): Flow<Int> = emptyFlow()
+                override fun hasAnyTranscript(): Flow<Boolean> = emptyFlow()
+                override suspend fun insertTranscript(transcript: TranscriptEntity): Long = 1L
+                override suspend fun updateAnalysis(id: Int, translation: String, analysisJson: String, modifiedAt: Long) {}
+                override suspend fun deleteTranscript(transcript: TranscriptEntity) {}
+                override suspend fun deleteAll() {}
+            },
+            userStatsDao = object : UserStatsDao {
+                override fun getUserStats(): Flow<UserStatsEntity?> = emptyFlow()
+                override suspend fun getUserStatsOnce(): UserStatsEntity? = storedStats
+                override suspend fun insertOrUpdate(stats: UserStatsEntity) { storedStats = stats }
+                override suspend fun deleteAll() { storedStats = null }
+            },
+            activityDao = object : ActivityDao {
+                override fun getActivitySince(since: String): Flow<List<ActivityEntity>> = emptyFlow()
+                override suspend fun getAllActivity(): List<ActivityEntity> = activityMap.values.toList()
+                override suspend fun getActivityForDate(date: String): ActivityEntity? = activityMap[date]
+                override suspend fun insertOrUpdate(activity: ActivityEntity) { activityMap[activity.date] = activity }
+                override suspend fun deleteAll() { activityMap.clear() }
+            },
+            roleplayDao = object : RoleplayDao {
+                override suspend fun getConversation(): List<RoleplayMessageEntity> = emptyList()
+                override suspend fun insert(message: RoleplayMessageEntity) {}
+                override suspend fun deleteAll() {}
+            },
+            reviewEventDao = object : ReviewEventDao {
+                override suspend fun insert(event: ReviewEventEntity) {}
+                override suspend fun insertAll(events: List<ReviewEventEntity>) {}
+                override fun getAllEvents(): Flow<List<ReviewEventEntity>> = emptyFlow()
+                override suspend fun getAllEventsList(): List<ReviewEventEntity> = emptyList()
+                override suspend fun findByRemoteId(remoteId: String): ReviewEventEntity? = null
+                override fun getEventsForWord(vocabId: Int): Flow<List<ReviewEventEntity>> = emptyFlow()
+                override suspend fun latestReviewTimestamp(vocabId: Int, atOrBefore: Long): Long? = null
+                override suspend fun deleteAll() {}
+            }
+        )
+
+        // 1. Exporting a DB with a poisoned lastStudiedAt must succeed and strip the invalid field
+        val exported = JSONObject(manager.exportBackup())
+        val exportedCard = exported.getJSONArray("vocabulary").getJSONObject(0)
+        assertTrue("Poisoned lastStudiedAt must be stripped on export", !exportedCard.has("lastStudiedAt"))
+
+        // 2. Importing a valid schedule must defeat the poisoned local lastStudiedAt
+        val todayStr = LocalDate.now().toString()
+        val incoming = createValidBackupJson(
+            version = 3,
+            vocabulary = JSONArray().put(
+                JSONObject().apply {
+                    put("id", 1)
+                    put("germanText", "die Brücke")
+                    put("englishTranslation", "the bridge")
+                    put("timestamp", 1000L)
+                    put("nextReview", futureDue)
+                    put("interval", 6)
+                    put("easeFactor", 2.6)
+                    put("reviewCount", 2)
+                    put("lastModifiedAt", yesterday)
+                    put("lastStudiedAt", yesterday)
+                }
+            ),
+            activityLog = JSONArray().put(
+                JSONObject().put("date", todayStr).put("xpGained", 10).put("timestamp", 0L)
+            )
+        )
+        manager.applyImport(incoming)
+
+        val repaired = vocabMap[1]!!
+        assertEquals(6, repaired.interval)
+        assertEquals(2, repaired.reviewCount)
+        assertEquals(yesterday, repaired.lastStudiedAt)
+        assertEquals(1, storedStats?.streak)
+        assertTrue("lastActivityTimestamp anchored when active day has timestamp 0", (storedStats?.lastActivityTimestamp ?: 0L) > 0L)
+    }
+
+    @Test
+    fun `rejects non-integer numbers, duplicate activity dates, and case-colliding remoteIds (AUD-03 & AUD-05)`() {
+        // Stray far-future date must not zero out a valid active streak
+        assertEquals(
+            2,
+            BackupManager.calculateStreakFromDates(
+                listOf("2099-01-01", "2026-10-15", "2026-10-14"),
+                today = LocalDate.parse("2026-10-15")
+            )
+        )
+
+        // Fractional interval rejected
+        val fractionalInterval = createValidBackupJson(
+            vocabulary = JSONArray().put(
+                JSONObject()
+                    .put("germanText", "Haus")
+                    .put("englishTranslation", "house")
+                    .put("interval", 1.5)
+                    .put("reviewCount", 1)
+                    .put("nextReview", 1000L)
+            )
+        )
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupManager.validateBackupJson(fractionalInterval)
+        }
+
+        // String XP rejected
+        val stringXp = createValidBackupJson(
+            userStats = JSONArray().put(JSONObject().put("xp", "100").put("streak", 1))
+        )
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupManager.validateBackupJson(stringXp)
+        }
+
+        // Duplicate activityLog date rejected
+        val duplicateActivityDate = createValidBackupJson(
+            activityLog = JSONArray()
+                .put(JSONObject().put("date", "2026-11-27").put("xpGained", 10).put("timestamp", 1000L))
+                .put(JSONObject().put("date", "2026-11-27").put("xpGained", 20).put("timestamp", 2000L))
+        )
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupManager.validateBackupJson(duplicateActivityDate)
+        }
+
+        // Case-colliding review event remoteIds rejected
+        val caseDuplicateReview = createValidBackupJson().apply {
+            put(
+                "reviewEvents",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("rating", "GOOD")
+                            .put("scheduledDays", 1)
+                            .put("actualDays", 1)
+                            .put("reviewedAtTimestamp", 1000L)
+                            .put("remoteId", "a1111111-2222-4333-8444-444444444444")
+                    )
+                    .put(
+                        JSONObject()
+                            .put("rating", "GOOD")
+                            .put("scheduledDays", 1)
+                            .put("actualDays", 1)
+                            .put("reviewedAtTimestamp", 2000L)
+                            .put("remoteId", "A1111111-2222-4333-8444-444444444444")
+                    )
+            )
+        }
+        assertThrows(BackupException.InvalidFormat::class.java) {
+            BackupManager.validateBackupJson(caseDuplicateReview)
+        }
+    }
 }

@@ -201,11 +201,36 @@ export const AI_MESSAGES: Record<
 
 export class GroqHttpError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly retryAfterSeconds?: number;
+  constructor(status: number, message: string, retryAfterSeconds?: number) {
     super(message);
     this.name = "GroqHttpError";
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/**
+ * Parses an HTTP `Retry-After` header (either integer delta-seconds or an HTTP-date)
+ * into a bounded positive number of seconds (1..3600), or null if absent/invalid.
+ */
+export function parseRetryAfterSeconds(
+  header: string | null | undefined,
+  now: number = Date.now()
+): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+  if (/^\d+$/.test(trimmed)) {
+    const secs = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(secs) || secs <= 0) return null;
+    return Math.min(3_600, secs);
+  }
+  const targetMs = Date.parse(trimmed);
+  if (!Number.isFinite(targetMs)) return null;
+  const deltaSecs = Math.ceil((targetMs - now) / 1_000);
+  if (deltaSecs <= 0) return null;
+  return Math.min(3_600, deltaSecs);
 }
 
 /** post() gave up after TIMEOUT_MS with no answer. Distinct from the caller cancelling. */
@@ -315,6 +340,7 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
 
       // Check if safely retryable server errors (500, 502, 503, 504)
       if (attempt < MAX_POST_RETRIES && isRetryableStatus(response.status) && !externalSignal?.aborted) {
+        await response.body?.cancel().catch(() => {});
         attempt++;
         await sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 500, externalSignal);
         continue;
@@ -322,14 +348,19 @@ async function post(body: string, apiKey: string, externalSignal?: AbortSignal):
 
       const errorText = await readBoundedText(response, MAX_ERROR_RESPONSE_CHARS).catch(() => "");
       const detail = detailFrom(errorText);
+      const retryAfterSeconds = response.status === 429
+        ? parseRetryAfterSeconds(response.headers?.get("retry-after")) ?? undefined
+        : undefined;
       const rawMsg = detail ??
         (response.status === 401
           ? t(AI_MESSAGES.keyRejected)
           : response.status === 429
-            ? t(AI_MESSAGES.rateLimited)
+            ? retryAfterSeconds !== undefined
+              ? t("ai.rateLimitedSeconds", [retryAfterSeconds])
+              : t(AI_MESSAGES.rateLimited)
             : t("ai.status", [response.status]));
       // Provider rejections (400, 401, 403, 404, unqualified 429, etc.) must fail fast without retrying
-      throw new GroqHttpError(response.status, redactSensitiveKey(rawMsg));
+      throw new GroqHttpError(response.status, redactSensitiveKey(rawMsg), retryAfterSeconds);
     } catch (err) {
       // The caller's cancel wins: if both fired, the user no longer wants an answer.
       if (externalSignal?.aborted) throw err;

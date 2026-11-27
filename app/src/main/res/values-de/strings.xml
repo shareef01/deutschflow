@@ -320,10 +320,17 @@
     <string name="ai_cut_off">Die Antwort wurde abgeschnitten, bevor sie fertig war. Versuche einen kürzeren Satz.</string>
     <string name="ai_key_rejected">Dieser API-Schlüssel wurde abgelehnt. Prüfe ihn in den Einstellungen.</string>
     <string name="ai_rate_limited">Zu viele Anfragen im Moment. Versuche es in einer Minute erneut.</string>
+    <string name="ai_rate_limited_seconds">Zu viele Anfragen im Moment. Versuche es in %1$d s erneut.</string>
     <string name="ai_status">Der Dienst antwortete mit %1$d.</string>
     <string name="ai_input_blank">Eingabe darf nicht leer sein</string>
-    <string name="ai_input_too_long">Eingabe ist zu lang (maximal %1$d Zeichen)</string>
-    <string name="ai_message_too_long">Nachricht ist zu lang (maximal %1$d Zeichen)</string>
+    <plurals name="ai_input_too_long">
+        <item quantity="one">Eingabe ist zu lang (maximal %1$d Zeichen)</item>
+        <item quantity="other">Eingabe ist zu lang (maximal %1$d Zeichen)</item>
+    </plurals>
+    <plurals name="ai_message_too_long">
+        <item quantity="one">Nachricht ist zu lang (maximal %1$d Zeichen)</item>
+        <item quantity="other">Nachricht ist zu lang (maximal %1$d Zeichen)</item>
+    </plurals>
     <string name="ai_cancelled">Anfrage abgebrochen</string>
     <string name="ai_timeout">Groq hat nicht rechtzeitig geantwortet. Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="settings_cefr_level">GER-Niveau</string>
