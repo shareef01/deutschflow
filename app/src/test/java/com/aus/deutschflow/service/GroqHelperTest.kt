@@ -286,4 +286,21 @@ class GroqHelperTest {
         assertEquals(1024, body.getInt("max_completion_tokens"))
         assertEquals(0.2, body.getDouble("temperature"), 0.0)
     }
+
+    @Test
+    fun `parseRetryAfterSeconds handles delta-seconds, RFC 1123 dates, caps, and invalid headers`() {
+        assertEquals(42L, GroqHelper.parseRetryAfterSeconds("42"))
+        assertEquals(3_600L, GroqHelper.parseRetryAfterSeconds("99999"))
+        assertEquals(null, GroqHelper.parseRetryAfterSeconds("0"))
+        assertEquals(null, GroqHelper.parseRetryAfterSeconds("-5"))
+        assertEquals(null, GroqHelper.parseRetryAfterSeconds("not-a-date"))
+        assertEquals(null, GroqHelper.parseRetryAfterSeconds(null))
+
+        val nowMs = java.time.ZonedDateTime
+            .parse("Fri, 27 Nov 2026 05:00:00 GMT", java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+            .toInstant()
+            .toEpochMilli()
+        assertEquals(30L, GroqHelper.parseRetryAfterSeconds("Fri, 27 Nov 2026 05:00:30 GMT", nowMs))
+        assertEquals(null, GroqHelper.parseRetryAfterSeconds("Fri, 27 Nov 2026 04:59:59 GMT", nowMs))
+    }
 }

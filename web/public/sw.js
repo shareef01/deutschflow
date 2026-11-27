@@ -165,6 +165,7 @@ function isProtectedAppRoute(pathname) {
     pathname !== "/manifest.json" &&
     pathname !== "/sw.js" &&
     pathname !== "/login" &&
+    pathname !== "/privacy" &&
     !pathname.startsWith("/api/")
   ) {
     return true;
@@ -285,6 +286,21 @@ self.addEventListener("fetch", (event) => {
       event.respondWith(
         fetch(request).catch(() => {
           return new Response("Offline - Login unavailable", {
+            status: 503,
+            headers: { "Content-Type": "text/plain" },
+          });
+        })
+      );
+      return;
+    }
+
+    // /privacy is served publicly without authentication (see proxy.ts PUBLIC_PATHS).
+    // Its 200 OK response does not prove an active session, so it must NEVER clear
+    // the logged-out fail-safe state or be cached as a protected app-shell route.
+    if (url.pathname === "/privacy") {
+      event.respondWith(
+        fetch(request).catch(() => {
+          return new Response("Offline - Content unavailable", {
             status: 503,
             headers: { "Content-Type": "text/plain" },
           });

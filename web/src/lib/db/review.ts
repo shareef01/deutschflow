@@ -21,20 +21,22 @@ export async function recordReview(
     }
     const now = Date.now();
     const scheduleChanged = !isExtraPractice || quality === ReviewQuality.AGAIN;
-    const scheduled = scheduleChanged ? calculateNextReview(current, quality) : current;
+    const scheduled = scheduleChanged ? calculateNextReview(current, quality, now) : current;
     const nextLastStudiedAt = scheduleChanged ? now : current.lastStudiedAt;
     const persisted = {
       ...scheduled,
       lastModifiedAt: Math.max(now, current.lastModifiedAt + 1),
       lastStudiedAt: nextLastStudiedAt,
     };
-    const previous = await db.reviewEvents.where("vocabularyId").equals(current.id!).toArray();
-    let lastReview = current.lastStudiedAt;
-    for (const ev of previous) {
-      if (lastReview === undefined || ev.reviewedAtTimestamp > lastReview) {
-        lastReview = ev.reviewedAtTimestamp;
-      }
-    }
+    const latestEvent = await db.reviewEvents
+      .where("[vocabularyId+reviewedAtTimestamp]")
+      .between([current.id!, 0], [current.id!, Number.MAX_SAFE_INTEGER], true, true)
+      .last();
+    const lastReview =
+      latestEvent !== undefined &&
+      (current.lastStudiedAt === undefined || latestEvent.reviewedAtTimestamp > current.lastStudiedAt)
+        ? latestEvent.reviewedAtTimestamp
+        : current.lastStudiedAt;
     // A first review has no preceding review interval.
     const actualDays = lastReview === undefined ? 0 : Math.max(0, Math.floor((now - lastReview) / 86_400_000));
     await db.vocabulary.update(current.id!, {

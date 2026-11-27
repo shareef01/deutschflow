@@ -121,7 +121,7 @@ export interface ImportResult {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function str(value: unknown, fallback = ""): string {
@@ -289,19 +289,27 @@ export function parseDateToOrdinal(dateStr: string): number {
 }
 
 export function calculateStreakFromDates(dates: string[], today = new Date()): number {
-  const ordinals = Array.from(
-    new Set(dates.filter(isValidCalendarDate).map(parseDateToOrdinal))
-  ).sort((a, b) => b - a);
-
-  if (ordinals.length === 0) return 0;
-
   const todayOrdinal = Math.floor(
     Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86_400_000
   );
   const yesterdayOrdinal = todayOrdinal - 1;
+  // Tolerate +1 day timezone shift (e.g., backup exported east of UTC), matching Android.
+  // Ignore dates strictly beyond tomorrow so stray future entries cannot break a live streak.
+  const tomorrowOrdinal = todayOrdinal + 1;
+
+  const ordinals = Array.from(
+    new Set(
+      dates
+        .filter(isValidCalendarDate)
+        .map(parseDateToOrdinal)
+        .filter((ord) => ord <= tomorrowOrdinal)
+    )
+  ).sort((a, b) => b - a);
+
+  if (ordinals.length === 0) return 0;
 
   const latest = ordinals[0];
-  if (latest !== todayOrdinal && latest !== yesterdayOrdinal) {
+  if (latest !== todayOrdinal && latest !== yesterdayOrdinal && latest !== tomorrowOrdinal) {
     return 0;
   }
 
@@ -488,6 +496,7 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     }
   }
 
+  const activityDates = new Set<string>();
   for (const row of backup.activityLog) {
     if (!isRecord(row)) {
       throw new ImportError("invalid", "Activity log entry must be an object.");
@@ -496,6 +505,10 @@ export function validateBackup(backup: unknown): asserts backup is LibraryBackup
     if (!isValidCalendarDate(date)) {
       throw new ImportError("invalid", `Invalid calendar date in activity log: "${date}".`);
     }
+    if (activityDates.has(date)) {
+      throw new ImportError("invalid", `Duplicate activity log date in backup: "${date}".`);
+    }
+    activityDates.add(date);
     if (row.xpGained !== undefined && (!Number.isSafeInteger(row.xpGained) || (row.xpGained as number) < 0 || (row.xpGained as number) > MAX_DAILY_XP)) {
       throw new ImportError("invalid", "Invalid activity log xpGained.");
     }
@@ -809,14 +822,14 @@ async function applyImport(
   if (transcripts.length > 0) {
     const existing = await db.transcripts.toArray();
     const knownRemoteIds = new Map(existing.map((t) => [t.remoteId, t]));
-    const knownContent = new Map(existing.map((t) => [`${t.fullText}:${t.timestamp}`, t]));
+    const knownContent = new Map(existing.map((t) => [`${t.fullText.trim()}:${t.timestamp}`, t]));
 
     const transcriptsToPut: TranscriptEntry[] = [];
     const transcriptsToAdd: Omit<TranscriptEntry, "id">[] = [];
 
     for (const row of transcripts) {
       if (!isRecord(row)) continue;
-      const fullText = str(row.fullText);
+      const fullText = str(row.fullText).trim();
       if (!fullText) continue;
       const ts = num(row.timestamp, 0);
       const remoteId = sanitizeRemoteId(row.remoteId, fullText, ts);
@@ -962,12 +975,36 @@ async function applyImport(
 
   if (activeDates.length > 0) {
     mergedStreak = calculateStreakFromDates(activeDates);
-    const latestOrdinal = Math.max(...activeDates.map(parseDateToOrdinal));
-    mergedLastActivity = Math.max(
+    const today = new Date();
+    const maxStreakOrdinal = Math.floor(
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86_400_000
+    ) + 1;
+    const eligibleOrdinals = activeDates
+      .map(parseDateToOrdinal)
+      .filter((ord) => ord <= maxStreakOrdinal);
+    const latestOrdinal = eligibleOrdinals.length > 0
+      ? Math.max(...eligibleOrdinals)
+      : Math.max(...activeDates.map(parseDateToOrdinal));
+    const latestActivityTs = Math.max(
+      0,
       ...allActivities
         .filter((a) => a.xpGained > 0 && parseDateToOrdinal(a.date) === latestOrdinal)
         .map((a) => a.timestamp)
     );
+    mergedLastActivity = Math.max(
+      current?.lastActivityTimestamp ?? 0,
+      num(incoming?.lastActivityTimestamp, 0),
+      latestActivityTs,
+    );
+    if (mergedLastActivity === 0 && mergedStreak > 0) {
+      const latestDateStr = allActivities.find(
+        (a) => a.xpGained > 0 && parseDateToOrdinal(a.date) === latestOrdinal
+      )?.date;
+      if (latestDateStr) {
+        const [y, m, d] = latestDateStr.split("-").map((n) => Number.parseInt(n, 10));
+        mergedLastActivity = new Date(y, m - 1, d).getTime();
+      }
+    }
   } else {
     const currentTs = current?.lastActivityTimestamp ?? 0;
     const incomingTs = num(incoming?.lastActivityTimestamp, 0);

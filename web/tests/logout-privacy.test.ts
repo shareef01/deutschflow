@@ -108,6 +108,7 @@ describe("Logout Correctness, Service Worker Privacy & Session Boundaries", () =
 
       // Public / static / API routes that must NEVER be purged as protected app shell
       expect(isProtectedAppRoute("/login")).toBe(false);
+      expect(isProtectedAppRoute("/privacy")).toBe(false);
       expect(isProtectedAppRoute("/api/logout")).toBe(false);
       expect(isProtectedAppRoute("/api/groq")).toBe(false);
       expect(isProtectedAppRoute("/manifest.json")).toBe(false);

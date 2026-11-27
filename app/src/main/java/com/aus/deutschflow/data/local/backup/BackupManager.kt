@@ -17,7 +17,7 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.text.SimpleDateFormat
 import java.time.LocalDate
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.format.DateTimeParseException
 import java.util.*
 import javax.inject.Inject
@@ -173,8 +173,9 @@ class BackupManager private constructor(
                         put("reviewCount", item.reviewCount)
                         put("remoteId", item.remoteId)
                         put("lastModifiedAt", item.lastModifiedAt)
+                        val storedLastStudied = item.lastStudiedAt.takeIf { it in 1L..latestStudyTime } ?: 0L
                         val exportedLastStudied = maxOf(
-                            item.lastStudiedAt,
+                            storedLastStudied,
                             lastStudiedByVocabId[item.id] ?: 0L
                         )
                         if (exportedLastStudied > 0L) {
@@ -374,7 +375,7 @@ class BackupManager private constructor(
             if (germanText.isBlank() || englishTranslation.isBlank()) continue
 
             val oldBackupId = row.optInt("id", 0)
-            val remoteId = row.optString("remoteId").ifBlank { UUID.randomUUID().toString() }
+            val remoteId = row.optString("remoteId").trim().lowercase(Locale.ROOT).ifBlank { UUID.randomUUID().toString() }
             val lastModifiedAt = row.optLong("lastModifiedAt", row.optLong("timestamp", now))
 
             val incomingReviewTimestamp = if (oldBackupId > 0) incomingLatestReviewByVocabId[oldBackupId] ?: 0L else 0L
@@ -396,7 +397,7 @@ class BackupManager private constructor(
                 antonyms = row.optString("antonyms", ""),
                 nextReview = row.optLong("nextReview", 0L),
                 interval = row.optInt("interval", 0),
-                easeFactor = row.optDouble("easeFactor", 2.5).toFloat(),
+                easeFactor = normalizeBackupEase(row.optDouble("easeFactor", 2.5)).toFloat(),
                 reviewCount = row.optInt("reviewCount", 0),
                 remoteId = remoteId,
                 lastModifiedAt = lastModifiedAt,
@@ -406,13 +407,16 @@ class BackupManager private constructor(
             val existing = vocabularyDao.findByKey(incoming.germanTextKey)
             if (existing != null) {
                 val existingEventTimestamp = reviewEventDao.latestReviewTimestamp(existing.id, latestStudyTime) ?: 0L
-                val thisLastStudied = maxOf(existing.lastStudiedAt, existingEventTimestamp)
-                val merged = existing.mergedWith(incoming, now).withFurthestScheduleOf(
-                    other = incoming,
-                    now = now,
-                    thisLastStudiedAt = thisLastStudied,
-                    otherLastStudiedAt = otherLastStudied
-                )
+                val sanitizedExistingLastStudied = existing.lastStudiedAt.takeIf { it in 1L..latestStudyTime } ?: 0L
+                val thisLastStudied = maxOf(sanitizedExistingLastStudied, existingEventTimestamp)
+                val merged = existing.copy(lastStudiedAt = sanitizedExistingLastStudied)
+                    .mergedWith(incoming, now)
+                    .withFurthestScheduleOf(
+                        other = incoming,
+                        now = now,
+                        thisLastStudiedAt = thisLastStudied,
+                        otherLastStudiedAt = otherLastStudied
+                    )
                 vocabularyDao.updateVocabulary(merged)
                 if (oldBackupId > 0) backupIdToPersistedId[oldBackupId] = existing.id
                 vocabularyMerged++
@@ -434,7 +438,7 @@ class BackupManager private constructor(
             if (fullText.isBlank()) continue
 
             val timestamp = row.optLong("timestamp", now)
-            val remoteId = row.optString("remoteId").trim().ifBlank {
+            val remoteId = row.optString("remoteId").trim().lowercase(Locale.ROOT).ifBlank {
                 deterministicTranscriptId(fullText, timestamp)
             }
             val lastModifiedAt = row.optLong("lastModifiedAt", timestamp)
@@ -516,6 +520,17 @@ class BackupManager private constructor(
         } else {
             maxOf(currentStats.streak, incomingStreak)
         }
+        if (mergedLastActivity == 0L && finalStreak > 0 && allDates.isNotEmpty()) {
+            val tomorrowEpoch = LocalDate.now().toEpochDay() + 1
+            val latestDate = allDates
+                .filter { isValidCalendarDate(it) }
+                .map { LocalDate.parse(it) }
+                .filter { it.toEpochDay() <= tomorrowEpoch }
+                .maxOrNull()
+            if (latestDate != null) {
+                mergedLastActivity = latestDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }
+        }
 
         userStatsDao.insertOrUpdate(
             currentStats.copy(
@@ -582,7 +597,7 @@ class BackupManager private constructor(
                     targetVocabId = getOrCreateArchivedVocabularyId()
                 }
 
-                val remoteId = row.optString("remoteId").ifBlank { UUID.randomUUID().toString() }
+                val remoteId = row.optString("remoteId").trim().lowercase(Locale.ROOT).ifBlank { UUID.randomUUID().toString() }
                 val existing = reviewEventDao.findByRemoteId(remoteId)
                 if (existing == null) {
                     reviewEventDao.insert(
@@ -760,16 +775,18 @@ class BackupManager private constructor(
             UUID.nameUUIDFromBytes("transcript:$fullText:$timestamp".toByteArray(Charsets.UTF_8)).toString()
 
         fun calculateStreakFromDates(dates: List<String>, today: LocalDate = LocalDate.now()): Int {
+            val todayEpoch = today.toEpochDay()
+            val yesterdayEpoch = todayEpoch - 1
+            val tomorrowEpoch = todayEpoch + 1
+
             val validDates = dates.filter { isValidCalendarDate(it) }
                 .map { LocalDate.parse(it) }
+                .filter { it.toEpochDay() <= tomorrowEpoch }
                 .distinct()
                 .sortedDescending()
 
             if (validDates.isEmpty()) return 0
 
-            val todayEpoch = today.toEpochDay()
-            val yesterdayEpoch = todayEpoch - 1
-            val tomorrowEpoch = todayEpoch + 1
             val latestEpoch = validDates.first().toEpochDay()
 
             if (latestEpoch != todayEpoch && latestEpoch != yesterdayEpoch && latestEpoch != tomorrowEpoch) {
@@ -790,11 +807,61 @@ class BackupManager private constructor(
             return streak
         }
 
+        private fun requireOptionalInt(
+            row: JSONObject,
+            key: String,
+            default: Int,
+            min: Int,
+            max: Int,
+            errorMessage: String
+        ): Int {
+            if (!row.has(key)) return default
+            val raw = row.opt(key)
+            if (raw !is Number) throw BackupException.InvalidFormat(errorMessage)
+            val d = raw.toDouble()
+            if (!d.isFinite() || d % 1.0 != 0.0 || d < min.toDouble() || d > max.toDouble()) {
+                throw BackupException.InvalidFormat(errorMessage)
+            }
+            return d.toInt()
+        }
+
+        private fun requireOptionalLong(
+            row: JSONObject,
+            key: String,
+            default: Long,
+            min: Long,
+            max: Long,
+            errorMessage: String
+        ): Long {
+            if (!row.has(key)) return default
+            val num = row.opt(key) as? Number ?: throw BackupException.InvalidFormat(errorMessage)
+            val value = when (num) {
+                is Int -> num.toLong()
+                is Long -> num
+                else -> {
+                    val d = num.toDouble()
+                    if (!d.isFinite() || d % 1.0 != 0.0 || d < min.toDouble() || d > max.toDouble()) {
+                        throw BackupException.InvalidFormat(errorMessage)
+                    }
+                    d.toLong()
+                }
+            }
+            if (value !in min..max) throw BackupException.InvalidFormat(errorMessage)
+            return value
+        }
+
         fun validateBackupJson(backup: JSONObject) {
             if (backup.optString("format") != BACKUP_FORMAT) {
                 throw BackupException.InvalidFormat("Not a DeutschFlow library export.")
             }
-            val version = backup.optInt("version", -1)
+            val version = requireOptionalInt(
+                backup,
+                "version",
+                -1,
+                1,
+                Int.MAX_VALUE,
+                "Invalid backup version."
+            )
             if (version <= 0) {
                 throw BackupException.InvalidFormat("Invalid backup version.")
             }
@@ -830,21 +897,23 @@ class BackupManager private constructor(
                     throw BackupException.InvalidFormat("Duplicate vocabulary canonical key in backup.")
                 }
                 vocabKeys.add(key)
-                val remoteId = row.optString("remoteId", "").trim()
+                val remoteId = row.optString("remoteId", "").trim().lowercase(Locale.ROOT)
                 if (remoteId.isNotEmpty()) {
                     if (vocabRemoteIds.contains(remoteId)) {
                         throw BackupException.InvalidFormat("Duplicate vocabulary remoteId in backup.")
                     }
                     vocabRemoteIds.add(remoteId)
                 }
-                val id = row.optInt("id", 0)
-                if (id > 0) {
+                if (row.has("id")) {
+                    val id = requireOptionalInt(row, "id", 0, 1, Int.MAX_VALUE, "Invalid vocabulary id.")
                     if (vocabIds.contains(id)) throw BackupException.InvalidFormat("Duplicate vocabulary id.")
                     vocabIds.add(id)
                 }
-                val interval = row.optInt("interval", 0)
-                val reviewCount = row.optInt("reviewCount", 0)
-                val nextReview = row.optLong("nextReview", 0L)
+                requireOptionalLong(row, "timestamp", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid vocabulary timestamp.")
+                requireOptionalLong(row, "lastModifiedAt", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid vocabulary lastModifiedAt.")
+                val interval = requireOptionalInt(row, "interval", 0, 0, 365, "Invalid SRS interval.")
+                val reviewCount = requireOptionalInt(row, "reviewCount", 0, 0, 100_000, "Invalid review count.")
+                val nextReview = requireOptionalLong(row, "nextReview", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid nextReview timestamp.")
                 val easeFactor = if (row.has("easeFactor")) {
                     (row.opt("easeFactor") as? Number)?.toDouble()?.let(::normalizeBackupEase)
                         ?: throw BackupException.InvalidFormat("Invalid ease factor.")
@@ -857,10 +926,7 @@ class BackupManager private constructor(
                     }
                 }
 
-                if (interval < 0 || interval > 365) throw BackupException.InvalidFormat("Invalid SRS interval.")
                 if (easeFactor !in 1.3..3.0) throw BackupException.InvalidFormat("Invalid ease factor.")
-                if (reviewCount < 0 || reviewCount > 100_000) throw BackupException.InvalidFormat("Invalid review count.")
-                if (nextReview < 0 || nextReview > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid nextReview timestamp.")
 
                 val isNew = interval == 0 && reviewCount == 0 && nextReview == 0L
                 val isLearned = interval > 0 && reviewCount > 0 && nextReview > 0L
@@ -877,9 +943,9 @@ class BackupManager private constructor(
                 val row = transcriptsArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Transcript item must be an object.")
                 val fullText = row.optString("fullText", "").trim()
                 if (fullText.isEmpty()) throw BackupException.InvalidFormat("Transcript text is required.")
-                val ts = row.optLong("timestamp", 0L)
-                if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid transcript timestamp.")
-                val remoteId = row.optString("remoteId", "").trim()
+                val ts = requireOptionalLong(row, "timestamp", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid transcript timestamp.")
+                requireOptionalLong(row, "lastModifiedAt", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid transcript lastModifiedAt.")
+                val remoteId = row.optString("remoteId", "").trim().lowercase(Locale.ROOT)
                 if (remoteId.isNotEmpty()) {
                     if (transcriptRemoteIds.contains(remoteId)) {
                         throw BackupException.InvalidFormat("Duplicate transcript remoteId in backup.")
@@ -896,25 +962,26 @@ class BackupManager private constructor(
             // Validate userStats
             for (i in 0 until statsArray.length()) {
                 val row = statsArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("User stats item must be an object.")
-                val xp = row.optInt("xp", 0)
-                val streak = row.optInt("streak", 0)
-                val ts = row.optLong("lastActivityTimestamp", 0L)
-                if (xp < 0 || xp > MAX_LIFETIME_XP) throw BackupException.InvalidFormat("Invalid XP in stats.")
-                if (streak < 0 || streak > 10_000) throw BackupException.InvalidFormat("Invalid streak in stats.")
-                if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid timestamp in stats.")
+                requireOptionalInt(row, "xp", 0, 0, MAX_LIFETIME_XP, "Invalid XP in stats.")
+                requireOptionalInt(row, "streak", 0, 0, 10_000, "Invalid streak in stats.")
+                requireOptionalLong(row, "lastActivityTimestamp", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid timestamp in stats.")
             }
 
             // Validate activityLog
             val activityArray = backup.getJSONArray("activityLog")
+            val activityDates = mutableSetOf<String>()
             for (i in 0 until activityArray.length()) {
                 val row = activityArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Activity log item must be an object.")
                 val date = row.optString("date", "")
                 if (!isValidCalendarDate(date)) {
                     throw BackupException.InvalidFormat("Invalid calendar date in activity log: \"$date\".")
                 }
-                val xpGained = row.optInt("xpGained", 0)
-                val ts = row.optLong("timestamp", 0L)
-                if (xpGained < 0 || xpGained > MAX_DAILY_XP) throw BackupException.InvalidFormat("Invalid xpGained in activity log.")
+                if (activityDates.contains(date)) {
+                    throw BackupException.InvalidFormat("Duplicate calendar date in activity log: \"$date\".")
+                }
+                activityDates.add(date)
+                val xpGained = requireOptionalInt(row, "xpGained", 0, 0, MAX_DAILY_XP, "Invalid xpGained in activity log.")
+                requireOptionalLong(row, "timestamp", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid timestamp in activity log.")
                 if (row.has("xpAwards")) {
                     val awards = row.optJSONObject("xpAwards")?.takeIf { version >= 3 }
                         ?: throw BackupException.InvalidFormat("Invalid XP awards.")
@@ -930,7 +997,6 @@ class BackupManager private constructor(
                         if (awardXp > xpGained) throw BackupException.InvalidFormat("XP awards exceed daily XP.")
                     }
                 }
-                if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid timestamp in activity log.")
             }
 
             // Validate reviewEvents
@@ -941,26 +1007,22 @@ class BackupManager private constructor(
                     val row = reviewArray.optJSONObject(i) ?: throw BackupException.InvalidFormat("Review event must be an object.")
                     val hasVocab = row.has("vocabularyId") && !row.isNull("vocabularyId")
                     if (hasVocab) {
-                        val vocabId = row.optInt("vocabularyId", -1)
-                        if (vocabId < 0) {
-                            throw BackupException.InvalidFormat("Invalid review event vocabulary ID: $vocabId.")
-                        }
+                        requireOptionalInt(row, "vocabularyId", -1, 0, Int.MAX_VALUE, "Invalid review event vocabulary ID.")
                     }
                     val rating = row.optString("rating", "")
                     if (rating !in listOf("AGAIN", "HARD", "GOOD", "EASY")) {
                         throw BackupException.InvalidFormat("Invalid review event rating.")
                     }
-                    val sched = row.optInt("scheduledDays", 0)
-                    val actual = row.optInt("actualDays", 0)
-                    val reviewedAt = row.optLong("reviewedAtTimestamp", 0L)
-                    val remoteId = row.optString("remoteId", "")
-                    if (sched < 0 || sched > 365) throw BackupException.InvalidFormat("Invalid review scheduled days.")
-                    if (actual < 0 || reviewedAt < 0 || reviewedAt > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid review timestamp.")
+                    requireOptionalInt(row, "scheduledDays", 0, 0, 365, "Invalid review scheduled days.")
+                    requireOptionalInt(row, "actualDays", 0, 0, Int.MAX_VALUE, "Invalid review actual days.")
+                    requireOptionalLong(row, "reviewedAtTimestamp", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid review timestamp.")
+                    val remoteId = row.optString("remoteId", "").trim()
                     if (!UUID_REGEX.matches(remoteId)) throw BackupException.InvalidFormat("Invalid review event remoteId UUID.")
-                    if (reviewRemoteIds.contains(remoteId)) {
+                    val canonicalRemoteId = remoteId.lowercase(Locale.ROOT)
+                    if (reviewRemoteIds.contains(canonicalRemoteId)) {
                         throw BackupException.InvalidFormat("Duplicate review event remoteId in backup.")
                     }
-                    reviewRemoteIds.add(remoteId)
+                    reviewRemoteIds.add(canonicalRemoteId)
                 }
             }
 
@@ -976,13 +1038,12 @@ class BackupManager private constructor(
                     val content = row.optString("content", "").trim()
                     val scn = row.optString("scenario", "").trim()
                     if (content.isEmpty() || scn.isEmpty()) throw BackupException.InvalidFormat("Roleplay content and scenario are required.")
-                    val pos = row.optInt("position", -1)
-                    if (pos < 0 || positions.contains(pos)) throw BackupException.InvalidFormat("Invalid or duplicate roleplay message position.")
+                    val pos = requireOptionalInt(row, "position", -1, 0, Int.MAX_VALUE, "Invalid or duplicate roleplay message position.")
+                    if (positions.contains(pos)) throw BackupException.InvalidFormat("Invalid or duplicate roleplay message position.")
                     positions.add(pos)
                     if (scenario != null && scenario != scn) throw BackupException.InvalidFormat("Roleplay session contains mismatched scenarios.")
                     scenario = scn
-                    val ts = row.optLong("timestamp", 0L)
-                    if (ts < 0 || ts > MAX_FUTURE_TIMESTAMP) throw BackupException.InvalidFormat("Invalid roleplay timestamp.")
+                    requireOptionalLong(row, "timestamp", 0L, 0L, MAX_FUTURE_TIMESTAMP, "Invalid roleplay timestamp.")
                 }
             }
         }

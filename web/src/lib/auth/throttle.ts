@@ -190,25 +190,6 @@ export class InMemoryThrottleBackend implements ThrottleBackend {
   getTrackedCount(): number {
     return this.attempts.size;
   }
-
-  // Synchronous helpers for backwards compatibility
-  syncGet(rawKey: string, now: number): Attempts | null {
-    const key = normalizeKey(rawKey);
-    this.prune(now);
-    const entry = this.attempts.get(key);
-    if (!entry || now - entry.last > WINDOW_MS) return null;
-    return entry;
-  }
-
-  syncSet(rawKey: string, entry: Attempts): void {
-    const key = normalizeKey(rawKey);
-    this.attempts.set(key, entry);
-  }
-
-  syncDelete(rawKey: string): void {
-    const key = normalizeKey(rawKey);
-    this.attempts.delete(key);
-  }
 }
 
 /**
@@ -236,6 +217,8 @@ export class UpstashRedisThrottleBackend implements ThrottleBackend {
     try {
       return await fetch(`${this.url.replace(/\/+$/, "")}${path}`, {
         ...options,
+        cache: "no-store",
+        redirect: "error",
         signal: controller.signal,
         headers: {
           Authorization: `Bearer ${this.token}`,
@@ -726,31 +709,6 @@ export async function recordThrottleFailure(rawKey: string, now: number = Date.n
 export async function recordThrottleSuccess(rawKey: string): Promise<void> {
   const backend = getActiveThrottleBackend();
   await backend.delete(rawKey);
-}
-
-// ============================================================================
-// Synchronous API (Backwards compatibility with existing tests & code)
-// ============================================================================
-
-export function delayForNextAttempt(rawKey: string, now: number = Date.now()): number {
-  const entry = defaultMemoryBackend.syncGet(rawKey, now);
-  if (!entry || now - entry.last > WINDOW_MS) return 0;
-  return Math.max(0, entry.nextAllowed - now);
-}
-
-export function recordFailure(rawKey: string, now: number = Date.now()): void {
-  const entry = defaultMemoryBackend.syncGet(rawKey, now);
-  const count = entry && now - entry.last <= WINDOW_MS ? entry.count + 1 : 1;
-  const cooldown = calculateCooldown(count);
-  defaultMemoryBackend.syncSet(rawKey, { count, last: now, nextAllowed: now + cooldown });
-}
-
-export function recordSuccess(rawKey: string): void {
-  defaultMemoryBackend.syncDelete(rawKey);
-}
-
-export function getTrackedCount(): number {
-  return defaultMemoryBackend.getTrackedCount();
 }
 
 export function resetThrottle(): void {

@@ -327,6 +327,65 @@ describe("Logout Route Handler — explicit cookie clearance", () => {
     const response = await logoutPost(request);
     expect(response.status).toBe(200);
   });
+
+  it("POST /api/logout accepts forwarded public origin behind configured trusted proxy (AUD-04)", async () => {
+    vi.stubEnv("TRUSTED_PROXY_HEADER", "X-Real-IP");
+    const request = new NextRequest("http://127.0.0.1:3000/api/logout", {
+      method: "POST",
+      headers: {
+        origin: "https://deutschflow.example",
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "deutschflow.example",
+      },
+    });
+    expect((await logoutPost(request)).status).toBe(200);
+
+    // Mismatched origin is still rejected even behind a trusted proxy
+    const evil = new NextRequest("http://127.0.0.1:3000/api/logout", {
+      method: "POST",
+      headers: {
+        origin: "https://evil.example",
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "deutschflow.example",
+      },
+    });
+    expect((await logoutPost(evil)).status).toBe(403);
+  });
+
+  it("POST /api/logout rejects spoofed x-forwarded-host when no trusted proxy is configured (AUD-04)", async () => {
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUSTED_PROXY_HEADER", "");
+    const request = new Request("http://127.0.0.1:3000/api/logout", {
+      method: "POST",
+      headers: {
+        origin: "https://evil.example",
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "evil.example",
+      },
+    });
+    expect((await logoutPost(request)).status).toBe(403);
+  });
+
+  it("POST /api/login rejects cross-origin requests and oversized payloads (AUD-06)", async () => {
+    vi.stubEnv("SITE_PASSWORD", PASSWORD);
+    vi.stubEnv("SESSION_SECRET", "test-session-secret-at-least-32-bytes");
+    const crossOrigin = new NextRequest("https://deutschflow.app/api/login", {
+      method: "POST",
+      headers: { origin: "https://evil.example" },
+      body: new URLSearchParams({ password: PASSWORD }),
+    });
+    expect((await loginPost(crossOrigin)).status).toBe(403);
+
+    const oversized = new NextRequest("https://deutschflow.app/api/login", {
+      method: "POST",
+      headers: {
+        origin: "https://deutschflow.app",
+        "content-length": "65536",
+      },
+      body: new URLSearchParams({ password: PASSWORD }),
+    });
+    expect((await loginPost(oversized)).status).toBe(413);
+  });
 });
 
 describe("configurable session lifetime (SESSION_MAX_AGE_SECONDS)", () => {

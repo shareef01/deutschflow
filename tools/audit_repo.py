@@ -44,8 +44,18 @@ def audit_android_strings():
     tree_en = ET.parse(STRINGS_EN)
     tree_de = ET.parse(STRINGS_DE)
 
-    keys_en = {elem.attrib["name"] for elem in tree_en.getroot().findall("string") if "name" in elem.attrib and elem.attrib.get("translatable") != "false"}
-    keys_de = {elem.attrib["name"] for elem in tree_de.getroot().findall("string") if "name" in elem.attrib and elem.attrib.get("translatable") != "false"}
+    keys_en = {
+        f"{tag}:{elem.attrib['name']}"
+        for tag in ("string", "plurals")
+        for elem in tree_en.getroot().findall(tag)
+        if "name" in elem.attrib and elem.attrib.get("translatable") != "false"
+    }
+    keys_de = {
+        f"{tag}:{elem.attrib['name']}"
+        for tag in ("string", "plurals")
+        for elem in tree_de.getroot().findall(tag)
+        if "name" in elem.attrib and elem.attrib.get("translatable") != "false"
+    }
 
     en_missing_in_de = sorted(keys_en - keys_de)
     de_missing_in_en = sorted(keys_de - keys_en)
